@@ -1,0 +1,1250 @@
+#pragma once
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <string>
+#include <type_traits>
+
+#include "../util/util_debug.h"
+#include "../util/util_flags.h"
+#include "../util/util_float16.h"
+#include "../util/util_small_vector.h"
+
+namespace dxbc_spv::ir {
+
+using util::float16_t;
+
+class Op;
+
+/** Fundamental scalar data type */
+enum class ScalarType : uint8_t {
+  /** Void type, for when an instruction returns nothing. */
+  eVoid         = 0,
+
+  /** Unknown type that has not been resolved. If the proper
+   *  type cannot be inferred, this will be lowered to U32. */
+  eUnknown      = 1,
+
+  /** Unsized boolean. Does not use D3D semantics. */
+  eBool         = 2,
+
+  /** Signed integer types. */
+  eI8           = 3,
+  eI16          = 4,
+  eI32          = 5,
+  eI64          = 6,
+
+  /** Unsigned integer types. */
+  eU8           = 7,
+  eU16          = 8,
+  eU32          = 9,
+  eU64          = 10,
+
+  /** Float types. */
+  eF16          = 11,
+  eF32          = 12,
+  eF64          = 13,
+
+  /** Min precision types. These must be lowered to the corresponding
+   *  16-bit or 32-bit types depending on device support. */
+  eMinI16       = 14,
+  eMinU16       = 15,
+  eMinF16       = 16,
+
+  /** Opaque descriptor types. Used for resource access. */
+  eSampler      = 17,
+  eCbv          = 18,
+  eSrv          = 19,
+  eUav          = 20,
+  eUavCounter   = 21,
+
+  eCount
+};
+
+constexpr uint32_t ScalarTypeBits = 5u;
+static_assert(uint8_t(ScalarType::eCount) <= (1u << ScalarTypeBits));
+
+
+/** Utility function to query the byte size of a scalar data type.
+ *  Types must be fully resolved for this to me meaningful. */
+inline uint32_t byteSize(ScalarType type) {
+  switch (type) {
+    case ScalarType::eI8:
+    case ScalarType::eU8:
+      return 1u;
+
+    case ScalarType::eI16:
+    case ScalarType::eU16:
+    case ScalarType::eF16:
+      return 2u;
+
+    case ScalarType::eI32:
+    case ScalarType::eU32:
+    case ScalarType::eF32:
+      return 4u;
+
+    case ScalarType::eI64:
+    case ScalarType::eU64:
+    case ScalarType::eF64:
+      return 8u;
+
+    default:
+      return 0u;
+  }
+}
+
+
+/** Basic vector type. Represents either a scalar
+ *  or a vector with two to four components. */
+class BasicType {
+
+public:
+
+  explicit BasicType(ScalarType base, uint32_t size)
+  : m_baseType  (uint8_t(base)),
+    m_components(uint8_t(size ? size - 1u : 0u)),
+    m_reserved  (0u) { }
+
+  BasicType(ScalarType base)
+  : BasicType(base, 0) { }
+
+  BasicType()
+  : BasicType(ScalarType::eVoid, 0) { }
+
+  /** Queries underlying scalar type. */
+  ScalarType getBaseType() const {
+    return ScalarType(m_baseType);
+  }
+
+  /** Queries component count. */
+  uint32_t getVectorSize() const {
+    return m_components + 1u;
+  }
+
+  /** Checks whether the type is scalar. */
+  bool isScalar() const {
+    return !m_components;
+  }
+
+  /** Checks whether the type is a vector with two or more components. */
+  bool isVector() const {
+    return m_components > 0u;
+  }
+
+  /** Checks whether base type is void. */
+  bool isVoidType() const {
+    auto type = getBaseType();
+    return type == ScalarType::eVoid;
+  }
+
+  /** Checks whether base type is unknown. */
+  bool isUnknownType() const {
+    auto type = getBaseType();
+    return type == ScalarType::eUnknown;
+  }
+
+  /** Checks whether base type is boolean. */
+  bool isBoolType() const {
+    auto type = getBaseType();
+    return type == ScalarType::eBool;
+  }
+
+  /** Checks whether base type is a signed integer type */
+  bool isSignedIntType() const {
+    auto type = getBaseType();
+
+    return type == ScalarType::eI8
+        || type == ScalarType::eI16
+        || type == ScalarType::eI32
+        || type == ScalarType::eI64
+        || type == ScalarType::eMinI16;
+  }
+
+  /** Checks whether base type is an unsigned integer type */
+  bool isUnsignedIntType() const {
+    auto type = getBaseType();
+
+    return type == ScalarType::eU8
+        || type == ScalarType::eU16
+        || type == ScalarType::eU32
+        || type == ScalarType::eU64
+        || type == ScalarType::eMinU16;
+  }
+
+  /** Checks whether base type is an integer type */
+  bool isIntType() const {
+    return isSignedIntType() || isUnsignedIntType();
+  }
+
+  /** Checks whether base type is a float type */
+  bool isFloatType() const {
+    auto type = getBaseType();
+
+    return type == ScalarType::eF16
+        || type == ScalarType::eF32
+        || type == ScalarType::eF64
+        || type == ScalarType::eMinF16;
+  }
+
+  /** Checks whether base type is a numeric type */
+  bool isNumericType() const {
+    return isFloatType() || isIntType() || isUnknownType();
+  }
+
+  /** Checks whether base type is a minimum precision type. */
+  bool isMinPrecisionType() const {
+    auto type = getBaseType();
+
+    return type == ScalarType::eMinI16
+        || type == ScalarType::eMinU16
+        || type == ScalarType::eMinF16;
+  }
+
+  /** Checks whether base type is a descriptor type */
+  bool isDescriptorType() const {
+    auto type = getBaseType();
+
+    return type == ScalarType::eSampler
+        || type == ScalarType::eCbv
+        || type == ScalarType::eSrv
+        || type == ScalarType::eUav
+        || type == ScalarType::eUavCounter;
+  }
+
+  /** Computes byte size of vector type */
+  uint32_t byteSize() const {
+    return ir::byteSize(getBaseType()) * getVectorSize();
+  }
+
+  /** Computes required byte alignment of vector type */
+  uint32_t byteAlignment() const {
+    return ir::byteSize(getBaseType());
+  }
+
+  /** Checks types for equality */
+  bool operator == (const BasicType& other) const {
+    return m_baseType   == other.m_baseType
+        && m_components == other.m_components;
+  }
+
+  bool operator != (const BasicType& other) const {
+    return !(this->operator == (other));
+  }
+
+  /** Helpers to construct types from basic C++ types. */
+  static BasicType from(bool, uint32_t n) { return BasicType(ScalarType::eBool, n); }
+
+  static BasicType from(uint8_t,  uint32_t n) { return BasicType(ScalarType::eU8, n);  }
+  static BasicType from(uint16_t, uint32_t n) { return BasicType(ScalarType::eU16, n); }
+  static BasicType from(uint32_t, uint32_t n) { return BasicType(ScalarType::eU32, n); }
+  static BasicType from(uint64_t, uint32_t n) { return BasicType(ScalarType::eU64, n); }
+
+  static BasicType from(int8_t,  uint32_t n) { return BasicType(ScalarType::eI8, n);  }
+  static BasicType from(int16_t, uint32_t n) { return BasicType(ScalarType::eI16, n); }
+  static BasicType from(int32_t, uint32_t n) { return BasicType(ScalarType::eI32, n); }
+  static BasicType from(int64_t, uint32_t n) { return BasicType(ScalarType::eI64, n); }
+
+  static BasicType from(float16_t, uint32_t n) { return BasicType(ScalarType::eF16, n); }
+  static BasicType from(float,     uint32_t n) { return BasicType(ScalarType::eF32, n); }
+  static BasicType from(double,    uint32_t n) { return BasicType(ScalarType::eF64, n); }
+
+private:
+
+  uint8_t m_baseType   : 5;
+  uint8_t m_components : 2;
+  uint8_t m_reserved   : 1;
+
+};
+
+
+/** Complete type class.
+ *
+ * A complete type can be any of the following categories:
+ * - A basic type, i.e. a plain scalar or vector, or void.
+ * - A struct consisting of multiple basic types.
+ * - An array of any of the above, with up to three dimensions.
+ *
+ * Arrays can be unbounded or runtime-sized, in which case the outer-most
+ * dimension has a declared size of 0.
+ *
+ * As an example the type \c vec4<f32>[n][] is a two-dimensional array of float
+ * vectors, where \c a is the size of the inner dimension (index 0), and the
+ * outer dimension (index 1) has a size not known at runtime.
+ */
+class Type {
+
+public:
+
+  static constexpr uint32_t MaxArrayDimensions = 3;
+  static constexpr uint32_t MaxStructMembers = 24;
+
+  /** Initializes void type */
+  Type() : Type(ScalarType::eVoid) { }
+
+  /** Initializes type from scalar type */
+  Type(ScalarType base)
+  : Type(BasicType(base)) { }
+
+  /** Initializes type from basic type */
+  Type(BasicType base)
+  : m_structSize(base.isVoidType() ? 0u : 1u) {
+    m_members[0u] = base;
+  }
+
+  /** Queries base member type. */
+  BasicType getBaseType(uint32_t memberIdx) const {
+    return memberIdx < m_structSize ? m_members[memberIdx] : BasicType();
+  }
+
+  /** Checks whether type is void. */
+  bool isVoidType() const {
+    return !m_structSize;
+  }
+
+  /** Checks whether type is a scalar or vector */
+  bool isBasicType() const {
+    return !isStructType() && !isArrayType();
+  }
+
+  /** Checks whether type is scalar */
+  bool isScalarType() const {
+    return isBasicType() && getBaseType(0u).isScalar();
+  }
+
+  /** Checks whether type is a vector */
+  bool isVectorType() const {
+    return isBasicType() && getBaseType(0u).isVector();
+  }
+
+  /** Checks whether type is a structure with multiple
+   *  members, but is not an array of any kind. */
+  bool isStructType() const {
+    return !m_dimensions && m_structSize > 1u;
+  }
+
+  /** Queries struct member count */
+  uint32_t getStructMemberCount() const {
+    return m_structSize;
+  }
+
+  /** Checks whether type is an array. */
+  bool isArrayType() const {
+    return m_dimensions > 0u;
+  }
+
+  /** Checks whether type is an array where every dimension
+   *  has a pre-determined size. */
+  bool isSizedArray() const {
+    return m_dimensions && m_sizes[m_dimensions - 1u] > 0u;
+  }
+
+  /** Checks whether type is an array where the size of the
+   *  outer-most dimension is not known at compile time. */
+  bool isUnboundedArray() const {
+    return m_dimensions && m_sizes[m_dimensions - 1u] == 0u;
+  }
+
+  /** Queries the number of array dimensions. */
+  uint32_t getArrayDimensions() const {
+    return m_dimensions;
+  }
+
+  /** Queries the array size for a given dimension. If 0, and
+   *  if the dimension is valid, this indicates that the size
+   *  is not known at compile-time. */
+  uint32_t getArraySize(uint32_t dimension) const {
+    return dimension < m_dimensions ? m_sizes[dimension] : 0u;
+  }
+
+  /** Adds a struct member. */
+  Type& addStructMember(BasicType type);
+
+  /** Adds an array dimension. Pass a size of 0 for an unbounded array. */
+  Type& addArrayDimension(uint32_t size);
+
+  /** Constructs type from indexing into it once, with the given index.
+   *  Note that the index value is only relevant for struct types. */
+  Type getSubType(uint32_t index) const;
+
+  /** Resolves flattened scalar type at a given index. Useful to
+   *  determine the operand type of a constant definition. */
+  ScalarType resolveFlattenedType(uint32_t index) const;
+
+  /** Computes byte size of type. If the outermost array dimension
+   *  is unsized, returns the size of the underlying type. */
+  uint32_t byteSize() const;
+
+  /** Computes required byte alignment of type. This assumes scalar
+   *  alignment, i.e. vectors are not treated in any special way. */
+  uint32_t byteAlignment() const;
+
+  /** Computes byte offset of a given member */
+  uint32_t byteOffset(uint32_t member) const;
+
+  /** Checks types for equality */
+  bool operator == (const Type& other) const;
+  bool operator != (const Type& other) const;
+
+private:
+
+  uint8_t m_dimensions = 0;
+  uint8_t m_structSize = 0;
+
+  std::array<uint16_t, MaxArrayDimensions> m_sizes = { };
+  std::array<BasicType, MaxStructMembers> m_members = { };
+
+};
+
+static_assert(sizeof(Type) == 32);
+
+
+/** Structured construct declaration for a block.
+ *
+ * Set on a label to declare that the block-ending
+ * branch is part of an if, switch or loop construct.
+ */
+enum class Construct : uint32_t {
+  eNone                 = 0,
+  eStructuredSelection  = 1,
+  eStructuredLoop       = 2,
+};
+
+
+/** Resource kind. */
+enum class ResourceKind : uint32_t {
+  /** Typed buffer, must be declared with a scalar or vector type. */
+  eBufferTyped        = 0,
+  /** Structured buffer, must be declared with a struct or sized array type.
+   *  The byte size of the type directly maps to the structure stride. */
+  eBufferStructured   = 1,
+  /** Raw buffer, must be declared with a scalar type. */
+  eBufferRaw          = 2,
+  /** Image types. Like typed buffers, these must be declared
+   *  with a scalar or vector type. */
+  eImage1D            = 3,
+  eImage1DArray       = 4,
+  eImage2D            = 5,
+  eImage2DArray       = 6,
+  eImage2DMS          = 7,
+  eImage2DMSArray     = 8,
+  eImageCube          = 9,
+  eImageCubeArray     = 10,
+  eImage3D            = 11,
+};
+
+
+/* Computes required component count of the address vector for any
+ * given resource kind. Does not include the array layer index. */
+inline uint32_t resourceCoordComponentCount(ResourceKind kind) {
+  switch (kind) {
+    case ResourceKind::eBufferTyped:
+    case ResourceKind::eBufferRaw:
+    case ResourceKind::eImage1D:
+    case ResourceKind::eImage1DArray:
+      return 1u;
+
+    case ResourceKind::eBufferStructured:
+    case ResourceKind::eImage2D:
+    case ResourceKind::eImage2DArray:
+    case ResourceKind::eImage2DMS:
+    case ResourceKind::eImage2DMSArray:
+      return 2u;
+
+    case ResourceKind::eImageCube:
+    case ResourceKind::eImageCubeArray:
+    case ResourceKind::eImage3D:
+      return 3u;
+  }
+
+  /* unreachable */
+  dxbc_spv_unreachable();
+  return 0u;
+}
+
+
+/** Checks whether resource is layered. */
+inline bool resourceIsLayered(ResourceKind kind) {
+  return kind == ResourceKind::eImage1DArray
+      || kind == ResourceKind::eImage2DArray
+      || kind == ResourceKind::eImage2DMSArray
+      || kind == ResourceKind::eImageCubeArray;
+}
+
+
+/** Checks whether resource is multisampled. */
+inline bool resourceIsMultisampled(ResourceKind kind) {
+  return kind == ResourceKind::eImage2DMS
+      || kind == ResourceKind::eImage2DMSArray;
+}
+
+
+/** Checks whether resource is a buffer. */
+inline bool resourceIsBuffer(ResourceKind kind) {
+  return kind == ResourceKind::eBufferTyped
+      || kind == ResourceKind::eBufferStructured
+      || kind == ResourceKind::eBufferRaw;
+}
+
+
+/** Checks whether resource is types. */
+inline bool resourceIsTyped(ResourceKind kind) {
+  return kind != ResourceKind::eBufferStructured
+      && kind != ResourceKind::eBufferRaw;
+}
+
+
+/** Primitive type declaration for tessellation and geometry. */
+enum class PrimitiveType : uint32_t {
+  /** Points. Legal as GS input, GS output, and tessellation primitives. */
+  ePoints             = 0,
+  /** Lines. Legal as GS input, GS output, and tessellation
+   *  primitives. Also legal as a tessellation domain. */
+  eLines              = 1,
+  /** Lines with adjacency. Legal as GS input. */
+  eLinesAdj           = 2,
+  /** Triangles. Legal as GS input, GS output, tessellation
+   *  primitives, and tessellation domain. */
+  eTriangles          = 3,
+  /** Triangles with adjacency. Legal as GS input. */
+  eTrianglesAdj       = 4,
+  /** Quads. Only legal as a tessellation domain. */
+  eQuads              = 5,
+
+  /** First patch entry. Individual patch sizes have no declared
+   *  enum, instead the integer enum value is used to calculate
+   *  it. A patch with one vertex would have the value 7.
+   *  Only valid for geometry shader input topologies. */
+  ePatch              = 6,
+};
+
+
+/** Computes vertex count for primitive type. */
+inline uint32_t primitiveVertexCount(PrimitiveType type) {
+  switch (type) {
+    case PrimitiveType::ePoints: return 1u;
+    case PrimitiveType::eLines: return 2u;
+    case PrimitiveType::eLinesAdj: return 4u;
+    case PrimitiveType::eTriangles: return 3u;
+    case PrimitiveType::eTrianglesAdj: return 3u;
+
+    default: {
+      uint32_t patchSize = uint32_t(type) - uint32_t(PrimitiveType::ePatch);
+
+      dxbc_spv_assert(patchSize >= 1u && patchSize <= 32u);
+      return patchSize;
+    }
+  }
+}
+
+
+/** Triangle winding order for tessellation */
+enum class TessWindingOrder : uint32_t {
+  eCcw = 0u,
+  eCw  = 1u,
+};
+
+
+/** Tessellation partitioning */
+enum class TessPartitioning : uint32_t {
+  eInteger    = 0u,
+  eFractOdd   = 1u,
+  eFractEven  = 2u,
+  ePow2       = 3u,
+};
+
+
+/** Built-in input or output declaration */
+enum class BuiltIn : uint32_t {
+  /** Vertex position in any geometry stage, or fragment location in
+   *  pixel shaders. Uses SPIR-V semantics for the .w coordinate.
+   *  Must be declared as a four-component float vector. */
+  ePosition           = 0u,
+  /** Clip distances. Must be declared as a sized float array. */
+  eClipDistance       = 1u,
+  /** Cull distances. Must be declared as a sized float array. */
+  eCullDistance       = 2u,
+  /** Vertex ID, starting at 0. Uses D3D semantics. Must be declared
+   *  as a scalar unsigned integer. */
+  eVertexId           = 3u,
+  /** Instance ID, starting at 0. Uses D3D semantics. Must be
+   *  declared as a scalar unsigned integer. */
+  eInstanceId         = 4u,
+  /** Primitive ID, starting at 0. Uses D3D semantics. Must be
+   *  declared as a scalar unsigned integer. Can be written by
+   *  certain shader stages. */
+  ePrimitiveId        = 5u,
+  /** Render target layer. Must be declared as an unsigned integer. */
+  eLayerIndex         = 6u,
+  /** Viewport index. Must be declared as an unsigned integer. */
+  eViewportIndex      = 7u,
+  /** Geometry shader instance ID. Must be declared as an unsigned integer. */
+  eGsInstanceId       = 8u,
+  /** Tessellation control point ID. Must be declared as an unsigned integer. */
+  eTessControlPointId = 9u,
+  /** Tessellation coordinates in domain shaders. Must be declared
+   *  as a two-component float vector. */
+  eTessCoord          = 10u,
+  /** Inner tesellation factors. Must be declared as a sized float array. */
+  eTessFactorInner    = 11u,
+  /** Outer tesellation factors. Must be declared as a sized float array. */
+  eTessFactorOuter    = 12u,
+  /** Rasterizer sample count. Must be declared as an unsigned integer. */
+  eSampleCount        = 13u,
+  /** Sample ID in fragment shader. Must be declared as a scalar
+   *  unsigned integer. Its use will trigger sample rate shading. */
+  eSampleId           = 14u,
+  /** Sample position in fragment shader. Must be declared as a scalar
+   *  unsigned integer. Its use will trigger sample rate shading. */
+  eSamplePosition     = 15u,
+  /** Sample mask in fragment shader. Must be declared as a scalar unsigned
+   *  integer to follow D3D semantics. Can be used as input and output. */
+  eSampleMask         = 16u,
+  /** Front-face flag in fragment shader. Must be declared as a boolean. */
+  eIsFrontFace        = 17u,
+  /** Fragment depth in fragment shader. Output only. Must be declared as
+   *  a scalar float. */
+  eDepth              = 18u,
+  /** Stencil reference in fragment shader. Output only. Must be declared
+   *  as a scalar unsigned integer. */
+  eStencilRef         = 19u,
+  /** Workgroup ID in compute shader. Must be declared as a three-component
+   *  unsigned integer vector. */
+  eWorkgroupId        = 20u,
+  /** Global thread ID in compute shader. Must be declared as a
+   *  three-component unsigned integer vector. */
+  eGlobalThreadId     = 21u,
+  /** Local thread ID in compute shader. Must be declared as a
+   *  three-component unsigned integer vector. */
+  eLocalThreadId      = 22u,
+  /** Flattened local thread ID in compute shader. Must be declared
+   *  as a scalar unsigned integer. */
+  eLocalThreadIndex   = 23u,
+};
+
+
+/** Atomic operation type */
+enum class AtomicOp : uint32_t {
+  eLoad             = 0u,
+  eStore            = 1u,
+  eExchange         = 2u,
+  eCompareExchange  = 3u,
+  eAdd              = 4u,
+  eSub              = 5u,
+  eSMin             = 6u,
+  eSMax             = 7u,
+  eUMin             = 8u,
+  eUMax             = 9u,
+  eAnd              = 10u,
+  eOr               = 11u,
+  eXor              = 12u,
+};
+
+
+/** UAV flags */
+enum class UavFlag : uint32_t {
+  eCoherent           = (1u << 0),
+  eReadOnly           = (1u << 1),
+  eWriteOnly          = (1u << 2),
+  eRasterizerOrdered  = (1u << 3),
+
+  eFlagEnum           = 0u
+};
+
+using UavFlags = util::Flags<UavFlag>;
+
+
+/** Interpolation mode flags */
+enum class InterpolationMode : uint32_t {
+  eFlat             = (1u << 0),
+  eCentroid         = (1u << 1),
+  eSample           = (1u << 2),
+  eNoPerspective    = (1u << 3),
+
+  eFlagEnum         = 0u
+};
+
+using InterpolationModes = util::Flags<InterpolationMode>;
+
+
+/** Shader stage flags */
+enum class ShaderStage : uint32_t {
+  ePixel            = (1u << 0),
+  eVertex           = (1u << 1),
+  eGeometry         = (1u << 2),
+  eHull             = (1u << 3),
+  eDomain           = (1u << 4),
+  eCompute          = (1u << 5),
+
+  eFlagEnum         = 0u
+};
+
+using ShaderStageMask = util::Flags<ShaderStage>;
+
+
+/** SSA definition. Stores a unique ID that refers to an operation. */
+class SsaDef {
+
+public:
+
+  SsaDef() = default;
+
+  /** Creates SSA def from raw ID */
+  explicit SsaDef(uint32_t id)
+  : m_id(id) { }
+
+  /** Queries raw ID. Used primarily for serialization and look-up purposes.
+   *  An ID of 0 is a null definition and does not refer to any operation. */
+  uint32_t getId() const {
+    return m_id;
+  }
+
+  /** Checks whether definiton is non-null. */
+  explicit operator bool () const {
+    return m_id > 0u;
+  }
+
+  bool operator == (const SsaDef& other) const { return m_id == other.m_id; }
+  bool operator != (const SsaDef& other) const { return m_id != other.m_id; }
+
+private:
+
+  uint32_t m_id = 0u;
+
+};
+
+
+/** Opcodes */
+enum class OpCode : uint16_t {
+  eUnknown                      = 0u,
+
+  eEntryPoint                   = 1u,
+  eDebugName                    = 2u,
+  eConstant                     = 3u,
+
+  eSetCsWorkgroupSize           = 16u,
+  eSetGsInstances               = 17u,
+  eSetGsInputPrimitive          = 18u,
+  eSetGsOutputVertices          = 19u,
+  eSetGsOutputPrimitive         = 20u,
+  eSetPsEarlyFragmentTest       = 21u,
+  eSetPsDepthGreaterEqual       = 22u,
+  eSetPsDepthLessEqual          = 23u,
+  eSetTessPrimitive             = 24u,
+  eSetTessDomain                = 25u,
+
+  eDclInput                     = 32u,
+  eDclInputBuiltIn              = 33u,
+  eDclOutput                    = 34u,
+  eDclOutputBuiltIn             = 35u,
+  eDclSpecConstant              = 36u,
+  eDclPushData                  = 37u,
+  eDclSampler                   = 38u,
+  eDclCbv                       = 39u,
+  eDclSrv                       = 40u,
+  eDclUav                       = 41u,
+  eDclUavCounter                = 42u,
+  eDclLds                       = 43u,
+  eDclScratch                   = 44u,
+  eDclTmp                       = 45u,
+  eDclParam                     = 46u,
+
+  /** Last valid opcode for declarative instructions */
+  eLastDeclarative              = 63u,
+
+  eFunction                     = 64u,
+  eFunctionEnd                  = 65u,
+  eFunctionCall                 = 66u,
+
+  eLabel                        = 96u,
+  eBranch                       = 97u,
+  eBranchConditional            = 98u,
+  eSwitch                       = 99u,
+  eUnreachable                  = 100u,
+  eReturn                       = 101u,
+  ePhi                          = 102u,
+
+  Count
+};
+
+constexpr uint32_t OpCodeBits = 10;
+static_assert(uint16_t(OpCode::Count) <= (1u << OpCodeBits));
+
+
+/** Operation flags */
+enum class OpFlag : uint8_t {
+  /** Flag to indicate that the instruction cannot be used
+   *  in transforms that would affect the result. */
+  ePrecise = (1u << 0),
+  /** Instruction is explicitly marked as non-uniform.
+   *  May be used for descriptor access. */
+  eNonUniform = (1u << 1),
+
+  eFlagEnum = 0
+};
+
+constexpr uint32_t OpFlagBits = 2;
+using OpFlags = util::Flags<OpFlag>;
+
+
+/** Operand data. Stores either a reference to another instruction
+ *  as an SSA definition, or a literal constant. */
+class Operand {
+
+public:
+
+  Operand() = default;
+
+  /** Creates operand from SSA value */
+  explicit Operand(SsaDef def) : m_data(def.getId()) { }
+  explicit Operand(const Op* op);
+
+  /** Creates operand from enum value */
+  template<typename T, std::enable_if_t<std::is_enum_v<T>, bool> = true>
+  explicit Operand(T v) : Operand(std::underlying_type_t<T>(v)) { }
+
+  /** Creates operand from enum value */
+  template<typename T, T V = T::eFlagEnum>
+  explicit Operand(util::Flags<T> v) : Operand(typename util::Flags<T>::IntType(v)) { }
+
+  /** Creates operand from boolean */
+  explicit Operand(bool v) : Operand(v ? 1u : 0u) { }
+
+  /** Creates operand from signed integer */
+  explicit Operand(int8_t v) : Operand(uint64_t(v)) { }
+  explicit Operand(int16_t v) : Operand(uint64_t(v)) { }
+  explicit Operand(int32_t v) : Operand(uint64_t(v)) { }
+  explicit Operand(int64_t v) : Operand(uint64_t(v)) { }
+
+  /** Creates operand from unsigned integer */
+  explicit Operand(uint8_t v) : m_data(v) { }
+  explicit Operand(uint16_t v) : m_data(v) { }
+  explicit Operand(uint32_t v) : m_data(v) { }
+  explicit Operand(uint64_t v) : m_data(v) { }
+
+  /** Creates operand from 16-bit float */
+  explicit Operand(float16_t v) : Operand(v.data) { }
+
+  /** Creates operand from 32-bit float */
+  explicit Operand(float v) {
+    uint32_t dw = 0u;
+    std::memcpy(&dw, &v, sizeof(dw));
+
+    m_data = dw;
+  }
+
+  /** Creates operand from 64-bit float */
+  explicit Operand(double v) {
+    std::memcpy(&m_data, &v, sizeof(m_data));
+  }
+
+  /** Extracts referenced SSA definiton, if any. */
+  explicit operator SsaDef() const {
+    return SsaDef(m_data);
+  }
+
+  /** Extracts boolean value. */
+  explicit operator bool() const {
+    return bool(m_data);
+  }
+
+  /** Reads literal as 16-bit float */
+  explicit operator float16_t() const {
+    return float16_t::fromRaw(m_data);
+  }
+
+  /** Reads literal as 32-bit float */
+  explicit operator float() const {
+    uint32_t dw = m_data;
+
+    float f;
+    std::memcpy(&f, &dw, sizeof(f));
+    return f;
+  }
+
+  /** Reads literal as 64-bit float */
+  explicit operator double() const {
+    double d;
+    std::memcpy(&d, &m_data, sizeof(d));
+    return d;
+  }
+
+  /** Reads literal as signed integer */
+  explicit operator int8_t() const { return int8_t(m_data); }
+  explicit operator int16_t() const { return int16_t(m_data); }
+  explicit operator int32_t() const { return int32_t(m_data); }
+  explicit operator int64_t() const { return int64_t(m_data); }
+
+  /** Reads literal as unsigned integer */
+  explicit operator uint8_t() const { return uint8_t(m_data); }
+  explicit operator uint16_t() const { return uint16_t(m_data); }
+  explicit operator uint32_t() const { return uint32_t(m_data); }
+  explicit operator uint64_t() const { return uint64_t(m_data); }
+
+  /** Reads literal as enum */
+  template<typename T, std::enable_if_t<std::is_enum_v<T>, bool> = true>
+  explicit operator T() const {
+    return T(std::underlying_type_t<T>(*this));
+  }
+
+  /** Reads literal as a set of flags */
+  template<typename T, T V = T::eFlagEnum>
+  explicit operator util::Flags<T> () const {
+    return util::Flags<T>(typename util::Flags<T>::IntType(*this));
+  }
+
+  /** Reads data as a potentially null-terminated string. */
+  bool getToString(std::string& str) const;
+
+  bool operator == (const Operand& other) const { return m_data == other.m_data; }
+  bool operator != (const Operand& other) const { return m_data != other.m_data; }
+
+private:
+
+  uint64_t m_data = 0u;
+
+};
+
+static_assert(sizeof(Operand) == sizeof(uint64_t));
+
+
+/** Instruction class. */
+class Op {
+  constexpr static uint32_t MaxEmbeddedOperands = 9u;
+public:
+
+  Op() = default;
+
+  Op(OpCode opCode, OpFlags flags, Type resultType, uint32_t operandCount, const Operand* operands)
+  : m_opCode(opCode), m_flags(flags)
+  , m_resultType(resultType) {
+    if (operands) {
+      for (uint32_t i = 0u; i < operandCount; i++)
+        m_operands.push_back(operands[i]);
+    } else {
+      m_operands.resize(operandCount);
+    }
+  }
+
+  Op(OpCode opCode, Type resultType)
+  : Op(opCode, OpFlags(), resultType, 0u, nullptr) { }
+
+  Op             (const Op&) = default;
+  Op& operator = (const Op&) = default;
+
+  Op(Op&& other)
+  : m_def         (std::exchange(other.m_def, SsaDef()))
+  , m_opCode      (std::exchange(other.m_opCode, OpCode::eUnknown))
+  , m_flags       (std::exchange(other.m_flags, OpFlags()))
+  , m_resultType  (std::exchange(other.m_resultType, Type()))
+  , m_operands    (std::move(other.m_operands)) { }
+
+  Op& operator = (Op&& other) {
+    m_def         = std::exchange(other.m_def, SsaDef());
+    m_opCode      = std::exchange(other.m_opCode, OpCode::eUnknown);
+    m_flags       = std::exchange(other.m_flags, OpFlags());
+    m_resultType  = std::exchange(other.m_resultType, Type());
+    m_operands    = std::move(other.m_operands);
+    return *this;
+  }
+
+  /** Queries SSA definition. This is valid even if the return type is void,
+   *  so that all instructions can be referenced. The SSA definiton will be
+   *  assigned when the operation is added to the shader module builder.
+   *  Before that, it is a \c null reference and must not be used. */
+  SsaDef getDef() const {
+    return m_def;
+  }
+
+  /** Queries opcode. */
+  OpCode getOpCode() const {
+    return m_opCode;
+  }
+
+  /** Queries flags. */
+  OpFlags getFlags() const {
+    return m_flags;
+  }
+
+  /** Queries number of operands. */
+  uint32_t getOperandCount() const {
+    return uint32_t(m_operands.size());
+  }
+
+  /** Queries given operand. */
+  Operand getOperand(uint32_t operandIdx) const {
+    return operandIdx < getOperandCount()
+      ? m_operands[operandIdx]
+      : Operand();
+  }
+
+  /** Queries result type. */
+  const Type& getType() const {
+    return m_resultType;
+  }
+
+  /** Sets flags */
+  Op& setFlags(OpFlags flags) {
+    m_flags = flags;
+    return *this;
+  }
+
+  /** Sets result type. */
+  Op& setResultType(const Type& type) {
+    m_resultType = type;
+    return *this;
+  }
+
+  /** Appends an operand and increments operand count. */
+  Op& addOperand(Operand arg) {
+    m_operands.push_back(arg);
+    return *this;
+  }
+
+  /** Overrides an existing operand. */
+  Op& setOperand(uint32_t index, Operand arg) {
+    dxbc_spv_assert(index < getOperandCount());
+
+    m_operands[index] = arg;
+    return *this;
+  }
+
+  /** Assigns SSA definition. Generally, this does not need to be called
+   *  directly as SSA defs are assigned when adding instructions to the
+   *  builder. */
+  Op& setSsaDef(SsaDef def) {
+    m_def = def;
+    return *this;
+  }
+
+  /** Checks whether instruction is declarative */
+  bool isDeclarative() const {
+    return m_opCode <= OpCode::eLastDeclarative;
+  }
+
+  /** Checks whether instruction is a constant. */
+  bool isConstant() const {
+    return m_opCode == OpCode::eConstant;
+  }
+
+  /** Checks whether operation has a valid opcode. */
+  explicit operator bool () const {
+    return m_opCode != OpCode::eUnknown;
+  }
+
+  /** Queries index of first literal operand. Instructions that use literal
+   *  operands must have them all at the end. Returns the operand count if
+   *  the instruction does not have any literal operands. */
+  uint32_t getFirstLiteralOperandIndex() const;
+
+  /** Retrieves a literal string starting at the given operand index.
+   *  Literal strings may consist of multiple operands. */
+  std::string getLiteralString(uint32_t index) const;
+
+  /** Checks whether two instruction definitions are equivalent. This is the
+   *  case if the op code, op flags, return types and all operands are equal. */
+  bool isEquivalent(const Op& other) const;
+
+  /** Helpers to construct entry point op. */
+  static Op EntryPoint(SsaDef function, ShaderStage stage) {
+    return Op(OpCode::eEntryPoint, Type())
+      .addOperand(Operand(function))
+      .addOperand(Operand(stage));
+  };
+
+  /** Helpers to construct scalar and vector constants */
+  template<typename T>
+  static Op Constant(T v) {
+    auto t = Type(BasicType::from(T(), 1u));
+    return Op(OpCode::eConstant, t).addOperand(Operand(v));
+  }
+
+  template<typename T>
+  static Op Constant(T v0, T v1) {
+    auto t = Type(BasicType::from(T(), 2u));
+    return Op(OpCode::eConstant, t)
+      .addOperand(Operand(v0))
+      .addOperand(Operand(v1));
+  }
+
+  template<typename T>
+  static Op Constant(T v0, T v1, T v2) {
+    auto t = Type(BasicType::from(T(), 3u));
+    return Op(OpCode::eConstant, t)
+      .addOperand(Operand(v0))
+      .addOperand(Operand(v1))
+      .addOperand(Operand(v2));
+  }
+
+  template<typename T>
+  static Op Constant(T v0, T v1, T v2, T v3) {
+    auto t = Type(BasicType::from(T(), 4u));
+    return Op(OpCode::eConstant, t)
+      .addOperand(Operand(v0))
+      .addOperand(Operand(v1))
+      .addOperand(Operand(v2))
+      .addOperand(Operand(v3));
+  }
+
+  /** Helper to construct debug name ops */
+  static Op DebugName(SsaDef def, const char* name);
+
+  /** Helpers to construct mode setting ops */
+  static Op SetCsWorkgroupSize(SsaDef def, uint32_t x, uint32_t y, uint32_t z) {
+    return Op(OpCode::eSetCsWorkgroupSize, Type())
+      .addOperand(Operand(def))
+      .addOperand(Operand(x))
+      .addOperand(Operand(y))
+      .addOperand(Operand(z));
+  }
+
+  static Op SetGsInstances(SsaDef def, uint32_t n) {
+    return Op(OpCode::eSetGsInstances, Type())
+      .addOperand(Operand(def))
+      .addOperand(Operand(n));
+  }
+
+  static Op SetGsInputPrimitive(SsaDef def, PrimitiveType type) {
+    return Op(OpCode::eSetGsInputPrimitive, Type())
+      .addOperand(Operand(def))
+      .addOperand(Operand(type));
+  }
+
+  static Op SetGsOutputVertices(SsaDef def, uint32_t n) {
+    return Op(OpCode::eSetGsOutputVertices, Type())
+      .addOperand(Operand(def))
+      .addOperand(Operand(n));
+  }
+
+  static Op SetGsOutputPrimitive(SsaDef def, PrimitiveType type, uint32_t stream) {
+    return Op(OpCode::eSetGsInputPrimitive, Type())
+      .addOperand(Operand(def))
+      .addOperand(Operand(type))
+      .addOperand(Operand(stream));
+  }
+
+  static Op SetPsEarlyFragmentTest(SsaDef def) {
+    return Op(OpCode::eSetPsEarlyFragmentTest, Type()).addOperand(Operand(def));
+  }
+
+  static Op SetPsDepthGreaterEqual(SsaDef def) {
+    return Op(OpCode::eSetPsDepthGreaterEqual, Type()).addOperand(Operand(def));
+  }
+
+  static Op SetPsDepthLessEqual(SsaDef def) {
+    return Op(OpCode::eSetPsDepthLessEqual, Type()).addOperand(Operand(def));
+  }
+
+  static Op SetTessPrimitive(SsaDef def, PrimitiveType type, TessWindingOrder winding, TessPartitioning partitioning) {
+    return Op(OpCode::eSetTessPrimitive, Type())
+      .addOperand(Operand(def))
+      .addOperand(Operand(type))
+      .addOperand(Operand(winding))
+      .addOperand(Operand(partitioning));
+  }
+
+  /* Helpers for function-related instructions */
+  static Op Function(Type type) {
+    return Op(OpCode::eFunction, type);
+  }
+
+  static Op FunctionEnd() {
+    return Op(OpCode::eFunctionEnd, Type());
+  }
+
+  static Op FunctionCall(Type type, SsaDef function) {
+    return Op(OpCode::eFunctionCall, type)
+      .addOperand(Operand(function));
+  }
+
+  Op& addParam(SsaDef param) {
+    return addOperand(Operand(param));
+  }
+
+  /* Helpers for structured control-flow instructions */
+  static Op Label() {
+    return Op(OpCode::eLabel, Type())
+      .addOperand(Operand(Construct::eNone));
+  }
+
+  static Op LabelSelection(SsaDef mergeBlock) {
+    return Op(OpCode::eLabel, Type())
+      .addOperand(Operand(mergeBlock))
+      .addOperand(Operand(Construct::eStructuredSelection));
+  }
+
+  static Op LabelLoop(SsaDef mergeBlock, SsaDef continueBlock) {
+    return Op(OpCode::eLabel, Type())
+      .addOperand(Operand(mergeBlock))
+      .addOperand(Operand(continueBlock))
+      .addOperand(Operand(Construct::eStructuredLoop));
+  }
+
+  static Op Branch(SsaDef block) {
+    return Op(OpCode::eBranch, Type())
+      .addOperand(Operand(block));
+  }
+
+  static Op BranchConditional(SsaDef cond, SsaDef trueBlock, SsaDef falseBlock) {
+    return Op(OpCode::eBranchConditional, Type())
+      .addOperand(Operand(cond))
+      .addOperand(Operand(trueBlock))
+      .addOperand(Operand(falseBlock));
+  }
+
+  static Op Switch(SsaDef value, SsaDef defaultBlock) {
+    return Op(OpCode::eSwitch, Type())
+      .addOperand(Operand(value))
+      .addOperand(Operand(defaultBlock));
+  }
+
+  Op& addCase(SsaDef value, SsaDef block) {
+    return addOperand(Operand(value))
+          .addOperand(Operand(block));
+  }
+
+  static Op Unreachable() {
+    return Op(OpCode::eUnreachable, Type());
+  }
+
+  static Op Phi(Type type) {
+    return Op(OpCode::ePhi, type);
+  }
+
+  Op& addPhi(SsaDef block, SsaDef value) {
+    return addOperand(Operand(block))
+          .addOperand(Operand(value));
+  }
+
+  static Op Return() {
+    return Op(OpCode::eReturn, Type());
+  }
+
+  static Op Return(Type type, SsaDef value) {
+    return Op(OpCode::eReturn, type)
+      .addOperand(Operand(value));
+  }
+
+private:
+
+  SsaDef m_def = { };
+
+  OpCode m_opCode = OpCode::eUnknown;
+  OpFlags m_flags = { };
+
+  Type m_resultType = { };
+
+  util::small_vector<Operand, MaxEmbeddedOperands> m_operands = { };
+
+};
+
+static_assert(sizeof(Op) <= 128u);
+
+
+inline Operand::Operand(const Op* op) {
+  dxbc_spv_assert(!op || op->getDef());
+  m_data = op ? op->getDef().getId() : 0u;
+}
+
+}
