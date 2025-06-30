@@ -6,6 +6,7 @@ project('dxbc-spirv', ['cpp'],
 dxbc_spv_files = files([
   'ir/ir.cpp',
   'ir/ir_builder.cpp',
+  'ir/ir_disasm.cpp',
 
   'util/util_float16.cpp',
 ])
