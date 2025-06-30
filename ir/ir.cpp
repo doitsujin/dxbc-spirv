@@ -1,5 +1,7 @@
 #include "ir.h"
 
+#include <iomanip>
+
 namespace dxbc_spv::ir {
 
 Type& Type::addStructMember(BasicType type) {
@@ -221,6 +223,320 @@ Op Op::DebugName(SsaDef def, const char* name) {
 
   op.addOperand(Operand(lit));
   return op;
+}
+
+
+std::ostream& operator << (std::ostream& os, const ScalarType& ty) {
+  switch (ty) {
+    case ScalarType::eVoid:       return os << "void";
+    case ScalarType::eUnknown:    return os << "?";
+    case ScalarType::eBool:       return os << "bool";
+
+    case ScalarType::eI8:         return os << "i8";
+    case ScalarType::eI16:        return os << "i16";
+    case ScalarType::eI32:        return os << "i32";
+    case ScalarType::eI64:        return os << "i64";
+
+    case ScalarType::eU8:         return os << "u8";
+    case ScalarType::eU16:        return os << "u16";
+    case ScalarType::eU32:        return os << "u32";
+    case ScalarType::eU64:        return os << "u64";
+
+    case ScalarType::eF16:        return os << "f16";
+    case ScalarType::eF32:        return os << "f32";
+    case ScalarType::eF64:        return os << "f64";
+
+    case ScalarType::eMinI16:     return os << "mini16";
+    case ScalarType::eMinU16:     return os << "minu16";
+    case ScalarType::eMinF16:     return os << "minf16";
+
+    case ScalarType::eSampler:    return os << "sampler";
+    case ScalarType::eCbv:        return os << "cbv";
+    case ScalarType::eSrv:        return os << "srv";
+    case ScalarType::eUav:        return os << "uav";
+    case ScalarType::eUavCounter: return os << "uav_ctr";
+
+    case ScalarType::eCount: break;
+  }
+
+  return os << "ScalarType(" << std::dec << uint32_t(ty) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, const BasicType& ty) {
+  if (ty.isVector())
+    os << "vec" << ty.getVectorSize() << '<';
+
+  os << ty.getBaseType();
+
+  if (ty.isVector())
+    os << '>';
+
+  return os;
+}
+
+
+std::ostream& operator << (std::ostream& os, const Type& ty) {
+  if (ty.isStructType()) {
+    os << '{' << ty.getBaseType(0u);
+
+    for (uint32_t i = 1u; i < ty.getStructMemberCount(); i++)
+      os << ',' << ty.getBaseType(i);
+
+    os << '}';
+  } else {
+    os << ty.getBaseType(0u);
+  }
+
+  for (uint32_t i = 0u; i < ty.getArrayDimensions(); i++) {
+    uint32_t size = ty.getArraySize(i);
+
+    if (size || i + 1u < ty.getArrayDimensions())
+      os << '[' << size << ']';
+    else
+      os << "[]";
+  }
+
+  return os;
+}
+
+
+std::ostream& operator << (std::ostream& os, const Construct& construct) {
+  switch (construct) {
+    case Construct::eNone:                return os << "None";
+    case Construct::eStructuredSelection: return os << "StructuredSelection";
+    case Construct::eStructuredLoop:      return os << "StructuredLoop";
+  }
+
+  return os << "Construct(" << std::dec << uint32_t(construct) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, const ResourceKind& kind) {
+  switch (kind) {
+    case ResourceKind::eBufferTyped:      return os << "BufferTyped";
+    case ResourceKind::eBufferStructured: return os << "BufferStructured";
+    case ResourceKind::eBufferRaw:        return os << "BufferRaw";
+    case ResourceKind::eImage1D:          return os << "Image1D";
+    case ResourceKind::eImage1DArray:     return os << "Image1DArray";
+    case ResourceKind::eImage2D:          return os << "Image2D";
+    case ResourceKind::eImage2DArray:     return os << "Image2DArray";
+    case ResourceKind::eImage2DMS:        return os << "Image2DMS";
+    case ResourceKind::eImage2DMSArray:   return os << "Image2DMSArray";
+    case ResourceKind::eImageCube:        return os << "ImageCube";
+    case ResourceKind::eImageCubeArray:   return os << "ImageCubeArray";
+    case ResourceKind::eImage3D:          return os << "Image3D";
+  }
+
+  return os << "ResourceKind(" << std::dec << uint32_t(kind) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, const PrimitiveType& primitive) {
+  switch (primitive) {
+    case PrimitiveType::ePoints:        return os << "Points";
+    case PrimitiveType::eLines:         return os << "Lines";
+    case PrimitiveType::eLinesAdj:      return os << "LinesAdj";
+    case PrimitiveType::eTriangles:     return os << "Triangles";
+    case PrimitiveType::eTrianglesAdj:  return os << "TrianglesAdj";
+    case PrimitiveType::eQuads:         return os << "Quads";
+
+    case PrimitiveType::ePatch: break;
+  }
+
+  uint32_t patchVertexCount = uint32_t(primitive) - uint32_t(PrimitiveType::ePatch);
+
+  if (patchVertexCount >= 1u && patchVertexCount <= 32u)
+    return os << "Patch<" << patchVertexCount << ">";
+
+  return os << "PrimitiveType(" << std::dec << uint32_t(primitive) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, const TessWindingOrder& winding) {
+  switch (winding) {
+    case TessWindingOrder::eCcw:  return os << "Ccw";
+    case TessWindingOrder::eCw:   return os << "Cw";
+  }
+
+  return os << "TessWindingOrder(" << std::dec << uint32_t(winding) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, const TessPartitioning& partitioning) {
+  switch (partitioning) {
+    case TessPartitioning::eInteger:    return os << "Integer";
+    case TessPartitioning::eFractOdd:   return os << "FractOdd";
+    case TessPartitioning::eFractEven:  return os << "FractEven";
+    case TessPartitioning::ePow2:       return os << "Pow2";
+  }
+
+  return os << "TessPartitioning(" << uint32_t(partitioning) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, const BuiltIn& builtIn) {
+  switch (builtIn) {
+    case BuiltIn::ePosition:            return os << "Position";
+    case BuiltIn::eClipDistance:        return os << "ClipDistance";
+    case BuiltIn::eCullDistance:        return os << "CullDistance";
+    case BuiltIn::eVertexId:            return os << "VertexId";
+    case BuiltIn::eInstanceId:          return os << "InstanceId";
+    case BuiltIn::ePrimitiveId:         return os << "PrimitiveId";
+    case BuiltIn::eLayerIndex:          return os << "LayerIndex";
+    case BuiltIn::eViewportIndex:       return os << "ViewportIndex";
+    case BuiltIn::eGsInstanceId:        return os << "GsInstanceId";
+    case BuiltIn::eTessControlPointId:  return os << "TessControlPointId";
+    case BuiltIn::eTessCoord:           return os << "TessCoord";
+    case BuiltIn::eTessFactorInner:     return os << "TessFactorInner";
+    case BuiltIn::eTessFactorOuter:     return os << "TessFactorOuter";
+    case BuiltIn::eSampleCount:         return os << "SampleCount";
+    case BuiltIn::eSampleId:            return os << "SampleId";
+    case BuiltIn::eSamplePosition:      return os << "SamplePosition";
+    case BuiltIn::eSampleMask:          return os << "SampleMask";
+    case BuiltIn::eIsFrontFace:         return os << "IsFrontFace";
+    case BuiltIn::eDepth:               return os << "Depth";
+    case BuiltIn::eStencilRef:          return os << "StencilRef";
+    case BuiltIn::eWorkgroupId:         return os << "WorkgroupId";
+    case BuiltIn::eGlobalThreadId:      return os << "GlobalThreadId";
+    case BuiltIn::eLocalThreadId:       return os << "LocalThreadId";
+    case BuiltIn::eLocalThreadIndex:    return os << "LocalThreadIndex";
+  }
+
+  return os << "BuiltIn(" << uint32_t(builtIn) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, const AtomicOp& atomicOp) {
+  switch (atomicOp) {
+    case AtomicOp::eLoad:               return os << "Load";
+    case AtomicOp::eStore:              return os << "Store";
+    case AtomicOp::eExchange:           return os << "Exchange";
+    case AtomicOp::eCompareExchange:    return os << "CompareExchange";
+    case AtomicOp::eAdd:                return os << "Add";
+    case AtomicOp::eSub:                return os << "Sub";
+    case AtomicOp::eSMin:               return os << "SMin";
+    case AtomicOp::eSMax:               return os << "SMax";
+    case AtomicOp::eUMin:               return os << "UMin";
+    case AtomicOp::eUMax:               return os << "UMax";
+    case AtomicOp::eAnd:                return os << "And";
+    case AtomicOp::eOr:                 return os << "Or";
+    case AtomicOp::eXor:                return os << "Xor";
+  }
+
+  return os << "AtomicOp(" << std::dec << uint32_t(atomicOp) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, const InterpolationMode& mode) {
+  switch (mode) {
+    case InterpolationMode::eFlat:          return os << "Flat";
+    case InterpolationMode::eCentroid:      return os << "Centroid";
+    case InterpolationMode::eSample:        return os << "Sample";
+    case InterpolationMode::eNoPerspective: return os << "NoPerspective";
+
+    case InterpolationMode::eFlagEnum: break;
+  }
+
+  return os << "InterpolationMode(" << std::dec << uint32_t(mode) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, const UavFlag& flag) {
+  switch (flag) {
+    case UavFlag::eCoherent:          return os << "Coherent";
+    case UavFlag::eReadOnly:          return os << "ReadOnly";
+    case UavFlag::eWriteOnly:         return os << "WriteOnly";
+    case UavFlag::eRasterizerOrdered: return os << "RasterizerOrdered";
+
+    case UavFlag::eFlagEnum: break;
+  }
+
+  return os << "UavFlag(" << std::dec << uint32_t(flag) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, const ShaderStage& stage) {
+  switch (stage) {
+    case ShaderStage::ePixel:     return os << "Pixel";
+    case ShaderStage::eVertex:    return os << "Vertex";
+    case ShaderStage::eGeometry:  return os << "Geometry";
+    case ShaderStage::eHull:      return os << "Hull";
+    case ShaderStage::eDomain:    return os << "Domain";
+    case ShaderStage::eCompute:   return os << "Compute";
+
+    case ShaderStage::eFlagEnum: break;
+  }
+
+  return os << "ShaderStage(" << std::dec << uint32_t(stage) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, const SsaDef& def) {
+  return os << '%' << def.getId();
+}
+
+
+std::ostream& operator << (std::ostream& os, const OpFlag& flag) {
+  switch (flag) {
+    case OpFlag::ePrecise:    return os << "precise";
+    case OpFlag::eNonUniform: return os << "nonuniform";
+
+    case OpFlag::eFlagEnum: break;
+  }
+
+  return os << "OpFlag(" << std::dec << uint32_t(flag) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
+  switch (opCode) {
+    case OpCode::eUnknown:
+    case OpCode::eLastDeclarative:
+    case OpCode::Count:
+      break;
+
+    case OpCode::eEntryPoint: return os << "EntryPoint";
+    case OpCode::eDebugName: return os << "DebugName";
+    case OpCode::eConstant: return os << "Constant";
+    case OpCode::eSetCsWorkgroupSize: return os << "SetCsWorkgroupSize";
+    case OpCode::eSetGsInstances: return os << "SetGsInstances";
+    case OpCode::eSetGsInputPrimitive: return os << "SetGsInputPrimitive";
+    case OpCode::eSetGsOutputVertices: return os << "SetGsOutputVertices";
+    case OpCode::eSetGsOutputPrimitive: return os << "SetGsOutputPrimitive";
+    case OpCode::eSetPsEarlyFragmentTest: return os << "SetPsEarlyFragmentTest";
+    case OpCode::eSetPsDepthGreaterEqual: return os << "SetPsDepthGreaterEqual";
+    case OpCode::eSetPsDepthLessEqual: return os << "SetPsDepthLessEqual";
+    case OpCode::eSetTessPrimitive: return os << "SetTessPrimitive";
+    case OpCode::eSetTessDomain: return os << "SetTessDomain";
+    case OpCode::eDclInput: return os << "DclInput";
+    case OpCode::eDclInputBuiltIn: return os << "DclInputBuiltIn";
+    case OpCode::eDclOutput: return os << "DclOutput";
+    case OpCode::eDclOutputBuiltIn: return os << "DclOutputBuiltIn";
+    case OpCode::eDclSpecConstant: return os << "DclSpecConstant";
+    case OpCode::eDclPushData: return os << "DclPushData";
+    case OpCode::eDclSampler: return os << "DclSampler";
+    case OpCode::eDclCbv: return os << "DclCbv";
+    case OpCode::eDclSrv: return os << "DclSrv";
+    case OpCode::eDclUav: return os << "DclUav";
+    case OpCode::eDclUavCounter: return os << "DclUavCounter";
+    case OpCode::eDclLds: return os << "DclLds";
+    case OpCode::eDclScratch: return os << "DclScratch";
+    case OpCode::eDclTmp: return os << "DclTmp";
+    case OpCode::eDclParam: return os << "DclParam";
+    case OpCode::eFunction: return os << "Function";
+    case OpCode::eFunctionEnd: return os << "FunctionEnd";
+    case OpCode::eFunctionCall: return os << "FunctionCall";
+    case OpCode::eLabel: return os << "Label";
+    case OpCode::eBranch: return os << "Branch";
+    case OpCode::eBranchConditional: return os << "BranchConditional";
+    case OpCode::eSwitch: return os << "Switch";
+    case OpCode::eUnreachable: return os << "Unreachable";
+    case OpCode::eReturn: return os << "Return";
+    case OpCode::ePhi: return os << "Phi";
+  }
+
+  return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";
 }
 
 }

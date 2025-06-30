@@ -3,7 +3,9 @@
 #include <atomic>
 #include <cstdint>
 #include <iterator>
+#include <ostream>
 #include <type_traits>
+#include <utility>
 
 namespace dxbc_spv::util {
 
@@ -163,6 +165,23 @@ private:
 
 };
 
+template<typename T>
+std::ostream& operator << (std::ostream& os, Flags<T> flags) {
+  if (!flags) {
+    os << "None";
+  } else {
+    os << flags.first();
+    flags -= flags.first();
+
+    while (flags) {
+      os << "|" << flags.first();
+      flags -= flags.first();
+    }
+  }
+
+  return os;
+}
+
 }
 
 template<typename T, T v = T::eFlagEnum>
@@ -190,3 +209,20 @@ template<typename T, T v = T::eFlagEnum>
 auto operator == (T a, dxbc_spv::util::Flags<T> b) { return dxbc_spv::util::Flags<T>(a) == b; }
 template<typename T, T v = T::eFlagEnum>
 auto operator != (T a, dxbc_spv::util::Flags<T> b) { return dxbc_spv::util::Flags<T>(a) != b; }
+
+template<typename T, T v = T::eFlagEnum>
+std::ostream& operator << (std::ostream& os, dxbc_spv::util::Flags<T> flags) {
+  if (!flags) {
+    os << "None";
+  } else {
+    os << flags.first();
+    flags -= flags.first();
+
+    while (flags) {
+      os << "|" << flags.first();
+      flags -= flags.first();
+    }
+  }
+
+  return os;
+}

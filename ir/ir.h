@@ -4,11 +4,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <ostream>
 #include <string>
 #include <type_traits>
+#include <utility>
 
 #include "../util/util_debug.h"
 #include "../util/util_flags.h"
+#include "../util/util_hash.h"
 #include "../util/util_float16.h"
 #include "../util/util_small_vector.h"
 
@@ -1246,5 +1249,58 @@ inline Operand::Operand(const Op* op) {
   dxbc_spv_assert(!op || op->getDef());
   m_data = op ? op->getDef().getId() : 0u;
 }
+
+std::ostream& operator << (std::ostream& os, const ScalarType& ty);
+std::ostream& operator << (std::ostream& os, const BasicType& ty);
+std::ostream& operator << (std::ostream& os, const Type& ty);
+std::ostream& operator << (std::ostream& os, const Construct& construct);
+std::ostream& operator << (std::ostream& os, const ResourceKind& kind);
+std::ostream& operator << (std::ostream& os, const PrimitiveType& primitive);
+std::ostream& operator << (std::ostream& os, const TessWindingOrder& winding);
+std::ostream& operator << (std::ostream& os, const TessPartitioning& partitioning);
+std::ostream& operator << (std::ostream& os, const BuiltIn& builtIn);
+std::ostream& operator << (std::ostream& os, const AtomicOp& atomicOp);
+std::ostream& operator << (std::ostream& os, const UavFlag& flag);
+std::ostream& operator << (std::ostream& os, const InterpolationMode& flag);
+std::ostream& operator << (std::ostream& os, const ShaderStage& stage);
+std::ostream& operator << (std::ostream& os, const SsaDef& def);
+std::ostream& operator << (std::ostream& os, const OpFlag& flag);
+std::ostream& operator << (std::ostream& os, const OpCode& opCode);
+
+}
+
+namespace std {
+
+template<>
+struct hash<dxbc_spv::ir::SsaDef> {
+  size_t operator () (const dxbc_spv::ir::SsaDef& value) const {
+    return size_t(value.getId());
+  }
+};
+
+template<>
+struct hash<dxbc_spv::ir::BasicType> {
+  size_t operator () (const dxbc_spv::ir::BasicType& type) const {
+    return uint32_t(type.getBaseType()) | ((type.getVectorSize() - 1u) << dxbc_spv::ir::ScalarTypeBits);
+  }
+};
+
+template<>
+struct hash<dxbc_spv::ir::Type> {
+  size_t operator () (const dxbc_spv::ir::Type& type) const {
+    size_t v = type.getArrayDimensions();
+    v = dxbc_spv::util::hash_combine(v, type.getStructMemberCount());
+
+    for (uint32_t i = 0u; i < type.getArrayDimensions(); i++)
+      v = dxbc_spv::util::hash_combine(v, type.getArraySize(i));
+
+    for (uint32_t i = 0u; i < type.getStructMemberCount(); i++) {
+      v = dxbc_spv::util::hash_combine(v,
+        std::hash<dxbc_spv::ir::BasicType>()(type.getBaseType(i)));
+    }
+
+    return v;
+  }
+};
 
 }
