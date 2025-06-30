@@ -1,6 +1,7 @@
 test_files = files([
   'test_main.cpp',
 
+  'ir/test_ir_builder.cpp',
   'ir/test_ir_op.cpp',
   'ir/test_ir_type.cpp',
 
