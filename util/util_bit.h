@@ -50,6 +50,27 @@ inline uint32_t tzcnt(uint64_t n) {
 }
 
 
+/** Leading zero count (8-bit) */
+inline uint32_t lzcnt8(uint8_t n) {
+  uint32_t r = 0;
+  r += ((n << r) & 0xf0u) ? 0 : 4;
+  r += ((n << r) & 0xc0u) ? 0 : 2;
+  r += ((n << r) & 0x80u) ? 0 : 1;
+  return n != 0 ? r : 8;
+}
+
+
+/** Leading zero count (16-bit) */
+inline uint32_t lzcnt16(uint16_t n) {
+  uint32_t r = 0;
+  r += ((n << r) & 0xff00u) ? 0 : 8;
+  r += ((n << r) & 0xf000u) ? 0 : 4;
+  r += ((n << r) & 0xc000u) ? 0 : 2;
+  r += ((n << r) & 0x8000u) ? 0 : 1;
+  return n != 0 ? r : 16;
+}
+
+
 /** Leading zero count (32-bit) */
 inline uint32_t lzcnt32(uint32_t n) {
   uint32_t r = 0;
