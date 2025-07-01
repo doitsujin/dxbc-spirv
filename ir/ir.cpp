@@ -501,6 +501,9 @@ std::ostream& operator << (std::ostream& os, const MemoryType& type) {
 
 
 std::ostream& operator << (std::ostream& os, const SsaDef& def) {
+  if (!def)
+    return os << "null";
+
   return os << '%' << def.getId();
 }
 
