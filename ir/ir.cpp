@@ -587,6 +587,7 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eCompositeInsert: return os << "CompositeInsert";
     case OpCode::eCompositeExtract: return os << "CompositeExtract";
     case OpCode::eCompositeConstruct: return os << "CompositeConstruct";
+    case OpCode::eCheckSparseAccess: return os << "CheckSparseAccess";
   }
 
   return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";
