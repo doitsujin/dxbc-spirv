@@ -818,6 +818,25 @@ enum class OpCode : uint16_t {
 
   eCheckSparseAccess            = 256u,
 
+  eParamLoad                    = 288u,
+  eTmpLoad                      = 289u,
+  eTmpStore                     = 290u,
+  eScratchLoad                  = 291u,
+  eScratchStore                 = 292u,
+  eLdsLoad                      = 293u,
+  eLdsStore                     = 294u,
+  ePushDataLoad                 = 295u,
+  eSpecConstantLoad             = 296u,
+  eInputLoad                    = 297u,
+  eOutputLoad                   = 298u,
+  eOutputStore                  = 299u,
+  eDescriptorLoad               = 300u,
+  eBufferLoad                   = 301u,
+  eBufferStore                  = 302u,
+  eBufferQuerySize              = 303u,
+  eMemoryLoad                   = 304u,
+  eMemoryStore                  = 305u,
+
   Count
 };
 
@@ -1491,6 +1510,117 @@ public:
   static Op CheckSparseAccess(SsaDef feedback) {
     return Op(OpCode::eCheckSparseAccess, ScalarType::eBool)
       .addOperand(Operand(feedback));
+  }
+
+  static Op ParamLoad(Type type, SsaDef function, SsaDef decl) {
+    return Op(OpCode::eParamLoad, type)
+      .addOperand(Operand(function))
+      .addOperand(Operand(decl));
+  }
+
+  static Op TmpLoad(Type type, SsaDef decl) {
+    return Op(OpCode::eTmpLoad, type)
+      .addOperand(Operand(decl));
+  }
+
+  static Op TmpStore(SsaDef decl, SsaDef value) {
+    return Op(OpCode::eTmpStore, Type())
+      .addOperand(Operand(decl))
+      .addOperand(Operand(value));
+  }
+
+  static Op ScratchLoad(Type type, SsaDef decl, SsaDef address) {
+    return Op(OpCode::eScratchLoad, type)
+      .addOperand(Operand(decl))
+      .addOperand(Operand(address));
+  }
+
+  static Op ScratchStore(SsaDef decl, SsaDef address, SsaDef value) {
+    return Op(OpCode::eScratchStore, Type())
+      .addOperand(Operand(decl))
+      .addOperand(Operand(address))
+      .addOperand(Operand(value));
+  }
+
+  static Op LdsLoad(Type type, SsaDef decl, SsaDef address) {
+    return Op(OpCode::eLdsLoad, type)
+      .addOperand(Operand(decl))
+      .addOperand(Operand(address));
+  }
+
+  static Op LdsStore(SsaDef decl, SsaDef address, SsaDef value) {
+    return Op(OpCode::eLdsStore, Type())
+      .addOperand(Operand(decl))
+      .addOperand(Operand(address))
+      .addOperand(Operand(value));
+  }
+
+  static Op PushDataLoad(Type type, SsaDef decl, SsaDef address) {
+    return Op(OpCode::ePushDataLoad, type)
+      .addOperand(Operand(decl))
+      .addOperand(Operand(address));
+  }
+
+  static Op SpecConstantLoad(Type type, SsaDef decl, SsaDef address) {
+    return Op(OpCode::eSpecConstantLoad, type)
+      .addOperand(Operand(decl))
+      .addOperand(Operand(address));
+  }
+
+  static Op InputLoad(Type type, SsaDef decl, SsaDef address) {
+    return Op(OpCode::eInputLoad, type)
+      .addOperand(Operand(decl))
+      .addOperand(Operand(address));
+  }
+
+  static Op OutputLoad(Type type, SsaDef decl, SsaDef address) {
+    return Op(OpCode::eOutputLoad, type)
+      .addOperand(Operand(decl))
+      .addOperand(Operand(address));
+  }
+
+  static Op OutputStore(SsaDef decl, SsaDef address, SsaDef value) {
+    return Op(OpCode::eOutputStore, Type())
+      .addOperand(Operand(decl))
+      .addOperand(Operand(address))
+      .addOperand(Operand(value));
+  }
+
+  static Op DescriptorLoad(Type type, SsaDef decl, SsaDef index) {
+    return Op(OpCode::eDescriptorLoad, type)
+      .addOperand(Operand(decl))
+      .addOperand(Operand(index));
+  }
+
+  static Op BufferLoad(Type type, SsaDef descriptor, SsaDef address) {
+    return Op(OpCode::eBufferLoad, type)
+      .addOperand(Operand(descriptor))
+      .addOperand(Operand(address));
+  }
+
+  static Op BufferStore(SsaDef descriptor, SsaDef address, SsaDef value) {
+    return Op(OpCode::eBufferStore, Type())
+      .addOperand(Operand(descriptor))
+      .addOperand(Operand(address))
+      .addOperand(Operand(value));
+  }
+
+  static Op BufferQuerySize(SsaDef descriptor) {
+    return Op(OpCode::eBufferQuerySize, ScalarType::eU32)
+      .addOperand(Operand(descriptor));
+  }
+
+  static Op MemoryLoad(Type type, SsaDef pointer, SsaDef address) {
+    return Op(OpCode::eMemoryLoad, type)
+      .addOperand(Operand(pointer))
+      .addOperand(Operand(address));
+  }
+
+  static Op MemoryStore(SsaDef pointer, SsaDef address, SsaDef value) {
+    return Op(OpCode::eMemoryStore, Type())
+      .addOperand(Operand(pointer))
+      .addOperand(Operand(address))
+      .addOperand(Operand(value));
   }
 
 private:

@@ -588,6 +588,24 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eCompositeExtract: return os << "CompositeExtract";
     case OpCode::eCompositeConstruct: return os << "CompositeConstruct";
     case OpCode::eCheckSparseAccess: return os << "CheckSparseAccess";
+    case OpCode::eParamLoad: return os << "ParamLoad";
+    case OpCode::eTmpLoad: return os << "TmpLoad";
+    case OpCode::eTmpStore: return os << "TmpStore";
+    case OpCode::eScratchLoad: return os << "ScratchLoad";
+    case OpCode::eScratchStore: return os << "ScratchStore";
+    case OpCode::eLdsLoad: return os << "LdsLoad";
+    case OpCode::eLdsStore: return os << "LdsStore";
+    case OpCode::ePushDataLoad: return os << "PushDataLoad";
+    case OpCode::eSpecConstantLoad: return os << "SpecConstantLoad";
+    case OpCode::eInputLoad: return os << "InputLoad";
+    case OpCode::eOutputLoad: return os << "OutputLoad";
+    case OpCode::eOutputStore: return os << "OutputStore";
+    case OpCode::eDescriptorLoad: return os << "DescriptorLoad";
+    case OpCode::eBufferLoad: return os << "BufferLoad";
+    case OpCode::eBufferStore: return os << "BufferStore";
+    case OpCode::eBufferQuerySize: return os << "BufferQuerySize";
+    case OpCode::eMemoryLoad: return os << "MemoryLoad";
+    case OpCode::eMemoryStore: return os << "MemoryStore";
   }
 
   return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";
