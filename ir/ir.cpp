@@ -207,6 +207,9 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
     case OpCode::eMemoryAtomic:
       return getOperandCount() ? getOperandCount() - 1u : 0u;
 
+    case OpCode::eImageGather:
+      return 5u;
+
     default:
       return getOperandCount();
   }
@@ -616,6 +619,14 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eImageAtomic: return os << "ImageAtomic";
     case OpCode::eCounterAtomic: return os << "CounterAtomic";
     case OpCode::eMemoryAtomic: return os << "MemoryAtomic";
+    case OpCode::eImageLoad: return os << "ImageLoad";
+    case OpCode::eImageStore: return os << "ImageStore";
+    case OpCode::eImageQuerySize: return os << "ImageQuerySize";
+    case OpCode::eImageQueryMips: return os << "ImageQueryMips";
+    case OpCode::eImageQuerySamples: return os << "ImageQuerySamples";
+    case OpCode::eImageSample: return os << "ImageSample";
+    case OpCode::eImageGather: return os << "ImageGather";
+    case OpCode::eImageComputeLod: return os << "ImageComputeLod";
   }
 
   return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";

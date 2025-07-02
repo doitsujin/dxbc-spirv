@@ -843,6 +843,15 @@ enum class OpCode : uint16_t {
   eCounterAtomic                = 323u,
   eMemoryAtomic                 = 324u,
 
+  eImageLoad                    = 352u,
+  eImageStore                   = 353u,
+  eImageQuerySize               = 354u,
+  eImageQueryMips               = 355u,
+  eImageQuerySamples            = 356u,
+  eImageSample                  = 357u,
+  eImageGather                  = 358u,
+  eImageComputeLod              = 359u,
+
   Count
 };
 
@@ -1678,6 +1687,66 @@ public:
       .addOperand(Operand(address))
       .addOperands(Operand(SsaDef(args))...)
       .addOperand(Operand(op));
+  }
+
+  static Op ImageLoad(Type type, SsaDef descriptor, SsaDef mip, SsaDef layer, SsaDef coord, SsaDef sample, SsaDef offset) {
+    return Op(OpCode::eImageLoad, type)
+      .addOperand(Operand(descriptor))
+      .addOperand(Operand(mip))
+      .addOperand(Operand(layer))
+      .addOperand(Operand(coord))
+      .addOperand(Operand(sample))
+      .addOperand(Operand(offset));
+  }
+
+  static Op ImageStore(SsaDef descriptor, SsaDef layer, SsaDef coord, SsaDef value) {
+    return Op(OpCode::eImageStore, Type())
+      .addOperand(Operand(descriptor))
+      .addOperand(Operand(layer))
+      .addOperand(Operand(coord))
+      .addOperand(Operand(value));
+  }
+
+  static Op ImageQuerySize(Type type, SsaDef descriptor, SsaDef mip) {
+    return Op(OpCode::eImageQuerySize, type)
+      .addOperand(Operand(descriptor))
+      .addOperand(Operand(mip));
+  }
+
+  static Op ImageQueryMips(Type type, SsaDef descriptor) {
+    return Op(OpCode::eImageQueryMips, type)
+      .addOperand(Operand(descriptor));
+  }
+
+  static Op ImageQuerySamples(Type type, SsaDef descriptor) {
+    return Op(OpCode::eImageQuerySamples, type)
+      .addOperand(Operand(descriptor));
+  }
+
+  static Op ImageSample(Type type, SsaDef descriptor, SsaDef sampler,
+      SsaDef coord, SsaDef offset, SsaDef lodIndex, SsaDef lodBias, SsaDef lodClamp,
+      SsaDef derivatives, SsaDef depthValue) {
+    return Op(OpCode::eImageSample, type)
+      .addOperand(Operand(descriptor))
+      .addOperand(Operand(sampler))
+      .addOperand(Operand(coord))
+      .addOperand(Operand(offset))
+      .addOperand(Operand(lodIndex))
+      .addOperand(Operand(lodBias))
+      .addOperand(Operand(lodClamp))
+      .addOperand(Operand(derivatives))
+      .addOperand(Operand(depthValue));
+  }
+
+  static Op ImageGather(Type type, SsaDef descriptor, SsaDef sampler,
+      SsaDef coord, SsaDef offset, SsaDef depthValue, uint32_t component) {
+    return Op(OpCode::eImageGather, type)
+      .addOperand(Operand(descriptor))
+      .addOperand(Operand(sampler))
+      .addOperand(Operand(coord))
+      .addOperand(Operand(offset))
+      .addOperand(Operand(depthValue))
+      .addOperand(Operand(component));
   }
 
 private:
