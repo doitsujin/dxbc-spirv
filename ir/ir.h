@@ -768,6 +768,19 @@ enum class OpCode : uint16_t {
   eReturn                       = 101u,
   ePhi                          = 102u,
 
+  eScopedIf                     = 128u,
+  eScopedElse                   = 129u,
+  eScopedEndIf                  = 130u,
+  eScopedLoop                   = 131u,
+  eScopedLoopBreak              = 132u,
+  eScopedLoopContinue           = 133u,
+  eScopedEndLoop                = 134u,
+  eScopedSwitch                 = 135u,
+  eScopedSwitchCase             = 136u,
+  eScopedSwitchDefault          = 137u,
+  eScopedSwitchBreak            = 138u,
+  eScopedEndSwitch              = 139u,
+
   Count
 };
 
@@ -1329,6 +1342,57 @@ public:
   static Op Return(Type type, SsaDef value) {
     return Op(OpCode::eReturn, type)
       .addOperand(Operand(value));
+  }
+
+  static Op ScopedIf(SsaDef cond) {
+    return Op(OpCode::eScopedIf, Type())
+      .addOperand(Operand(cond));
+  }
+
+  static Op ScopedElse() {
+    return Op(OpCode::eScopedElse, Type());
+  }
+
+  static Op ScopedEndIf() {
+    return Op(OpCode::eScopedEndIf, Type());
+  }
+
+  static Op ScopedLoop() {
+    return Op(OpCode::eScopedLoop, Type());
+  }
+
+  static Op ScopedLoopBreak() {
+    return Op(OpCode::eScopedLoopBreak, Type());
+  }
+
+  static Op ScopedLoopContinue() {
+    return Op(OpCode::eScopedLoopContinue, Type());
+  }
+
+  static Op ScopedEndLoop() {
+    return Op(OpCode::eScopedEndLoop, Type());
+  }
+
+  static Op ScopedSwitch(SsaDef value) {
+    return Op(OpCode::eScopedSwitch, Type())
+      .addOperand(Operand(value));
+  }
+
+  static Op ScopedSwitchCase(Operand literal) {
+    return Op(OpCode::eScopedSwitchCase, Type())
+      .addOperand(literal);
+  }
+
+  static Op ScopedSwitchDefault() {
+    return Op(OpCode::eScopedSwitchDefault, Type());
+  }
+
+  static Op ScopedSwitchBreak() {
+    return Op(OpCode::eScopedSwitchBreak, Type());
+  }
+
+  static Op ScopedEndSwitch() {
+    return Op(OpCode::eScopedEndSwitch, Type());
   }
 
 private:
