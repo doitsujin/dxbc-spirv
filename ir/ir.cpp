@@ -201,6 +201,7 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
     case OpCode::eSetTessDomain:
     case OpCode::eDerivX:
     case OpCode::eDerivY:
+    case OpCode::eFRound:
       return 1u;
 
     case OpCode::eLabel:
@@ -523,6 +524,18 @@ std::ostream& operator << (std::ostream& os, const DerivativeMode& mode) {
 }
 
 
+std::ostream& operator << (std::ostream& os, const RoundMode& mode) {
+  switch (mode) {
+    case RoundMode::eZero:        return os << "Zero";
+    case RoundMode::eNearestEven: return os << "NearestEven";
+    case RoundMode::eNegativeInf: return os << "NegativeInf";
+    case RoundMode::ePositiveInf: return os << "PositiveInf";
+  }
+
+  return os << "RoundMode(" << std::dec << uint32_t(mode) << ")";
+}
+
+
 std::ostream& operator << (std::ostream& os, const SsaDef& def) {
   if (!def)
     return os << "null";
@@ -673,6 +686,29 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eBNe: return os << "BNe";
     case OpCode::eBNot: return os << "BNot";
     case OpCode::eSelect: return os << "Select";
+    case OpCode::eFAbs: return os << "FAbs";
+    case OpCode::eFNeg: return os << "FNeg";
+    case OpCode::eFAdd: return os << "FAdd";
+    case OpCode::eFSub: return os << "FSub";
+    case OpCode::eFMul: return os << "FMul";
+    case OpCode::eFMulLegacy: return os << "FMulLegacy";
+    case OpCode::eFMad: return os << "FMad";
+    case OpCode::eFMadLegacy: return os << "FMadLegacy";
+    case OpCode::eFDiv: return os << "FDiv";
+    case OpCode::eFRcp: return os << "FRcp";
+    case OpCode::eFSqrt: return os << "FSqrt";
+    case OpCode::eFRsq: return os << "FRsq";
+    case OpCode::eFExp2: return os << "FExp2";
+    case OpCode::eFLog2: return os << "FLog2";
+    case OpCode::eFFract: return os << "FFract";
+    case OpCode::eFRound: return os << "FRound";
+    case OpCode::eFMin: return os << "FMin";
+    case OpCode::eFMax: return os << "FMax";
+    case OpCode::eFDot: return os << "FDot";
+    case OpCode::eFDotLegacy: return os << "FDotLegacy";
+    case OpCode::eFClamp: return os << "FClamp";
+    case OpCode::eFSin: return os << "FSin";
+    case OpCode::eFCos: return os << "FCos";
   }
 
   return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";
