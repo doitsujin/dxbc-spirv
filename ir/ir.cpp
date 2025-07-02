@@ -199,6 +199,8 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
     case OpCode::eSetGsOutputPrimitive:
     case OpCode::eSetTessPrimitive:
     case OpCode::eSetTessDomain:
+    case OpCode::eDerivX:
+    case OpCode::eDerivY:
       return 1u;
 
     case OpCode::eLabel:
@@ -510,6 +512,17 @@ std::ostream& operator << (std::ostream& os, const MemoryType& type) {
 }
 
 
+std::ostream& operator << (std::ostream& os, const DerivativeMode& mode) {
+  switch (mode) {
+    case DerivativeMode::eDefault:  return os << "Default";
+    case DerivativeMode::eCoarse:   return os << "Coarse";
+    case DerivativeMode::eFine:     return os << "Fine";
+  }
+
+  return os << "DerivativeMode(" << std::dec << uint32_t(mode) << ")";
+}
+
+
 std::ostream& operator << (std::ostream& os, const SsaDef& def) {
   if (!def)
     return os << "null";
@@ -637,6 +650,8 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eInterpolateAtCentroid: return os << "InterpolateAtCentroid";
     case OpCode::eInterpolateAtSample: return os << "InterpolateAtSample";
     case OpCode::eInterpolateAtOffset: return os << "InterpolateAtOffset";
+    case OpCode::eDerivX: return os << "DerivX";
+    case OpCode::eDerivY: return os << "DerivY";
   }
 
   return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";
