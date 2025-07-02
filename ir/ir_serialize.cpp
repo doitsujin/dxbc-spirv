@@ -262,14 +262,19 @@ bool Deserializer::deserialize(Builder& builder) {
     if (!deserializeOp(op, def))
       return false;
 
-    auto result = builder.add(Op(op.getOpCode(), op.getType()));
+    auto result = op.isConstant()
+      ? builder.add(op)
+      : builder.add(Op(op.getOpCode(), op.getType()));
+
     dxbc_spv_assert(result == def);
   }
 
   /* Add actual ops to builder */
   for (auto& op : ops) {
     auto def = op.getDef();
-    builder.rewriteOp(def, std::move(op));
+
+    if (!op.isConstant())
+      builder.rewriteOp(def, std::move(op));
   }
 
   /* Ensure the op count is valid */
