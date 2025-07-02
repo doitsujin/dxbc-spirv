@@ -289,8 +289,11 @@ public:
   T* end() { return begin() + size(); }
 
   /** Constant iterator begin/end. */
-  const T* cbegin() const { return ptr(0); }
-  const T* cend() const { return cbegin() + size(); }
+  const T* begin() const { return ptr(0); }
+  const T* end() const { return begin() + size(); }
+
+  const T* cbegin() const { return begin(); }
+  const T* cend() const { return end(); }
 
   const T& front() const { return *ptr(0); }
         T& front()       { return *ptr(0); }
