@@ -186,6 +186,10 @@ void Disassembler::disassembleOperandLiteral(const Op& op, uint32_t index) {
         if (index == 1u) { m_str << DerivativeMode(operand); return; }
         return;
 
+      case OpCode::eFRound:
+        if (index == 1u) { m_str << RoundMode(operand); return; }
+        return;
+
       default:;
     }
   }

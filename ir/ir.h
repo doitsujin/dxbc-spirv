@@ -708,6 +708,15 @@ enum class MemoryType : uint32_t {
 using MemoryTypeFlags = util::Flags<MemoryType>;
 
 
+/** Floating point round mode */
+enum class RoundMode : uint32_t {
+  eZero             = (1u << 0),
+  eNearestEven      = (1u << 1),
+  eNegativeInf      = (1u << 2),
+  ePositiveInf      = (1u << 3),
+};
+
+
 /** Derivative mode */
 enum class DerivativeMode : uint32_t {
   eDefault          = 0u,
@@ -899,6 +908,30 @@ enum class OpCode : uint16_t {
   eBNot                         = 612u,
 
   eSelect                       = 640u,
+
+  eFAbs                         = 672u,
+  eFNeg                         = 673u,
+  eFAdd                         = 674u,
+  eFSub                         = 675u,
+  eFMul                         = 676u,
+  eFMulLegacy                   = 677u,
+  eFMad                         = 678u,
+  eFMadLegacy                   = 679u,
+  eFDiv                         = 680u,
+  eFRcp                         = 681u,
+  eFSqrt                        = 682u,
+  eFRsq                         = 683u,
+  eFExp2                        = 684u,
+  eFLog2                        = 685u,
+  eFFract                       = 686u,
+  eFRound                       = 687u,
+  eFMin                         = 688u,
+  eFMax                         = 689u,
+  eFDot                         = 690u,
+  eFDotLegacy                   = 691u,
+  eFClamp                       = 692u,
+  eFSin                         = 693u,
+  eFCos                         = 694u,
 
   Count
 };
@@ -1971,6 +2004,137 @@ public:
       .addOperand(Operand(f));
   }
 
+  static Op FAbs(Type type, SsaDef a) {
+    return Op(OpCode::eFAbs, type)
+      .addOperand(Operand(a));
+  }
+
+  static Op FNeg(Type type, SsaDef a) {
+    return Op(OpCode::eFNeg, type)
+      .addOperand(Operand(a));
+  }
+
+  static Op FAdd(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eFAdd, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op FSub(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eFSub, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op FMul(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eFMul, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op FMulLegacy(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eFMulLegacy, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op FMad(Type type, SsaDef a, SsaDef b, SsaDef c) {
+    return Op(OpCode::eFMad, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b))
+      .addOperand(Operand(c));
+  }
+
+  static Op FMadLegacy(Type type, SsaDef a, SsaDef b, SsaDef c) {
+    return Op(OpCode::eFMadLegacy, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b))
+      .addOperand(Operand(c));
+  }
+
+  static Op FDiv(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eFDiv, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op FRcp(Type type, SsaDef a) {
+    return Op(OpCode::eFRcp, type)
+      .addOperand(Operand(a));
+  }
+
+  static Op FSqrt(Type type, SsaDef a) {
+    return Op(OpCode::eFSqrt, type)
+      .addOperand(Operand(a));
+  }
+
+  static Op FRsq(Type type, SsaDef a) {
+    return Op(OpCode::eFRsq, type)
+      .addOperand(Operand(a));
+  }
+
+  static Op FExp2(Type type, SsaDef a) {
+    return Op(OpCode::eFExp2, type)
+      .addOperand(Operand(a));
+  }
+
+  static Op FLog2(Type type, SsaDef a) {
+    return Op(OpCode::eFLog2, type)
+      .addOperand(Operand(a));
+  }
+
+  static Op FFract(Type type, SsaDef a) {
+    return Op(OpCode::eFFract, type)
+      .addOperand(Operand(a));
+  }
+
+  static Op FRound(Type type, SsaDef a, RoundMode mode) {
+    return Op(OpCode::eFRound, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(mode));
+  }
+
+  static Op FMin(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eFMin, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op FMax(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eFMax, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op FDot(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eFDot, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op FDotLegacy(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eFDotLegacy, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op FClamp(Type type, SsaDef a, SsaDef lo, SsaDef hi) {
+    return Op(OpCode::eFClamp, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(lo))
+      .addOperand(Operand(hi));
+  }
+
+  static Op FSin(Type type, SsaDef a) {
+    return Op(OpCode::eFSin, type)
+      .addOperand(Operand(a));
+  }
+
+  static Op FCos(Type type, SsaDef a) {
+    return Op(OpCode::eFCos, type)
+      .addOperand(Operand(a));
+  }
+
 private:
 
   SsaDef m_def = { };
@@ -2008,6 +2172,7 @@ std::ostream& operator << (std::ostream& os, const ShaderStage& stage);
 std::ostream& operator << (std::ostream& os, const Scope& stage);
 std::ostream& operator << (std::ostream& os, const MemoryType& stage);
 std::ostream& operator << (std::ostream& os, const DerivativeMode& stage);
+std::ostream& operator << (std::ostream& os, const RoundMode& stage);
 std::ostream& operator << (std::ostream& os, const SsaDef& def);
 std::ostream& operator << (std::ostream& os, const OpFlag& flag);
 std::ostream& operator << (std::ostream& os, const OpCode& opCode);
