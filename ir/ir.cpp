@@ -627,6 +627,8 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eImageSample: return os << "ImageSample";
     case OpCode::eImageGather: return os << "ImageGather";
     case OpCode::eImageComputeLod: return os << "ImageComputeLod";
+    case OpCode::ePointer: return os << "Pointer";
+    case OpCode::ePointerAddress: return os << "PointerAddress";
   }
 
   return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";

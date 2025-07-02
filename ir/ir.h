@@ -852,6 +852,9 @@ enum class OpCode : uint16_t {
   eImageGather                  = 358u,
   eImageComputeLod              = 359u,
 
+  ePointer                      = 384u,
+  ePointerAddress               = 385u,
+
   Count
 };
 
@@ -1747,6 +1750,16 @@ public:
       .addOperand(Operand(offset))
       .addOperand(Operand(depthValue))
       .addOperand(Operand(component));
+  }
+
+  static Op Pointer(Type type, SsaDef address) {
+    return Op(OpCode::ePointer, type)
+      .addOperand(Operand(address));
+  }
+
+  static Op PointerAddress(SsaDef pointer) {
+    return Op(OpCode::ePointerAddress, ScalarType::eU64)
+      .addOperand(Operand(pointer));
   }
 
 private:
