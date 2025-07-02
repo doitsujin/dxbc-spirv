@@ -860,6 +860,10 @@ enum class OpCode : uint16_t {
 
   eDemote                       = 448u,
 
+  eInterpolateAtCentroid        = 480u,
+  eInterpolateAtSample          = 481u,
+  eInterpolateAtOffset          = 482u,
+
   Count
 };
 
@@ -1779,6 +1783,23 @@ public:
 
   static Op Demote() {
     return Op(OpCode::eDemote, Type());
+  }
+
+  static Op InterpolateAtCentroid(Type type, SsaDef input) {
+    return Op(OpCode::eInterpolateAtCentroid, type)
+      .addOperand(Operand(input));
+  }
+
+  static Op InterpolateAtSample(Type type, SsaDef input, SsaDef sample) {
+    return Op(OpCode::eInterpolateAtSample, type)
+      .addOperand(Operand(input))
+      .addOperand(Operand(sample));
+  }
+
+  static Op InterpolateAtOffset(Type type, SsaDef input, SsaDef offset) {
+    return Op(OpCode::eInterpolateAtOffset, type)
+      .addOperand(Operand(input))
+      .addOperand(Operand(offset));
   }
 
 private:

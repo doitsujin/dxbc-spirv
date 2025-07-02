@@ -634,6 +634,9 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eEmitVertex: return os << "EmitVertex";
     case OpCode::eEmitPrimitive: return os << "EmitPrimitive";
     case OpCode::eDemote: return os << "Demote";
+    case OpCode::eInterpolateAtCentroid: return os << "InterpolateAtCentroid";
+    case OpCode::eInterpolateAtSample: return os << "InterpolateAtSample";
+    case OpCode::eInterpolateAtOffset: return os << "InterpolateAtOffset";
   }
 
   return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";
