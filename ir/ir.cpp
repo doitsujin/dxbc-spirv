@@ -184,6 +184,7 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
     case OpCode::eDclCbv:
     case OpCode::eDclSrv:
     case OpCode::eDclUav:
+    case OpCode::eScopedSwitchCase:
       return 0u;
 
     case OpCode::eDebugName:
@@ -534,6 +535,18 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eUnreachable: return os << "Unreachable";
     case OpCode::eReturn: return os << "Return";
     case OpCode::ePhi: return os << "Phi";
+    case OpCode::eScopedIf: return os << "ScopedIf";
+    case OpCode::eScopedElse: return os << "ScopedElse";
+    case OpCode::eScopedEndIf: return os << "ScopedEndIf";
+    case OpCode::eScopedLoop: return os << "ScopedLoop";
+    case OpCode::eScopedLoopBreak: return os << "ScopedLoopBreak";
+    case OpCode::eScopedLoopContinue: return os << "ScopedLoopContinue";
+    case OpCode::eScopedEndLoop: return os << "ScopedEndLoop";
+    case OpCode::eScopedSwitch: return os << "ScopedSwitch";
+    case OpCode::eScopedSwitchCase: return os << "ScopedSwitchCase";
+    case OpCode::eScopedSwitchDefault: return os << "ScopedSwitchDefault";
+    case OpCode::eScopedSwitchBreak: return os << "ScopedSwitchBreak";
+    case OpCode::eScopedEndSwitch: return os << "ScopedEndSwitch";
   }
 
   return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";
