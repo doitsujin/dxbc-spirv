@@ -633,6 +633,7 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::ePointerAddress: return os << "PointerAddress";
     case OpCode::eEmitVertex: return os << "EmitVertex";
     case OpCode::eEmitPrimitive: return os << "EmitPrimitive";
+    case OpCode::eDemote: return os << "Demote";
   }
 
   return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";
