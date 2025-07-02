@@ -878,6 +878,20 @@ enum class OpCode : uint16_t {
   eRovScopedLockBegin           = 544u,
   eRovScopedLockEnd             = 545u,
 
+  eFEq                          = 576u,
+  eFNe                          = 577u,
+  eFLt                          = 578u,
+  eFLe                          = 579u,
+  eFGt                          = 580u,
+  eFGe                          = 581u,
+  eFIsNan                       = 582u,
+  eIEq                          = 583u,
+  eINe                          = 584u,
+  eSLt                          = 585u,
+  eSGe                          = 586u,
+  eULt                          = 587u,
+  eUGe                          = 588u,
+
   Count
 };
 
@@ -1834,6 +1848,83 @@ public:
 
   static Op RovScopedLockEnd() {
     return Op(OpCode::eRovScopedLockEnd, Type());
+  }
+
+  static Op FEq(SsaDef a, SsaDef b) {
+    return Op(OpCode::eFEq, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op FNe(SsaDef a, SsaDef b) {
+    return Op(OpCode::eFNe, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op FLt(SsaDef a, SsaDef b) {
+    return Op(OpCode::eFLt, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op FLe(SsaDef a, SsaDef b) {
+    return Op(OpCode::eFLe, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op FGt(SsaDef a, SsaDef b) {
+    return Op(OpCode::eFGt, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op FGe(SsaDef a, SsaDef b) {
+    return Op(OpCode::eFGe, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op FIsNan(SsaDef a) {
+    return Op(OpCode::eFIsNan, ScalarType::eBool)
+      .addOperand(Operand(a));
+  }
+
+  static Op IEq(SsaDef a, SsaDef b) {
+    return Op(OpCode::eIEq, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op INe(SsaDef a, SsaDef b) {
+    return Op(OpCode::eINe, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op SLt(SsaDef a, SsaDef b) {
+    return Op(OpCode::eSLt, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op SGe(SsaDef a, SsaDef b) {
+    return Op(OpCode::eSGe, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op ULt(SsaDef a, SsaDef b) {
+    return Op(OpCode::eULt, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op UGe(SsaDef a, SsaDef b) {
+    return Op(OpCode::eUGe, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
   }
 
 private:
