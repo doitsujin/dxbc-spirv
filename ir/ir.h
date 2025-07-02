@@ -812,6 +812,10 @@ enum class OpCode : uint16_t {
   eCast                         = 196u,
   eConsumeAs                    = 197u,
 
+  eCompositeInsert              = 224u,
+  eCompositeExtract             = 225u,
+  eCompositeConstruct           = 226u,
+
   Count
 };
 
@@ -1461,6 +1465,25 @@ public:
   static Op ConsumeAs(Type type, SsaDef value) {
     return Op(OpCode::eConsumeAs, type)
       .addOperand(Operand(value));
+  }
+
+  static Op CompositeInsert(Type type, SsaDef composite, SsaDef address, SsaDef value) {
+    return Op(OpCode::eCompositeInsert, type)
+      .addOperand(Operand(composite))
+      .addOperand(Operand(address))
+      .addOperand(Operand(value));
+  }
+
+  static Op CompositeExtract(Type type, SsaDef composite, SsaDef address) {
+    return Op(OpCode::eCompositeExtract, type)
+      .addOperand(Operand(composite))
+      .addOperand(Operand(address));
+  }
+
+  template<typename... T>
+  static Op CompositeConstruct(Type type, T... args) {
+    return Op(OpCode::eCompositeConstruct, type)
+      .addOperands(Operand(SsaDef(args))...);
   }
 
 private:
