@@ -855,6 +855,9 @@ enum class OpCode : uint16_t {
   ePointer                      = 384u,
   ePointerAddress               = 385u,
 
+  eEmitVertex                   = 416u,
+  eEmitPrimitive                = 417u,
+
   Count
 };
 
@@ -1760,6 +1763,16 @@ public:
   static Op PointerAddress(SsaDef pointer) {
     return Op(OpCode::ePointerAddress, ScalarType::eU64)
       .addOperand(Operand(pointer));
+  }
+
+  static Op EmitVertex(uint32_t stream) {
+    return Op(OpCode::eEmitVertex, Type())
+      .addOperand(Operand(stream));
+  }
+
+  static Op EmitPrimitive(uint32_t stream) {
+    return Op(OpCode::eEmitPrimitive, Type())
+      .addOperand(Operand(stream));
   }
 
 private:
