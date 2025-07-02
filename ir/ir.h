@@ -816,6 +816,8 @@ enum class OpCode : uint16_t {
   eCompositeExtract             = 225u,
   eCompositeConstruct           = 226u,
 
+  eCheckSparseAccess            = 256u,
+
   Count
 };
 
@@ -1484,6 +1486,11 @@ public:
   static Op CompositeConstruct(Type type, T... args) {
     return Op(OpCode::eCompositeConstruct, type)
       .addOperands(Operand(SsaDef(args))...);
+  }
+
+  static Op CheckSparseAccess(SsaDef feedback) {
+    return Op(OpCode::eCheckSparseAccess, ScalarType::eBool)
+      .addOperand(Operand(feedback));
   }
 
 private:
