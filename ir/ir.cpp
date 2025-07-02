@@ -654,6 +654,19 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eDerivY: return os << "DerivY";
     case OpCode::eRovScopedLockBegin: return os << "RovScopedLockBegin";
     case OpCode::eRovScopedLockEnd: return os << "RovScopedLockEnd";
+    case OpCode::eFEq: return os << "FEq";
+    case OpCode::eFNe: return os << "FNe";
+    case OpCode::eFLt: return os << "FLt";
+    case OpCode::eFLe: return os << "FLe";
+    case OpCode::eFGt: return os << "FGt";
+    case OpCode::eFGe: return os << "FGe";
+    case OpCode::eFIsNan: return os << "FIsNan";
+    case OpCode::eIEq: return os << "IEq";
+    case OpCode::eINe: return os << "INe";
+    case OpCode::eSLt: return os << "SLt";
+    case OpCode::eSGe: return os << "SGe";
+    case OpCode::eULt: return os << "ULt";
+    case OpCode::eUGe: return os << "UGe";
   }
 
   return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";
