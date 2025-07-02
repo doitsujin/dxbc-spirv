@@ -875,6 +875,9 @@ enum class OpCode : uint16_t {
   eDerivX                       = 512u,
   eDerivY                       = 513u,
 
+  eRovScopedLockBegin           = 544u,
+  eRovScopedLockEnd             = 545u,
+
   Count
 };
 
@@ -1823,6 +1826,14 @@ public:
     return Op(OpCode::eDerivY, type)
       .addOperand(Operand(value))
       .addOperand(Operand(mode));
+  }
+
+  static Op RovScopedLockBegin() {
+    return Op(OpCode::eRovScopedLockBegin, Type());
+  }
+
+  static Op RovScopedLockEnd() {
+    return Op(OpCode::eRovScopedLockEnd, Type());
   }
 
 private:

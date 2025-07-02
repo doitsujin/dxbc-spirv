@@ -652,6 +652,8 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eInterpolateAtOffset: return os << "InterpolateAtOffset";
     case OpCode::eDerivX: return os << "DerivX";
     case OpCode::eDerivY: return os << "DerivY";
+    case OpCode::eRovScopedLockBegin: return os << "RovScopedLockBegin";
+    case OpCode::eRovScopedLockEnd: return os << "RovScopedLockEnd";
   }
 
   return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";
