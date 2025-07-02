@@ -200,6 +200,11 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
       return 1u;
 
     case OpCode::eLabel:
+    case OpCode::eLdsAtomic:
+    case OpCode::eBufferAtomic:
+    case OpCode::eImageAtomic:
+    case OpCode::eCounterAtomic:
+    case OpCode::eMemoryAtomic:
       return getOperandCount() ? getOperandCount() - 1u : 0u;
 
     default:
@@ -606,6 +611,11 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eBufferQuerySize: return os << "BufferQuerySize";
     case OpCode::eMemoryLoad: return os << "MemoryLoad";
     case OpCode::eMemoryStore: return os << "MemoryStore";
+    case OpCode::eLdsAtomic: return os << "LdsAtomic";
+    case OpCode::eBufferAtomic: return os << "BufferAtomic";
+    case OpCode::eImageAtomic: return os << "ImageAtomic";
+    case OpCode::eCounterAtomic: return os << "CounterAtomic";
+    case OpCode::eMemoryAtomic: return os << "MemoryAtomic";
   }
 
   return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";

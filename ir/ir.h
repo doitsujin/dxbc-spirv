@@ -837,6 +837,12 @@ enum class OpCode : uint16_t {
   eMemoryLoad                   = 304u,
   eMemoryStore                  = 305u,
 
+  eLdsAtomic                    = 320u,
+  eBufferAtomic                 = 321u,
+  eImageAtomic                  = 322u,
+  eCounterAtomic                = 323u,
+  eMemoryAtomic                 = 324u,
+
   Count
 };
 
@@ -1072,6 +1078,12 @@ public:
   Op& addOperand(Operand arg) {
     m_operands.push_back(arg);
     return *this;
+  }
+
+  /** Appends multiple operands. */
+  template<typename... T>
+  Op& addOperands(T... args) {
+    return (addOperand(args), ...);
   }
 
   /** Overrides an existing operand. */
@@ -1621,6 +1633,51 @@ public:
       .addOperand(Operand(pointer))
       .addOperand(Operand(address))
       .addOperand(Operand(value));
+  }
+
+  template<typename... T>
+  static Op LdsAtomic(AtomicOp op, Type type, SsaDef decl, SsaDef address, T... args) {
+    return Op(OpCode::eLdsAtomic, type)
+      .addOperand(Operand(decl))
+      .addOperand(Operand(address))
+      .addOperands(Operand(SsaDef(args))...)
+      .addOperand(Operand(op));
+  }
+
+  template<typename... T>
+  static Op BufferAtomic(AtomicOp op, Type type, SsaDef descriptor, SsaDef address, T... args) {
+    return Op(OpCode::eBufferAtomic, type)
+      .addOperand(Operand(descriptor))
+      .addOperand(Operand(address))
+      .addOperands(Operand(SsaDef(args))...)
+      .addOperand(Operand(op));
+  }
+
+  template<typename... T>
+  static Op ImageAtomic(AtomicOp op, Type type, SsaDef descriptor, SsaDef layer, SsaDef coord, T... args) {
+    return Op(OpCode::eImageAtomic, type)
+      .addOperand(Operand(descriptor))
+      .addOperand(Operand(layer))
+      .addOperand(Operand(coord))
+      .addOperands(Operand(SsaDef(args))...)
+      .addOperand(Operand(op));
+  }
+
+  template<typename... T>
+  static Op CounterAtomic(AtomicOp op, Type type, SsaDef descriptor, T... args) {
+    return Op(OpCode::eCounterAtomic, type)
+      .addOperand(Operand(descriptor))
+      .addOperands(Operand(SsaDef(args))...)
+      .addOperand(Operand(op));
+  }
+
+  template<typename... T>
+  static Op MemoryAtomic(AtomicOp op, Type type, SsaDef pointer, SsaDef address, T... args) {
+    return Op(OpCode::eMemoryAtomic, type)
+      .addOperand(Operand(pointer))
+      .addOperand(Operand(address))
+      .addOperands(Operand(SsaDef(args))...)
+      .addOperand(Operand(op));
   }
 
 private:
