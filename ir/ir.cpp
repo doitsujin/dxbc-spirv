@@ -185,6 +185,7 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
     case OpCode::eDclSrv:
     case OpCode::eDclUav:
     case OpCode::eScopedSwitchCase:
+    case OpCode::eBarrier:
       return 0u;
 
     case OpCode::eDebugName:
@@ -473,6 +474,32 @@ std::ostream& operator << (std::ostream& os, const ShaderStage& stage) {
 }
 
 
+std::ostream& operator << (std::ostream& os, const Scope& scope) {
+  switch (scope) {
+    case Scope::eThread:    return os << "Thread";
+    case Scope::eQuad:      return os << "Quad";
+    case Scope::eSubgroup:  return os << "Subgroup";
+    case Scope::eWorkgroup: return os << "Workgroup";
+    case Scope::eGlobal:    return os << "Global";
+  }
+
+  return os << "Scope(" << std::dec << uint32_t(scope) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, const MemoryType& type) {
+  switch (type) {
+    case MemoryType::eLds:        return os << "Lds";
+    case MemoryType::eUavBuffer:  return os << "UavBuffer";
+    case MemoryType::eUavImage:   return os << "UavImage";
+
+    case MemoryType::eFlagEnum: break;
+  }
+
+  return os << "MemoryType(" << std::dec << uint32_t(type) << ")";
+}
+
+
 std::ostream& operator << (std::ostream& os, const SsaDef& def) {
   return os << '%' << def.getId();
 }
@@ -547,6 +574,7 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eScopedSwitchDefault: return os << "ScopedSwitchDefault";
     case OpCode::eScopedSwitchBreak: return os << "ScopedSwitchBreak";
     case OpCode::eScopedEndSwitch: return os << "ScopedEndSwitch";
+    case OpCode::eBarrier: return os << "Barrier";
   }
 
   return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";

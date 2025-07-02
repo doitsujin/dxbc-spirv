@@ -686,6 +686,28 @@ enum class ShaderStage : uint32_t {
 using ShaderStageMask = util::Flags<ShaderStage>;
 
 
+/** Scope */
+enum class Scope : uint32_t {
+  eThread           = 0u,
+  eQuad             = 1u,
+  eSubgroup         = 2u,
+  eWorkgroup        = 3u,
+  eGlobal           = 4u,
+};
+
+
+/** Memory type flags */
+enum class MemoryType : uint32_t {
+  eLds              = (1u << 0),
+  eUavBuffer        = (1u << 1),
+  eUavImage         = (1u << 2),
+
+  eFlagEnum         = 0
+};
+
+using MemoryTypeFlags = util::Flags<MemoryType>;
+
+
 /** SSA definition. Stores a unique ID that refers to an operation. */
 class SsaDef {
 
@@ -780,6 +802,8 @@ enum class OpCode : uint16_t {
   eScopedSwitchDefault          = 137u,
   eScopedSwitchBreak            = 138u,
   eScopedEndSwitch              = 139u,
+
+  eBarrier                      = 160u,
 
   Count
 };
@@ -1395,6 +1419,13 @@ public:
     return Op(OpCode::eScopedEndSwitch, Type());
   }
 
+  static Op Barrier(Scope execScope, Scope memScope, MemoryTypeFlags memTypes) {
+    return Op(OpCode::eBarrier, Type())
+      .addOperand(Operand(execScope))
+      .addOperand(Operand(memScope))
+      .addOperand(Operand(memTypes));
+  }
+
 private:
 
   SsaDef m_def = { };
@@ -1429,6 +1460,8 @@ std::ostream& operator << (std::ostream& os, const AtomicOp& atomicOp);
 std::ostream& operator << (std::ostream& os, const UavFlag& flag);
 std::ostream& operator << (std::ostream& os, const InterpolationMode& flag);
 std::ostream& operator << (std::ostream& os, const ShaderStage& stage);
+std::ostream& operator << (std::ostream& os, const Scope& stage);
+std::ostream& operator << (std::ostream& os, const MemoryType& stage);
 std::ostream& operator << (std::ostream& os, const SsaDef& def);
 std::ostream& operator << (std::ostream& os, const OpFlag& flag);
 std::ostream& operator << (std::ostream& os, const OpCode& opCode);
