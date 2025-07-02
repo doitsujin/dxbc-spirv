@@ -898,6 +898,8 @@ enum class OpCode : uint16_t {
   eBNe                          = 611u,
   eBNot                         = 612u,
 
+  eSelect                       = 640u,
+
   Count
 };
 
@@ -1960,6 +1962,13 @@ public:
   static Op BNot(SsaDef a) {
     return Op(OpCode::eBNot, ScalarType::eBool)
       .addOperand(Operand(a));
+  }
+
+  static Op Select(Type type, SsaDef cond, SsaDef t, SsaDef f) {
+    return Op(OpCode::eSelect, type)
+      .addOperand(Operand(cond))
+      .addOperand(Operand(t))
+      .addOperand(Operand(f));
   }
 
 private:

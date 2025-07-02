@@ -672,6 +672,7 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eBEq: return os << "BEq";
     case OpCode::eBNe: return os << "BNe";
     case OpCode::eBNot: return os << "BNot";
+    case OpCode::eSelect: return os << "Select";
   }
 
   return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";
