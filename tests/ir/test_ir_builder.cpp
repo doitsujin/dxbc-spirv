@@ -142,9 +142,36 @@ void testIrBuilderInsertCode() {
 }
 
 
+void testIrBuilderConstants() {
+  Builder builder;
+
+  auto constf32_a = builder.makeConstant(1.0f);
+  auto constf32_b = builder.makeConstant(1.0f);
+  auto constf32_c = builder.makeConstant(0.0f);
+
+  ok(constf32_a == constf32_b);
+  ok(constf32_a != constf32_c);
+
+  builder.remove(constf32_a);
+
+  ok(!builder.getOp(constf32_a));
+  ok(!builder.getOp(constf32_b));
+
+  auto constu32vec2_a = builder.makeConstant(0u, 1u);
+  auto constu32vec2_b = builder.makeConstant(0u, 2u);
+  auto constu16vec2_a = builder.makeConstant(uint16_t(1u), uint16_t(0u));
+  auto constu16vec2_b = builder.makeConstant(uint16_t(1u), uint16_t(0u));
+
+  ok(constu32vec2_a != constu32vec2_b);
+  ok(constu32vec2_a != constu16vec2_a);
+  ok(constu16vec2_a == constu16vec2_b);
+}
+
+
 void testIrBuilder() {
   RUN_TEST(testIrBuilderEmpty);
   RUN_TEST(testIrBuilderInsertCode);
+  RUN_TEST(testIrBuilderConstants);
 }
 
 }
