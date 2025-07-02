@@ -892,6 +892,12 @@ enum class OpCode : uint16_t {
   eULt                          = 587u,
   eUGe                          = 588u,
 
+  eBAnd                         = 608u,
+  eBOr                          = 609u,
+  eBEq                          = 610u,
+  eBNe                          = 611u,
+  eBNot                         = 612u,
+
   Count
 };
 
@@ -1925,6 +1931,35 @@ public:
     return Op(OpCode::eUGe, ScalarType::eBool)
       .addOperand(Operand(a))
       .addOperand(Operand(b));
+  }
+
+  static Op BAnd(SsaDef a, SsaDef b) {
+    return Op(OpCode::eBAnd, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op BOr(SsaDef a, SsaDef b) {
+    return Op(OpCode::eBOr, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op BEq(SsaDef a, SsaDef b) {
+    return Op(OpCode::eBEq, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op BNe(SsaDef a, SsaDef b) {
+    return Op(OpCode::eBNe, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op BNot(SsaDef a) {
+    return Op(OpCode::eBNot, ScalarType::eBool)
+      .addOperand(Operand(a));
   }
 
 private:
