@@ -708,6 +708,14 @@ enum class MemoryType : uint32_t {
 using MemoryTypeFlags = util::Flags<MemoryType>;
 
 
+/** Derivative mode */
+enum class DerivativeMode : uint32_t {
+  eDefault          = 0u,
+  eCoarse           = 1u,
+  eFine             = 2u,
+};
+
+
 /** SSA definition. Stores a unique ID that refers to an operation. */
 class SsaDef {
 
@@ -863,6 +871,9 @@ enum class OpCode : uint16_t {
   eInterpolateAtCentroid        = 480u,
   eInterpolateAtSample          = 481u,
   eInterpolateAtOffset          = 482u,
+
+  eDerivX                       = 512u,
+  eDerivY                       = 513u,
 
   Count
 };
@@ -1802,6 +1813,18 @@ public:
       .addOperand(Operand(offset));
   }
 
+  static Op DerivX(Type type, SsaDef value, DerivativeMode mode) {
+    return Op(OpCode::eDerivX, type)
+      .addOperand(Operand(value))
+      .addOperand(Operand(mode));
+  }
+
+  static Op DerivY(Type type, SsaDef value, DerivativeMode mode) {
+    return Op(OpCode::eDerivY, type)
+      .addOperand(Operand(value))
+      .addOperand(Operand(mode));
+  }
+
 private:
 
   SsaDef m_def = { };
@@ -1838,6 +1861,7 @@ std::ostream& operator << (std::ostream& os, const InterpolationMode& flag);
 std::ostream& operator << (std::ostream& os, const ShaderStage& stage);
 std::ostream& operator << (std::ostream& os, const Scope& stage);
 std::ostream& operator << (std::ostream& os, const MemoryType& stage);
+std::ostream& operator << (std::ostream& os, const DerivativeMode& stage);
 std::ostream& operator << (std::ostream& os, const SsaDef& def);
 std::ostream& operator << (std::ostream& os, const OpFlag& flag);
 std::ostream& operator << (std::ostream& os, const OpCode& opCode);

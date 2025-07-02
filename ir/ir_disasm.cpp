@@ -181,6 +181,11 @@ void Disassembler::disassembleOperandLiteral(const Op& op, uint32_t index) {
         }
         break;
 
+      case OpCode::eDerivX:
+      case OpCode::eDerivY:
+        if (index == 1u) { m_str << DerivativeMode(operand); return; }
+        return;
+
       default:;
     }
   }
