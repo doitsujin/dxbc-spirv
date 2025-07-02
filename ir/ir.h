@@ -805,6 +805,13 @@ enum class OpCode : uint16_t {
 
   eBarrier                      = 160u,
 
+  eConvertFtoF                  = 192u,
+  eConvertFtoI                  = 193u,
+  eConvertItoF                  = 194u,
+  eConvertItoI                  = 195u,
+  eCast                         = 196u,
+  eConsumeAs                    = 197u,
+
   Count
 };
 
@@ -1424,6 +1431,36 @@ public:
       .addOperand(Operand(execScope))
       .addOperand(Operand(memScope))
       .addOperand(Operand(memTypes));
+  }
+
+  static Op ConvertFtoF(Type type, SsaDef value) {
+    return Op(OpCode::eConvertFtoF, type)
+      .addOperand(Operand(value));
+  }
+
+  static Op ConvertFtoI(Type type, SsaDef value) {
+    return Op(OpCode::eConvertFtoI, type)
+      .addOperand(Operand(value));
+  }
+
+  static Op ConvertItoF(Type type, SsaDef value) {
+    return Op(OpCode::eConvertItoF, type)
+      .addOperand(Operand(value));
+  }
+
+  static Op ConvertItoI(Type type, SsaDef value) {
+    return Op(OpCode::eConvertItoI, type)
+      .addOperand(Operand(value));
+  }
+
+  static Op Cast(Type type, SsaDef value) {
+    return Op(OpCode::eCast, type)
+      .addOperand(Operand(value));
+  }
+
+  static Op ConsumeAs(Type type, SsaDef value) {
+    return Op(OpCode::eConsumeAs, type)
+      .addOperand(Operand(value));
   }
 
 private:

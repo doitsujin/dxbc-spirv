@@ -578,6 +578,12 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eScopedSwitchBreak: return os << "ScopedSwitchBreak";
     case OpCode::eScopedEndSwitch: return os << "ScopedEndSwitch";
     case OpCode::eBarrier: return os << "Barrier";
+    case OpCode::eConvertFtoF: return os << "ConvertFtoF";
+    case OpCode::eConvertFtoI: return os << "ConvertFtoI";
+    case OpCode::eConvertItoF: return os << "ConvertItoF";
+    case OpCode::eConvertItoI: return os << "ConvertItoI";
+    case OpCode::eCast: return os << "Cast";
+    case OpCode::eConsumeAs: return os << "ConsumeAs";
   }
 
   return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";
