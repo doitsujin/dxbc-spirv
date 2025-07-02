@@ -170,6 +170,17 @@ void Disassembler::disassembleOperandLiteral(const Op& op, uint32_t index) {
         if (index == 2u) { m_str << MemoryTypeFlags(operand); return; }
         break;
 
+      case OpCode::eLdsAtomic:
+      case OpCode::eBufferAtomic:
+      case OpCode::eImageAtomic:
+      case OpCode::eCounterAtomic:
+      case OpCode::eMemoryAtomic:
+        if (index == op.getFirstLiteralOperandIndex()) {
+          m_str << AtomicOp(operand);
+          return;
+        }
+        break;
+
       default:;
     }
   }
