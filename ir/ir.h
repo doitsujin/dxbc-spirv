@@ -858,6 +858,8 @@ enum class OpCode : uint16_t {
   eEmitVertex                   = 416u,
   eEmitPrimitive                = 417u,
 
+  eDemote                       = 448u,
+
   Count
 };
 
@@ -1773,6 +1775,10 @@ public:
   static Op EmitPrimitive(uint32_t stream) {
     return Op(OpCode::eEmitPrimitive, Type())
       .addOperand(Operand(stream));
+  }
+
+  static Op Demote() {
+    return Op(OpCode::eDemote, Type());
   }
 
 private:
