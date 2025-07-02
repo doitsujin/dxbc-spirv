@@ -1,5 +1,7 @@
 #include "ir_builder.h"
 
+#include "../util/util_hash.h"
+
 namespace dxbc_spv::ir {
 
 Builder::Builder() {
@@ -16,7 +18,10 @@ Builder::~Builder() {
 
 SsaDef Builder::add(Op op) {
   bool isDeclarative = op.isDeclarative();
-  auto def = writeOp(std::move(op));
+  auto [def, isDuplicate] = writeOp(std::move(op));
+
+  if (isDuplicate)
+    return def;
 
   auto& metadata = m_metadata.at(def.getId());
 
@@ -34,7 +39,10 @@ SsaDef Builder::add(Op op) {
 
 
 SsaDef Builder::addBefore(SsaDef ref, Op op) {
-  auto def = writeOp(std::move(op));
+  auto [def, isDuplicate] = writeOp(std::move(op));
+
+  if (isDuplicate)
+    return def;
 
   auto& metadata = m_metadata.at(def.getId());
   metadata.next = ref;
@@ -50,7 +58,10 @@ SsaDef Builder::addBefore(SsaDef ref, Op op) {
 
 
 SsaDef Builder::addAfter(SsaDef ref, Op op) {
-  auto def = writeOp(std::move(op));
+  auto [def, isDuplicate] = writeOp(std::move(op));
+
+  if (isDuplicate)
+    return def;
 
   auto& metadata = m_metadata.at(def.getId());
   metadata.prev = ref;
@@ -73,6 +84,9 @@ void Builder::remove(SsaDef def) {
   for (uint32_t i = 0u; i < op.getFirstLiteralOperandIndex(); i++)
     removeUse(SsaDef(op.getOperand(i)), def);
 
+  if (op.isConstant())
+    m_constants.erase(op);
+
   removeNode(def);
 }
 
@@ -85,8 +99,8 @@ void Builder::removeOp(const Op& op) {
 void Builder::rewriteOp(SsaDef def, Op op) {
   auto& dstOp = m_ops.at(def.getId());
 
-  dxbc_spv_assert(op);
-  dxbc_spv_assert(dstOp);
+  dxbc_spv_assert(op && !op.isConstant());
+  dxbc_spv_assert(dstOp && !dstOp.isConstant());
 
   for (uint32_t i = 0u; i < dstOp.getFirstLiteralOperandIndex(); i++)
     removeUse(SsaDef(dstOp.getOperand(i)), def);
@@ -119,7 +133,14 @@ void Builder::rewriteDef(SsaDef oldDef, SsaDef newDef) {
 }
 
 
-SsaDef Builder::writeOp(Op&& op) {
+std::pair<SsaDef, bool> Builder::writeOp(Op&& op) {
+  if (op.isConstant()) {
+    SsaDef def = lookupConstant(op);
+
+    if (def)
+      return std::make_pair(def, true);
+  }
+
   SsaDef def = allocSsaDef();
 
   auto& dstOp = m_ops.at(def.getId());
@@ -129,7 +150,10 @@ SsaDef Builder::writeOp(Op&& op) {
   for (uint32_t i = 0u; i < dstOp.getFirstLiteralOperandIndex(); i++)
     addUse(SsaDef(dstOp.getOperand(i)), def);
 
-  return def;
+  if (dstOp.isConstant())
+    m_constants.insert(dstOp);
+
+  return std::make_pair(def, false);
 }
 
 
@@ -242,5 +266,37 @@ SsaDef Builder::allocSsaDef() {
     return SsaDef(id);
   }
 }
+
+
+SsaDef Builder::lookupConstant(const Op& op) const {
+  auto e = m_constants.find(op);
+
+  if (e != m_constants.end())
+    return e->getDef();
+
+  return SsaDef();
+}
+
+
+size_t Builder::ConstantHash::operator () (const Op& op) const {
+  size_t v = uint16_t(op.getOpCode());
+  v = util::hash_combine(v, uint8_t(op.getFlags()));
+  v = util::hash_combine(v, std::hash<Type>()(op.getType()));
+
+  for (uint32_t i = 0u; i < op.getOperandCount(); i++) {
+    auto lit = uint64_t(op.getOperand(i));
+
+    v = util::hash_combine(v, uint32_t(lit >> 32u));
+    v = util::hash_combine(v, uint32_t(lit));
+  }
+
+  return v;
+}
+
+
+bool Builder::ConstantEq::operator () (const Op& a, const Op& b) const {
+  return a.isEquivalent(b);
+}
+
 
 }

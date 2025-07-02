@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -172,9 +173,16 @@ public:
     return uint32_t(m_ops.size());
   }
 
+  /** Convenience method to create and add a constant op. */
+  template<typename... T>
+  SsaDef makeConstant(T... args) {
+    return add(Op::Constant(args...));
+  }
+
   /** Convenince method to add an instruction either to the
    *  end of the module, or the end of the declarative block
-   *  if the op in question is declarative. */
+   *  if the op in question is declarative.
+   *  Note that \c Constant declarations are deduplicated. */
   SsaDef add(Op op);
 
   /** Inserts an instruction into the code before another in
@@ -195,7 +203,9 @@ public:
   void removeOp(const Op& op);
 
   /** Replaces operation for the given SSA definition. Useful when
-   *  a 1:1 replcement is required, or when changing operands. */
+   *  a 1:1 replcement is required, or when changing operands. Note
+   *  that this must not be used on \c Constant declarations in order
+   *  to avoid undesired side effects. */
   void rewriteOp(SsaDef def, Op op);
 
   /** Rewrites SSA definition. All uses of the previous definition
@@ -203,16 +213,26 @@ public:
    *  instruction will be removed. */
   void rewriteDef(SsaDef oldDef, SsaDef newDef);
 
+  struct ConstantHash {
+    size_t operator () (const Op& op) const;
+  };
+
+  struct ConstantEq {
+    bool operator () (const Op& a, const Op& b) const;
+  };
+
 private:
 
   std::vector<Op>         m_ops;
   std::vector<OpMetadata> m_metadata;
 
+  std::unordered_set<Op, ConstantHash, ConstantEq> m_constants;
+
   OpList m_code;
   SsaDef m_codeBlockStart;
   SsaDef m_free = { };
 
-  SsaDef writeOp(Op&& op);
+  std::pair<SsaDef, bool> writeOp(Op&& op);
 
   void addUse(SsaDef target, SsaDef user);
 
@@ -223,6 +243,8 @@ private:
   void removeNode(SsaDef def);
 
   SsaDef allocSsaDef();
+
+  SsaDef lookupConstant(const Op& op) const;
 
 };
 
