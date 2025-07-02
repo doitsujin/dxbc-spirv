@@ -186,6 +186,8 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
     case OpCode::eDclUav:
     case OpCode::eScopedSwitchCase:
     case OpCode::eBarrier:
+    case OpCode::eEmitVertex:
+    case OpCode::eEmitPrimitive:
       return 0u;
 
     case OpCode::eDebugName:
@@ -629,6 +631,8 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eImageComputeLod: return os << "ImageComputeLod";
     case OpCode::ePointer: return os << "Pointer";
     case OpCode::ePointerAddress: return os << "PointerAddress";
+    case OpCode::eEmitVertex: return os << "EmitVertex";
+    case OpCode::eEmitPrimitive: return os << "EmitPrimitive";
   }
 
   return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";
