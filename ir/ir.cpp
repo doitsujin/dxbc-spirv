@@ -149,6 +149,23 @@ bool Operand::getToString(std::string& str) const {
 }
 
 
+Op& Op::addLiteralString(const char* string) {
+  uint64_t lit = uint8_t(string[0u]);
+
+  for (size_t i = 1u; string[i]; i++) {
+    if (!(i % 8u)) {
+      addOperand(Operand(lit));
+      lit = uint8_t(string[i]);
+    } else {
+      lit |= uint64_t(uint8_t(string[i])) << (8u * (i % 8u));
+    }
+  }
+
+  addOperand(Operand(lit));
+  return *this;
+}
+
+
 std::string Op::getLiteralString(uint32_t index) const {
   std::string str;
 
@@ -181,6 +198,7 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
       return 0u;
 
     case OpCode::eDebugName:
+    case OpCode::eSemantic:
     case OpCode::eEntryPoint:
     case OpCode::eSetCsWorkgroupSize:
     case OpCode::eSetGsInstances:
@@ -218,26 +236,6 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
     default:
       return getOperandCount();
   }
-}
-
-
-Op Op::DebugName(SsaDef def, const char* name) {
-  Op op(OpCode::eDebugName, Type());
-  op.addOperand(Operand(def));
-
-  uint64_t lit = uint8_t(name[0u]);
-
-  for (size_t i = 1u; name[i]; i++) {
-    if (!(i % 8u)) {
-      op.addOperand(Operand(lit));
-      lit = uint8_t(name[i]);
-    } else {
-      lit |= uint64_t(uint8_t(name[i])) << (8u * (i % 8u));
-    }
-  }
-
-  op.addOperand(Operand(lit));
-  return op;
 }
 
 
@@ -566,6 +564,7 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eEntryPoint: return os << "EntryPoint";
     case OpCode::eDebugName: return os << "DebugName";
     case OpCode::eConstant: return os << "Constant";
+    case OpCode::eSemantic: return os << "Semantic";
     case OpCode::eSetCsWorkgroupSize: return os << "SetCsWorkgroupSize";
     case OpCode::eSetGsInstances: return os << "SetGsInstances";
     case OpCode::eSetGsInputPrimitive: return os << "SetGsInputPrimitive";

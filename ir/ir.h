@@ -764,6 +764,7 @@ enum class OpCode : uint16_t {
   eEntryPoint                   = 1u,
   eDebugName                    = 2u,
   eConstant                     = 3u,
+  eSemantic                     = 4u,
 
   eSetCsWorkgroupSize           = 16u,
   eSetGsInstances               = 17u,
@@ -1208,6 +1209,9 @@ public:
     return (addOperand(args), ...);
   }
 
+  /** Adds a literal string as operand tokens */
+  Op& addLiteralString(const char* string);
+
   /** Overrides an existing operand. */
   Op& setOperand(uint32_t index, Operand arg) {
     dxbc_spv_assert(index < getOperandCount());
@@ -1301,7 +1305,18 @@ public:
   }
 
   /** Helper to construct debug name ops */
-  static Op DebugName(SsaDef def, const char* name);
+  static Op DebugName(SsaDef def, const char* name) {
+    return Op(OpCode::eDebugName, Type())
+      .addOperand(Operand(def))
+      .addLiteralString(name);
+  }
+
+  static Op Semantic(SsaDef def, uint32_t index, const char* name) {
+    return Op(OpCode::eSemantic, Type())
+      .addOperand(Operand(def))
+      .addOperand(Operand(index))
+      .addLiteralString(name);
+  }
 
   /** Helper to construct declaration ops */
   static Op DclInput(Type type, SsaDef entryPoint, uint32_t location, uint32_t component) {
