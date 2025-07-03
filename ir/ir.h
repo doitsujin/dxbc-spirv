@@ -1304,79 +1304,104 @@ public:
   static Op DebugName(SsaDef def, const char* name);
 
   /** Helper to construct declaration ops */
-  static Op DclInput(Type type, uint32_t location, uint32_t component, InterpolationModes interpolation) {
+  static Op DclInput(Type type, SsaDef entryPoint, uint32_t location, uint32_t component) {
     return Op(OpCode::eDclInput, type)
-      .addOperand(Operand(location))
-      .addOperand(Operand(component))
-      .addOperand(Operand(interpolation));
-  }
-
-  static Op DclInputBuiltIn(Type type, BuiltIn builtin, InterpolationModes interpolation) {
-    return Op(OpCode::eDclInputBuiltIn, type)
-      .addOperand(Operand(builtin))
-      .addOperand(Operand(interpolation));
-  }
-
-  static Op DclOutput(Type type, uint32_t location, uint32_t component) {
-    return Op(OpCode::eDclOutput, type)
+      .addOperand(Operand(entryPoint))
       .addOperand(Operand(location))
       .addOperand(Operand(component));
   }
 
-  static Op DclOutput(Type type, uint32_t location, uint32_t component, uint32_t gsStream) {
+  static Op DclInput(Type type, SsaDef entryPoint, uint32_t location, uint32_t component, InterpolationModes interpolation) {
+    return Op(OpCode::eDclInput, type)
+      .addOperand(Operand(entryPoint))
+      .addOperand(Operand(location))
+      .addOperand(Operand(component))
+      .addOperand(Operand(interpolation));
+  }
+
+  static Op DclInputBuiltIn(Type type, SsaDef entryPoint, BuiltIn builtin) {
+    return Op(OpCode::eDclInputBuiltIn, type)
+      .addOperand(Operand(entryPoint))
+      .addOperand(Operand(builtin));
+  }
+
+  static Op DclInputBuiltIn(Type type, SsaDef entryPoint, BuiltIn builtin, InterpolationModes interpolation) {
+    return Op(OpCode::eDclInputBuiltIn, type)
+      .addOperand(Operand(entryPoint))
+      .addOperand(Operand(builtin))
+      .addOperand(Operand(interpolation));
+  }
+
+  static Op DclOutput(Type type, SsaDef entryPoint, uint32_t location, uint32_t component) {
     return Op(OpCode::eDclOutput, type)
+      .addOperand(Operand(entryPoint))
+      .addOperand(Operand(location))
+      .addOperand(Operand(component));
+  }
+
+  static Op DclOutput(Type type, SsaDef entryPoint, uint32_t location, uint32_t component, uint32_t gsStream) {
+    return Op(OpCode::eDclOutput, type)
+      .addOperand(Operand(entryPoint))
       .addOperand(Operand(location))
       .addOperand(Operand(component))
       .addOperand(Operand(gsStream));
   }
 
-  static Op DclOutputBuiltIn(Type type, BuiltIn builtin) {
+  static Op DclOutputBuiltIn(Type type, SsaDef entryPoint, BuiltIn builtin) {
     return Op(OpCode::eDclOutputBuiltIn, type)
+      .addOperand(Operand(entryPoint))
       .addOperand(Operand(builtin));
   }
 
-  static Op DclOutputBuiltIn(Type type, BuiltIn builtin, uint32_t gsStream) {
+  static Op DclOutputBuiltIn(Type type, SsaDef entryPoint, BuiltIn builtin, uint32_t gsStream) {
     return Op(OpCode::eDclOutputBuiltIn, type)
+      .addOperand(Operand(entryPoint))
       .addOperand(Operand(builtin))
       .addOperand(Operand(gsStream));
   }
 
-  static Op DclSpecConstant(Type type, uint32_t specId, Operand defaultValue) {
+  static Op DclSpecConstant(Type type, SsaDef entryPoint, uint32_t specId, Operand defaultValue) {
     return Op(OpCode::eDclSpecConstant, type)
+      .addOperand(Operand(entryPoint))
       .addOperand(Operand(specId))
       .addOperand(defaultValue);
   }
 
-  static Op DclPushData(Type type, uint32_t offset, ShaderStageMask stageMask) {
+  static Op DclPushData(Type type, SsaDef entryPoint, uint32_t offset, ShaderStageMask stageMask) {
     return Op(OpCode::eDclPushData, type)
+      .addOperand(Operand(entryPoint))
       .addOperand(Operand(offset))
       .addOperand(Operand(stageMask));
   }
 
-  static Op DclSampler(uint32_t regSpace, uint32_t regIdx, uint32_t count) {
+  static Op DclSampler(SsaDef entryPoint, uint32_t regSpace, uint32_t regIdx, uint32_t count) {
     return Op(OpCode::eDclSampler, Type())
+      .addOperand(Operand(entryPoint))
       .addOperand(Operand(regSpace))
       .addOperand(Operand(regIdx))
       .addOperand(Operand(count));
   }
 
-  static Op DclCbv(Type type, uint32_t regSpace, uint32_t regIdx, uint32_t count) {
+  static Op DclCbv(Type type, SsaDef entryPoint, uint32_t regSpace, uint32_t regIdx, uint32_t count) {
     return Op(OpCode::eDclCbv, type)
+      .addOperand(Operand(entryPoint))
       .addOperand(Operand(regSpace))
       .addOperand(Operand(regIdx))
       .addOperand(Operand(count));
   }
 
-  static Op DclSrv(Type type, uint32_t regSpace, uint32_t regIdx, uint32_t count, ResourceKind kind) {
+  static Op DclSrv(Type type, SsaDef entryPoint, uint32_t regSpace, uint32_t regIdx, uint32_t count, ResourceKind kind) {
     return Op(OpCode::eDclSrv, type)
+      .addOperand(Operand(entryPoint))
       .addOperand(Operand(regSpace))
       .addOperand(Operand(regIdx))
       .addOperand(Operand(count))
       .addOperand(Operand(kind));
   }
 
-  static Op DclUav(Type type, uint32_t regSpace, uint32_t regIdx, uint32_t count, ResourceKind kind, UavFlags flags) {
+  static Op DclUav(Type type, SsaDef entryPoint, uint32_t regSpace, uint32_t regIdx, uint32_t count, ResourceKind kind, UavFlags flags) {
     return Op(OpCode::eDclUav, type)
+      .addOperand(Operand(entryPoint))
       .addOperand(Operand(regSpace))
       .addOperand(Operand(regIdx))
       .addOperand(Operand(count))
@@ -1384,21 +1409,25 @@ public:
       .addOperand(Operand(flags));
   }
 
-  static Op DclUavCounter(SsaDef uav) {
+  static Op DclUavCounter(SsaDef entryPoint, SsaDef uav) {
     return Op(OpCode::eDclUavCounter, ScalarType::eU32)
+      .addOperand(Operand(entryPoint))
       .addOperand(Operand(uav));
   }
 
-  static Op DclLds(Type type) {
-    return Op(OpCode::eDclLds, type);
+  static Op DclLds(Type type, SsaDef entryPoint) {
+    return Op(OpCode::eDclLds, type)
+      .addOperand(Operand(entryPoint));
   }
 
-  static Op DclScratch(Type type) {
-    return Op(OpCode::eDclScratch, type);
+  static Op DclScratch(Type type, SsaDef entryPoint) {
+    return Op(OpCode::eDclScratch, type)
+      .addOperand(Operand(entryPoint));
   }
 
-  static Op DclTmp(Type type) {
-    return Op(OpCode::eDclTmp, type);
+  static Op DclTmp(Type type, SsaDef entryPoint) {
+    return Op(OpCode::eDclTmp, type)
+      .addOperand(Operand(entryPoint));
   }
 
   static Op DclParam(Type type) {

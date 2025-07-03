@@ -174,16 +174,6 @@ bool Op::isEquivalent(const Op& other) const {
 uint32_t Op::getFirstLiteralOperandIndex() const {
   switch (m_opCode) {
     case OpCode::eConstant:
-    case OpCode::eDclInput:
-    case OpCode::eDclInputBuiltIn:
-    case OpCode::eDclOutput:
-    case OpCode::eDclOutputBuiltIn:
-    case OpCode::eDclSpecConstant:
-    case OpCode::eDclPushData:
-    case OpCode::eDclSampler:
-    case OpCode::eDclCbv:
-    case OpCode::eDclSrv:
-    case OpCode::eDclUav:
     case OpCode::eScopedSwitchCase:
     case OpCode::eBarrier:
     case OpCode::eEmitVertex:
@@ -199,6 +189,16 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
     case OpCode::eSetGsOutputPrimitive:
     case OpCode::eSetTessPrimitive:
     case OpCode::eSetTessDomain:
+    case OpCode::eDclInput:
+    case OpCode::eDclInputBuiltIn:
+    case OpCode::eDclOutput:
+    case OpCode::eDclOutputBuiltIn:
+    case OpCode::eDclSpecConstant:
+    case OpCode::eDclPushData:
+    case OpCode::eDclSampler:
+    case OpCode::eDclCbv:
+    case OpCode::eDclSrv:
+    case OpCode::eDclUav:
     case OpCode::eDerivX:
     case OpCode::eDerivY:
     case OpCode::eFRound:
