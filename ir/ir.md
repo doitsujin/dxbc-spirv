@@ -186,6 +186,14 @@ on it may use arbitrary scalar or vector types.
 For structured buffers, the type is an unsized array of an arbitrary type. Typically, this will be of the form `u32[n][]`,
 where `n` corresponds to the number of dwords in a structure.
 
+### Semantic declaration
+| `ir::OpCode`         | Return type      | Arguments...     |                  |           |
+|----------------------|------------------|------------------|------------------|-----------|
+| `Semantic`           | `%void`          | `%Dcl*`          | index            | name      |
+
+Semantic operations can target any input or output declaration, including built-ins. The index
+and name parameters are a literal integer and literal string, respectively.
+
 ### Composite instructions
 Shader I/O and certain resource access operations may use arrays, structs or vectors, which can be accessed via the following instructions:
 

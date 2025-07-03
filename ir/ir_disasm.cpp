@@ -78,14 +78,21 @@ void Disassembler::disassembleOperandDef(const Op& op, uint32_t index) {
 void Disassembler::disassembleOperandLiteral(const Op& op, uint32_t index) {
   auto operand = op.getOperand(index);
 
-  if (op.getOpCode() == OpCode::eDebugName) {
-    if (index == op.getFirstLiteralOperandIndex()) {
-      m_str << " \"";
-      m_str << op.getLiteralString(index);
-      m_str << "\"";
-    }
+  if (op.getOpCode() == OpCode::eDebugName || op.getOpCode() == OpCode::eSemantic) {
+    uint32_t stringIndex = op.getFirstLiteralOperandIndex();
 
-    return;
+    if (op.getOpCode() == OpCode::eSemantic)
+      stringIndex += 1u;
+
+    if (index > stringIndex)
+      return;
+
+    if (index == stringIndex) {
+      m_str << " \"";
+      m_str << op.getLiteralString(stringIndex);
+      m_str << "\"";
+      return;
+    }
   }
 
   m_str << " ";
