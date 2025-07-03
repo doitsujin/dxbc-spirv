@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "../../ir/ir_builder.h"
 
 #include "../test_common.h"
@@ -142,6 +144,91 @@ void testIrBuilderInsertCode() {
 }
 
 
+void testIrBuilderReorderCode() {
+  { Builder builder;
+
+    SsaDef funcDef = builder.add(Op::Function(Type()));
+    builder.reorderAfter(SsaDef(), funcDef, funcDef);
+
+    SsaDef iterDef;
+
+    for (const auto& op : builder) {
+      ok(!iterDef);
+      iterDef = op.getDef();
+    }
+
+    ok(iterDef == funcDef);
+
+    auto code = builder.getCode();
+    ok(code.first == builder.begin());
+    ok(code.second == builder.end());
+  }
+
+  { Builder builder;
+
+    std::vector<SsaDef> def;
+
+    for (uint32_t i = 0u; i < 4u; i++) {
+      def.push_back(builder.add(Op::Function(ScalarType::eU32)));
+      def.push_back(builder.add(Op::Return(ScalarType::eU32, builder.makeConstant(i))));
+      def.push_back(builder.add(Op::FunctionEnd()));
+    }
+
+    builder.reorderBefore(def.at(3u), def.at(6u), def.at(8u));
+
+    for (size_t i = 0u; i < 3u; i++)
+      std::swap(def.at(3u + i), def.at(6u + i));
+
+    { auto code = builder.getCode();
+      uint32_t count = 0u;
+
+      for (auto i = code.first; i != code.second; i++) {
+        ok(!count || def.at(count - 1u) == builder.getPrev(i->getDef()));
+        ok(def.at(count++) == i->getDef());
+      }
+
+      ok(count == def.size());
+    }
+
+    builder.reorderBefore(def.at(0u), def.at(9u), def.at(11u));
+
+    for (size_t i = 0u; i < 3u; i++)
+      def.insert(def.begin() + i, def.at(def.size() - 3u + i));
+
+    def.resize(def.size() - 3u);
+
+    { auto code = builder.getCode();
+      uint32_t count = 0u;
+
+      for (auto i = code.first; i != code.second; i++) {
+        ok(!count || def.at(count - 1u) == builder.getPrev(i->getDef()));
+        ok(def.at(count++) == i->getDef());
+      }
+
+      ok(count == def.size());
+    }
+
+    builder.reorderAfter(def.at(5u), def.at(0u), def.at(2u));
+
+    for (size_t i = 0u; i < 3u; i++) {
+      def.insert(def.begin() + 6u, def.front());
+      def.erase(def.begin());
+    }
+
+    { auto code = builder.getCode();
+      uint32_t count = 0u;
+
+      for (auto i = code.first; i != code.second; i++) {
+        ok(!count || def.at(count - 1u) == builder.getPrev(i->getDef()));
+        ok(def.at(count++) == i->getDef());
+      }
+
+      ok(count == def.size());
+    }
+  }
+}
+
+
 void testIrBuilderConstants() {
   Builder builder;
 
@@ -171,6 +258,7 @@ void testIrBuilderConstants() {
 void testIrBuilder() {
   RUN_TEST(testIrBuilderEmpty);
   RUN_TEST(testIrBuilderInsertCode);
+  RUN_TEST(testIrBuilderReorderCode);
   RUN_TEST(testIrBuilderConstants);
 }
 
