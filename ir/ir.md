@@ -317,12 +317,16 @@ array type.
 | `Function`           | any         | List of parameter `%DclParam` references            |                   |
 | `FunctionEnd`        | `void`      | None                                                |                   |
 | `FunctionCall`       | any         | `%Function` function to call                        | `%params` list    |
-| `EntryPoint`         | `void`      | `%Function`                                         | `ir::ShaderStage` |
+| `EntryPoint`         | `void`      | `%Functions`...                                     | `ir::ShaderStage` |
 | `Return`             | any         | `%value` (may be null if the function returns void) |                   |
 
 Only one `EntryPoint` instruction is allowed per shader. If an `EntryPoint` instruction is the target of a `DebugName`
 instruction, that name should be considered the name of the shader module when lowering to the final shader binary,
 rather than the name of the function itself.
+
+For hull shaders, `EntryPoint` takes two functions arguments: A control point function, which is only allowed to write
+control point outputs, and a patch constant function, which may read control point outputs and may write or read patch
+constant outputs. The patch constant function will include barriers as necessary.
 
 The `FunctionEnd` instruction must only occur outside of a block, see below.
 

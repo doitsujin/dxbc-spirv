@@ -1259,6 +1259,13 @@ public:
       .addOperand(Operand(stage));
   };
 
+  static Op EntryPoint(SsaDef controlPointFunction, SsaDef patchConstantFunction, ShaderStage stage) {
+    return Op(OpCode::eEntryPoint, Type())
+      .addOperand(Operand(controlPointFunction))
+      .addOperand(Operand(patchConstantFunction))
+      .addOperand(Operand(stage));
+  };
+
   /** Helpers to construct scalar and vector constants */
   template<typename T>
   static Op Constant(T v) {
