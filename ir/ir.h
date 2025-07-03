@@ -949,6 +949,22 @@ enum class OpCode : uint16_t {
   eSFindMsb                     = 717u,
   eUFindMsb                     = 718u,
 
+  eIAdd                         = 736u,
+  eIAddCarry                    = 737u,
+  eISub                         = 738u,
+  eISubBorrow                   = 739u,
+  eINeg                         = 740u,
+  eIMul                         = 741u,
+  eSDiv                         = 742u,
+  eUDiv                         = 743u,
+  eSMin                         = 744u,
+  eSMax                         = 745u,
+  eSClamp                       = 746u,
+  eUMin                         = 747u,
+  eUMax                         = 748u,
+  eUClamp                       = 749u,
+  eUMSad                        = 750u,
+
   Count
 };
 
@@ -2239,6 +2255,97 @@ public:
       .addOperand(Operand(a));
   }
 
+  static Op IAdd(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eIAdd, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op IAddCarry(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eIAddCarry, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op ISub(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eISub, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op ISubBorrow(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eISubBorrow, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op INeg(Type type, SsaDef a) {
+    return Op(OpCode::eINeg, type)
+      .addOperand(Operand(a));
+  }
+
+  static Op IMul(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eIMul, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op SDiv(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eSDiv, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op UDiv(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eUDiv, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op SMin(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eSMin, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op SMax(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eSMax, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op SClamp(Type type, SsaDef a, SsaDef lo, SsaDef hi) {
+    return Op(OpCode::eSClamp, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(lo))
+      .addOperand(Operand(hi));
+  }
+
+  static Op UMin(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eUMin, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op UMax(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eUMax, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op UClamp(Type type, SsaDef a, SsaDef lo, SsaDef hi) {
+    return Op(OpCode::eUClamp, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(lo))
+      .addOperand(Operand(hi));
+  }
+
+  static Op UMSad(Type type, SsaDef ref, SsaDef src, SsaDef accum) {
+    return Op(OpCode::eUMSad, type)
+      .addOperand(Operand(ref))
+      .addOperand(Operand(src))
+      .addOperand(Operand(accum));
+  }
 
 private:
 
