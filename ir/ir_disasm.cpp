@@ -4,33 +4,63 @@
 
 namespace dxbc_spv::ir {
 
-void Disassembler::disassemble() {
+Disassembler::Disassembler(Builder& builder, const Options& options)
+: m_builder(builder), m_options(options) {
   if (m_options.useDebugNames)
     resolveDebugNames();
-
-  for (auto ins : m_builder)
-    disassembleInstruction(ins);
 }
 
 
-void Disassembler::disassembleInstruction(const Op& op) {
-  m_str << std::setw(24) << std::setfill(' ');
-  disassembleDef(op.getDef());
-  m_str << " = " << op.getOpCode();
+Disassembler::~Disassembler() {
 
-  if (op.getFlags())
-    m_str << " [" << op.getFlags() << "]";
+}
 
-  if (!op.getType().isVoidType() || op.getOperandCount())
-    m_str << " " << op.getType();
+
+void Disassembler::disassemble(std::ostream& stream) const {
+  for (auto ins : m_builder)
+    disassembleOp(stream, ins);
+}
+
+
+void Disassembler::disassembleOp(std::ostream& stream, const Op& op) const {
+  std::string prefix;
+
+  if (op.getFlags()) {
+    std::stringstream flags;
+    flags << " [" << op.getFlags() << "] ";
+    prefix = flags.str();
+  }
+
+  std::stringstream def;
+  disassembleDef(def, op.getDef());
+
+  std::stringstream lead;
+  lead << op.getType() << " " << std::setw(5) << std::setfill(' ') << def.str();
+
+  stream << prefix << std::setw(24 - std::min<size_t>(24u, prefix.size())) << std::setfill(' ') << lead.str();
+  stream << " = " << op.getOpCode();
 
   for (uint32_t i = 0u; i < op.getFirstLiteralOperandIndex(); i++)
-    disassembleOperandDef(op, i);
+    disassembleOperandDef(stream, op, i);
 
   for (uint32_t i = op.getFirstLiteralOperandIndex(); i < op.getOperandCount(); i++)
-    disassembleOperandLiteral(op, i);
+    disassembleOperandLiteral(stream, op, i);
 
-  m_str << std::endl;
+  stream << std::endl;
+}
+
+
+std::string Disassembler::disassemble() const {
+  std::stringstream str;
+  disassemble(str);
+  return str.str();
+}
+
+
+std::string Disassembler::disassembleOp(const Op& op) const {
+  std::stringstream str;
+  disassembleOp(str, op);
+  return str.str();
 }
 
 
@@ -46,36 +76,32 @@ void Disassembler::resolveDebugNames() {
 }
 
 
-void Disassembler::disassembleDef(SsaDef def) {
+void Disassembler::disassembleDef(std::ostream& stream, SsaDef def) const {
   auto entry = m_debugNames.find(def);
 
-  std::stringstream tmp;
-
   if (entry != m_debugNames.end())
-    tmp << '%' << entry->second;
+    stream << '%' << entry->second;
   else
-    tmp << def;
-
-  m_str << tmp.str();
+    stream << def;
 }
 
 
-void Disassembler::disassembleOperandDef(const Op& op, uint32_t index) {
+void Disassembler::disassembleOperandDef(std::ostream& stream, const Op& op, uint32_t index) const {
   auto operand = SsaDef(op.getOperand(index));
 
-  m_str << " ";
+  stream << " ";
 
   if (op.getOpCode() == OpCode::eDebugName) {
     /* Don't display the debug name twice */
-    m_str << operand;
+    stream << operand;
     return;
   }
 
-  disassembleDef(operand);
+  disassembleDef(stream, operand);
 }
 
 
-void Disassembler::disassembleOperandLiteral(const Op& op, uint32_t index) {
+void Disassembler::disassembleOperandLiteral(std::ostream& stream, const Op& op, uint32_t index) const {
   auto operand = op.getOperand(index);
 
   if (op.getOpCode() == OpCode::eDebugName || op.getOpCode() == OpCode::eSemantic) {
@@ -88,34 +114,34 @@ void Disassembler::disassembleOperandLiteral(const Op& op, uint32_t index) {
       return;
 
     if (index == stringIndex) {
-      m_str << " \"";
-      m_str << op.getLiteralString(stringIndex);
-      m_str << "\"";
+      stream << " \"";
+      stream << op.getLiteralString(stringIndex);
+      stream << "\"";
       return;
     }
   }
 
-  m_str << " ";
+  stream << " ";
 
   if (op.getOpCode() == OpCode::eConstant) {
     ScalarType type = op.getType().resolveFlattenedType(index);
 
     switch (type) {
-      case ScalarType::eBool: m_str << (bool(operand) ? "True" : "False"); return;
+      case ScalarType::eBool: stream << (bool(operand) ? "True" : "False"); return;
 
-      case ScalarType::eI8:  m_str << int32_t(int8_t(operand)); return;
-      case ScalarType::eI16: m_str << int32_t(int16_t(operand)); return;
-      case ScalarType::eI32: m_str << int32_t(operand); return;
-      case ScalarType::eI64: m_str << int64_t(operand); return;
+      case ScalarType::eI8:  stream << int32_t(int8_t(operand)); return;
+      case ScalarType::eI16: stream << int32_t(int16_t(operand)); return;
+      case ScalarType::eI32: stream << int32_t(operand); return;
+      case ScalarType::eI64: stream << int64_t(operand); return;
 
-      case ScalarType::eU8:  m_str << uint32_t(uint8_t(operand)); return;
-      case ScalarType::eU16: m_str << uint32_t(uint16_t(operand)); return;
-      case ScalarType::eU32: m_str << uint32_t(operand); return;
-      case ScalarType::eU64: m_str << uint64_t(operand); return;
+      case ScalarType::eU8:  stream << uint32_t(uint8_t(operand)); return;
+      case ScalarType::eU16: stream << uint32_t(uint16_t(operand)); return;
+      case ScalarType::eU32: stream << uint32_t(operand); return;
+      case ScalarType::eU64: stream << uint64_t(operand); return;
 
-      case ScalarType::eF16: m_str << float(float16_t(operand)); return;
-      case ScalarType::eF32: m_str << float(operand); return;
-      case ScalarType::eF64: m_str << double(operand); return;
+      case ScalarType::eF16: stream << float(float16_t(operand)); return;
+      case ScalarType::eF32: stream << float(operand); return;
+      case ScalarType::eF64: stream << double(operand); return;
 
       default:;
     }
@@ -124,57 +150,57 @@ void Disassembler::disassembleOperandLiteral(const Op& op, uint32_t index) {
   if (m_options.useEnumNames) {
     switch (op.getOpCode()) {
       case OpCode::eEntryPoint:
-        if (index == op.getFirstLiteralOperandIndex()) { m_str << ShaderStage(operand); return; }
+        if (index == op.getFirstLiteralOperandIndex()) { stream << ShaderStage(operand); return; }
         break;
 
       case OpCode::eSetGsInputPrimitive:
       case OpCode::eSetGsOutputPrimitive:
       case OpCode::eSetTessDomain:
-        if (index == 1u) { m_str << PrimitiveType(operand); return; }
+        if (index == 1u) { stream << PrimitiveType(operand); return; }
         break;
 
       case OpCode::eSetTessPrimitive:
-        if (index == 1u) { m_str << PrimitiveType(operand); return; }
-        if (index == 2u) { m_str << TessWindingOrder(operand); return; }
-        if (index == 3u) { m_str << TessPartitioning(operand); return; }
+        if (index == 1u) { stream << PrimitiveType(operand); return; }
+        if (index == 2u) { stream << TessWindingOrder(operand); return; }
+        if (index == 3u) { stream << TessPartitioning(operand); return; }
         break;
 
       case OpCode::eDclInput:
-        if (index == 3u) { m_str << InterpolationModes(operand); return; }
+        if (index == 3u) { stream << InterpolationModes(operand); return; }
         break;
 
       case OpCode::eDclInputBuiltIn:
-        if (index == 1u) { m_str << BuiltIn(operand); return; }
-        if (index == 2u) { m_str << InterpolationModes(operand); return; }
+        if (index == 1u) { stream << BuiltIn(operand); return; }
+        if (index == 2u) { stream << InterpolationModes(operand); return; }
         break;
 
       case OpCode::eDclOutputBuiltIn:
-        if (index == 1u) { m_str << BuiltIn(operand); return; }
+        if (index == 1u) { stream << BuiltIn(operand); return; }
         break;
 
       case OpCode::eDclPushData:
-        if (index == 2u) { m_str << ShaderStageMask(operand); return; }
+        if (index == 2u) { stream << ShaderStageMask(operand); return; }
         break;
 
       case OpCode::eDclSrv:
-        if (index == 4u) { m_str << ResourceKind(operand); return; }
+        if (index == 4u) { stream << ResourceKind(operand); return; }
         break;
 
       case OpCode::eDclUav:
-        if (index == 4u) { m_str << ResourceKind(operand); return; }
-        if (index == 5u) { m_str << UavFlags(operand); return; }
+        if (index == 4u) { stream << ResourceKind(operand); return; }
+        if (index == 5u) { stream << UavFlags(operand); return; }
         break;
 
       case OpCode::eLabel:
         if (index == op.getFirstLiteralOperandIndex()) {
-          m_str << Construct(operand);
+          stream << Construct(operand);
           return;
         }
         break;
 
       case OpCode::eBarrier:
-        if (index <= 1u) { m_str << Scope(operand); return; }
-        if (index == 2u) { m_str << MemoryTypeFlags(operand); return; }
+        if (index <= 1u) { stream << Scope(operand); return; }
+        if (index == 2u) { stream << MemoryTypeFlags(operand); return; }
         break;
 
       case OpCode::eLdsAtomic:
@@ -183,18 +209,18 @@ void Disassembler::disassembleOperandLiteral(const Op& op, uint32_t index) {
       case OpCode::eCounterAtomic:
       case OpCode::eMemoryAtomic:
         if (index == op.getFirstLiteralOperandIndex()) {
-          m_str << AtomicOp(operand);
+          stream << AtomicOp(operand);
           return;
         }
         break;
 
       case OpCode::eDerivX:
       case OpCode::eDerivY:
-        if (index == 1u) { m_str << DerivativeMode(operand); return; }
+        if (index == 1u) { stream << DerivativeMode(operand); return; }
         return;
 
       case OpCode::eFRound:
-        if (index == 1u) { m_str << RoundMode(operand); return; }
+        if (index == 1u) { stream << RoundMode(operand); return; }
         return;
 
       default:;
@@ -205,9 +231,9 @@ void Disassembler::disassembleOperandLiteral(const Op& op, uint32_t index) {
   uint64_t lit = uint64_t(operand);
 
   if (lit <= 0xffffu)
-    m_str << std::dec << lit;
+    stream << std::dec << lit;
   else
-    m_str << "0x" << std::hex << lit << std::dec;
+    stream << "0x" << std::hex << lit << std::dec;
 }
 
 }
