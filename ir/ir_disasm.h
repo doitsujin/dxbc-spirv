@@ -23,37 +23,36 @@ public:
     bool useEnumNames = true;
   };
 
-  Disassembler(const Builder& builder, const Options& options)
-  : m_builder(builder), m_options(options) { }
+  Disassembler(Builder& builder, const Options& options);
 
-  /** Returns disassembled shader as an UTF-8 string. */
-  void disassemble();
+  ~Disassembler();
 
-  /** Retrieves disassembled string. */
-  std::string getString() const {
-    return m_str.str();
-  }
+  /** Disassembles shader module into the given stream. */
+  void disassemble(std::ostream& stream) const;
+
+  /** Disassembles single instruction into the given stream. */
+  void disassembleOp(std::ostream& stream, const Op& op) const;
+
+  /** Disassembles shader module into a string. */
+  std::string disassemble() const;
+
+  /** Disassembles single instruction into a string. */
+  std::string disassembleOp(const Op& op) const;
 
 private:
 
-  const Builder&    m_builder;
-  Options           m_options;
-
-  std::stringstream m_str;
+  const Builder& m_builder;
+  Options m_options;
 
   std::unordered_map<SsaDef, std::string> m_debugNames;
 
-  void disassembleInstruction(const Op& op);
-
-  void disassembleBinaryData();
-
   void resolveDebugNames();
 
-  void disassembleDef(SsaDef def);
+  void disassembleDef(std::ostream& stream, SsaDef def) const;
 
-  void disassembleOperandDef(const Op& op, uint32_t index);
+  void disassembleOperandDef(std::ostream& stream, const Op& op, uint32_t index) const;
 
-  void disassembleOperandLiteral(const Op& op, uint32_t index);
+  void disassembleOperandLiteral(std::ostream& stream, const Op& op, uint32_t index) const;
 
 };
 
