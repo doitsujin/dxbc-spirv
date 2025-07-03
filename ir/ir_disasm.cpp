@@ -117,7 +117,7 @@ void Disassembler::disassembleOperandLiteral(const Op& op, uint32_t index) {
   if (m_options.useEnumNames) {
     switch (op.getOpCode()) {
       case OpCode::eEntryPoint:
-        if (index == 1u) { m_str << ShaderStage(operand); return; }
+        if (index == op.getFirstLiteralOperandIndex()) { m_str << ShaderStage(operand); return; }
         break;
 
       case OpCode::eSetGsInputPrimitive:
@@ -133,29 +133,29 @@ void Disassembler::disassembleOperandLiteral(const Op& op, uint32_t index) {
         break;
 
       case OpCode::eDclInput:
-        if (index == 2u) { m_str << InterpolationModes(operand); return; }
+        if (index == 3u) { m_str << InterpolationModes(operand); return; }
         break;
 
       case OpCode::eDclInputBuiltIn:
-        if (index == 0u) { m_str << BuiltIn(operand); return; }
-        if (index == 1u) { m_str << InterpolationModes(operand); return; }
+        if (index == 1u) { m_str << BuiltIn(operand); return; }
+        if (index == 2u) { m_str << InterpolationModes(operand); return; }
         break;
 
       case OpCode::eDclOutputBuiltIn:
-        if (index == 0u) { m_str << BuiltIn(operand); return; }
+        if (index == 1u) { m_str << BuiltIn(operand); return; }
         break;
 
       case OpCode::eDclPushData:
-        if (index == 1u) { m_str << ShaderStageMask(operand); return; }
+        if (index == 2u) { m_str << ShaderStageMask(operand); return; }
         break;
 
       case OpCode::eDclSrv:
-        if (index == 3u) { m_str << ResourceKind(operand); return; }
+        if (index == 4u) { m_str << ResourceKind(operand); return; }
         break;
 
       case OpCode::eDclUav:
-        if (index == 3u) { m_str << ResourceKind(operand); return; }
-        if (index == 4u) { m_str << UavFlags(operand); return; }
+        if (index == 4u) { m_str << ResourceKind(operand); return; }
+        if (index == 5u) { m_str << UavFlags(operand); return; }
         break;
 
       case OpCode::eLabel:

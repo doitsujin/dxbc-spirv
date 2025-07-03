@@ -121,23 +121,23 @@ lowered to `Cast` and `Convert` instructions as necessary. It is the only instru
 with a scalar type of `ir::Type::Unknown`. In the final shader binary, no `ConsumeAs` instructions shall remain.
 
 ### Variable declaration instructions
-| `ir::OpCode`         | Return type      | Arguments...     |           |                |                     |                 |
-|----------------------|------------------|------------------|-----------|----------------|---------------------|-----------------|
-| `DclInput`           | vector or scalar | location         | component | `ir::InterpolationModes` |           |                 |
-| `DclInputBuiltIn`    | any              | `ir::BuiltIn`    | `ir::InterpolationModes` | |                     |                 |
-| `DclOutput`          | vector or scalar | location         | component | stream (GS)    |                     |                 |
-| `DclOutputBuiltIn`   | any              | `ir::BuiltIn`    | stream (GS) |              |                     |                 |
-| `DclSpecConstant`    | any              | spec id          | default   |                |                     |                 |
-| `DclPushData`        | any              | push data offset | `ir::ShaderStageMask` |    |                     |                 |
-| `DclSampler`         | any              | space            | register  | count          |                     |                 |
-| `DclCbv`             | any              | space            | register  | count          |                     |                 |
-| `DclSrv`             | any              | space            | register  | count          | `ir::ResourceKind`  |                 |
-| `DclUav`             | any              | space            | register  | count          | `ir::ResourceKind`  | `ir::UavFlags`  |
-| `DclUavCounter`      | `u32`            | `%DclUav` uav    |           |                |                     |                 |
-| `DclLds`             | any              |                  |           |                |                     |                 |
-| `DclScratch`         | any              |                  |           |                |                     |                 |
-| `DclTmp`             | any              |                  |           |                |                     |                 |
-| `DclParam`           | any              |                  |           |                |                     |                 |
+| `ir::OpCode`         | Return type      | Arguments...     |                  |           |                |                     |                 |
+|----------------------|------------------|------------------|------------------|-----------|----------------|---------------------|-----------------|
+| `DclInput`           | see below        | `%EntryPoint`    | location         | component | `ir::InterpolationModes` |           |                 |
+| `DclInputBuiltIn`    | any              | `%EntryPoint`    | `ir::BuiltIn`    | `ir::InterpolationModes` | |                     |                 |
+| `DclOutput`          | see below        | `%EntryPoint`    | location         | component | stream (GS)    |                     |                 |
+| `DclOutputBuiltIn`   | any              | `%EntryPoint`    | `ir::BuiltIn`    | stream (GS) |              |                     |                 |
+| `DclSpecConstant`    | any              | `%EntryPoint`    | spec id          | default   |                |                     |                 |
+| `DclPushData`        | any              | `%EntryPoint`    | push data offset | `ir::ShaderStageMask` |    |                     |                 |
+| `DclSampler`         | any              | `%EntryPoint`    | space            | register  | count          |                     |                 |
+| `DclCbv`             | any              | `%EntryPoint`    | space            | register  | count          |                     |                 |
+| `DclSrv`             | any              | `%EntryPoint`    | space            | register  | count          | `ir::ResourceKind`  |                 |
+| `DclUav`             | any              | `%EntryPoint`    | space            | register  | count          | `ir::ResourceKind`  | `ir::UavFlags`  |
+| `DclUavCounter`      | `u32`            | `%EntryPoint`    | `%DclUav` uav    |           |                |                     |                 |
+| `DclLds`             | any              | `%EntryPoint`    |                  |           |                |                     |                 |
+| `DclScratch`         | any              | `%EntryPoint`    |                  |           |                |                     |                 |
+| `DclTmp`             | any              | `%EntryPoint`    |                  |           |                |                     |                 |
+| `DclParam`           | any              |                  |                  |           |                |                     |                 |
 
 The `count` parameter for `DclSampler`, `DclSrv`, `DclCbv` and `DclUav` instructions is a literal constant declareing the size of the
 descriptor array, If the size is `0`, the array is unbounded. If `1`, the declaration consists of only a single descriptor, and the
@@ -166,8 +166,11 @@ as well as optionally having a debug name attached to them, since there is no ot
 The `ir::InterpolationMode` parameter for input declarations is always `None` outside of pixel shaders. Inside pixel shaders, it is
 implicitly set to `flat` for integer types.
 
+The return type of `DclInput` and `DclOutput` can be a 32-bit scalar or vector type, or a sized array of scalars or vectors.
+In pixel shaders, `DclInput` instructions with an integer type must set the `Flat` interpolation mode.
+
 For any `DclOutput` instruction in hull shaders, or corresponding `DclInput` instructions in domain shaders, control point data will
-always have an unsized array type, whereas patch constants use a scalar or vector type. The exception here is that tessellation factor
+always have a sized array type, whereas patch constants use a scalar or vector type. The exception here is that tessellation factor
 built-ins are also exposed as an array, but they are inherently always patch constants.
 
 Likewise, `DclInput*` instructions for per-vertex inputs in geometry shaders and hull shaders will use a sized array type.
