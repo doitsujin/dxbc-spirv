@@ -724,6 +724,21 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eIFindLsb: return os << "IFindLsb";
     case OpCode::eSFindMsb: return os << "SFindMsb";
     case OpCode::eUFindMsb: return os << "UFindMsb";
+    case OpCode::eIAdd: return os << "IAdd";
+    case OpCode::eIAddCarry: return os << "IAddCarry";
+    case OpCode::eISub: return os << "ISub";
+    case OpCode::eISubBorrow: return os << "ISubBorrow";
+    case OpCode::eINeg: return os << "INeg";
+    case OpCode::eIMul: return os << "IMul";
+    case OpCode::eSDiv: return os << "SDiv";
+    case OpCode::eUDiv: return os << "UDiv";
+    case OpCode::eSMin: return os << "SMin";
+    case OpCode::eSMax: return os << "SMax";
+    case OpCode::eSClamp: return os << "SClamp";
+    case OpCode::eUMin: return os << "UMin";
+    case OpCode::eUMax: return os << "UMax";
+    case OpCode::eUClamp: return os << "UClamp";
+    case OpCode::eUMSad: return os << "UMSad";
   }
 
   return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";
