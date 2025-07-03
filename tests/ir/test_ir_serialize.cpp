@@ -76,15 +76,43 @@ void testIrSerialize() {
 
   Builder builder;
 
-  builder.add(Op::Constant(-1));
-  builder.add(Op::Constant(3.0));
-
   auto funcDef = builder.add(Op::Function(Type()));
+  builder.add(Op::DebugName(funcDef, "main"));
+
+  auto entryPointDef = builder.add(
+    Op::EntryPoint(funcDef, ShaderStage::eVertex));
+  builder.add(Op::DebugName(entryPointDef, "vertex_shader_123"));
+
+  auto vertexIdDef = builder.add(
+    Op::DclInputBuiltIn(ScalarType::eU32, entryPointDef, BuiltIn::eVertexId));
+  builder.add(Op::DebugName(vertexIdDef, "v0"));
+  builder.add(Op::Semantic(vertexIdDef, 0, "SV_VERTEXID"));
+
+  auto positionDef = builder.add(
+    Op::DclOutputBuiltIn(BasicType(ScalarType::eF32, 4), entryPointDef, BuiltIn::ePosition));
+  builder.add(Op::DebugName(positionDef, "o0"));
+  builder.add(Op::Semantic(positionDef, 0, "SV_POSITION"));
+
   builder.add(Op::Label());
+
+  auto vidDef = builder.add(Op::InputLoad(ScalarType::eU32, SsaDef(), vertexIdDef));
+  auto xDef = builder.add(Op::Select(ScalarType::eF32,
+    builder.add(Op::INe(builder.makeConstant(0u),
+      builder.add(Op::IAnd(ScalarType::eU32, vidDef, builder.makeConstant(1u))))),
+    builder.makeConstant(3.0f),
+    builder.makeConstant(-1.0f)));
+  auto yDef = builder.add(Op::Select(ScalarType::eF32,
+    builder.add(Op::INe(builder.makeConstant(0u),
+      builder.add(Op::IAnd(ScalarType::eU32, vidDef, builder.makeConstant(2u)).setFlags(OpFlag::ePrecise)))),
+    builder.makeConstant(3.0f),
+    builder.makeConstant(-1.0f)));
+  auto zDef = builder.makeConstant(0.0f);
+  auto wDef = builder.makeConstant(1.0f);
+
+  auto vecDef = builder.add(Op::CompositeConstruct(BasicType(ScalarType::eF32, 4), xDef, yDef, zDef, wDef));
+  builder.add(Op::OutputStore(positionDef, SsaDef(), vecDef));
   builder.add(Op::Return());
   builder.add(Op::FunctionEnd());
-
-  builder.add(Op::DebugName(funcDef, "entry_point"));
 
   testIrSerializeBuilder(builder);
 }
