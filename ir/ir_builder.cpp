@@ -133,6 +133,52 @@ void Builder::rewriteDef(SsaDef oldDef, SsaDef newDef) {
 }
 
 
+void Builder::reorderBefore(SsaDef ref, SsaDef first, SsaDef last) {
+  dxbc_spv_assert(first && last);
+  dxbc_spv_assert(getOp(first).isDeclarative() == getOp(last).isDeclarative());
+  dxbc_spv_assert(!ref || getOp(ref).isDeclarative() == getOp(first).isDeclarative());
+
+  unlinkNodes(first, last);
+
+  auto& aMetadata = m_metadata.at(first.getId());
+  auto& bMetadata = m_metadata.at(last.getId());
+
+  aMetadata.prev = m_code.tail;
+  bMetadata.next = ref;
+
+  if (ref)
+    aMetadata.prev = m_metadata.at(ref.getId()).prev;
+
+  insertNodes(first, last);
+
+  if (m_codeBlockStart == ref)
+    m_codeBlockStart = first;
+}
+
+
+void Builder::reorderAfter(SsaDef ref, SsaDef first, SsaDef last) {
+  dxbc_spv_assert(first && last);
+  dxbc_spv_assert(getOp(first).isDeclarative() == getOp(last).isDeclarative());
+  dxbc_spv_assert(!ref || getOp(ref).isDeclarative() == getOp(first).isDeclarative());
+
+  unlinkNodes(first, last);
+
+  auto& aMetadata = m_metadata.at(first.getId());
+  auto& bMetadata = m_metadata.at(last.getId());
+
+  aMetadata.prev = ref;
+  bMetadata.next = m_code.head;
+
+  if (ref)
+    bMetadata.next = m_metadata.at(ref.getId()).next;
+
+  insertNodes(first, last);
+
+  if (m_codeBlockStart == ref)
+    m_codeBlockStart = first;
+}
+
+
 std::pair<SsaDef, bool> Builder::writeOp(Op&& op) {
   if (op.isConstant()) {
     SsaDef def = lookupConstant(op);
@@ -190,31 +236,37 @@ void Builder::removeUse(SsaDef target, SsaDef user) {
 
 
 void Builder::insertNode(SsaDef def) {
-  auto& metadata = m_metadata.at(def.getId());
+  insertNodes(def, def);
+}
 
-  dxbc_spv_assert(((!metadata.prev && metadata.next == m_code.head) ||
-    m_metadata.at(metadata.prev.getId()).next == metadata.next));
-  dxbc_spv_assert(((!metadata.next && metadata.prev == m_code.tail) ||
-    m_metadata.at(metadata.next.getId()).prev == metadata.prev));
 
-  if (!getOp(def).isDeclarative()) {
-    dxbc_spv_assert(!metadata.next || !getOp(metadata.next).isDeclarative());
+void Builder::insertNodes(SsaDef first, SsaDef last) {
+  auto& aMetadata = m_metadata.at(first.getId());
+  auto& bMetadata = m_metadata.at(last.getId());
 
-    if (m_codeBlockStart == metadata.next)
-      m_codeBlockStart = def;
+  dxbc_spv_assert(((!aMetadata.prev && bMetadata.next == m_code.head) ||
+    m_metadata.at(aMetadata.prev.getId()).next == bMetadata.next));
+  dxbc_spv_assert(((!bMetadata.next && aMetadata.prev == m_code.tail) ||
+    m_metadata.at(bMetadata.next.getId()).prev == aMetadata.prev));
+
+  if (!getOp(first).isDeclarative()) {
+    dxbc_spv_assert(!bMetadata.next || !getOp(bMetadata.next).isDeclarative());
+
+    if (m_codeBlockStart == bMetadata.next)
+      m_codeBlockStart = first;
   } else {
-    dxbc_spv_assert(!metadata.prev || getOp(metadata.prev).isDeclarative());
+    dxbc_spv_assert(!aMetadata.prev || getOp(aMetadata.prev).isDeclarative());
   }
 
-  if (metadata.prev)
-    m_metadata.at(metadata.prev.getId()).next = def;
+  if (aMetadata.prev)
+    m_metadata.at(aMetadata.prev.getId()).next = first;
   else
-    m_code.head = def;
+    m_code.head = first;
 
-  if (metadata.next)
-    m_metadata.at(metadata.next.getId()).prev = def;
+  if (bMetadata.next)
+    m_metadata.at(bMetadata.next.getId()).prev = last;
   else
-    m_code.tail = def;
+    m_code.tail = last;
 }
 
 
@@ -242,6 +294,28 @@ void Builder::removeNode(SsaDef def) {
   metadata.next = m_free;
 
   m_free = def;
+}
+
+
+void Builder::unlinkNodes(SsaDef first, SsaDef last) {
+  auto& aMetadata = m_metadata.at(first.getId());
+  auto& bMetadata = m_metadata.at(last.getId());
+
+  if (aMetadata.prev)
+    m_metadata.at(aMetadata.prev.getId()).next = bMetadata.next;
+  else
+    m_code.head = bMetadata.next;
+
+  if (bMetadata.next)
+    m_metadata.at(bMetadata.next.getId()).prev = aMetadata.prev;
+  else
+    m_code.tail = aMetadata.prev;
+
+  if (m_codeBlockStart == first)
+    m_codeBlockStart = bMetadata.next;
+
+  aMetadata.prev = SsaDef();
+  bMetadata.next = SsaDef();
 }
 
 

@@ -213,6 +213,15 @@ public:
    *  instruction will be removed. */
   void rewriteDef(SsaDef oldDef, SsaDef newDef);
 
+  /** Reorders a block of instructions before another instruction.
+   *  This only changes the linked list of instructions. Note that
+   *  the reference node must not be included in the first..last
+   *  range, or behavioru is undefined, */
+  void reorderBefore(SsaDef ref, SsaDef first, SsaDef last);
+
+  /** Reorders a block of instructions after another instruction. */
+  void reorderAfter(SsaDef ref, SsaDef first, SsaDef last);
+
   struct ConstantHash {
     size_t operator () (const Op& op) const;
   };
@@ -240,7 +249,11 @@ private:
 
   void insertNode(SsaDef def);
 
+  void insertNodes(SsaDef first, SsaDef last);
+
   void removeNode(SsaDef def);
+
+  void unlinkNodes(SsaDef first, SsaDef last);
 
   SsaDef allocSsaDef();
 
