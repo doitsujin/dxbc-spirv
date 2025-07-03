@@ -933,6 +933,22 @@ enum class OpCode : uint16_t {
   eFSin                         = 693u,
   eFCos                         = 694u,
 
+  eIAnd                         = 704u,
+  eIOr                          = 705u,
+  eIXor                         = 706u,
+  eINot                         = 707u,
+  eIBitInsert                   = 708u,
+  eUBitExtract                  = 709u,
+  eSBitExtract                  = 710u,
+  eIShl                         = 711u,
+  eSShr                         = 712u,
+  eUShr                         = 713u,
+  eIBitCount                    = 714u,
+  eIBitReverse                  = 715u,
+  eIFindLsb                     = 716u,
+  eSFindMsb                     = 717u,
+  eUFindMsb                     = 718u,
+
   Count
 };
 
@@ -2134,6 +2150,95 @@ public:
     return Op(OpCode::eFCos, type)
       .addOperand(Operand(a));
   }
+
+  static Op IAnd(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eIAnd, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op IOr(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eIOr, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op IXor(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eIXor, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op INot(Type type, SsaDef a) {
+    return Op(OpCode::eINot, type)
+      .addOperand(Operand(a));
+  }
+
+  static Op IBitInsert(Type type, SsaDef base, SsaDef insert, SsaDef offset, SsaDef count) {
+    return Op(OpCode::eIBitInsert, type)
+      .addOperand(Operand(base))
+      .addOperand(Operand(insert))
+      .addOperand(Operand(offset))
+      .addOperand(Operand(count));
+  }
+
+  static Op UBitExtract(Type type, SsaDef base, SsaDef offset, SsaDef count) {
+    return Op(OpCode::eUBitExtract, type)
+      .addOperand(Operand(base))
+      .addOperand(Operand(offset))
+      .addOperand(Operand(count));
+  }
+
+  static Op SBitExtract(Type type, SsaDef base, SsaDef offset, SsaDef count) {
+    return Op(OpCode::eSBitExtract, type)
+      .addOperand(Operand(base))
+      .addOperand(Operand(offset))
+      .addOperand(Operand(count));
+  }
+
+  static Op IShl(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eIShl, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op SShr(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eSShr, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op UShr(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eUShr, type)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op IBitCount(Type type, SsaDef a) {
+    return Op(OpCode::eIBitCount, type)
+      .addOperand(Operand(a));
+  }
+
+  static Op IBitReverse(Type type, SsaDef a) {
+    return Op(OpCode::eIBitReverse, type)
+      .addOperand(Operand(a));
+  }
+
+  static Op IFindLsb(Type type, SsaDef a) {
+    return Op(OpCode::eIFindLsb, type)
+      .addOperand(Operand(a));
+  }
+
+  static Op SFindMsb(Type type, SsaDef a) {
+    return Op(OpCode::eSFindMsb, type)
+      .addOperand(Operand(a));
+  }
+
+  static Op UFindMsb(Type type, SsaDef a) {
+    return Op(OpCode::eUFindMsb, type)
+      .addOperand(Operand(a));
+  }
+
 
 private:
 
