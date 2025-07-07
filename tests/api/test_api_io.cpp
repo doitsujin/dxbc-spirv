@@ -95,6 +95,7 @@ Builder test_io_vs_vertex_id() {
   builder.add(Op::OutputStore(outDef, SsaDef(),
     builder.add(Op::InputLoad(ScalarType::eU32, inDef, SsaDef()))));
 
+  builder.add(Op::Return());
   return builder;
 }
 
