@@ -32,7 +32,7 @@ Builder test_io_vs() {
   builder.add(Op::Semantic(posOutDef, 0u, "SV_POSITION"));
   builder.add(Op::DebugName(posOutDef, "o0"));
 
-  auto normalOutDef = builder.add(Op::DclOutput(BasicType(ScalarType::eF32, 4u), entryPoint, 1u, 0u));
+  auto normalOutDef = builder.add(Op::DclOutput(BasicType(ScalarType::eF32, 3u), entryPoint, 1u, 0u));
   builder.add(Op::Semantic(normalOutDef, 0u, "NORMAL"));
   builder.add(Op::DebugName(normalOutDef, "o1_xyz"));
 
