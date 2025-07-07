@@ -1,0 +1,11 @@
+test_api_files = files([
+  'test_api.cpp',
+  'test_api_io.cpp',
+])
+
+lib_dxbc_spv_test_api = static_library('test_api', test_api_files,
+  link_with   : [ lib_dxbc_spv ])
+
+executable('test_api_dump', files([ 'test_api_dump.cpp']),
+  link_with   : [ lib_dxbc_spv_test_api, lib_dxbc_spv ],
+  install     : false)
