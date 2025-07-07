@@ -8,6 +8,7 @@ dxbc_spv_files = files([
   'ir/ir_builder.cpp',
   'ir/ir_disasm.cpp',
   'ir/ir_serialize.cpp',
+  'ir/ir_validation.cpp',
 
   'util/util_float16.cpp',
 ])
