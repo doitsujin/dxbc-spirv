@@ -28,6 +28,11 @@ SsaDef Builder::add(Op op) {
   if (isDeclarative && m_codeBlockStart) {
     metadata.next = m_codeBlockStart;
     metadata.prev = m_metadata.at(m_codeBlockStart.getId()).prev;
+  } else if (m_cursor && m_cursor != m_code.tail) {
+    metadata.next = m_metadata.at(m_cursor.getId()).next;
+    metadata.prev = m_cursor;
+
+    m_cursor = def;
   } else {
     metadata.next = SsaDef();
     metadata.prev = m_code.tail;
@@ -179,6 +184,16 @@ void Builder::reorderAfter(SsaDef ref, SsaDef first, SsaDef last) {
 }
 
 
+void Builder::setCursor(SsaDef def) {
+  m_cursor = def;
+}
+
+
+void Builder::resetCursor() {
+  m_cursor = SsaDef();
+}
+
+
 std::pair<SsaDef, bool> Builder::writeOp(Op&& op) {
   if (op.isConstant()) {
     SsaDef def = lookupConstant(op);
@@ -275,6 +290,13 @@ void Builder::removeNode(SsaDef def) {
 
   if (m_codeBlockStart == def)
     m_codeBlockStart = metadata.next;
+
+  if (m_cursor == def) {
+    m_cursor = metadata.prev;
+
+    if (m_cursor && getOp(m_cursor).isDeclarative())
+      m_cursor = SsaDef();
+  }
 
   if (metadata.prev)
     m_metadata.at(metadata.prev.getId()).next = metadata.next;

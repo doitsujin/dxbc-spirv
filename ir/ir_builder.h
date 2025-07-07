@@ -179,9 +179,9 @@ public:
     return add(Op::Constant(args...));
   }
 
-  /** Convenince method to add an instruction either to the
-   *  end of the module, or the end of the declarative block
-   *  if the op in question is declarative.
+  /** Convenince method to add an instruction either after the
+   *  current insertion cursor, or the end of the declarative
+   *  block if the op in question is declarative.
    *  Note that \c Constant declarations are deduplicated. */
   SsaDef add(Op op);
 
@@ -222,6 +222,12 @@ public:
   /** Reorders a block of instructions after another instruction. */
   void reorderAfter(SsaDef ref, SsaDef first, SsaDef last);
 
+  /** Sets insertion cursor for subsequent calls to \c add. */
+  void setCursor(SsaDef def);
+
+  /** Resets insertion cursor to end of module. */
+  void resetCursor();
+
   struct ConstantHash {
     size_t operator () (const Op& op) const;
   };
@@ -240,6 +246,7 @@ private:
   OpList m_code;
   SsaDef m_codeBlockStart;
   SsaDef m_free = { };
+  SsaDef m_cursor = { };
 
   std::pair<SsaDef, bool> writeOp(Op&& op);
 
