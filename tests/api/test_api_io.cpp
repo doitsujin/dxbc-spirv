@@ -40,11 +40,11 @@ Builder test_io_vs() {
   builder.add(Op::Semantic(colorOutDef, 0u, "COLOR"));
   builder.add(Op::DebugName(colorOutDef, "o1_w"));
 
-  auto tangent0OutDef = builder.add(Op::DclOutput(ScalarType::eU32, entryPoint, 2u, 0u));
+  auto tangent0OutDef = builder.add(Op::DclOutput(BasicType(ScalarType::eF32, 3u), entryPoint, 2u, 0u));
   builder.add(Op::Semantic(tangent0OutDef, 0u, "TANGENT"));
   builder.add(Op::DebugName(tangent0OutDef, "o2"));
 
-  auto tangent1OutDef = builder.add(Op::DclOutput(ScalarType::eU32, entryPoint, 3u, 0u));
+  auto tangent1OutDef = builder.add(Op::DclOutput(BasicType(ScalarType::eF32, 3u), entryPoint, 3u, 0u));
   builder.add(Op::Semantic(tangent1OutDef, 1u, "TANGENT"));
   builder.add(Op::DebugName(tangent1OutDef, "o3"));
 
