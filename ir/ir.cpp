@@ -199,7 +199,6 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
 
     case OpCode::eDebugName:
     case OpCode::eSemantic:
-    case OpCode::eEntryPoint:
     case OpCode::eSetCsWorkgroupSize:
     case OpCode::eSetGsInstances:
     case OpCode::eSetGsInputPrimitive:
@@ -222,6 +221,7 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
     case OpCode::eFRound:
       return 1u;
 
+    case OpCode::eEntryPoint:
     case OpCode::eLabel:
     case OpCode::eLdsAtomic:
     case OpCode::eBufferAtomic:
