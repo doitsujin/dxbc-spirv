@@ -4,7 +4,7 @@
 
 namespace dxbc_spv::ir {
 
-Disassembler::Disassembler(Builder& builder, const Options& options)
+Disassembler::Disassembler(const Builder& builder, const Options& options)
 : m_builder(builder), m_options(options) {
   if (m_options.useDebugNames)
     resolveDebugNames();

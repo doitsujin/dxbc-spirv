@@ -23,7 +23,7 @@ public:
     bool useEnumNames = true;
   };
 
-  Disassembler(Builder& builder, const Options& options);
+  Disassembler(const Builder& builder, const Options& options);
 
   ~Disassembler();
 
