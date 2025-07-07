@@ -13,3 +13,5 @@ test_files = files([
 executable('test_dxbc_spv', test_files,
   link_with   : [ lib_dxbc_spv ],
   install     : false)
+
+subdir('api')
