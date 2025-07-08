@@ -186,6 +186,14 @@ on it may use arbitrary scalar or vector types.
 For structured buffers, the type is an unsized array of an arbitrary type. Typically, this will be of the form `u32[n][]`,
 where `n` corresponds to the number of dwords in a structure.
 
+#### UAV flags
+- `Coherent`: UAV is globally coherent, writes must be made visible to `Global` scope.
+- `ReadOnly`: UAV is only accessed for reading.
+- `WriteOnly`: UAV is only accessed for writing.
+- `RasterizerOrdered`: UAV is only accessed between `RovScopedLockBegin` and `RovScopedLockEnd`.
+- `FixedFormat`: The resource format matches the declared type exactly.
+    Must be set for typed buffer and image UAVs accessed with atomics.
+
 ### Semantic declaration
 | `ir::OpCode`         | Return type      | Arguments...     |                  |           |
 |----------------------|------------------|------------------|------------------|-----------|
