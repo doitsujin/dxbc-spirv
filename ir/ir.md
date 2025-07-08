@@ -278,8 +278,9 @@ The `ir::AtomicOp` parameter is a literal enum value, thus the last parameter.
 
 The `%layer` parameter is `null` for non-arrayed image types.
 
-The return value of `ir::AtomicOp::CompareExchange` is always `bool`. The first operand will always contain the
-desired value to compare to, and the second operand will be the value to store if the comparison succeeds.
+For `ir::AtomicOp::CompareExchange`, the first operand contains the desired value to compare
+to, and the second operand will be the value to store if the comparison succeeds. The operation
+returns the value at the given memory location before any exchange can take place.
 
 ### Image instructions
 | `ir::OpCode`         | Return type      | Arguments...  |                   |             |              |              |             |              |          |                  |
