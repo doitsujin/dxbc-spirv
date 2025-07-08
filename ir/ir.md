@@ -293,14 +293,14 @@ returns the value at the given memory location before any exchange can take plac
 ### Image instructions
 | `ir::OpCode`         | Return type      | Arguments...  |                   |             |              |              |             |              |          |           |       |             |
 |----------------------|------------------|---------------|-------------------|-------------|--------------|--------------|-------------|--------------|----------|-----------|------ |-------------|
-| `ImageLoad`          | any              | `%descriptor` | `%mip`            | `%layer`    | `%coord`     | `%sample`    | `%offset`   |              |          |           |       |             |
+| `ImageLoad`          | see below        | `%descriptor` | `%mip`            | `%layer`    | `%coord`     | `%sample`    | `%offset`   |              |          |           |       |             |
 | `ImageStore`         | `void`           | `%descriptor` | `%layer`          | `%coord`    | `%value`     |              |             |              |          |           |       |             |
 | `ImageAtomic`        | `void` or scalar | `%uav` descriptor | `%layer`      | `%coord`   | `%operands`   | `ir::AtomicOp` |           |              |          |           |       |             |
-| `ImageQuerySize`     | struct           | `%descriptor` | `%mip`            |             |              |              |             |              |          |           |       |             |
+| `ImageQuerySize`     | struct, see below| `%descriptor` | `%mip`            |             |              |              |             |              |          |           |       |             |
 | `ImageQueryMips`     | `u32`            | `%descriptor` |                   |             |              |              |             |              |          |           |       |             |
 | `ImageQuerySamples`  | `u32`            | `%descriptor` |                   |             |              |              |             |              |          |           |       |             |
-| `ImageSample`        | any              | `%descriptor` | `%sampler`        | `%layer`    | `%coord`     | `%offset`    | `%lod_index` | `%lod_bias` | `%lod_clamp` | `%dx` | `%dy` | `%depth_compare` |
-| `ImageGather`        | any              | `%descriptor` | `%sampler`        | `%layer`    | `%coord`     | `%offset`    | `%depth_compare` | `component` |          |       |       |             |
+| `ImageSample`        | see below        | `%descriptor` | `%sampler`        | `%layer`    | `%coord`     | `%offset`    | `%lod_index` | `%lod_bias` | `%lod_clamp` | `%dx` | `%dy` | `%depth_compare` |
+| `ImageGather`        | see below        | `%descriptor` | `%sampler`        | `%layer`    | `%coord`     | `%offset`    | `%depth_compare` | `component` |          |       |       |             |
 | `ImageComputeLod`    | `vec2<f32>`      | `%descriptor` | `%sampler`        | `%coord`    |              |              |             |              |          |           |       |             |
 
 The `ImageQuerySize` instruction returns a struct with the following members:
@@ -308,6 +308,10 @@ The `ImageQuerySize` instruction returns a struct with the following members:
 - The array layer count, which will always be 1 for non-layered images
 
 The `ImageLoad`, `ImageSample` and `ImageGather` instructions may return a sparse feedback struct.
+
+For `ImageLoad` and `ImageSample`, the returned texel type is the same type that the image was declared
+with. This can be a scalar or vector. For `ImageGather`, the texel type is always a `vec4` of the same
+component type as the image declaration.
 
 For `ImageLoad`, `ImageSample` and `ImageGather`, all operands after `%coord` may be `null`. The `component`
 operand for `ImageGather` is a literal and will thus never be `null`.
