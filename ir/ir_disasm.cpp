@@ -35,7 +35,9 @@ void Disassembler::disassembleOp(std::ostream& stream, const Op& op) const {
   disassembleDef(def, op.getDef());
 
   std::stringstream lead;
-  lead << op.getType() << " " << std::setw(5) << std::setfill(' ') << def.str();
+  if (!op.getType().isVoidType())
+    lead << op.getType();
+  lead << " " << std::setw(5) << std::setfill(' ') << def.str();
 
   stream << prefix << std::setw(24 - std::min<size_t>(24u, prefix.size())) << std::setfill(' ') << lead.str();
   stream << " = " << op.getOpCode();
