@@ -1894,11 +1894,12 @@ public:
   }
 
   static Op ImageSample(Type type, SsaDef descriptor, SsaDef sampler,
-      SsaDef coord, SsaDef offset, SsaDef lodIndex, SsaDef lodBias, SsaDef lodClamp,
+      SsaDef layer, SsaDef coord, SsaDef offset, SsaDef lodIndex, SsaDef lodBias, SsaDef lodClamp,
       SsaDef derivatives, SsaDef depthValue) {
     return Op(OpCode::eImageSample, type)
       .addOperand(Operand(descriptor))
       .addOperand(Operand(sampler))
+      .addOperand(Operand(layer))
       .addOperand(Operand(coord))
       .addOperand(Operand(offset))
       .addOperand(Operand(lodIndex))
@@ -1909,10 +1910,11 @@ public:
   }
 
   static Op ImageGather(Type type, SsaDef descriptor, SsaDef sampler,
-      SsaDef coord, SsaDef offset, SsaDef depthValue, uint32_t component) {
+      SsaDef layer, SsaDef coord, SsaDef offset, SsaDef depthValue, uint32_t component) {
     return Op(OpCode::eImageGather, type)
       .addOperand(Operand(descriptor))
       .addOperand(Operand(sampler))
+      .addOperand(Operand(layer))
       .addOperand(Operand(coord))
       .addOperand(Operand(offset))
       .addOperand(Operand(depthValue))
