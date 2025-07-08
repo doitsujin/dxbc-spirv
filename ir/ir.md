@@ -129,7 +129,7 @@ with a scalar type of `ir::Type::Unknown`. In the final shader binary, no `Consu
 | `DclOutputBuiltIn`   | any              | `%EntryPoint`    | `ir::BuiltIn`    | stream (GS) |              |                     |                 |
 | `DclSpecConstant`    | any              | `%EntryPoint`    | spec id          | default   |                |                     |                 |
 | `DclPushData`        | any              | `%EntryPoint`    | push data offset | `ir::ShaderStageMask` |    |                     |                 |
-| `DclSampler`         | any              | `%EntryPoint`    | space            | register  | count          |                     |                 |
+| `DclSampler`         | `void`           | `%EntryPoint`    | space            | register  | count          |                     |                 |
 | `DclCbv`             | any              | `%EntryPoint`    | space            | register  | count          |                     |                 |
 | `DclSrv`             | any              | `%EntryPoint`    | space            | register  | count          | `ir::ResourceKind`  |                 |
 | `DclUav`             | any              | `%EntryPoint`    | space            | register  | count          | `ir::ResourceKind`  | `ir::UavFlags`  |
@@ -291,17 +291,17 @@ to, and the second operand will be the value to store if the comparison succeeds
 returns the value at the given memory location before any exchange can take place.
 
 ### Image instructions
-| `ir::OpCode`         | Return type      | Arguments...  |                   |             |              |              |             |              |          |                  |
-|----------------------|------------------|---------------|-------------------|-------------|--------------|--------------|-------------|--------------|----------|------------------|
-| `ImageLoad`          | any              | `%descriptor` | `%mip`            | `%layer`    | `%coord`     | `%sample`    | `%offset`   |              |          |                  |
-| `ImageStore`         | `void`           | `%descriptor` | `%layer`          | `%coord`    | `%value`     |              |             |              |          |                  |
-| `ImageAtomic`        | `void` or scalar | `%uav` descriptor | `%layer`      | `%coord`   | `%operands`   | `ir::AtomicOp` |           |              |          |                  |
-| `ImageQuerySize`     | struct           | `%descriptor` | `%mip`            |             |              |              |             |              |          |                  |
-| `ImageQueryMips`     | `u32`            | `%descriptor` |                   |             |              |              |             |              |          |                  |
-| `ImageQuerySamples`  | `u32`            | `%descriptor` |                   |             |              |              |             |              |          |                  |
-| `ImageSample`        | any              | `%descriptor` | `%sampler`        | `%coord`    | `%offset`    | `%lod_index` | `%lod_bias` | `%lod_clamp` | `%deriv` | `%depth_compare` |
-| `ImageGather`        | any              | `%descriptor` | `%sampler`        | `%coord`    | `%offset`    | `%depth_compare` | `component` |          |          |                  |
-| `ImageComputeLod`    | `vec2<f32>`      | `%descriptor` | `%sampler`        | `%coord`    |              |              |             |              |          |                  |
+| `ir::OpCode`         | Return type      | Arguments...  |                   |             |              |              |             |              |          |                  |              |
+|----------------------|------------------|---------------|-------------------|-------------|--------------|--------------|-------------|--------------|----------|------------------|--------------|
+| `ImageLoad`          | any              | `%descriptor` | `%mip`            | `%layer`    | `%coord`     | `%sample`    | `%offset`   |              |          |                  |              |
+| `ImageStore`         | `void`           | `%descriptor` | `%layer`          | `%coord`    | `%value`     |              |             |              |          |                  |              |
+| `ImageAtomic`        | `void` or scalar | `%uav` descriptor | `%layer`      | `%coord`   | `%operands`   | `ir::AtomicOp` |           |              |          |                  |              |
+| `ImageQuerySize`     | struct           | `%descriptor` | `%mip`            |             |              |              |             |              |          |                  |              |
+| `ImageQueryMips`     | `u32`            | `%descriptor` |                   |             |              |              |             |              |          |                  |              |
+| `ImageQuerySamples`  | `u32`            | `%descriptor` |                   |             |              |              |             |              |          |                  |              |
+| `ImageSample`        | any              | `%descriptor` | `%sampler`        | `%layer`    | `%coord`     | `%offset`    | `%lod_index` | `%lod_bias` | `%lod_clamp` | `%deriv` | `%depth_compare` |
+| `ImageGather`        | any              | `%descriptor` | `%sampler`        | `%layer`    | `%coord`     | `%offset`    | `%depth_compare` | `component` |          |          |                  |
+| `ImageComputeLod`    | `vec2<f32>`      | `%descriptor` | `%sampler`        | `%coord`    |              |              |             |              |          |                  |              |
 
 The `ImageQuerySize` instruction returns a struct with the following members:
 - A scalar or vector containing the size of the queried mip level, in pixels
