@@ -1,5 +1,6 @@
 #include "test_api.h"
 #include "test_api_io.h"
+#include "test_api_resources.h"
 
 namespace dxbc_spv::test_api {
 
@@ -27,6 +28,11 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_io_vs_clip_cull_dist);
   ADD_TEST(test_io_vs_layer);
   ADD_TEST(test_io_vs_viewport);
+
+  ADD_TEST(test_resources_cbv);
+  ADD_TEST(test_resources_cbv_dynamic);
+  ADD_TEST(test_resources_cbv_indexed);
+  ADD_TEST(test_resources_cbv_indexed_nonuniform);
 
   return result;
 #undef ADD_TEST
