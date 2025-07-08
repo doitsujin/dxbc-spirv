@@ -231,7 +231,7 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
       return getOperandCount() ? getOperandCount() - 1u : 0u;
 
     case OpCode::eImageGather:
-      return 5u;
+      return 6u;
 
     default:
       return getOperandCount();
