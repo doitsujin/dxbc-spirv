@@ -1895,7 +1895,7 @@ public:
 
   static Op ImageSample(Type type, SsaDef descriptor, SsaDef sampler,
       SsaDef layer, SsaDef coord, SsaDef offset, SsaDef lodIndex, SsaDef lodBias, SsaDef lodClamp,
-      SsaDef derivatives, SsaDef depthValue) {
+      SsaDef derivX, SsaDef derivY, SsaDef depthValue) {
     return Op(OpCode::eImageSample, type)
       .addOperand(Operand(descriptor))
       .addOperand(Operand(sampler))
@@ -1905,7 +1905,8 @@ public:
       .addOperand(Operand(lodIndex))
       .addOperand(Operand(lodBias))
       .addOperand(Operand(lodClamp))
-      .addOperand(Operand(derivatives))
+      .addOperand(Operand(derivX))
+      .addOperand(Operand(derivY))
       .addOperand(Operand(depthValue));
   }
 

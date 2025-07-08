@@ -291,17 +291,17 @@ to, and the second operand will be the value to store if the comparison succeeds
 returns the value at the given memory location before any exchange can take place.
 
 ### Image instructions
-| `ir::OpCode`         | Return type      | Arguments...  |                   |             |              |              |             |              |          |                  |              |
-|----------------------|------------------|---------------|-------------------|-------------|--------------|--------------|-------------|--------------|----------|------------------|--------------|
-| `ImageLoad`          | any              | `%descriptor` | `%mip`            | `%layer`    | `%coord`     | `%sample`    | `%offset`   |              |          |                  |              |
-| `ImageStore`         | `void`           | `%descriptor` | `%layer`          | `%coord`    | `%value`     |              |             |              |          |                  |              |
-| `ImageAtomic`        | `void` or scalar | `%uav` descriptor | `%layer`      | `%coord`   | `%operands`   | `ir::AtomicOp` |           |              |          |                  |              |
-| `ImageQuerySize`     | struct           | `%descriptor` | `%mip`            |             |              |              |             |              |          |                  |              |
-| `ImageQueryMips`     | `u32`            | `%descriptor` |                   |             |              |              |             |              |          |                  |              |
-| `ImageQuerySamples`  | `u32`            | `%descriptor` |                   |             |              |              |             |              |          |                  |              |
-| `ImageSample`        | any              | `%descriptor` | `%sampler`        | `%layer`    | `%coord`     | `%offset`    | `%lod_index` | `%lod_bias` | `%lod_clamp` | `%deriv` | `%depth_compare` |
-| `ImageGather`        | any              | `%descriptor` | `%sampler`        | `%layer`    | `%coord`     | `%offset`    | `%depth_compare` | `component` |          |          |                  |
-| `ImageComputeLod`    | `vec2<f32>`      | `%descriptor` | `%sampler`        | `%coord`    |              |              |             |              |          |                  |              |
+| `ir::OpCode`         | Return type      | Arguments...  |                   |             |              |              |             |              |          |           |       |             |
+|----------------------|------------------|---------------|-------------------|-------------|--------------|--------------|-------------|--------------|----------|-----------|------ |-------------|
+| `ImageLoad`          | any              | `%descriptor` | `%mip`            | `%layer`    | `%coord`     | `%sample`    | `%offset`   |              |          |           |       |             |
+| `ImageStore`         | `void`           | `%descriptor` | `%layer`          | `%coord`    | `%value`     |              |             |              |          |           |       |             |
+| `ImageAtomic`        | `void` or scalar | `%uav` descriptor | `%layer`      | `%coord`   | `%operands`   | `ir::AtomicOp` |           |              |          |           |       |             |
+| `ImageQuerySize`     | struct           | `%descriptor` | `%mip`            |             |              |              |             |              |          |           |       |             |
+| `ImageQueryMips`     | `u32`            | `%descriptor` |                   |             |              |              |             |              |          |           |       |             |
+| `ImageQuerySamples`  | `u32`            | `%descriptor` |                   |             |              |              |             |              |          |           |       |             |
+| `ImageSample`        | any              | `%descriptor` | `%sampler`        | `%layer`    | `%coord`     | `%offset`    | `%lod_index` | `%lod_bias` | `%lod_clamp` | `%dx` | `%dy` | `%depth_compare` |
+| `ImageGather`        | any              | `%descriptor` | `%sampler`        | `%layer`    | `%coord`     | `%offset`    | `%depth_compare` | `component` |          |       |       |             |
+| `ImageComputeLod`    | `vec2<f32>`      | `%descriptor` | `%sampler`        | `%coord`    |              |              |             |              |          |           |       |             |
 
 The `ImageQuerySize` instruction returns a struct with the following members:
 - A scalar or vector containing the size of the queried mip level, in pixels
@@ -314,7 +314,9 @@ operand for `ImageGather` is a literal and will thus never be `null`.
 
 For `ImageSample`, the `offset` parameter, if not `null`, is always a constant vector. For `ImageGather`, it may not be constant.
 
-For `ImageSample`, the `deriv` parameter, if not `null`, is a struct containing the `x` and `y` derivative vectors, in that order.
+For `ImageSample`, the `%dx` and `%dy` parameters, if not `null`, contain derivatives of the same type as the texture coordinate.
+
+For `ImageSample`, if the `%depth_compare` parameter is not `null`, the instruction must return a scalar float.
 
 ### Pointer instructions
 Raw pointers can be used to access memory via the `MemoryLoad`, `MemoryStore` and `MemoryAtomic` instructions.
