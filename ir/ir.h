@@ -1113,7 +1113,7 @@ static_assert(sizeof(Operand) == sizeof(uint64_t));
 
 /** Instruction class. */
 class Op {
-  constexpr static uint32_t MaxEmbeddedOperands = 9u;
+  constexpr static uint32_t MaxEmbeddedOperands = 11u;
 public:
 
   Op() = default;
@@ -2419,8 +2419,6 @@ private:
   util::small_vector<Operand, MaxEmbeddedOperands> m_operands = { };
 
 };
-
-static_assert(sizeof(Op) <= 128u);
 
 
 inline Operand::Operand(const Op* op) {
