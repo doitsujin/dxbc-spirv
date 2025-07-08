@@ -1922,6 +1922,13 @@ public:
       .addOperand(Operand(component));
   }
 
+  static Op ImageComputeLod(Type type, SsaDef descriptor, SsaDef sampler, SsaDef coord) {
+    return Op(OpCode::eImageComputeLod, type)
+      .addOperand(Operand(descriptor))
+      .addOperand(Operand(sampler))
+      .addOperand(Operand(coord));
+  }
+
   static Op Pointer(Type type, SsaDef address) {
     return Op(OpCode::ePointer, type)
       .addOperand(Operand(address));
