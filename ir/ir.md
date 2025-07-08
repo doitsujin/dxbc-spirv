@@ -243,9 +243,6 @@ The sparse feedback value should only be used with the `CheckSparseAccess` instr
 Note that `SrvLoad`, `UavLoad` and `UavStore` instructions can only be used on raw, structured or typed buffer instructions. Image
 resources can only be accessed via image instructions.
 
-The `%inbounds` parameter for instructions that have it indicates whether or not the access is guaranteed to be within the bounds of the
-underlying type, and points to a constant boolean. If this parameter is `true`, bound-checking is unnecessary.
-
 The `%address` parameter for any of the given instructions can be `null` if the referenced objects should be read or written as a whole,
 or a scalar or vector type that traverses the referenced type, with array dimensions first (outer to inner, may be dynamic), then the
 struct member (must point to a constant), and then the vector component index (must be a constant). This is similar to SPIR-V access chains.
