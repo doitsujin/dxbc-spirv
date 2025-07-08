@@ -651,6 +651,7 @@ enum class UavFlag : uint32_t {
   eReadOnly           = (1u << 1),
   eWriteOnly          = (1u << 2),
   eRasterizerOrdered  = (1u << 3),
+  eFixedFormat        = (1u << 4),
 
   eFlagEnum           = 0u
 };
@@ -1204,9 +1205,14 @@ public:
   }
 
   /** Appends multiple operands. */
-  template<typename... T>
-  Op& addOperands(T... args) {
-    return (addOperand(args), ...);
+  template<typename T, typename... Tx>
+  Op& addOperands(T arg, Tx... args) {
+    return addOperand(arg).addOperands(args...);
+  }
+
+  /** Appends no operands */
+  Op& addOperands() {
+    return *this;
   }
 
   /** Adds a literal string as operand tokens */

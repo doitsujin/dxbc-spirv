@@ -461,6 +461,7 @@ std::ostream& operator << (std::ostream& os, const UavFlag& flag) {
     case UavFlag::eReadOnly:          return os << "ReadOnly";
     case UavFlag::eWriteOnly:         return os << "WriteOnly";
     case UavFlag::eRasterizerOrdered: return os << "RasterizerOrdered";
+    case UavFlag::eFixedFormat:       return os << "FixedFormat";
 
     case UavFlag::eFlagEnum: break;
   }
