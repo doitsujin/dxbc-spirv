@@ -34,7 +34,47 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_resources_cbv_indexed);
   ADD_TEST(test_resources_cbv_indexed_nonuniform);
 
-  return result;
+  ADD_TEST(test_resources_srv_buffer_typed_load);
+  ADD_TEST(test_resources_srv_buffer_typed_query);
+  ADD_TEST(test_resources_srv_buffer_raw_load);
+  ADD_TEST(test_resources_srv_buffer_raw_query);
+  ADD_TEST(test_resources_srv_buffer_structured_load);
+  ADD_TEST(test_resources_srv_buffer_structured_query);
+
+  ADD_TEST(test_resources_srv_indexed_buffer_typed_load);
+  ADD_TEST(test_resources_srv_indexed_buffer_typed_query);
+  ADD_TEST(test_resources_srv_indexed_buffer_raw_load);
+  ADD_TEST(test_resources_srv_indexed_buffer_raw_query);
+  ADD_TEST(test_resources_srv_indexed_buffer_structured_load);
+  ADD_TEST(test_resources_srv_indexed_buffer_structured_query);
+
+  ADD_TEST(test_resources_uav_buffer_typed_load);
+  ADD_TEST(test_resources_uav_buffer_typed_store);
+  ADD_TEST(test_resources_uav_buffer_typed_atomic);
+  ADD_TEST(test_resources_uav_buffer_typed_query);
+  ADD_TEST(test_resources_uav_buffer_raw_load);
+  ADD_TEST(test_resources_uav_buffer_raw_store);
+  ADD_TEST(test_resources_uav_buffer_raw_atomic);
+  ADD_TEST(test_resources_uav_buffer_raw_query);
+  ADD_TEST(test_resources_uav_buffer_structured_load);
+  ADD_TEST(test_resources_uav_buffer_structured_store);
+  ADD_TEST(test_resources_uav_buffer_structured_atomic);
+  ADD_TEST(test_resources_uav_buffer_structured_query);
+
+  ADD_TEST(test_resources_uav_indexed_buffer_typed_load);
+  ADD_TEST(test_resources_uav_indexed_buffer_typed_store);
+  ADD_TEST(test_resources_uav_indexed_buffer_typed_atomic);
+  ADD_TEST(test_resources_uav_indexed_buffer_typed_query);
+  ADD_TEST(test_resources_uav_indexed_buffer_raw_load);
+  ADD_TEST(test_resources_uav_indexed_buffer_raw_store);
+  ADD_TEST(test_resources_uav_indexed_buffer_raw_atomic);
+  ADD_TEST(test_resources_uav_indexed_buffer_raw_query);
+  ADD_TEST(test_resources_uav_indexed_buffer_structured_load);
+  ADD_TEST(test_resources_uav_indexed_buffer_structured_store);
+  ADD_TEST(test_resources_uav_indexed_buffer_structured_atomic);
+  ADD_TEST(test_resources_uav_indexed_buffer_structured_query);
+
+return result;
 #undef ADD_TEST
 }
 
