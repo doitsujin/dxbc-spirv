@@ -49,4 +49,7 @@ Builder test_resources_uav_indexed_buffer_structured_store();
 Builder test_resources_uav_indexed_buffer_structured_atomic();
 Builder test_resources_uav_indexed_buffer_structured_query();
 
+Builder test_resource_uav_counter();
+Builder test_resource_uav_counter_indexed();
+
 }

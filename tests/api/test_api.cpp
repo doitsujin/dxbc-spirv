@@ -74,6 +74,9 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_resources_uav_indexed_buffer_structured_atomic);
   ADD_TEST(test_resources_uav_indexed_buffer_structured_query);
 
+  ADD_TEST(test_resource_uav_counter);
+  ADD_TEST(test_resource_uav_counter_indexed);
+
 return result;
 #undef ADD_TEST
 }

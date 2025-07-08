@@ -414,4 +414,50 @@ Builder test_resources_uav_indexed_buffer_structured_atomic() {
   return make_test_buffer_atomic(ResourceKind::eBufferStructured, true);
 }
 
+
+SsaDef emit_uav_counter_descriptor(Builder& builder, SsaDef entryPoint, bool indexed) {
+  SsaDef dcl = emit_buffer_declaration(builder, entryPoint, ResourceKind::eBufferStructured, true, indexed, false);
+  SsaDef ctr = builder.add(Op::DclUavCounter(entryPoint, dcl));
+
+  SsaDef index;
+
+  if (indexed) {
+    auto inputDef = builder.add(Op::DclInputBuiltIn(BasicType(ScalarType::eU32, 3u), entryPoint, BuiltIn::eWorkgroupId));
+    builder.add(Op::Semantic(inputDef, 0u, "SV_GROUPID"));
+    builder.add(Op::DebugName(inputDef, "vGroup"));
+
+    index = builder.add(Op::InputLoad(ScalarType::eU32, inputDef, builder.makeConstant(0u)));
+  } else {
+    index = builder.makeConstant(0u);
+  }
+
+  auto op = Op::DescriptorLoad(ScalarType::eUavCounter, ctr, index);
+
+  if (indexed)
+    op.setFlags(OpFlag::eNonUniform);
+
+  return builder.add(op);
+}
+
+Builder make_test_uav_counter(bool indexed) {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::eCompute);
+  builder.add(Op::SetCsWorkgroupSize(entryPoint, 32u, 1u, 1u));
+
+  builder.add(Op::Label());
+  auto descriptor = emit_uav_counter_descriptor(builder, entryPoint, indexed);
+
+  builder.add(Op::CounterAtomic(AtomicOp::eInc, ScalarType::eU32, descriptor));
+  builder.add(Op::Return());
+  return builder;
+}
+
+Builder test_resource_uav_counter() {
+  return make_test_uav_counter(false);
+}
+
+Builder test_resource_uav_counter_indexed() {
+  return make_test_uav_counter(true);
+}
+
 }
