@@ -163,8 +163,8 @@ can use them, as well as specialized resource query and input interpolation inst
 `DclParam` instructions are not necessarily unique to any given function. Their purpose is merely to provide type information
 as well as optionally having a debug name attached to them, since there is no other way to encode type information.
 
-The `ir::InterpolationMode` parameter for input declarations is always `None` outside of pixel shaders. Inside pixel shaders, it is
-implicitly set to `flat` for integer types.
+The `ir::InterpolationModes` parameter for input declarations is not set outside of pixel shaders.
+Inside pixel shaders, it will always be set to `Flat` for integer types.
 
 The return type of `DclInput` and `DclOutput` can be a 32-bit scalar or vector type, or a sized array of scalars or vectors.
 In pixel shaders, `DclInput` instructions with an integer type must set the `Flat` interpolation mode.
