@@ -25,6 +25,9 @@ void Disassembler::disassemble(std::ostream& stream) const {
 void Disassembler::disassembleOp(std::ostream& stream, const Op& op) const {
   std::string prefix;
 
+  if (!m_options.showConstants && op.isConstant())
+    return;
+
   if (op.getFlags()) {
     std::stringstream flags;
     flags << " [" << op.getFlags() << "] ";
@@ -42,11 +45,15 @@ void Disassembler::disassembleOp(std::ostream& stream, const Op& op) const {
   stream << prefix << std::setw(24 - std::min<size_t>(24u, prefix.size())) << std::setfill(' ') << lead.str();
   stream << " = " << op.getOpCode();
 
-  for (uint32_t i = 0u; i < op.getFirstLiteralOperandIndex(); i++)
+  for (uint32_t i = 0u; i < op.getFirstLiteralOperandIndex(); i++) {
+    stream << " ";
     disassembleOperandDef(stream, op, i);
+  }
 
-  for (uint32_t i = op.getFirstLiteralOperandIndex(); i < op.getOperandCount(); i++)
+  for (uint32_t i = op.getFirstLiteralOperandIndex(); i < op.getOperandCount(); i++) {
+    stream << " ";
     disassembleOperandLiteral(stream, op, i);
+  }
 
   stream << std::endl;
 }
@@ -81,22 +88,38 @@ void Disassembler::resolveDebugNames() {
 void Disassembler::disassembleDef(std::ostream& stream, SsaDef def) const {
   auto entry = m_debugNames.find(def);
 
-  if (entry != m_debugNames.end())
+  if (entry != m_debugNames.end()) {
     stream << '%' << entry->second;
-  else
-    stream << def;
+    return;
+  }
+
+  stream << def;
 }
 
 
 void Disassembler::disassembleOperandDef(std::ostream& stream, const Op& op, uint32_t index) const {
   auto operand = SsaDef(op.getOperand(index));
 
-  stream << " ";
-
   if (op.getOpCode() == OpCode::eDebugName) {
     /* Don't display the debug name twice */
     stream << operand;
     return;
+  }
+
+  if (m_options.resolveConstants) {
+    const auto& def = m_builder.getOp(operand);
+
+    if (def.isConstant()) {
+      stream << "%[" << def.getType() << '(';
+
+      for (uint32_t i = 0u; i < def.getOperandCount(); i++) {
+        stream << (i ? "," : "");
+        disassembleOperandLiteral(stream, def, i);
+      }
+
+      stream << ")]";
+      return;
+    }
   }
 
   disassembleDef(stream, operand);
@@ -116,14 +139,12 @@ void Disassembler::disassembleOperandLiteral(std::ostream& stream, const Op& op,
       return;
 
     if (index == stringIndex) {
-      stream << " \"";
+      stream << "\"";
       stream << op.getLiteralString(stringIndex);
       stream << "\"";
       return;
     }
   }
-
-  stream << " ";
 
   if (op.getOpCode() == OpCode::eConstant) {
     ScalarType type = op.getType().resolveFlattenedType(index);

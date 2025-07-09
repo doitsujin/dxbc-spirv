@@ -21,6 +21,10 @@ public:
     /** Whether to resolve enum names where appropriate.
      *  Otherwise, displays raw SSA IDs only */
     bool useEnumNames = true;
+    /** Whether to resolve constant references. */
+    bool resolveConstants = false;
+    /** Whether to show constant instructions. */
+    bool showConstants = true;
   };
 
   Disassembler(const Builder& builder, const Options& options);
