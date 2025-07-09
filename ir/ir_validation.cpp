@@ -908,6 +908,91 @@ bool Validator::validateImageOps(std::ostream& str) const {
 }
 
 
+bool Validator::validateCompositeOps(std::ostream& str) const {
+  for (auto op = m_builder.getCode().first; op != m_builder.getCode().second; op++) {
+    switch (op->getOpCode()) {
+      case OpCode::eCompositeConstruct: {
+        auto type = op->getType();
+
+        uint32_t aggregateSize = type.computeTopLevelMemberCount();
+
+        if (type.isScalarType()) {
+          str << type << " is not a composite type." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+
+        if (op->getOperandCount() != aggregateSize) {
+          str << type << " has " << aggregateSize << " elements, but " << op->getOperandCount() << " were provided." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+
+        for (uint32_t i = 0u; i < aggregateSize; i++) {
+          auto operandType = m_builder.getOp(SsaDef(op->getOperand(i))).getType();
+          auto expectedType = type.getSubType(i);
+
+          if (operandType != expectedType) {
+            str << "Expected " << expectedType << " for operand " << i << ", but got " << operandType << "." << std::endl;
+            m_disasm.disassembleOp(str, *op);
+            return false;
+          }
+        }
+      } break;
+
+      case OpCode::eCompositeInsert:
+      case OpCode::eCompositeExtract: {
+        auto compositeType = m_builder.getOp(SsaDef(op->getOperand(0u))).getType();
+        auto valueType = op->getType();
+        auto expectedType = compositeType;
+
+        if (op->getOpCode() == OpCode::eCompositeInsert) {
+          if (op->getType() != compositeType) {
+            str << "Return type must match composite type " << compositeType << "." << std::endl;
+            m_disasm.disassembleOp(str, *op);
+            return false;
+          }
+
+          valueType = m_builder.getOp(SsaDef(op->getOperand(2u))).getType();
+        }
+
+        const auto& address = m_builder.getOp(SsaDef(op->getOperand(1u)));
+        auto addressType = address.getType();
+
+        if (!addressType.isBasicType() || !addressType.getBaseType(0u).isIntType()) {
+          str << "Address must be scalar or vector of an integer type." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+
+        for (uint32_t i = 0u; i < addressType.getBaseType(0u).getVectorSize(); i++) {
+          auto component = decomposeAddress(address, i);
+
+          if (!expectedType.isArrayType() && !component.isConstant()) {
+            str << "Dynamic indexing not supported for type " << expectedType << "." << std::endl;
+            m_disasm.disassembleOp(str, *op);
+            return false;
+          }
+
+          expectedType = expectedType.getSubType(component.isConstant() ? uint32_t(component.getOperand(0u)) : 0u);
+        }
+
+        if (valueType != expectedType) {
+          str << "Got member type " << valueType << ", expected " << expectedType << "." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+      } break;
+
+      default:
+        break;
+    }
+  }
+
+  return true;
+}
+
+
 bool Validator::validateStructuredCfg(std::ostream& str) const {
   SsaDef currentBlock = { };
 
@@ -966,6 +1051,7 @@ bool Validator::validateFinalIr(std::ostream& str) const {
       && validateResources(str)
       && validateLoadStoreOps(str)
       && validateImageOps(str)
+      && validateCompositeOps(str)
       && validateStructuredCfg(str);
 }
 
@@ -977,6 +1063,22 @@ PrimitiveType Validator::findGsInputPrimitive(SsaDef entryPoint) const {
   }
 
   return PrimitiveType::ePoints;
+}
+
+
+Op Validator::decomposeAddress(const Op& op, uint32_t member) const {
+  if (op.getType().isScalarType())
+    return member ? Op() : op;
+
+  if (op.isConstant()) {
+    return Op(OpCode::eConstant, op.getType().getSubType(member))
+      .addOperand(op.getOperand(member));
+  }
+
+  if (op.getOpCode() == OpCode::eCompositeConstruct)
+    return m_builder.getOp(SsaDef(op.getOperand(member)));
+
+  return Op();
 }
 
 }

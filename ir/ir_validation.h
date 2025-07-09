@@ -40,6 +40,9 @@ public:
    * - Chekcs that coordinate vector sizes are valid. */
   bool validateImageOps(std::ostream& str) const;
 
+  /** Validates composite ops */
+  bool validateCompositeOps(std::ostream& str) const;
+
   /** Validates structured control flow instructions. */
   bool validateStructuredCfg(std::ostream& str) const;
 
@@ -54,6 +57,8 @@ private:
   Disassembler m_disasm;
 
   PrimitiveType findGsInputPrimitive(SsaDef entryPoint) const;
+
+  Op decomposeAddress(const Op& op, uint32_t member) const;
 
 };
 
