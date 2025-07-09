@@ -178,7 +178,9 @@ Likewise, `DclInput*` instructions for per-vertex inputs in geometry shaders and
 For `DclOutput*` instructions, the `stream` parameter is only defined in geometry shaders.
 
 #### Resource return types
-The return type for a typed resource declaration (i.e. image or typed buffer) is a scalar or vector of the sampled type.
+The return type for a typed resource declaration (i.e. image or typed buffer) is a scalar of the sampled type.
+Instructions accessing typed methods will usually return or expect a `vec4` of the given type, with some exceptions
+such as image sampling with depth comparison, which will return a scalar.
 
 For raw buffers, the type is `u32[]`, but any `BufferLoad`, `BufferStore` and `BufferAtomic` operations performed
 on it may use arbitrary scalar or vector types.

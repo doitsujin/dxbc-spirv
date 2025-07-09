@@ -409,18 +409,21 @@ bool Validator::validateLoadStoreOps(std::ostream& str) const {
 
           allowVectorAccessOnScalar = kind == ResourceKind::eBufferStructured ||
                                       kind == ResourceKind::eBufferRaw;
+
+          if (kind == ResourceKind::eBufferTyped)
+            expectedType = BasicType(expectedType.getBaseType(0u).getBaseType(), 4u);
         }
       }
 
-      if (code == OpCode::eBufferLoad && (op->getFlags() & OpFlag::eSparseFeedback)) {
-        if (valType == Type().addStructMember(ScalarType::eU32).addStructMember(expectedType.getBaseType(0u)))
-          continue;
-      }
+      if (code == OpCode::eBufferLoad && (op->getFlags() & OpFlag::eSparseFeedback))
+        expectedType = Type().addStructMember(ScalarType::eU32).addStructMember(expectedType.getBaseType(0u));
 
-      if (!allowVectorAccessOnScalar || !valType.isVectorType() || valType.getSubType(0u) != expectedType) {
-        str << "Got " << (isLoad ? "load" : "store") << " type " << valType << ", expected " << expectedType << "." << std::endl;
-        m_disasm.disassembleOp(str, *op);
-        return false;
+      if (valType != expectedType) {
+        if (!allowVectorAccessOnScalar || !valType.isVectorType() || valType.getSubType(0u) != expectedType) {
+          str << "Got " << (isLoad ? "load" : "store") << " type " << valType << ", expected " << expectedType << "." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
       }
     }
   }
