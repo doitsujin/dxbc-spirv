@@ -311,11 +311,12 @@ The `ImageQuerySize` instruction returns a struct with the following members:
 - A scalar or vector containing the size of the queried mip level, in pixels
 - The array layer count, which will always be 1 for non-layered images
 
-The `ImageLoad`, `ImageSample` and `ImageGather` instructions may return a sparse feedback struct.
+The `ImageLoad`, `ImageSample` and `ImageGather` instructions return a sparse feedback struct if
+the `SparseFeedback` flag is set on the instruction.
 
-For `ImageLoad` and `ImageSample`, the returned texel type is the same type that the image was declared
-with. This can be a scalar or vector. For `ImageGather`, the texel type is always a `vec4` of the same
-component type as the image declaration.
+For `ImageLoad`, `ImageSample` without depth comparison, and `ImageGather`, the returned texel type
+is a `vec4` of the scalar type declared for the resource. For `ImageSample` with depth comparison,
+the return type is scalar.
 
 For `ImageLoad`, `ImageSample` and `ImageGather`, all operands after `%coord` may be `null`. The `component`
 operand for `ImageGather` is a literal and will thus never be `null`.
