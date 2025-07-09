@@ -63,6 +63,33 @@ ScalarType Type::resolveFlattenedType(uint32_t index) const {
 }
 
 
+uint32_t Type::computeFlattenedScalarCount() const {
+  uint32_t componentCount = 0u;
+
+  for (uint32_t i = 0u; i < m_structSize; i++)
+    componentCount += getBaseType(i).getVectorSize();
+
+  for (uint32_t i = 0u; i < m_dimensions; i++)
+    componentCount *= getArraySize(i);
+
+  return componentCount;
+}
+
+
+uint32_t Type::computeTopLevelMemberCount() const {
+  if (isArrayType())
+    return getArraySize(m_dimensions - 1u);
+
+  if (isStructType())
+    return getStructMemberCount();
+
+  if (isVoidType())
+    return 0u;
+
+  return getBaseType(0u).getVectorSize();
+}
+
+
 uint32_t Type::byteSize() const {
   uint32_t alignment = 0u;
   uint32_t size = 0u;
