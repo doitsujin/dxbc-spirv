@@ -545,8 +545,9 @@ std::ostream& operator << (std::ostream& os, const SsaDef& def) {
 
 std::ostream& operator << (std::ostream& os, const OpFlag& flag) {
   switch (flag) {
-    case OpFlag::ePrecise:    return os << "precise";
-    case OpFlag::eNonUniform: return os << "nonuniform";
+    case OpFlag::ePrecise:        return os << "precise";
+    case OpFlag::eNonUniform:     return os << "nonuniform";
+    case OpFlag::eSparseFeedback: return os << "sparsefeedback";
 
     case OpFlag::eFlagEnum: break;
   }

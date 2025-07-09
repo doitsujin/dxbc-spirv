@@ -216,11 +216,13 @@ For `CompositeConstruct`, the constituents must match the composite member type 
 The `%address` parameter is a vector or scalar of an integer type.
 
 ### Sparse feedback
-Resource access instructions that return sparse feedback will return a struct with two members:
-- An unsigned integer containing the sparse feedback value.
-- A scalar or vector containing the value retrieved from the resource
+Instructions decorated with the `SparseFeedback` flag return a struct type with the following members:
+- An `u32` containing the sparse feedback value.
+- A scalar or vector containing the data retrieved from the resource.
 
-The sparse feedback value should only be used with the `CheckSparseAccess` instruction.
+The sparse feedback value should only be used with the `CheckSparseAccess` instruction. This abstraction
+exists in lower-level IRs, and was adopted here because applications may choose to copy the raw feedback
+value around and feed it back into a shader later, or potentially use it in external tools.
 
 | `ir::OpCode`         | Return type | Arguments... |
 |----------------------|-------------|--------------|
@@ -554,7 +556,7 @@ if the most significant bit of the encoded token is 1, the token must be sign-ex
 Each instruction is encoded as follows:
 - The opcode token, laid out as follows:
   - The opcode itself (10 bits)
-  - The instruction flags (2 bits)
+  - The instruction flags (3 bits)
   - The number of argument tokens that follow, excluding the type tokens (remaining bits).
 - A list of tokens declaring the return type. Types are encoded as follows:
   - A single header token declaring array dimensionality (2 bits) and struct member count (remaining bits).
