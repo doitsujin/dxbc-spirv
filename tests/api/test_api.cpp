@@ -191,6 +191,16 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_resource_uav_indexed_image_3d_store);
   ADD_TEST(test_resource_uav_indexed_image_3d_atomic);
 
+  ADD_TEST(test_resource_srv_buffer_load_sparse_feedback);
+  ADD_TEST(test_resource_srv_image_load_sparse_feedback);
+  ADD_TEST(test_resource_srv_image_sample_sparse_feedback);
+  ADD_TEST(test_resource_srv_image_sample_depth_sparse_feedback);
+  ADD_TEST(test_resource_srv_image_gather_sparse_feedback);
+  ADD_TEST(test_resource_srv_image_gather_depth_sparse_feedback);
+
+  ADD_TEST(test_resource_uav_buffer_load_sparse_feedback);
+  ADD_TEST(test_resource_uav_image_load_sparse_feedback);
+
 return result;
 #undef ADD_TEST
 }

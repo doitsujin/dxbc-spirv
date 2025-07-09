@@ -166,4 +166,14 @@ Builder test_resource_uav_indexed_image_3d_query();
 Builder test_resource_uav_indexed_image_3d_store();
 Builder test_resource_uav_indexed_image_3d_atomic();
 
+Builder test_resource_srv_buffer_load_sparse_feedback();
+Builder test_resource_srv_image_load_sparse_feedback();
+Builder test_resource_srv_image_sample_sparse_feedback();
+Builder test_resource_srv_image_sample_depth_sparse_feedback();
+Builder test_resource_srv_image_gather_sparse_feedback();
+Builder test_resource_srv_image_gather_depth_sparse_feedback();
+
+Builder test_resource_uav_buffer_load_sparse_feedback();
+Builder test_resource_uav_image_load_sparse_feedback();
+
 }
