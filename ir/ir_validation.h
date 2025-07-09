@@ -26,6 +26,9 @@ public:
   /** Validates shader I/O declarations. */
   bool validateShaderIo(std::ostream& str) const;
 
+  /** Validates resource declarations. */
+  bool validateResources(std::ostream& str) const;
+
   /** Validates load/store ops:
    * - Checks that the address vector is valid.
    * - Checks that return / value types are valid for the given declaration. */

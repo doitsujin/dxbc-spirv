@@ -239,6 +239,77 @@ bool Validator::validateShaderIo(std::ostream& str) const {
 }
 
 
+bool Validator::validateResources(std::ostream& str) const {
+  for (auto op = m_builder.getDeclarations().first; op != m_builder.getDeclarations().second; op++) {
+    if (op->getOpCode() == OpCode::eDclCbv ||
+        op->getOpCode() == OpCode::eDclSrv ||
+        op->getOpCode() == OpCode::eDclUav ||
+        op->getOpCode() == OpCode::eDclUavCounter ||
+        op->getOpCode() == OpCode::eDclSampler) {
+      auto epDef = SsaDef(op->getOperand(0u));
+
+      if (!epDef || m_builder.getOp(epDef).getOpCode() != OpCode::eEntryPoint) {
+        str << epDef << " is not a valid entry point." << std::endl;
+        m_disasm.disassembleOp(str, *op);
+        return false;
+      }
+    }
+
+    if (op->getOpCode() == OpCode::eDclSrv || op->getOpCode() == OpCode::eDclUav) {
+      auto kind = ResourceKind(op->getOperand(4u));
+      auto type = op->getType();
+
+      if (kind == ResourceKind::eBufferRaw) {
+        if (!type.isUnboundedArray() || !type.getSubType(0u).isScalarType()) {
+          str << type << " is not a valid type for raw buffers." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+      } else if (kind == ResourceKind::eBufferStructured) {
+        if (!type.isUnboundedArray()) {
+          str << type << " is not a valid type for structured buffers." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+      } else {
+        if (!type.isScalarType()) {
+          str << type << " is not a valid type for typed resources." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+      }
+    }
+
+    if (op->getOpCode() == OpCode::eDclUav) {
+      auto kind = ResourceKind(op->getOperand(4u));
+      auto flags = UavFlags(op->getOperand(5u));
+
+      if (kind == ResourceKind::eBufferRaw || kind == ResourceKind::eBufferStructured) {
+        if (flags & UavFlag::eFixedFormat) {
+          str << UavFlag::eFixedFormat << " only allowed on typed resources." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+      }
+    }
+
+    if (op->getOpCode() == OpCode::eDclUavCounter && op->getType() != ScalarType::eU32) {
+      str << "UAV counters must be declared as u32." << std::endl;
+      m_disasm.disassembleOp(str, *op);
+      return false;
+    }
+
+    if (op->getOpCode() == OpCode::eDclSampler && op->getType() != Type()) {
+      str << "Samplers must be declared as void." << std::endl;
+      m_disasm.disassembleOp(str, *op);
+      return false;
+    }
+  }
+
+  return true;
+}
+
+
 bool Validator::validateLoadStoreOps(std::ostream& str) const {
   for (auto op = m_builder.getCode().first; op != m_builder.getCode().second; op++) {
     OpCode code = op->getOpCode();
@@ -487,6 +558,7 @@ bool Validator::validateStructuredCfg(std::ostream& str) const {
 bool Validator::validateFinalIr(std::ostream& str) const {
   return validateStructure(str)
       && validateShaderIo(str)
+      && validateResources(str)
       && validateLoadStoreOps(str)
       && validateStructuredCfg(str);
 }
