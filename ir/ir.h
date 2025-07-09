@@ -375,6 +375,15 @@ public:
    *  determine the operand type of a constant definition. */
   ScalarType resolveFlattenedType(uint32_t index) const;
 
+  /** Computes flattened scalar count for type. */
+  uint32_t computeFlattenedScalarCount() const;
+
+  /** Computes top-level aggregate size. For an array type, this
+   *  will return the size of the outer-most array, for a struct,
+   *  this returns the struct member count, and for a vector, the
+   *  number of vector components. */
+  uint32_t computeTopLevelMemberCount() const;
+
   /** Computes byte size of type. If the outermost array dimension
    *  is unsized, returns the size of the underlying type. */
   uint32_t byteSize() const;
