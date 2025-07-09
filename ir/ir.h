@@ -982,11 +982,14 @@ enum class OpFlag : uint8_t {
   /** Instruction is explicitly marked as non-uniform.
    *  May be used for descriptor access. */
   eNonUniform = (1u << 1),
+  /** Flag to indicate that the operation returns
+   *  sparse feedback rather than raw data. */
+  eSparseFeedback = (1u << 2),
 
   eFlagEnum = 0
 };
 
-constexpr uint32_t OpFlagBits = 2;
+constexpr uint32_t OpFlagBits = 3;
 using OpFlags = util::Flags<OpFlag>;
 
 

@@ -412,6 +412,11 @@ bool Validator::validateLoadStoreOps(std::ostream& str) const {
         }
       }
 
+      if (code == OpCode::eBufferLoad && (op->getFlags() & OpFlag::eSparseFeedback)) {
+        if (valType == Type().addStructMember(ScalarType::eU32).addStructMember(expectedType.getBaseType(0u)))
+          continue;
+      }
+
       if (!allowVectorAccessOnScalar || !valType.isVectorType() || valType.getSubType(0u) != expectedType) {
         str << "Got " << (isLoad ? "load" : "store") << " type " << valType << ", expected " << expectedType << "." << std::endl;
         m_disasm.disassembleOp(str, *op);
