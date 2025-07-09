@@ -503,6 +503,411 @@ bool Validator::validateLoadStoreOps(std::ostream& str) const {
 }
 
 
+bool Validator::validateImageOps(std::ostream& str) const {
+  for (auto op = m_builder.getCode().first; op != m_builder.getCode().second; op++) {
+    auto opCode = op->getOpCode();
+
+    bool isImageSrvOp = opCode == OpCode::eImageLoad ||
+                        opCode == OpCode::eImageQuerySize ||
+                        opCode == OpCode::eImageQueryMips ||
+                        opCode == OpCode::eImageQuerySamples ||
+                        opCode == OpCode::eImageSample ||
+                        opCode == OpCode::eImageGather ||
+                        opCode == OpCode::eImageComputeLod;
+
+    bool isImageUavOp = opCode == OpCode::eImageLoad ||
+                        opCode == OpCode::eImageStore ||
+                        opCode == OpCode::eImageAtomic ||
+                        opCode == OpCode::eImageQuerySize;
+
+    if (!isImageSrvOp && !isImageUavOp)
+      continue;
+
+    /* Check that the descriptor type is valid for the resource declaration */
+    auto imageDescriptorRef = SsaDef(op->getOperand(0u));
+    const auto& imageDescriptor = m_builder.getOp(imageDescriptorRef);
+
+    if (imageDescriptor.getOpCode() != OpCode::eDescriptorLoad) {
+      str << imageDescriptorRef << " is not a valid image descriptor." << std::endl;
+      m_disasm.disassembleOp(str, *op);
+      return false;
+    }
+
+    if (imageDescriptor.getType() == ScalarType::eSrv) {
+      if (!isImageSrvOp) {
+        str << "Invalid operation on image SRV." << std::endl;
+        m_disasm.disassembleOp(str, *op);
+        return false;
+      }
+    } else if (imageDescriptor.getType() == ScalarType::eUav) {
+      if (!isImageUavOp) {
+        str << "Invalid operation on image UAV." << std::endl;
+        m_disasm.disassembleOp(str, *op);
+        return false;
+      }
+    } else {
+      str << imageDescriptor.getType() << " is not a valid image descriptor type." << std::endl;
+      m_disasm.disassembleOp(str, *op);
+      return false;
+    }
+
+    /* Check that the image declaration is valid */
+    const auto& image = m_builder.getOp(SsaDef(imageDescriptor.getOperand(0u)));
+
+    auto kind = ResourceKind(image.getOperand(4u));
+    auto flags = UavFlags(image.getOperand(5u));
+
+    bool isValidUavKind = kind == ResourceKind::eImage1D ||
+                          kind == ResourceKind::eImage1DArray ||
+                          kind == ResourceKind::eImage2D ||
+                          kind == ResourceKind::eImage2DArray ||
+                          kind == ResourceKind::eImage3D;
+
+    bool isValidSrvKind = kind == ResourceKind::eImage2DMS ||
+                          kind == ResourceKind::eImage2DMSArray ||
+                          kind == ResourceKind::eImageCube ||
+                          kind == ResourceKind::eImageCubeArray ||
+                          isValidUavKind;
+
+    if (((imageDescriptor.getType() == ScalarType::eSrv) && !isValidSrvKind) ||
+        ((imageDescriptor.getType() == ScalarType::eUav) && !isValidUavKind)) {
+      str << kind << " is not a valid kind for descriptor type " << imageDescriptor.getType() << std::endl;
+      m_disasm.disassembleOp(str, *op);
+      return false;
+    }
+
+    /* Validate actual opcodes */
+    ScalarType imageType = image.getType().getBaseType(0u).getBaseType();
+    SsaDef sampler, mip, layer, coord, sample, offset, dref;
+    Type expectedType;
+
+    switch (opCode) {
+      case OpCode::eImageLoad: {
+        mip = SsaDef(op->getOperand(1u));
+        layer = SsaDef(op->getOperand(2u));
+        coord = SsaDef(op->getOperand(3u));
+        sample = SsaDef(op->getOperand(4u));
+        offset = SsaDef(op->getOperand(5u));
+
+        expectedType = BasicType(imageType, 4u);
+      } break;
+
+      case OpCode::eImageStore: {
+        layer = SsaDef(op->getOperand(1u));
+        coord = SsaDef(op->getOperand(2u));
+
+        expectedType = Type();
+
+        /* Validate store value type */
+        const auto& valueOp = m_builder.getOp(SsaDef(op->getOperand(3u)));
+
+        if (valueOp.getType() != BasicType(imageType, 4u)) {
+          str << "Store value must be " << BasicType(imageType, 4u) << " for given image." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+      } break;
+
+      case OpCode::eImageAtomic: {
+        if (!(flags & UavFlag::eFixedFormat)) {
+          str << UavFlag::eFixedFormat << " not set on image for atomic access." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+
+        if (op->getType() != Type() && op->getType() != imageType) {
+          str << "Invalid return type for image of type " << imageType << "." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+
+        layer = SsaDef(op->getOperand(1u));
+        coord = SsaDef(op->getOperand(2u));
+
+        for (uint32_t i = 3u; i < op->getFirstLiteralOperandIndex(); i++) {
+          if (m_builder.getOp(SsaDef(op->getOperand(i))).getType() != imageType) {
+            str << "Invalid operand type for image of type " << imageType << "." << std::endl;
+            m_disasm.disassembleOp(str, *op);
+            return false;
+          }
+        }
+
+        if (!op->getType().isVoidType())
+          expectedType = imageType;
+      } break;
+
+      case OpCode::eImageQuerySize: {
+        mip = SsaDef(op->getOperand(1u));
+
+        expectedType = Type()
+          .addStructMember(BasicType(ScalarType::eU32, resourceCoordComponentCount(kind)))
+          .addStructMember(ScalarType::eU32);
+      } break;
+
+      case OpCode::eImageQueryMips: {
+        if (resourceIsMultisampled(kind) || imageDescriptor.getType() == ScalarType::eUav) {
+          str << "Image cannot have more than one mip level." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+
+        expectedType = ScalarType::eU32;
+      } break;
+
+      case OpCode::eImageQuerySamples: {
+        if (!resourceIsMultisampled(kind)) {
+          str << "Image is not multisampled." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+
+        expectedType = ScalarType::eU32;
+      } break;
+
+      case OpCode::eImageSample: {
+        sampler = SsaDef(op->getOperand(1u));
+        layer = SsaDef(op->getOperand(2u));
+        coord = SsaDef(op->getOperand(3u));
+        offset = SsaDef(op->getOperand(4u));
+        dref = SsaDef(op->getOperand(10u));
+
+        const auto& lodIndex = m_builder.getOp(SsaDef(op->getOperand(5u)));
+        const auto& lodBias = m_builder.getOp(SsaDef(op->getOperand(6u)));
+        const auto& lodClamp = m_builder.getOp(SsaDef(op->getOperand(7u)));
+
+        const auto& derivX = m_builder.getOp(SsaDef(op->getOperand(8u)));
+        const auto& derivY = m_builder.getOp(SsaDef(op->getOperand(9u)));
+
+        if (bool(derivX) != bool(derivY)) {
+          str << "Either none or both derivatives must be defined." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+
+        if (lodIndex && derivX) {
+          str << "Cannot define both LOD and derivatives." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+
+        if (lodIndex && (lodClamp || lodBias)) {
+          str << "Cannot define both LOD and LOD clamp or bias." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+
+        if (dref && (derivX || lodBias)) {
+          str << "Cannot use derivatives or LOD bias with depth compare." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+
+        if (lodIndex && (!lodIndex.getType().isScalarType() || !lodIndex.getType().getBaseType(0u).isFloatType())) {
+          str << "LOD index must be scalar float." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+
+        if (lodBias && (!lodBias.getType().isScalarType() || !lodBias.getType().getBaseType(0u).isFloatType())) {
+          str << "LOD bias must be scalar float." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+
+        if (lodClamp && (!lodClamp.getType().isScalarType() || !lodClamp.getType().getBaseType(0u).isFloatType())) {
+          str << "LOD clamp must be scalar float." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+
+        auto coordCount = resourceCoordComponentCount(kind);
+
+        if (derivX && (derivX.getType() != derivY.getType() ||
+            !derivX.getType().isBasicType() ||
+            !derivX.getType().getBaseType(0u).isFloatType() ||
+            derivX.getType().getBaseType(0u).getVectorSize() != coordCount)) {
+          str << "Derivatives must be scalar or vector of float type with " << coordCount << " components." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+
+        expectedType = BasicType(imageType, dref ? 1u : 4u);
+      } break;
+
+      case OpCode::eImageGather: {
+        sampler = SsaDef(op->getOperand(1u));
+        layer = SsaDef(op->getOperand(2u));
+        coord = SsaDef(op->getOperand(3u));
+        offset = SsaDef(op->getOperand(4u));
+        dref = SsaDef(op->getOperand(5u));
+
+        uint32_t component = uint32_t(op->getOperand(6u));
+
+        if (component >= (dref ? 1u : 4u)) {
+          str << "Gather component out of bounds." << std::endl;
+          m_disasm.disassembleOp(str, *op);
+          return false;
+        }
+
+        expectedType = BasicType(imageType, 4u);
+      } break;
+
+      case OpCode::eImageComputeLod: {
+        sampler = SsaDef(op->getOperand(1u));
+        coord = SsaDef(op->getOperand(2u));
+
+        expectedType = BasicType(ScalarType::eF32, 2u);
+      } break;
+
+      default:
+        break;
+    }
+
+    /* Validate sampler */
+    if (opCode == OpCode::eImageSample || opCode == OpCode::eImageGather || opCode == OpCode::eImageComputeLod) {
+      const auto& samplerDescriptor = m_builder.getOp(sampler);
+
+      if (samplerDescriptor.getOpCode() != OpCode::eDescriptorLoad ||
+          samplerDescriptor.getType() != ScalarType::eSampler) {
+        str << sampler << " is not a valid sampler descriptor." << std::endl;
+        m_disasm.disassembleOp(str, *op);
+        return false;
+      }
+    }
+
+    /* Validate array layer */
+    if (opCode == OpCode::eImageLoad || opCode == OpCode::eImageStore || opCode == OpCode::eImageAtomic ||
+        opCode == OpCode::eImageSample || opCode == OpCode::eImageGather) {
+      const auto& layerOp = m_builder.getOp(layer);
+      bool imageHasLayers = resourceIsLayered(kind);
+
+      if (imageHasLayers != bool(layerOp)) {
+        str << "Array layer " << (imageHasLayers ? "required" : "not allowed") << " for image kind " << kind << "." << std::endl;
+        m_disasm.disassembleOp(str, *op);
+        return false;
+      }
+
+      bool layerNeedsFloatType = bool(sampler);
+
+      if (layerOp && (!layerOp.getType().isScalarType() || (layerOp.getType().getBaseType(0u).isFloatType() != layerNeedsFloatType))) {
+        str << "Array layer must be scalar " << (layerNeedsFloatType ? "float" : "integer") << " type." << std::endl;
+        m_disasm.disassembleOp(str, *op);
+        return false;
+      }
+    }
+
+    /* Validate sample index */
+    if (opCode == OpCode::eImageLoad) {
+      const auto& sampleOp = m_builder.getOp(sample);
+      bool imageHasSample = resourceIsMultisampled(kind);
+
+      if (imageHasSample != bool(sampleOp)) {
+        str << "Sample index " << (imageHasSample ? "required" : "not allowed") << " for image kind " << kind << "." << std::endl;
+        m_disasm.disassembleOp(str, *op);
+        return false;
+      }
+
+      if (sampleOp && (!sampleOp.getType().isScalarType() || !sampleOp.getType().getBaseType(0u).isIntType())) {
+        str << "Sample index must be scalar integer type." << std::endl;
+        m_disasm.disassembleOp(str, *op);
+        return false;
+      }
+    }
+
+    /* Validate mip level parameter */
+    if (opCode == OpCode::eImageLoad || opCode == OpCode::eImageQuerySize) {
+      const auto& mipOp = m_builder.getOp(mip);
+
+      bool imageHasMips = !resourceIsMultisampled(kind) &&
+        imageDescriptor.getType() == ScalarType::eSrv;
+
+      if (imageHasMips != bool(mipOp)) {
+        str << "Mip level " << (imageHasMips ? "required" : "not allowed") << " for image kind " << kind << "." << std::endl;
+        m_disasm.disassembleOp(str, *op);
+        return false;
+      }
+
+      if (mipOp && (!mipOp.getType().isScalarType() || !mipOp.getType().getBaseType(0u).isIntType())) {
+        str << "Mip level must be scalar integer type." << std::endl;
+        m_disasm.disassembleOp(str, *op);
+        return false;
+      }
+    }
+
+    /* Validate offset parameter */
+    if (offset) {
+      const auto& offsetOp = m_builder.getOp(offset);
+      auto coordCount = resourceCoordComponentCount(kind);
+
+      if (!offsetOp.getType().isBasicType() ||
+          !offsetOp.getType().getBaseType(0u).isSignedIntType() ||
+          offsetOp.getType().getBaseType(0u).getVectorSize() != coordCount) {
+        str << "Texel offset must be a scalar or vector of a signed integer type." << std::endl;
+        m_disasm.disassembleOp(str, *op);
+        return false;
+      }
+
+      if (opCode != OpCode::eImageGather && !offsetOp.isConstant()) {
+        str << "Texel offset must be constant." << std::endl;
+        m_disasm.disassembleOp(str, *op);
+        return false;
+      }
+    }
+
+    /* Validate coordinate parameter */
+    if (opCode == OpCode::eImageLoad || opCode == OpCode::eImageStore || opCode == OpCode::eImageAtomic ||
+        opCode == OpCode::eImageSample || opCode == OpCode::eImageGather || opCode == OpCode::eImageComputeLod) {
+      const auto& coordOp = m_builder.getOp(coord);
+
+      auto coordCount = resourceCoordComponentCount(kind);
+      bool needsFloatCoord = bool(sampler);
+
+      if (!coordOp.getType().isBasicType() ||
+          (coordOp.getType().getBaseType(0u).isFloatType() != needsFloatCoord) ||
+          (coordOp.getType().getBaseType(0u).getVectorSize() != coordCount)) {
+        str << "Coordinate must be " << (coordCount == 1u ? "scalar" : "vector") << " of " << (needsFloatCoord ? "float" : "integer") << " type." << std::endl;
+        m_disasm.disassembleOp(str, *op);
+        return false;
+      }
+    }
+
+    /* Validate depth reference */
+    if (dref) {
+      const auto& drefOp = m_builder.getOp(dref);
+
+      if (!drefOp.getType().isScalarType() ||
+          !drefOp.getType().getBaseType(0u).isFloatType()) {
+        str << "Depth reference value must be scalar float." << std::endl;
+        m_disasm.disassembleOp(str, *op);
+        return false;
+      }
+    }
+
+    /* Validate sparse feedback */
+    if (op->getFlags() & OpFlag::eSparseFeedback) {
+      if (opCode != OpCode::eImageLoad && opCode != OpCode::eImageSample && opCode != OpCode::eImageGather) {
+        str << OpFlag::eSparseFeedback << " not allowed on instruction." << std::endl;
+        m_disasm.disassembleOp(str, *op);
+        return false;
+      }
+
+      expectedType = Type()
+        .addStructMember(ScalarType::eU32)
+        .addStructMember(expectedType.getBaseType(0u));
+    }
+
+    /* Validate return type */
+    if (op->getType() != expectedType) {
+      str << "Expected return type " << expectedType << "." << std::endl;
+      m_disasm.disassembleOp(str, *op);
+      return false;
+    }
+  }
+
+  return true;
+}
+
+
 bool Validator::validateStructuredCfg(std::ostream& str) const {
   SsaDef currentBlock = { };
 
@@ -560,6 +965,7 @@ bool Validator::validateFinalIr(std::ostream& str) const {
       && validateShaderIo(str)
       && validateResources(str)
       && validateLoadStoreOps(str)
+      && validateImageOps(str)
       && validateStructuredCfg(str);
 }
 

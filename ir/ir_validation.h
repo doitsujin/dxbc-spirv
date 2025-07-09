@@ -34,6 +34,12 @@ public:
    * - Checks that return / value types are valid for the given declaration. */
   bool validateLoadStoreOps(std::ostream& str) const;
 
+  /** Validates image ops:
+   * - Checks whether parameter combinations make sense.
+   * - Checks return and value types match the resource declaration.
+   * - Chekcs that coordinate vector sizes are valid. */
+  bool validateImageOps(std::ostream& str) const;
+
   /** Validates structured control flow instructions. */
   bool validateStructuredCfg(std::ostream& str) const;
 
