@@ -813,7 +813,6 @@ Builder make_test_image_gather(ResourceKind kind, bool indexed, bool depthCompar
   builder.add(Op::Semantic(layer, 0u, "LAYER"));
 
   uint32_t coordCount = resourceCoordComponentCount(kind);
-  auto coordType = BasicType(ScalarType::eF32, coordCount);
   auto offsetType = BasicType(ScalarType::eI32, coordCount);
 
   auto programmableOffset = builder.add(Op::DclInput(offsetType, entryPoint, 2u, 0u, InterpolationMode::eFlat));
@@ -1356,5 +1355,344 @@ Builder test_resource_uav_indexed_image_3d_atomic() {
   return make_test_image_atomic(ResourceKind::eImage3D, true);
 }
 
+
+Builder make_test_buffer_load_sparse_feedback(bool uav) {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+
+  builder.add(Op::Label());
+  auto descriptor = emit_buffer_descriptor(builder, entryPoint,
+    ResourceKind::eBufferTyped, uav, false, false);
+  auto index = builder.makeConstant(12345u);
+
+  auto texelType = BasicType(ScalarType::eF32, 4u);
+  auto resultType = Type()
+    .addStructMember(ScalarType::eU32)
+    .addStructMember(texelType);
+
+  auto load = builder.add(Op::BufferLoad(resultType, descriptor, index).setFlags(OpFlag::eSparseFeedback));
+
+  auto output0Def = builder.add(Op::DclOutput(texelType, entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(output0Def, 0u, "SV_TARGET"));
+
+  auto output1Def = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 1u, 0u));
+  builder.add(Op::Semantic(output1Def, 1u, "SV_TARGET"));
+
+  builder.add(Op::OutputStore(output0Def, SsaDef(),
+    builder.add(Op::CompositeExtract(texelType, load, builder.makeConstant(1u)))));
+
+  auto feedback = builder.add(Op::CompositeExtract(ScalarType::eU32, load, builder.makeConstant(0u)));
+
+  builder.add(Op::OutputStore(output1Def, SsaDef(),
+    builder.add(Op::Select(ScalarType::eF32, builder.add(Op::CheckSparseAccess(feedback)),
+      builder.makeConstant(1.0f), builder.makeConstant(0.0f)))));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+Builder make_test_image_load_sparse_feedback(bool uav) {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+
+  builder.add(Op::Label());
+
+  auto texelType = BasicType(ScalarType::eF32, 4u);
+  auto resultType = Type()
+    .addStructMember(ScalarType::eU32)
+    .addStructMember(texelType);
+
+  auto dclImg = emit_image_declaration(builder, entryPoint, ResourceKind::eImage2D, uav, false, false);
+  auto index = emit_image_descriptor_index(builder, entryPoint, false);
+  auto descriptor = emit_load_image_descriptor(builder, dclImg, index, uav);
+  auto coord = emit_image_coord(builder, entryPoint, ScalarType::eU32, ResourceKind::eImage2D);
+
+  SsaDef mip;
+
+  if (!uav)
+    mip = builder.makeConstant(1u);
+
+  uint32_t outputId = 0u;
+
+  auto load = builder.add(Op::ImageLoad(resultType, descriptor, mip,
+    SsaDef(), coord, SsaDef(), SsaDef()).setFlags(OpFlag::eSparseFeedback));
+
+  emit_store_outptut(builder, entryPoint, texelType, outputId++, builder.add(
+    Op::CompositeExtract(texelType, load, builder.makeConstant(1u))));
+
+  auto feedback = builder.add(Op::CheckSparseAccess(
+    builder.add(Op::CompositeExtract(ScalarType::eU32, load, builder.makeConstant(0u)))));
+
+  emit_store_outptut(builder, entryPoint, ScalarType::eF32, outputId++, builder.add(
+    Op::Select(ScalarType::eF32, feedback, builder.makeConstant(1.0f), builder.makeConstant(0.0f))));
+
+  if (!uav) {
+    SsaDef offset = emit_constant_offset(builder, ResourceKind::eImage2D);
+
+    load = builder.add(Op::ImageLoad(resultType, descriptor, mip,
+      SsaDef(), coord, SsaDef(), offset).setFlags(OpFlag::eSparseFeedback));
+
+    emit_store_outptut(builder, entryPoint, texelType, outputId++, builder.add(
+      Op::CompositeExtract(texelType, load, builder.makeConstant(1u))));
+
+    feedback = builder.add(Op::CheckSparseAccess(
+      builder.add(Op::CompositeExtract(ScalarType::eU32, load, builder.makeConstant(0u)))));
+
+    emit_store_outptut(builder, entryPoint, ScalarType::eF32, outputId++, builder.add(
+      Op::Select(ScalarType::eF32, feedback, builder.makeConstant(1.0f), builder.makeConstant(0.0f))));
+  }
+
+  builder.add(Op::Return());
+  return builder;
+
+}
+
+Builder make_test_image_sample_sparse_feedback(bool depthCompare) {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+
+  builder.add(Op::Label());
+
+  Type sampledType = BasicType(ScalarType::eF32, depthCompare ? 1u : 4u);
+  Type resultType = Type().addStructMember(ScalarType::eU32).addStructMember(sampledType.getBaseType(0u));
+
+  auto dclImg = emit_image_declaration(builder, entryPoint, ResourceKind::eImage2DArray, false, false, false);
+  auto dclSampler = emit_sampler_declaration(builder, entryPoint, false);
+  auto index = emit_image_descriptor_index(builder, entryPoint, false);
+  auto image = emit_load_image_descriptor(builder, dclImg, index, false);
+  auto sampler = emit_load_sampler_descriptor(builder, dclSampler, index);
+  auto coord = emit_image_coord(builder, entryPoint, ScalarType::eF32, ResourceKind::eImage2DArray);
+
+  auto depthRef = builder.add(Op::DclInput(ScalarType::eF32, entryPoint, 1u, 0u, InterpolationModes()));
+  builder.add(Op::Semantic(depthRef, 0u, "DEPTH_REF"));
+
+  auto lodBias = builder.add(Op::DclInput(ScalarType::eF32, entryPoint, 1u, 1u, InterpolationModes()));
+  builder.add(Op::Semantic(lodBias, 0u, "LOD_BIAS"));
+
+  auto lodClamp = builder.add(Op::DclInput(ScalarType::eF32, entryPoint, 1u, 2u, InterpolationModes()));
+  builder.add(Op::Semantic(lodClamp, 0u, "LOD_CLAMP"));
+
+  auto layer = builder.add(Op::DclInput(ScalarType::eF32, entryPoint, 1u, 3u, InterpolationModes()));
+  builder.add(Op::Semantic(layer, 0u, "LAYER"));
+
+  uint32_t coordCount = resourceCoordComponentCount(ResourceKind::eImage2DArray);
+  auto coordType = BasicType(ScalarType::eF32, coordCount);
+
+  auto derivCoord = builder.add(Op::DclInput(coordType, entryPoint, 2u, 0u, InterpolationModes()));
+  builder.add(Op::Semantic(derivCoord, 2u, "TEXCOORD"));
+
+  SsaDef drefValue;
+
+  if (depthCompare)
+    drefValue = builder.add(Op::InputLoad(ScalarType::eF32, depthRef, SsaDef()));
+
+  SsaDef layerValue = builder.add(Op::InputLoad(ScalarType::eF32, layer, SsaDef()));
+
+  SsaDef lodIndexValue;
+
+  if (depthCompare) {
+    lodIndexValue = builder.makeConstant(0.0f);
+  } else {
+    auto lodType = BasicType(ScalarType::eF32, 2u);
+    auto lodPair = builder.add(Op::ImageComputeLod(lodType, image, sampler, coord));
+    lodIndexValue = builder.add(Op::CompositeExtract(ScalarType::eF32, lodPair, builder.makeConstant(0u)));
+  }
+
+  auto lodBiasValue = builder.add(Op::InputLoad(ScalarType::eF32, lodBias, SsaDef()));
+  auto lodClampValue = builder.add(Op::InputLoad(ScalarType::eF32, lodClamp, SsaDef()));
+
+  uint32_t outputId = 0u;
+
+  /* Plain sample with no additional parameters */
+  auto load = builder.add(Op::ImageSample(resultType, image, sampler, layerValue, coord,
+    SsaDef(), SsaDef(), SsaDef(), SsaDef(), SsaDef(), SsaDef(), drefValue).setFlags(OpFlag::eSparseFeedback));
+
+  emit_store_outptut(builder, entryPoint, sampledType, outputId++, builder.add(
+    Op::CompositeExtract(sampledType, load, builder.makeConstant(1u))));
+
+  auto feedback = builder.add(Op::CheckSparseAccess(
+    builder.add(Op::CompositeExtract(ScalarType::eU32, load, builder.makeConstant(0u)))));
+
+  emit_store_outptut(builder, entryPoint, ScalarType::eF32, outputId++, builder.add(
+    Op::Select(ScalarType::eF32, feedback, builder.makeConstant(1.0f), builder.makeConstant(0.0f))));
+
+  /* Explicit LOD */
+  load = builder.add(Op::ImageSample(resultType, image, sampler, layerValue, coord,
+    SsaDef(), lodIndexValue, SsaDef(), SsaDef(), SsaDef(), SsaDef(), drefValue).setFlags(OpFlag::eSparseFeedback));
+
+  emit_store_outptut(builder, entryPoint, sampledType, outputId++, builder.add(
+    Op::CompositeExtract(sampledType, load, builder.makeConstant(1u))));
+
+  feedback = builder.add(Op::CheckSparseAccess(
+    builder.add(Op::CompositeExtract(ScalarType::eU32, load, builder.makeConstant(0u)))));
+
+  emit_store_outptut(builder, entryPoint, ScalarType::eF32, outputId++, builder.add(
+    Op::Select(ScalarType::eF32, feedback, builder.makeConstant(1.0f), builder.makeConstant(0.0f))));
+
+  if (!depthCompare) {
+    /* Test with LOD bias / clamp and all sorts of fun extras */
+    load = builder.add(Op::ImageSample(resultType, image, sampler, layerValue, coord,
+      emit_constant_offset(builder, ResourceKind::eImage2DArray), SsaDef(),
+      lodBiasValue, lodClampValue, SsaDef(), SsaDef(), drefValue).setFlags(OpFlag::eSparseFeedback));
+
+    emit_store_outptut(builder, entryPoint, sampledType, outputId++, builder.add(
+      Op::CompositeExtract(sampledType, load, builder.makeConstant(1u))));
+
+    feedback = builder.add(Op::CheckSparseAccess(
+      builder.add(Op::CompositeExtract(ScalarType::eU32, load, builder.makeConstant(0u)))));
+
+    emit_store_outptut(builder, entryPoint, ScalarType::eF32, outputId++, builder.add(
+      Op::Select(ScalarType::eF32, feedback, builder.makeConstant(1.0f), builder.makeConstant(0.0f))));
+
+    /* Test with explicit derivatives */
+    SsaDef dx, dy;
+
+    Op dxOp(OpCode::eCompositeConstruct, coordType);
+    Op dyOp(OpCode::eCompositeConstruct, coordType);
+
+    for (uint32_t i = 0u; i < coordCount; i++) {
+      auto derivCoordIn = builder.add(Op::InputLoad(ScalarType::eF32, derivCoord,
+        coordCount > 1u ? builder.makeConstant(i) : SsaDef()));
+
+      dx = builder.add(Op::DerivX(ScalarType::eF32, derivCoordIn, DerivativeMode::eDefault));
+      dy = builder.add(Op::DerivY(ScalarType::eF32, derivCoordIn, DerivativeMode::eDefault));
+
+      if (coordCount > 1u) {
+        dxOp.addOperand(Operand(dx));
+        dyOp.addOperand(Operand(dy));
+      }
+    }
+
+    if (coordCount > 1u) {
+      dx = builder.add(dxOp);
+      dy = builder.add(dyOp);
+    }
+
+    load = builder.add(Op::ImageSample(resultType, image, sampler, layerValue, coord,
+      SsaDef(), SsaDef(), SsaDef(), SsaDef(), dx, dy, drefValue).setFlags(OpFlag::eSparseFeedback));
+
+    emit_store_outptut(builder, entryPoint, sampledType, outputId++, builder.add(
+      Op::CompositeExtract(sampledType, load, builder.makeConstant(1u))));
+
+    feedback = builder.add(Op::CheckSparseAccess(
+      builder.add(Op::CompositeExtract(ScalarType::eU32, load, builder.makeConstant(0u)))));
+
+    emit_store_outptut(builder, entryPoint, ScalarType::eF32, outputId++, builder.add(
+      Op::Select(ScalarType::eF32, feedback, builder.makeConstant(1.0f), builder.makeConstant(0.0f))));
+  }
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+Builder make_test_image_gather_sparse_feedback(bool depthCompare) {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+
+  builder.add(Op::Label());
+
+  auto sampledType = BasicType(ScalarType::eF32, 4u);
+  auto resultType = Type().addStructMember(ScalarType::eU32).addStructMember(sampledType);
+
+  auto dclImg = emit_image_declaration(builder, entryPoint, ResourceKind::eImage2D, false, false, false);
+  auto dclSampler = emit_sampler_declaration(builder, entryPoint, false);
+  auto index = emit_image_descriptor_index(builder, entryPoint, false);
+  auto image = emit_load_image_descriptor(builder, dclImg, index, false);
+  auto sampler = emit_load_sampler_descriptor(builder, dclSampler, index);
+  auto coord = emit_image_coord(builder, entryPoint, ScalarType::eF32, ResourceKind::eImage2D);
+
+  auto depthRef = builder.add(Op::DclInput(ScalarType::eF32, entryPoint, 1u, 0u, InterpolationModes()));
+  builder.add(Op::Semantic(depthRef, 0u, "DEPTH_REF"));
+
+  uint32_t coordCount = resourceCoordComponentCount(ResourceKind::eImage2D);
+  auto offsetType = BasicType(ScalarType::eI32, coordCount);
+
+  auto programmableOffset = builder.add(Op::DclInput(offsetType, entryPoint, 2u, 0u, InterpolationMode::eFlat));
+  builder.add(Op::Semantic(programmableOffset, 0u, "OFFSET"));
+
+  SsaDef drefValue;
+
+  if (depthCompare)
+    drefValue = builder.add(Op::InputLoad(ScalarType::eF32, depthRef, SsaDef()));
+
+  SsaDef poValue = builder.add(Op::InputLoad(offsetType, programmableOffset, SsaDef()));
+
+  uint32_t outputId = 0u;
+
+  auto load = builder.add(Op::ImageGather(resultType, image, sampler,
+    SsaDef(), coord, SsaDef(), drefValue, 0u).setFlags(OpFlag::eSparseFeedback));
+
+  emit_store_outptut(builder, entryPoint, sampledType, outputId++, builder.add(
+    Op::CompositeExtract(sampledType, load, builder.makeConstant(1u))));
+
+  auto feedback = builder.add(Op::CheckSparseAccess(
+    builder.add(Op::CompositeExtract(ScalarType::eU32, load, builder.makeConstant(0u)))));
+
+  emit_store_outptut(builder, entryPoint, ScalarType::eF32, outputId++, builder.add(
+    Op::Select(ScalarType::eF32, feedback, builder.makeConstant(1.0f), builder.makeConstant(0.0f))));
+
+  /* Test constant offset */
+  load = builder.add(Op::ImageGather(resultType, image, sampler, SsaDef(), coord,
+    emit_constant_offset(builder, ResourceKind::eImage2D), drefValue, 0u).setFlags(OpFlag::eSparseFeedback));
+
+  emit_store_outptut(builder, entryPoint, sampledType, outputId++, builder.add(
+    Op::CompositeExtract(sampledType, load, builder.makeConstant(1u))));
+
+  feedback = builder.add(Op::CheckSparseAccess(
+    builder.add(Op::CompositeExtract(ScalarType::eU32, load, builder.makeConstant(0u)))));
+
+  emit_store_outptut(builder, entryPoint, ScalarType::eF32, outputId++, builder.add(
+    Op::Select(ScalarType::eF32, feedback, builder.makeConstant(1.0f), builder.makeConstant(0.0f))));
+
+  /* Test programmable offset */
+  load = builder.add(Op::ImageGather(resultType, image, sampler, SsaDef(), coord,
+    poValue, drefValue, 0u).setFlags(OpFlag::eSparseFeedback));
+
+  emit_store_outptut(builder, entryPoint, sampledType, outputId++, builder.add(
+    Op::CompositeExtract(sampledType, load, builder.makeConstant(1u))));
+
+  feedback = builder.add(Op::CheckSparseAccess(
+    builder.add(Op::CompositeExtract(ScalarType::eU32, load, builder.makeConstant(0u)))));
+
+  emit_store_outptut(builder, entryPoint, ScalarType::eF32, outputId++, builder.add(
+    Op::Select(ScalarType::eF32, feedback, builder.makeConstant(1.0f), builder.makeConstant(0.0f))));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+
+Builder test_resource_srv_buffer_load_sparse_feedback() {
+  return make_test_buffer_load_sparse_feedback(false);
+}
+
+Builder test_resource_srv_image_load_sparse_feedback() {
+  return make_test_image_load_sparse_feedback(false);
+}
+
+Builder test_resource_srv_image_sample_sparse_feedback() {
+  return make_test_image_sample_sparse_feedback(false);
+}
+
+Builder test_resource_srv_image_sample_depth_sparse_feedback() {
+  return make_test_image_sample_sparse_feedback(true);
+}
+
+Builder test_resource_srv_image_gather_sparse_feedback() {
+  return make_test_image_gather_sparse_feedback(false);
+}
+
+Builder test_resource_srv_image_gather_depth_sparse_feedback() {
+  return make_test_image_gather_sparse_feedback(true);
+}
+
+
+Builder test_resource_uav_buffer_load_sparse_feedback() {
+  return make_test_buffer_load_sparse_feedback(true);
+}
+
+Builder test_resource_uav_image_load_sparse_feedback() {
+  return make_test_image_load_sparse_feedback(true);
+}
 
 }
