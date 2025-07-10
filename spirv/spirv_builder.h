@@ -1,0 +1,212 @@
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+#include "../ir/ir.h"
+#include "../ir/ir_builder.h"
+
+#include "../util/util_small_vector.h"
+
+#include "spirv_types.h"
+
+namespace dxbc_spv::spirv {
+
+/** SPIR-V lowering pass.
+ *
+ * This iteratively consumes IR instructions and translates
+ * them to SPIR-V. This will target SPIR-V 1.6 with optional
+ * extensions as defined in the options struct.
+ */
+class SpirvBuilder {
+
+public:
+
+  struct Options {
+    /** Whether to include debug names. */
+    bool includeDebugNames = true;
+    /** Whether to use NV raw access chains for raw
+     *  and structured buffer access. */
+    bool nvRawAccessChains = false;
+  };
+
+  explicit SpirvBuilder(const ir::Builder& builder, const Options& options);
+
+  ~SpirvBuilder();
+
+  SpirvBuilder             (const SpirvBuilder&) = delete;
+  SpirvBuilder& operator = (const SpirvBuilder&) = delete;
+
+  /** Processes shader module. */
+  void buildSpirvBinary();
+
+  /** Retrieves SPIR-V binary as a pain dword array. */
+  std::vector<uint32_t> getSpirvBinary() const;
+
+  /** Retrieves SPIR-V binary. If \c data is \c nullptr,
+   *  the total binary size will be written to \c size. */
+  void getSpirvBinary(size_t& size, void* data) const;
+
+private:
+
+  const ir::Builder& m_builder;
+
+  ir::ShaderStage m_stage = ir::ShaderStage();
+
+  Options m_options;
+
+  std::unordered_map<ir::Type, uint32_t> m_types;
+  std::unordered_map<ir::SsaDef, ir::SsaDef> m_debugNames;
+  std::unordered_map<SpirvPointerTypeKey, uint32_t> m_ptrTypes;
+  std::unordered_map<SpirvFunctionTypeKey, uint32_t> m_funcTypes;
+  std::unordered_map<SpirvConstant, uint32_t> m_constants;
+  std::unordered_set<spv::Capability> m_enabledCaps;
+  std::unordered_set<std::string> m_enabledExt;
+  std::unordered_map<SpirvFunctionParameterKey, uint32_t> m_funcParamIds;
+
+  std::vector<uint32_t> m_ssaDefsToId;
+
+  SpirvHeader m_header;
+
+  util::small_vector<uint32_t, 64>    m_capabilities;
+  util::small_vector<uint32_t, 64>    m_extensions;
+  util::small_vector<uint32_t, 64>    m_imports;
+  util::small_vector<uint32_t, 8>     m_memoryModel;
+  util::small_vector<uint32_t, 256>   m_entryPoint;
+  util::small_vector<uint32_t, 64>    m_executionModes;
+  util::small_vector<uint32_t, 1024>  m_debug;
+  util::small_vector<uint32_t, 1024>  m_decorations;
+
+  std::vector<uint32_t> m_declarations;
+  std::vector<uint32_t> m_code;
+
+  uint32_t m_glslExtId = 0u;
+
+  struct {
+    ir::Op blockLabel = { };
+  } m_structure;
+
+  struct {
+    uint32_t controlPointFuncId = 0u;
+    uint32_t patchConstantFuncId = 0u;
+  } m_tessControl;
+
+  struct {
+    uint32_t baseVertex = 0u;
+    uint32_t baseInstance = 0u;
+  } m_drawParams;
+
+  uint32_t m_entryPointId = 0u;
+
+  void processDebugNames();
+
+  void finalize();
+
+  void emitInstruction(const ir::Op& op);
+
+  void emitEntryPoint(const ir::Op& op);
+
+  void emitConstant(const ir::Op& op);
+
+  void emitInterpolationModes(uint32_t id, ir::InterpolationModes modes);
+
+  void emitDclIoVar(const ir::Op& op);
+
+  uint32_t emitBuiltInDrawParameter(spv::BuiltIn builtIn);
+
+  void emitDclBuiltInIoVar(const ir::Op& op);
+
+  void emitFunction(const ir::Op& op);
+
+  void emitFunctionEnd();
+
+  void emitLabel(const ir::Op& op);
+
+  void emitBranch(const ir::Op& op);
+
+  void emitBranchConditional(const ir::Op& op);
+
+  void emitSwitch(const ir::Op& op);
+
+  void emitUnreachable();
+
+  void emitReturn(const ir::Op& op);
+
+  void emitPhi(const ir::Op& op);
+
+  void emitStructuredInfo(const ir::Op& op);
+
+  void emitMemoryModel();
+
+  void emitDebugName(ir::SsaDef def, uint32_t id);
+
+  uint32_t emitAccessChain(spv::StorageClass storageClass, ir::SsaDef base, ir::SsaDef address);
+
+  void emitLoadDrawParameterBuiltIn(const ir::Op& op, ir::BuiltIn builtIn);
+
+  void emitLoadVariable(const ir::Op& op);
+
+  void emitStoreVariable(const ir::Op& op);
+
+  void emitCompositeOp(const ir::Op& op);
+
+  void emitCompositeConstruct(const ir::Op& op);
+
+  uint32_t importGlslExt();
+
+  uint32_t allocId();
+
+  uint32_t getIdForDef(ir::SsaDef def);
+
+  uint32_t getIdForType(const ir::Type& type);
+
+  uint32_t defType(const ir::Type& type, bool explicitLayout);
+
+  uint32_t getIdForPtrType(uint32_t typeId, spv::StorageClass storageClass);
+
+  uint32_t getIdForFuncType(const SpirvFunctionTypeKey& key);
+
+  uint32_t getIdForConstant(const SpirvConstant& constant, uint32_t memberCount);
+
+  uint32_t makeScalarConst(ir::ScalarType type, const ir::Op& op, uint32_t& operandIndex);
+
+  uint32_t makeBasicConst(ir::BasicType type, const ir::Op& op, uint32_t& operandIndex);
+
+  uint32_t makeConstant(const ir::Type& type, const ir::Op& op, uint32_t& operandIndex);
+
+  uint32_t makeConstBool(bool value);
+
+  uint32_t makeConstU32(uint32_t value);
+
+  uint32_t makeConstI32(int32_t value);
+
+  uint32_t makeConstNull(uint32_t typeId);
+
+  uint32_t makeUndef(uint32_t typeId);
+
+  void setDebugName(uint32_t id, const char* name);
+
+  void setDebugMemberName(uint32_t id, uint32_t member, const char* name);
+
+  void enableCapability(spv::Capability cap);
+
+  void enableExtension(const char* name);
+
+  void addEntryPointId(uint32_t id);
+
+  ir::Type traverseType(ir::Type type, ir::SsaDef address) const;
+
+  static spv::StorageClass getVariableStorageClass(const ir::Op& op);
+
+  static uint32_t makeOpcodeToken(spv::Op op, uint32_t len);
+
+  static uint32_t getStringDwordCount(const char* str);
+
+  template<typename T, typename... Args>
+  static void pushOp(T& container, spv::Op op, Args... args);
+
+  template<typename T>
+  static void pushString(T& container, const char* str);
+
+};
+
+}
