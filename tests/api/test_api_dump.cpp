@@ -20,6 +20,7 @@ int main(int argc, char** argv) {
     dxbc_spv::ir::Disassembler::Options disassembleOptions;
     disassembleOptions.resolveConstants = true;
     disassembleOptions.showConstants = false;
+    disassembleOptions.showDebugNames = false;
     disassembleOptions.coloredOutput = true;
 
     dxbc_spv::ir::Disassembler disasm(test.builder, disassembleOptions);
