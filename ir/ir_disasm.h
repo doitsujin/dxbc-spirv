@@ -27,6 +27,8 @@ public:
     bool resolveConstants = false;
     /** Whether to show constant instructions. */
     bool showConstants = true;
+    /** Whether to show debug name instructions. */
+    bool showDebugNames = true;
     /** Whether to enable colored output */
     bool coloredOutput = false;
   };

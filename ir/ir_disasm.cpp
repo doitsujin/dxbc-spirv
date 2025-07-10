@@ -26,6 +26,9 @@ void Disassembler::disassembleOp(std::ostream& stream, const Op& op) const {
   if (!m_options.showConstants && op.isConstant())
     return;
 
+  if (!m_options.showDebugNames && op.getOpCode() == OpCode::eDebugName)
+    return;
+
   if (op.getFlags()) {
     std::stringstream flags;
     flags << " [";
@@ -121,6 +124,7 @@ void Disassembler::disassembleOperandDef(std::ostream& stream, const Op& op, uin
 
   if (op.getOpCode() == OpCode::eDebugName) {
     /* Don't display the debug name twice */
+    auto state = scopedColor(stream, util::ConsoleState::FgYellow);
     stream << operand;
     return;
   }
