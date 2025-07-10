@@ -1,3 +1,5 @@
+subdir('api')
+
 test_files = files([
   'test_main.cpp',
 
@@ -14,4 +16,6 @@ executable('test_dxbc_spv', test_files,
   link_with   : [ lib_dxbc_spv ],
   install     : false)
 
-subdir('api')
+executable('test_spirv_lowering', files('test_spirv.cpp'),
+  link_with   : [ lib_dxbc_spv, lib_dxbc_spv_test_api ],
+  install     : false)
