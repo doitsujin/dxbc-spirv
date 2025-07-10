@@ -17,7 +17,10 @@ int main(int argc, char** argv) {
   for (const auto& test : tests) {
     std::cout << test.name << ":" << std::endl;
 
-    dxbc_spv::ir::Disassembler disasm(test.builder, dxbc_spv::ir::Disassembler::Options());
+    dxbc_spv::ir::Disassembler::Options disassembleOptions;
+    disassembleOptions.coloredOutput = true;
+
+    dxbc_spv::ir::Disassembler disasm(test.builder, disassembleOptions);
     disasm.disassemble(std::cout);
     std::cout << std::endl;
 
