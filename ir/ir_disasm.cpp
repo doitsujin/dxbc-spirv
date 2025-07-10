@@ -1,5 +1,3 @@
-#include <iomanip>
-
 #include "ir_disasm.h"
 
 namespace dxbc_spv::ir {
@@ -27,7 +25,11 @@ void Disassembler::disassembleOp(std::ostream& stream, const Op& op) const {
 
   if (op.getFlags()) {
     std::stringstream flags;
-    flags << " [" << op.getFlags() << "] ";
+    flags << " [";
+    { auto state = scopedColor(flags, util::ConsoleState::FgMagenta);
+      flags << op.getFlags();
+    }
+    flags << "] ";
     prefix = flags.str();
   }
 
@@ -35,11 +37,24 @@ void Disassembler::disassembleOp(std::ostream& stream, const Op& op) const {
   disassembleDef(def, op.getDef());
 
   std::stringstream lead;
-  if (!op.getType().isVoidType())
+  if (!op.getType().isVoidType()) {
+    auto state = scopedColor(lead, util::ConsoleState::FgCyan);
     lead << op.getType();
-  lead << " " << std::setw(5) << std::setfill(' ') << def.str();
+  }
 
-  stream << prefix << std::setw(24 - std::min<size_t>(24u, prefix.size())) << std::setfill(' ') << lead.str();
+  auto defStr = def.str();
+
+  if (countChars(defStr) < 5u)
+    defStr.insert(0u, 5u - countChars(defStr), ' ');
+
+  lead << " " << defStr;
+
+  auto leadStr = lead.str();
+
+  if (countChars(prefix + leadStr) < 24u)
+    leadStr.insert(0u, 24u - countChars(prefix + leadStr), ' ');
+
+  stream << prefix << leadStr;
   stream << " = " << op.getOpCode();
 
   for (uint32_t i = 0u; i < op.getFirstLiteralOperandIndex(); i++) {
@@ -83,12 +98,16 @@ void Disassembler::resolveDebugNames() {
 
 
 void Disassembler::disassembleDef(std::ostream& stream, SsaDef def) const {
+  auto state = scopedColor(stream, util::ConsoleState::FgYellow);
   auto entry = m_debugNames.find(def);
 
   if (entry != m_debugNames.end()) {
     stream << '%' << entry->second;
     return;
   }
+
+  if (!def)
+    state = scopedColor(stream, util::ConsoleState::FgBlack, util::ConsoleState::EffectDim);
 
   stream << def;
 }
@@ -107,7 +126,13 @@ void Disassembler::disassembleOperandDef(std::ostream& stream, const Op& op, uin
     const auto& def = m_builder.getOp(operand);
 
     if (def.isConstant()) {
-      stream << "%[" << def.getType() << '(';
+      stream << "%[";
+
+      { auto state = scopedColor(stream, util::ConsoleState::FgCyan);
+        stream << def.getType();
+      }
+
+      stream << "(";
 
       for (uint32_t i = 0u; i < def.getOperandCount(); i++) {
         stream << (i ? "," : "");
@@ -137,13 +162,16 @@ void Disassembler::disassembleOperandLiteral(std::ostream& stream, const Op& op,
 
     if (index == stringIndex) {
       stream << "\"";
-      stream << op.getLiteralString(stringIndex);
+      { auto state = scopedColor(stream, util::ConsoleState::FgGreen);
+        stream << op.getLiteralString(stringIndex);
+      }
       stream << "\"";
       return;
     }
   }
 
   if (op.getOpCode() == OpCode::eConstant) {
+    auto state = scopedColor(stream, util::ConsoleState::FgRed);
     ScalarType type = op.getType().resolveFlattenedType(index);
 
     switch (type) {
@@ -168,6 +196,8 @@ void Disassembler::disassembleOperandLiteral(std::ostream& stream, const Op& op,
   }
 
   if (m_options.useEnumNames) {
+    auto state = scopedColor(stream, util::ConsoleState::FgBlue);
+
     switch (op.getOpCode()) {
       case OpCode::eEntryPoint:
         if (index == op.getFirstLiteralOperandIndex()) { stream << ShaderStage(operand); return; }
@@ -248,12 +278,42 @@ void Disassembler::disassembleOperandLiteral(std::ostream& stream, const Op& op,
   }
 
   /* Interpret literal as unsigned integer by default */
+  auto state = scopedColor(stream, util::ConsoleState::FgRed);
   uint64_t lit = uint64_t(operand);
 
   if (lit <= 0xffffu)
     stream << std::dec << lit;
   else
     stream << "0x" << std::hex << lit << std::dec;
+}
+
+util::ConsoleState Disassembler::scopedColor(std::ostream& stream, uint32_t fg, uint32_t effect) const {
+  if (!m_options.coloredOutput)
+    return util::ConsoleState();
+
+  return util::ConsoleState(stream, fg, effect);
+}
+
+size_t Disassembler::countChars(const std::string& str) {
+  size_t n = 0u;
+
+  bool insideEscapeSequence = false;
+
+  for (char ch : str) {
+    if (ch == '\033') {
+      insideEscapeSequence = true;
+      continue;
+    }
+
+    if (insideEscapeSequence) {
+      insideEscapeSequence = ch != 'm';
+      continue;
+    }
+
+    n++;
+  }
+
+  return n;
 }
 
 }
