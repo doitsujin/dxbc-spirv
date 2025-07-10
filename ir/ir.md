@@ -283,7 +283,7 @@ a vector, but the final destination type is scalar. This can allow for more effi
 | `LdsAtomic`          | `void` or scalar | `%DclLds`         | `%address` into LDS type     | `%operands`    | `ir::AtomicOp` |                |
 | `BufferAtomic`       | `void` or scalar | `%uav` descriptor | `%address` into UAV type     | `%operands`    | `ir::AtomicOp` |                |
 | `ImageAtomic`        | `void` or scalar | `%uav` descriptor | `%layer`                     | `%coord`       | `%operands`    | `ir::AtomicOp` |
-| `CounterAtomic`      | `void` or scalar | `%uav` counter    | `%operands`                  | `ir::AtomicOp` |                |                |
+| `CounterAtomic`      | `void` or scalar | `%uav` counter    | `ir::AtomicOp` (inc/dec)     |                |                |                |
 | `MemoryAtomic`       | `void` or scalar | `%Pointer`        | `%address` into pointee type | `%operands`    | `ir::AtomicOp` |                |
 
 The `ir::AtomicOp` parameter is a literal enum value, thus the last parameter.

@@ -642,6 +642,8 @@ enum class AtomicOp : uint32_t {
   eAnd              = 10u,
   eOr               = 11u,
   eXor              = 12u,
+  eInc              = 13u,
+  eDec              = 14u,
 };
 
 
@@ -1846,10 +1848,9 @@ public:
   }
 
   template<typename... T>
-  static Op CounterAtomic(AtomicOp op, Type type, SsaDef descriptor, T... args) {
+  static Op CounterAtomic(AtomicOp op, Type type, SsaDef descriptor) {
     return Op(OpCode::eCounterAtomic, type)
       .addOperand(Operand(descriptor))
-      .addOperands(Operand(SsaDef(args))...)
       .addOperand(Operand(op));
   }
 

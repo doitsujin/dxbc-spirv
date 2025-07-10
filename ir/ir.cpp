@@ -435,6 +435,8 @@ std::ostream& operator << (std::ostream& os, const AtomicOp& atomicOp) {
     case AtomicOp::eAnd:                return os << "And";
     case AtomicOp::eOr:                 return os << "Or";
     case AtomicOp::eXor:                return os << "Xor";
+    case AtomicOp::eInc:                return os << "Inc";
+    case AtomicOp::eDec:                return os << "dec";
   }
 
   return os << "AtomicOp(" << std::dec << uint32_t(atomicOp) << ")";
