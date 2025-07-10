@@ -6,6 +6,8 @@
 
 #include "ir_builder.h"
 
+#include "../util/util_console.h"
+
 namespace dxbc_spv::ir {
 
 /** Disassembler pass. Useful for debugging purposes.
@@ -25,6 +27,8 @@ public:
     bool resolveConstants = false;
     /** Whether to show constant instructions. */
     bool showConstants = true;
+    /** Whether to enable colored output */
+    bool coloredOutput = false;
   };
 
   Disassembler(const Builder& builder, const Options& options);
@@ -57,6 +61,10 @@ private:
   void disassembleOperandDef(std::ostream& stream, const Op& op, uint32_t index) const;
 
   void disassembleOperandLiteral(std::ostream& stream, const Op& op, uint32_t index) const;
+
+  util::ConsoleState scopedColor(std::ostream& stream, uint32_t fg, uint32_t effect = 0u) const;
+
+  static size_t countChars(const std::string& str);
 
 };
 
