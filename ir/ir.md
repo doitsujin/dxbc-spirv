@@ -347,7 +347,7 @@ no dedicated `Selection` instructions to define constructs. Instead, this is don
 |-----------------------|-------------|-----------------------|----------------------|----------------------|----------------------|----------------------|
 | `Label`               | `void`      | `%Label` args...      | `ir::Construct`      |                      |                      |
 | `Branch`              | `void`      | `%Label` target block |                      |                      |                      |                      |
-| `BranchConditional`   | `void`      | `%cond`               | `%Label` if true     | `%Label` if false    | `%construct` (opt.)  |                      |
+| `BranchConditional`   | `void`      | `%cond`               | `%Label` if true     | `%Label` if false    |                      |                      |
 | `Switch`              | `void`      | `%value` switch val   | `%Label` default     | `%value` case value  | `%Label` case block  |
 | `Unreachable`         | `void`      |                       |                      |                      |                      |                      |
 | `Phi`                 | any         | `%Label` source block | `%value`             |                      |                      |                      |
