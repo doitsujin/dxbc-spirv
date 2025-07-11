@@ -171,6 +171,48 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eCompositeConstruct:
       return emitCompositeConstruct(op);
 
+    case ir::OpCode::eFEq:
+    case ir::OpCode::eFNe:
+    case ir::OpCode::eFLt:
+    case ir::OpCode::eFLe:
+    case ir::OpCode::eFGt:
+    case ir::OpCode::eFGe:
+    case ir::OpCode::eFIsNan:
+    case ir::OpCode::eIEq:
+    case ir::OpCode::eINe:
+    case ir::OpCode::eSLt:
+    case ir::OpCode::eSGe:
+    case ir::OpCode::eULt:
+    case ir::OpCode::eUGe:
+    case ir::OpCode::eBAnd:
+    case ir::OpCode::eBOr:
+    case ir::OpCode::eBEq:
+    case ir::OpCode::eBNe:
+    case ir::OpCode::eBNot:
+    case ir::OpCode::eSelect:
+    case ir::OpCode::eFNeg:
+    case ir::OpCode::eFAdd:
+    case ir::OpCode::eFSub:
+    case ir::OpCode::eFMul:
+    case ir::OpCode::eFDiv:
+    case ir::OpCode::eIAnd:
+    case ir::OpCode::eIOr:
+    case ir::OpCode::eIXor:
+    case ir::OpCode::eINot:
+    case ir::OpCode::eIBitInsert:
+    case ir::OpCode::eUBitExtract:
+    case ir::OpCode::eSBitExtract:
+    case ir::OpCode::eIShl:
+    case ir::OpCode::eSShr:
+    case ir::OpCode::eUShr:
+    case ir::OpCode::eIAdd:
+    case ir::OpCode::eISub:
+    case ir::OpCode::eINeg:
+    case ir::OpCode::eIMul:
+    case ir::OpCode::eSDiv:
+    case ir::OpCode::eUDiv:
+      return emitSimpleArithmetic(op);
+
     case ir::OpCode::eSetCsWorkgroupSize:
     case ir::OpCode::eSetGsInstances:
     case ir::OpCode::eSetGsInputPrimitive:
@@ -235,71 +277,31 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eDerivY:
     case ir::OpCode::eRovScopedLockBegin:
     case ir::OpCode::eRovScopedLockEnd:
-    case ir::OpCode::eFEq:
-    case ir::OpCode::eFNe:
-    case ir::OpCode::eFLt:
-    case ir::OpCode::eFLe:
-    case ir::OpCode::eFGt:
-    case ir::OpCode::eFGe:
-    case ir::OpCode::eFIsNan:
-    case ir::OpCode::eIEq:
-    case ir::OpCode::eINe:
-    case ir::OpCode::eSLt:
-    case ir::OpCode::eSGe:
-    case ir::OpCode::eULt:
-    case ir::OpCode::eUGe:
-    case ir::OpCode::eBAnd:
-    case ir::OpCode::eBOr:
-    case ir::OpCode::eBEq:
-    case ir::OpCode::eBNe:
-    case ir::OpCode::eBNot:
-    case ir::OpCode::eSelect:
     case ir::OpCode::eFAbs:
-    case ir::OpCode::eFNeg:
-    case ir::OpCode::eFAdd:
-    case ir::OpCode::eFSub:
-    case ir::OpCode::eFMul:
+    case ir::OpCode::eFDot:
+    case ir::OpCode::eFDotLegacy:
     case ir::OpCode::eFMulLegacy:
     case ir::OpCode::eFMad:
     case ir::OpCode::eFMadLegacy:
-    case ir::OpCode::eFDiv:
     case ir::OpCode::eFRcp:
     case ir::OpCode::eFSqrt:
     case ir::OpCode::eFRsq:
     case ir::OpCode::eFExp2:
     case ir::OpCode::eFLog2:
     case ir::OpCode::eFFract:
-    case ir::OpCode::eFRound:
     case ir::OpCode::eFMin:
     case ir::OpCode::eFMax:
-    case ir::OpCode::eFDot:
-    case ir::OpCode::eFDotLegacy:
     case ir::OpCode::eFClamp:
     case ir::OpCode::eFSin:
     case ir::OpCode::eFCos:
-    case ir::OpCode::eIAnd:
-    case ir::OpCode::eIOr:
-    case ir::OpCode::eIXor:
-    case ir::OpCode::eINot:
-    case ir::OpCode::eIBitInsert:
-    case ir::OpCode::eUBitExtract:
-    case ir::OpCode::eSBitExtract:
-    case ir::OpCode::eIShl:
-    case ir::OpCode::eSShr:
-    case ir::OpCode::eUShr:
+    case ir::OpCode::eFRound:
     case ir::OpCode::eIBitCount:
     case ir::OpCode::eIBitReverse:
     case ir::OpCode::eIFindLsb:
     case ir::OpCode::eSFindMsb:
     case ir::OpCode::eUFindMsb:
-    case ir::OpCode::eIAdd:
     case ir::OpCode::eIAddCarry:
-    case ir::OpCode::eISub:
     case ir::OpCode::eISubBorrow:
-    case ir::OpCode::eINeg:
-    case ir::OpCode::eIMul:
-    case ir::OpCode::eSDiv:
-    case ir::OpCode::eUDiv:
     case ir::OpCode::eSMin:
     case ir::OpCode::eSMax:
     case ir::OpCode::eSClamp:
@@ -979,6 +981,74 @@ void SpirvBuilder::emitCompositeConstruct(const ir::Op& op) {
 }
 
 
+void SpirvBuilder::emitSimpleArithmetic(const ir::Op& op) {
+  auto id = getIdForDef(op.getDef());
+
+  /* Figure out opcode */
+  spv::Op opCode = [&] {
+    switch (op.getOpCode()) {
+      case ir::OpCode::eFEq:          return spv::OpFOrdEqual;
+      case ir::OpCode::eFNe:          return spv::OpFUnordNotEqual;
+      case ir::OpCode::eFLt:          return spv::OpFOrdLessThan;
+      case ir::OpCode::eFLe:          return spv::OpFOrdLessThanEqual;
+      case ir::OpCode::eFGt:          return spv::OpFOrdGreaterThan;
+      case ir::OpCode::eFGe:          return spv::OpFOrdGreaterThanEqual;
+      case ir::OpCode::eFIsNan:       return spv::OpIsNan;
+      case ir::OpCode::eIEq:          return spv::OpIEqual;
+      case ir::OpCode::eINe:          return spv::OpINotEqual;
+      case ir::OpCode::eSLt:          return spv::OpSLessThan;
+      case ir::OpCode::eSGe:          return spv::OpSGreaterThanEqual;
+      case ir::OpCode::eULt:          return spv::OpULessThan;
+      case ir::OpCode::eUGe:          return spv::OpUGreaterThanEqual;
+      case ir::OpCode::eBAnd:         return spv::OpLogicalAnd;
+      case ir::OpCode::eBOr:          return spv::OpLogicalOr;
+      case ir::OpCode::eBEq:          return spv::OpLogicalEqual;
+      case ir::OpCode::eBNe:          return spv::OpLogicalNotEqual;
+      case ir::OpCode::eBNot:         return spv::OpLogicalNot;
+      case ir::OpCode::eSelect:       return spv::OpSelect;
+      case ir::OpCode::eFNeg:         return spv::OpFNegate;
+      case ir::OpCode::eFAdd:         return spv::OpFAdd;
+      case ir::OpCode::eFSub:         return spv::OpFSub;
+      case ir::OpCode::eFMul:         return spv::OpFMul;
+      case ir::OpCode::eFDiv:         return spv::OpFDiv;
+      case ir::OpCode::eIAnd:         return spv::OpBitwiseAnd;
+      case ir::OpCode::eIOr:          return spv::OpBitwiseOr;
+      case ir::OpCode::eIXor:         return spv::OpBitwiseXor;
+      case ir::OpCode::eINot:         return spv::OpNot;
+      case ir::OpCode::eIBitInsert:   return spv::OpBitFieldInsert;
+      case ir::OpCode::eUBitExtract:  return spv::OpBitFieldUExtract;
+      case ir::OpCode::eSBitExtract:  return spv::OpBitFieldSExtract;
+      case ir::OpCode::eIShl:         return spv::OpShiftLeftLogical;
+      case ir::OpCode::eSShr:         return spv::OpShiftRightArithmetic;
+      case ir::OpCode::eUShr:         return spv::OpShiftRightLogical;
+      case ir::OpCode::eIAdd:         return spv::OpIAdd;
+      case ir::OpCode::eISub:         return spv::OpISub;
+      case ir::OpCode::eINeg:         return spv::OpSNegate;
+      case ir::OpCode::eIMul:         return spv::OpIMul;
+      case ir::OpCode::eSDiv:         return spv::OpSDiv;
+      case ir::OpCode::eUDiv:         return spv::OpUDiv;
+
+      default:
+        dxbc_spv_unreachable();
+        return spv::OpNop;
+    }
+  } ();
+
+  /* Emit instruction and operands as-is */
+  m_code.push_back(makeOpcodeToken(opCode, 3u + op.getOperandCount()));
+  m_code.push_back(getIdForType(op.getType()));
+  m_code.push_back(id);
+
+  for (uint32_t i = 0u; i < op.getOperandCount(); i++)
+    m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(i))));
+
+  if (op.getFlags() & ir::OpFlag::ePrecise)
+    pushOp(m_declarations, spv::OpDecorate, id, spv::DecorationNoContraction);
+
+  emitDebugName(op.getDef(), id);
+}
+
+
 uint32_t SpirvBuilder::importGlslExt() {
   if (!m_glslExtId) {
     m_glslExtId = allocId();
@@ -1202,6 +1272,7 @@ uint32_t SpirvBuilder::getIdForConstant(const SpirvConstant& constant, uint32_t 
   for (uint32_t i = 0u; i < memberCount; i++)
     m_declarations.push_back(constant.constituents[i]);
 
+  m_constants.insert({ constant, id });
   return id;
 }
 
