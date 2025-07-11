@@ -355,7 +355,7 @@ bool Validator::validateLoadStoreOps(std::ostream& str) const {
 
     Type dclType = m_builder.getOp(SsaDef(op->getOperand(0u))).getType();
     Type valType = isStore
-      ? m_builder.getOp(SsaDef(op->getOperand(op->getOperandCount() - 1u))).getType()
+      ? m_builder.getOp(SsaDef(op->getOperand(op->getFirstLiteralOperandIndex() - 1u))).getType()
       : op->getType();
 
     Type expectedType = dclType;
