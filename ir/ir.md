@@ -518,9 +518,9 @@ The `*Legacy` instructions follow D3D9 rules w.r.t. multiplication.
 | `IBitInsert`              | integer      | `%base`      | `%insert` | `%offset` | `%count` |
 | `UBitExtract`             | integer      | `%value`     | `%offset` | `%count`  |          |
 | `SBitExtract`             | integer      | `%value`     | `%offset` | `%count`  |          |
-| `IShl`                    | integer      | `%base`      | `%insert` | `%offset` | `%count` |
-| `SShr`                    | integer      | `%value`     | `%offset` | `%count`  |          |
-| `UShr`                    | integer      | `%value`     | `%offset` | `%count`  |          |
+| `IShl`                    | integer      | `%value`     | `%count`  |           |          |
+| `SShr`                    | integer      | `%value`     | `%count`  |           |          |
+| `UShr`                    | integer      | `%value`     | `%count`  |           |          |
 | `IBitCount`               | integer      | `%value`     |           |           |          |
 | `IBitReverse`             | integer      | `%value`     |           |           |          |
 | `IFindLsb`                | integer      | `%value`     |           |           |          |
