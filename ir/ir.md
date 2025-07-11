@@ -112,7 +112,7 @@ Semantics are as follows:
 - `ConvertFToI` is a saturating conversion from a float type to a signed or unsigned integer, with round-to-zero semantics.
 - `ConvertIToF` is a value-preserving conversion from a signed or unsigned integer to any float type with round-even semantics.
 - `ConvertItoI` converts between integer types of different size. If the result type is larger than the source and the source
-  is signed, it will be sign-extended, otherwise it will be sign-extended. If the result type is smaller, excess bits are discarded.
+  is signed, it will be sign-extended, otherwise it will be zero-extended. If the result type is smaller, excess bits are discarded.
   If the two types only differ in signedness, this instruction is identical in behaviour to `Cast` and will be lowered to it.
 - `Cast` is a bit-pattern preserving cast between different types that must have the same bit size. Vector types are allowed.
 
