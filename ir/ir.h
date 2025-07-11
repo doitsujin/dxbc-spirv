@@ -438,6 +438,33 @@ enum class ResourceKind : uint32_t {
 };
 
 
+/* Resource image dimensions */
+inline uint32_t resourceDimensions(ResourceKind kind) {
+  switch (kind) {
+    case ResourceKind::eBufferTyped:
+    case ResourceKind::eBufferRaw:
+    case ResourceKind::eBufferStructured:
+    case ResourceKind::eImage1D:
+    case ResourceKind::eImage1DArray:
+      return 1u;
+
+    case ResourceKind::eImage2D:
+    case ResourceKind::eImage2DArray:
+    case ResourceKind::eImageCube:
+    case ResourceKind::eImageCubeArray:
+    case ResourceKind::eImage2DMS:
+    case ResourceKind::eImage2DMSArray:
+      return 2u;
+
+    case ResourceKind::eImage3D:
+      return 3u;
+  }
+
+  dxbc_spv_unreachable();
+  return 0u;
+}
+
+
 /* Computes required component count of the address vector for any
  * given resource kind. Does not include the array layer index. */
 inline uint32_t resourceCoordComponentCount(ResourceKind kind) {
@@ -461,7 +488,6 @@ inline uint32_t resourceCoordComponentCount(ResourceKind kind) {
       return 3u;
   }
 
-  /* unreachable */
   dxbc_spv_unreachable();
   return 0u;
 }
