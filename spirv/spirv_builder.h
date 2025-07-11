@@ -133,7 +133,12 @@ private:
 
   void emitBufferQuery(const ir::Op& op);
 
+  void emitBufferAtomic(const ir::Op& op);
+
   void emitConvert(const ir::Op& op);
+
+  void emitAtomic(const ir::Op& op, const ir::Type& type, uint32_t operandIndex,
+      uint32_t ptrId, spv::Scope scope, spv::MemorySemanticsMask memoryTypes);
 
   void emitFunction(const ir::Op& op);
 

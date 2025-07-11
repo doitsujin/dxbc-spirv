@@ -144,6 +144,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eBufferQuerySize:
       return emitBufferQuery(op);
 
+    case ir::OpCode::eBufferAtomic:
+      return emitBufferAtomic(op);
+
     case ir::OpCode::eFunction:
       return emitFunction(op);
 
@@ -265,7 +268,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eMemoryLoad:
     case ir::OpCode::eMemoryStore:
     case ir::OpCode::eLdsAtomic:
-    case ir::OpCode::eBufferAtomic:
     case ir::OpCode::eImageAtomic:
     case ir::OpCode::eCounterAtomic:
     case ir::OpCode::eMemoryAtomic:
@@ -1068,6 +1070,52 @@ void SpirvBuilder::emitBufferQuery(const ir::Op& op) {
 }
 
 
+void SpirvBuilder::emitBufferAtomic(const ir::Op& op) {
+  /* Get op that loaded the descriptor, and the resource declaration */
+  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& dclOp = m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u)));
+
+  auto addressDef = ir::SsaDef(op.getOperand(1u));
+
+  if (declaresPlainBufferResource(dclOp)) {
+    auto type = traverseType(dclOp.getType(), addressDef);
+
+    dxbc_spv_assert(type.isScalarType());
+
+    /* Emit access chain, this will always point to a scalar. */
+    bool hasWrapperStruct = !dclOp.getType().isStructType();
+
+    auto accessChainId = emitAccessChain(spv::StorageClassStorageBuffer, dclOp.getType(),
+      getIdForDef(descriptorOp.getDef()), addressDef, 0u, hasWrapperStruct);
+
+    if (descriptorOp.getFlags() & ir::OpFlag::eNonUniform)
+      pushOp(m_decorations, spv::OpDecorate, accessChainId, spv::DecorationNonUniform);
+
+    emitAtomic(op, type, 2u, accessChainId, spv::ScopeQueueFamily,
+      spv::MemorySemanticsUniformMemoryMask);
+  } else {
+    /* OpImageTexelPointer is annoying and takes a pointer to an image descriptor,
+     * rather than an actually loaded image descriptor, so we have to re-evaluate
+     * the descriptor load op here. */
+    auto type = dclOp.getType();
+
+    auto ptrTypeId = getIdForPtrType(getIdForType(type), spv::StorageClassImage);
+    auto ptrId = allocId();
+
+    pushOp(m_code, spv::OpImageTexelPointer, ptrTypeId, ptrId,
+      getImageDescriptorPointer(descriptorOp), getIdForDef(addressDef),
+      makeConstU32(0u));
+
+    /* Need to declare the pointer op we pass to the atomic as non-uniform */
+    if (descriptorOp.getFlags() & ir::OpFlag::eNonUniform)
+      pushOp(m_decorations, spv::OpDecorate, ptrId, spv::DecorationNonUniform);
+
+    emitAtomic(op, type, 2u, ptrId, spv::ScopeQueueFamily,
+      spv::MemorySemanticsImageMemoryMask);
+  }
+}
+
+
 void SpirvBuilder::emitConvert(const ir::Op& op) {
   /* Everything can be a vector here */
   dxbc_spv_assert(op.getType().isBasicType());
@@ -1141,6 +1189,77 @@ void SpirvBuilder::emitConvert(const ir::Op& op) {
   auto dstId = getIdForDef(op.getDef());
 
   pushOp(m_code, spvOp, dstTypeId, dstId, srcId);
+}
+
+
+void SpirvBuilder::emitAtomic(const ir::Op& op, const ir::Type& type, uint32_t operandIndex,
+    uint32_t ptrId, spv::Scope scope, spv::MemorySemanticsMask memoryTypes) {
+  dxbc_spv_assert(op.getType().isVoidType() || op.getType() == type);
+
+  auto id = getIdForDef(op.getDef());
+
+  /* Work out SPIR-V op code and argument count based on atomic op literal */
+  auto atomicOp = ir::AtomicOp(op.getOperand(op.getFirstLiteralOperandIndex()));
+
+  auto [opCode, argCount] = [&] {
+    switch (atomicOp) {
+      case ir::AtomicOp::eLoad:             return std::make_pair(spv::OpAtomicLoad, 0u);
+      case ir::AtomicOp::eStore:            return std::make_pair(spv::OpAtomicStore, 1u);
+      case ir::AtomicOp::eExchange:         return std::make_pair(spv::OpAtomicExchange, 1u);
+      case ir::AtomicOp::eCompareExchange:  return std::make_pair(spv::OpAtomicCompareExchange, 2u);
+      case ir::AtomicOp::eAdd:              return std::make_pair(spv::OpAtomicIAdd, 1u);
+      case ir::AtomicOp::eSub:              return std::make_pair(spv::OpAtomicISub, 1u);
+      case ir::AtomicOp::eSMin:             return std::make_pair(spv::OpAtomicSMin, 1u);
+      case ir::AtomicOp::eSMax:             return std::make_pair(spv::OpAtomicSMax, 1u);
+      case ir::AtomicOp::eUMin:             return std::make_pair(spv::OpAtomicUMin, 1u);
+      case ir::AtomicOp::eUMax:             return std::make_pair(spv::OpAtomicUMax, 1u);
+      case ir::AtomicOp::eAnd:              return std::make_pair(spv::OpAtomicAnd, 1u);
+      case ir::AtomicOp::eOr:               return std::make_pair(spv::OpAtomicOr, 1u);
+      case ir::AtomicOp::eXor:              return std::make_pair(spv::OpAtomicXor, 1u);
+      case ir::AtomicOp::eInc:              return std::make_pair(spv::OpAtomicIIncrement, 0u);
+      case ir::AtomicOp::eDec:              return std::make_pair(spv::OpAtomicIDecrement, 0u);
+    }
+
+    dxbc_spv_unreachable();
+    return std::make_pair(spv::OpNop, 0u);
+  } ();
+
+  /* Set up memory semantics */
+  auto semantics = spv::MemorySemanticsAcquireReleaseMask;
+
+  if (atomicOp == ir::AtomicOp::eLoad)
+    semantics = spv::MemorySemanticsAcquireMask;
+  else if (atomicOp == ir::AtomicOp::eStore)
+    semantics = spv::MemorySemanticsReleaseMask;
+
+
+  /* Emit atomic instruction */
+  uint32_t operandCount = 4u + argCount;
+
+  if (atomicOp != ir::AtomicOp::eStore)
+    operandCount += 2u;  /* result type and id */
+
+  if (atomicOp == ir::AtomicOp::eCompareExchange)
+    operandCount += 1u;  /* unequal semantics */
+
+  m_code.push_back(makeOpcodeToken(opCode, operandCount));
+
+  if (atomicOp != ir::AtomicOp::eStore) {
+    m_code.push_back(getIdForType(type));
+    m_code.push_back(id);
+  }
+
+  m_code.push_back(ptrId);
+  m_code.push_back(makeConstU32(scope));
+  m_code.push_back(makeConstU32(memoryTypes | semantics));
+
+  if (atomicOp == ir::AtomicOp::eCompareExchange)
+    m_code.push_back(makeConstU32(memoryTypes | spv::MemorySemanticsAcquireMask));
+
+  for (uint32_t i = 0u; i < argCount; i++)
+    m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(operandIndex + i))));
+
+  emitDebugName(op.getDef(), id);
 }
 
 
