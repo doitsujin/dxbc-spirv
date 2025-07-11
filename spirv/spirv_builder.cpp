@@ -125,6 +125,25 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
       /* No-op, resolved when declaring function */
       return;
 
+    case ir::OpCode::eDclCbv:
+      return emitDclCbv(op);
+
+    case ir::OpCode::eDclSrv:
+    case ir::OpCode::eDclUav:
+      return emitDclSrvUav(op);
+
+    case ir::OpCode::eDescriptorLoad:
+      return emitDescriptorLoad(op);
+
+    case ir::OpCode::eBufferLoad:
+      return emitBufferLoad(op);
+
+    case ir::OpCode::eBufferStore:
+      return emitBufferStore(op);
+
+    case ir::OpCode::eBufferQuerySize:
+      return emitBufferQuery(op);
+
     case ir::OpCode::eFunction:
       return emitFunction(op);
 
@@ -170,6 +189,16 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
 
     case ir::OpCode::eCompositeConstruct:
       return emitCompositeConstruct(op);
+
+    case ir::OpCode::eCheckSparseAccess:
+      return emitCheckSparseAccess(op);
+
+    case ir::OpCode::eConvertFtoF:
+    case ir::OpCode::eConvertFtoI:
+    case ir::OpCode::eConvertItoF:
+    case ir::OpCode::eConvertItoI:
+    case ir::OpCode::eCast:
+      return emitConvert(op);
 
     case ir::OpCode::eFEq:
     case ir::OpCode::eFNe:
@@ -226,30 +255,13 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eDclSpecConstant:
     case ir::OpCode::eDclPushData:
     case ir::OpCode::eDclSampler:
-    case ir::OpCode::eDclCbv:
-    case ir::OpCode::eDclSrv:
-    case ir::OpCode::eDclUav:
     case ir::OpCode::eDclUavCounter:
     case ir::OpCode::eDclLds:
     case ir::OpCode::eDclScratch:
-    case ir::OpCode::eDclTmp:
     case ir::OpCode::eFunctionCall:
     case ir::OpCode::eBarrier:
-    case ir::OpCode::eConvertFtoF:
-    case ir::OpCode::eConvertFtoI:
-    case ir::OpCode::eConvertItoF:
-    case ir::OpCode::eConvertItoI:
-    case ir::OpCode::eCast:
-    case ir::OpCode::eConsumeAs:
-    case ir::OpCode::eCheckSparseAccess:
     case ir::OpCode::eParamLoad:
-    case ir::OpCode::eTmpLoad:
-    case ir::OpCode::eTmpStore:
     case ir::OpCode::eSpecConstantLoad:
-    case ir::OpCode::eDescriptorLoad:
-    case ir::OpCode::eBufferLoad:
-    case ir::OpCode::eBufferStore:
-    case ir::OpCode::eBufferQuerySize:
     case ir::OpCode::eMemoryLoad:
     case ir::OpCode::eMemoryStore:
     case ir::OpCode::eLdsAtomic:
@@ -315,6 +327,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
 
     case ir::OpCode::eUnknown:
     case ir::OpCode::eLastDeclarative:
+    case ir::OpCode::eDclTmp:
+    case ir::OpCode::eTmpLoad:
+    case ir::OpCode::eTmpStore:
     case ir::OpCode::eScopedIf:
     case ir::OpCode::eScopedElse:
     case ir::OpCode::eScopedEndIf:
@@ -327,7 +342,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eScopedSwitchDefault:
     case ir::OpCode::eScopedSwitchBreak:
     case ir::OpCode::eScopedEndSwitch:
+    case ir::OpCode::eConsumeAs:
     case ir::OpCode::Count:
+      /* Invalid opcodes */
       break;
   }
 
@@ -394,13 +411,9 @@ void SpirvBuilder::emitConstant(const ir::Op& op) {
 
   /* Deduplicate constants once more and assign the ID. This will reliably
    * work because constants are defined before any of their uses in the IR. */
-  uint32_t defId = op.getDef().getId();
   uint32_t spvId = makeConstant(op.getType(), op, operandIndex);
 
-  if (defId >= m_ssaDefsToId.size())
-    m_ssaDefsToId.resize(defId + 1u);
-
-  m_ssaDefsToId[defId] = spvId;
+  setIdForDef(op.getDef(), spvId);
 }
 
 
@@ -607,6 +620,431 @@ void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
   addEntryPointId(varId);
 }
 
+
+void SpirvBuilder::emitDclCbv(const ir::Op& op) {
+  /* Create a wrapper struct that we can decorate as a block */
+  auto structTypeId = defType(op.getType(), true);
+
+  if (!op.getType().isStructType()) {
+    structTypeId = defStructWrapper(structTypeId);
+
+    if (m_options.includeDebugNames)
+      setDebugMemberName(structTypeId, 0u, "m");
+  }
+
+  pushOp(m_decorations, spv::OpDecorate, structTypeId, spv::DecorationBlock);
+
+  defDescriptor(op, structTypeId, spv::StorageClassUniform);
+  m_descriptorTypes.insert({ op.getDef(), structTypeId });
+}
+
+
+void SpirvBuilder::emitDclSrvUav(const ir::Op& op) {
+  auto kind = getResourceKind(op);
+
+  if (kind == ir::ResourceKind::eBufferRaw || kind == ir::ResourceKind::eBufferStructured) {
+    /* Create wrapper struct, much like this works for CBV */
+    auto structTypeId = defType(op.getType(), true);
+
+    if (!op.getType().isStructType()) {
+      structTypeId = defStructWrapper(structTypeId);
+
+      if (m_options.includeDebugNames)
+        setDebugMemberName(structTypeId, 0u, "m");
+    }
+
+    pushOp(m_decorations, spv::OpDecorate, structTypeId, spv::DecorationBlock);
+
+    defDescriptor(op, structTypeId, spv::StorageClassStorageBuffer);
+    m_descriptorTypes.insert({ op.getDef(), structTypeId });
+  } else {
+    dxbc_spv_assert(op.getType().isScalarType());
+
+    /* Scalar type used for image access operations */
+    SpirvImageTypeKey key = { };
+    key.sampledTypeId = getIdForType(op.getType());
+
+    /* Determine dimension based on resource kind */
+    bool isUav = op.getOpCode() == ir::OpCode::eDclUav;
+
+    key.dim = [&] {
+      switch (kind) {
+        case ir::ResourceKind::eBufferTyped: {
+          enableCapability(isUav
+            ? spv::CapabilityImageBuffer
+            : spv::CapabilitySampledBuffer);
+        } return spv::DimBuffer;
+
+        case ir::ResourceKind::eImage1D:
+        case ir::ResourceKind::eImage1DArray: {
+          enableCapability(isUav
+            ? spv::CapabilityImage1D
+            : spv::CapabilitySampled1D);
+        } return spv::Dim1D;
+
+        case ir::ResourceKind::eImage2D:
+        case ir::ResourceKind::eImage2DArray:
+        case ir::ResourceKind::eImage2DMS:
+        case ir::ResourceKind::eImage2DMSArray:
+          return spv::Dim2D;
+
+        case ir::ResourceKind::eImageCube:
+          return spv::DimCube;
+
+        case ir::ResourceKind::eImageCubeArray: {
+          enableCapability(spv::CapabilitySampledCubeArray);
+        } return spv::DimCube;
+
+        case ir::ResourceKind::eImage3D:
+          return spv::Dim3D;
+
+        default:
+          dxbc_spv_unreachable();
+          return spv::Dim();
+      }
+    } ();
+
+    /* Determine whether this is a sampled or storage image. */
+    key.sampled = isUav ? 2u : 1u;
+
+    /* Determine arrayed-ness and multisampled-ness */
+    key.arrayed = ir::resourceIsLayered(kind) ? 1u : 0u;
+    key.ms = ir::resourceIsMultisampled(kind) ? 1u : 0u;
+
+    /* Determine fixed image format for certain UAV use cases. */
+    key.format = spv::ImageFormatUnknown;
+
+    if (isUav) {
+      auto uavFlags = getUavFlags(op);
+
+      if (uavFlags & ir::UavFlag::eFixedFormat) {
+        key.format = [&] {
+          switch (op.getType().getBaseType(0u).getBaseType()) {
+            case ir::ScalarType::eF32: return spv::ImageFormatR32f;
+            case ir::ScalarType::eU32: return spv::ImageFormatR32ui;
+            case ir::ScalarType::eI32: return spv::ImageFormatR32i;
+
+            case ir::ScalarType::eU64: {
+              enableCapability(spv::CapabilityInt64ImageEXT);
+            } return spv::ImageFormatR64ui;
+
+            case ir::ScalarType::eI64: {
+              enableCapability(spv::CapabilityInt64ImageEXT);
+            } return spv::ImageFormatR64i;
+
+            default:
+              dxbc_spv_unreachable();
+          }
+        } ();
+      }
+
+      /* Enable without-format caps depending on resource access */
+      if (key.format == spv::ImageFormatUnknown) {
+        if (!(uavFlags & ir::UavFlag::eWriteOnly))
+          enableCapability(spv::CapabilityStorageImageReadWithoutFormat);
+        if (!(uavFlags & ir::UavFlag::eReadOnly))
+          enableCapability(spv::CapabilityStorageImageWriteWithoutFormat);
+      }
+    }
+
+    /* Declare actual image type and descriptor */
+    auto imageTypeId = getIdForImageType(key);
+
+    defDescriptor(op, imageTypeId, spv::StorageClassUniformConstant);
+    m_descriptorTypes.insert({ op.getDef(), imageTypeId });
+  }
+}
+
+
+void SpirvBuilder::emitDescriptorLoad(const ir::Op& op) {
+  const auto& dclOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  auto resourceId = getIdForDef(dclOp.getDef());
+
+  bool isBuffer = declaresPlainBufferResource(dclOp);
+  bool isArray = getDescriptorArraySize(dclOp) != 1u;
+
+  /* Resolve index into descriptor array */
+  uint32_t arrayIndexId = isArray ? getIdForDef(ir::SsaDef(op.getOperand(1u))) : 0u;
+
+  if (arrayIndexId && (op.getFlags() & ir::OpFlag::eNonUniform))
+    enableCapability(spv::CapabilityShaderNonUniform);
+
+  if (isBuffer) {
+    uint32_t id = getIdForDef(op.getDef());
+
+    auto storageClass = op.getType() == ir::ScalarType::eCbv
+      ? spv::StorageClassUniform
+      : spv::StorageClassStorageBuffer;
+
+    auto typeId = m_descriptorTypes.at(dclOp.getDef());
+    auto ptrTypeId = getIdForPtrType(typeId, storageClass);
+
+    if (!isArray) {
+      /* No access chain needed, chain into buffer directly */
+      setIdForDef(op.getDef(), resourceId);
+    } else {
+      /* Access chain into the descriptor array as necessary, then let
+       * subsequent access chain address the buffer element itself. */
+      m_code.push_back(makeOpcodeToken(spv::OpAccessChain, 5u));
+      m_code.push_back(ptrTypeId);
+      m_code.push_back(id);
+      m_code.push_back(resourceId);
+      m_code.push_back(arrayIndexId);
+    }
+  } else {
+    /* Loading image or sampler descriptors otuside of the block where they are used
+     * is technically against spec, but vkd3d-proton has been relying on this for
+     * years, so it should be safe to do. */
+    uint32_t id = getIdForDef(op.getDef());
+
+    auto typeId = m_descriptorTypes.at(dclOp.getDef());
+
+    auto ptrTypeId = getIdForPtrType(typeId, spv::StorageClassUniformConstant);
+    auto ptrId = resourceId;
+
+    if (arrayIndexId) {
+      ptrId = allocId();
+      pushOp(m_code, spv::OpAccessChain, ptrTypeId, ptrId, resourceId, arrayIndexId);
+    }
+
+    pushOp(m_code, spv::OpLoad, typeId, id, ptrId);
+
+    /* Decorate result as non-uniform as necessary */
+    if (op.getFlags() & ir::OpFlag::eNonUniform)
+      pushOp(m_decorations, spv::OpDecorate, id, spv::DecorationNonUniform);
+  }
+}
+
+
+void SpirvBuilder::emitBufferLoad(const ir::Op& op) {
+  /* Get op that loaded the descriptor, and the resource declaration */
+  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& dclOp = m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u)));
+
+  bool isUav = descriptorOp.getType() == ir::ScalarType::eUav;
+  bool isSparse = op.getFlags() & ir::OpFlag::eSparseFeedback;
+
+  if (isSparse)
+    enableCapability(spv::CapabilitySparseResidency);
+
+  auto id = getIdForDef(op.getDef());
+  auto addressDef = ir::SsaDef(op.getOperand(1u));
+
+  if (declaresPlainBufferResource(dclOp)) {
+    dxbc_spv_assert(!isSparse);
+
+    auto addressedType = traverseType(dclOp.getType(), addressDef);
+    auto accessType = op.getType();
+
+    dxbc_spv_assert(addressedType == accessType ||
+      (addressedType.isScalarType() && accessType.isVectorType()));
+
+    /* Set up memory operands depending on the resource type */
+    SpirvMemoryOperands memoryOperands = { };
+
+    if (isUav) {
+      auto uavFlags = getUavFlags(dclOp);
+
+      if (!(uavFlags & ir::UavFlag::eReadOnly)) {
+        memoryOperands.flags |= spv::MemoryAccessNonPrivatePointerMask
+                             |  spv::MemoryAccessMakePointerVisibleMask;
+        memoryOperands.makeVisible = makeConstU32((uavFlags & ir::UavFlag::eCoherent)
+          ? spv::ScopeQueueFamily : spv::ScopeWorkgroup);
+      }
+    }
+
+    /* Emit access chains for loading the requested data. */
+    util::small_vector<uint32_t, 4u> loadIds;
+
+    auto storageClass = descriptorOp.getType() == ir::ScalarType::eCbv
+      ? spv::StorageClassUniform
+      : spv::StorageClassStorageBuffer;
+
+    bool hasWrapperStruct = !dclOp.getType().isStructType();
+
+    if (m_options.nvRawAccessChains && descriptorOp.getType() != ir::ScalarType::eCbv) {
+      loadIds.push_back(emitRawAccessChainNv(storageClass, accessType, dclOp,
+        getIdForDef(descriptorOp.getDef()), addressDef));
+
+      memoryOperands.flags |= spv::MemoryAccessAlignedMask;
+      memoryOperands.alignment = uint32_t(op.getOperand(2u));
+
+      addressedType = accessType;
+    } else if (addressedType == accessType) {
+      /* Trivial case, we can emit a single load. */
+      loadIds.push_back(emitAccessChain(storageClass, dclOp.getType(),
+        getIdForDef(descriptorOp.getDef()), addressDef, 0u, hasWrapperStruct));
+    } else {
+      /* Need to emit multiple loads and assemble a vector later. */
+      for (uint32_t i = 0u; i < accessType.getBaseType(0u).getVectorSize(); i++) {
+        loadIds.push_back(emitAccessChain(storageClass, dclOp.getType(),
+          getIdForDef(descriptorOp.getDef()), addressDef, i, hasWrapperStruct));
+      }
+    }
+
+    /* Decorate access chains as nonuniform as necessary */
+    if (descriptorOp.getFlags() & ir::OpFlag::eNonUniform) {
+      for (auto& accessId : loadIds)
+        pushOp(m_decorations, spv::OpDecorate, accessId, spv::DecorationNonUniform);
+    }
+
+    /* Emit actual loads. */
+    for (auto& accessId : loadIds) {
+      uint32_t loadId = loadIds.size() > 1u ? allocId() : id;
+
+      m_code.push_back(makeOpcodeToken(spv::OpLoad, 4u + memoryOperands.computeDwordCount()));
+      m_code.push_back(getIdForType(addressedType));
+      m_code.push_back(loadId);
+      m_code.push_back(accessId);
+      memoryOperands.pushTo(m_code);
+
+      accessId = loadId;
+    }
+
+    /* Assemble composite if necessary */
+    if (loadIds.size() > 1u) {
+      m_code.push_back(makeOpcodeToken(spv::OpCompositeConstruct, 3u + loadIds.size()));
+      m_code.push_back(getIdForType(accessType));
+      m_code.push_back(id);
+
+      for (auto loadId : loadIds)
+        m_code.push_back(loadId);
+    }
+  } else {
+    /* Set up image operands analogous to the memory operands above */
+    SpirvImageOperands imageOperands = { };
+
+    if (isUav) {
+      auto uavFlags = getUavFlags(dclOp);
+
+      if (!(uavFlags & ir::UavFlag::eReadOnly)) {
+        imageOperands.flags |= spv::ImageOperandsNonPrivateTexelMask
+                            |  spv::ImageOperandsMakeTexelVisibleMask;
+        imageOperands.makeVisible = makeConstU32((uavFlags & ir::UavFlag::eCoherent)
+          ? spv::ScopeQueueFamily : spv::ScopeWorkgroup);
+      }
+    }
+
+    /* Select correct opcode to emit */
+    auto opCode = isUav
+      ? (isSparse ? spv::OpImageSparseRead : spv::OpImageRead)
+      : (isSparse ? spv::OpImageSparseFetch : spv::OpImageFetch);
+
+    m_code.push_back(makeOpcodeToken(opCode, 5u + imageOperands.computeDwordCount()));
+    m_code.push_back(getIdForType(op.getType()));
+    m_code.push_back(id);
+    m_code.push_back(getIdForDef(descriptorOp.getDef()));
+    m_code.push_back(getIdForDef(addressDef));
+    imageOperands.pushTo(m_code);
+  }
+
+  emitDebugName(op.getDef(), id);
+}
+
+
+void SpirvBuilder::emitBufferStore(const ir::Op& op) {
+  /* TODO implement */
+  dxbc_spv_unreachable();
+}
+
+
+void SpirvBuilder::emitBufferQuery(const ir::Op& op) {
+  /* Get op that loaded the descriptor, and the resource declaration */
+  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& dclOp = m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u)));
+
+  auto id = getIdForDef(op.getDef());
+
+  if (declaresPlainBufferResource(dclOp)) {
+    pushOp(m_code, spv::OpArrayLength,
+      getIdForType(op.getType()), id,
+      getIdForDef(descriptorOp.getDef()), 0u);
+  } else {
+    enableCapability(spv::CapabilityImageQuery);
+
+    pushOp(m_code, spv::OpImageQuerySize,
+      getIdForType(op.getType()), id,
+      getIdForDef(descriptorOp.getDef()));
+  }
+}
+
+
+void SpirvBuilder::emitConvert(const ir::Op& op) {
+  /* Everything can be a vector here */
+  dxbc_spv_assert(op.getType().isBasicType());
+
+  const auto& srcOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  dxbc_spv_assert(srcOp.getType().isBasicType());
+
+  auto srcId = getIdForDef(srcOp.getDef());
+
+  spv::Op spvOp = [&] {
+    const auto& dstType = op.getType().getBaseType(0u);
+    const auto& srcType = srcOp.getType().getBaseType(0u);
+
+    switch (op.getOpCode()) {
+      case ir::OpCode::eCast:
+        return spv::OpBitcast;
+
+      case ir::OpCode::eConvertFtoF:
+        return spv::OpFConvert;
+
+      case ir::OpCode::eConvertFtoI:
+        return dstType.isSignedIntType()
+          ? spv::OpConvertFToS
+          : spv::OpConvertFToU;
+
+      case ir::OpCode::eConvertItoF:
+        return srcType.isSignedIntType()
+          ? spv::OpConvertSToF
+          : spv::OpConvertUToF;
+
+      case ir::OpCode::eConvertItoI: {
+        if (srcType.byteSize() == dstType.byteSize())
+          return spv::OpBitcast;
+
+        if (srcType.isSignedIntType())
+          return spv::OpSConvert;
+
+        if (dstType.isUnsignedIntType())
+          return spv::OpUConvert;
+
+        /* Cursed case where we do a zero-extension on a signed type. SPIR-V requires
+         * OpUConvert to have an unsigned destination type, so we need to insert a
+         * signed conversion into a bitcast here. */
+        ir::ScalarType unsignedType = dstType.getBaseType();
+
+        switch (dstType.getBaseType()) {
+          case ir::ScalarType::eI8:  unsignedType = ir::ScalarType::eU8; break;
+          case ir::ScalarType::eI16: unsignedType = ir::ScalarType::eU16; break;
+          case ir::ScalarType::eI32: unsignedType = ir::ScalarType::eU32; break;
+          case ir::ScalarType::eI64: unsignedType = ir::ScalarType::eU64; break;
+          default:
+            dxbc_spv_unreachable();
+        }
+
+        auto tmpTypeId = getIdForType(ir::BasicType(unsignedType, srcType.getVectorSize()));
+        auto tmpId = allocId();
+
+        pushOp(m_code, spv::OpUConvert, tmpTypeId, tmpId, srcId);
+
+        srcId = tmpId;
+        return spv::OpBitcast;
+      }
+
+      default:
+        dxbc_spv_unreachable();
+        return spv::Op();
+    }
+  } ();
+
+  auto dstTypeId = getIdForType(op.getType());
+  auto dstId = getIdForDef(op.getDef());
+
+  pushOp(m_code, spvOp, dstTypeId, dstId, srcId);
+}
+
+
 void SpirvBuilder::emitLabel(const ir::Op& op) {
   m_structure.blockLabel = op;
 
@@ -781,74 +1219,218 @@ void SpirvBuilder::emitFunctionEnd() {
 }
 
 
-uint32_t SpirvBuilder::emitAccessChain(spv::StorageClass storageClass, ir::SsaDef base, ir::SsaDef address) {
-  if (!address)
-    return getIdForDef(base);
+uint32_t SpirvBuilder::emitAddressOffset(ir::SsaDef def, uint32_t offset) {
+  if (!offset)
+    return getIdForDef(def);
+
+  const auto& op = m_builder.getOp(def);
+  dxbc_spv_assert(op.getType().isScalarType());
+
+  if (op.isConstant())
+    return makeConstU32(uint32_t(op.getOperand(0u)) + offset);
+
+  uint32_t typeId = getIdForType(op.getType());
+  uint32_t id = allocId();
+
+  pushOp(m_code, spv::OpIAdd, typeId, id, getIdForDef(def), makeConstU32(offset));
+  return id;
+}
+
+
+uint32_t SpirvBuilder::emitAccessChain(spv::StorageClass storageClass, const ir::Type& baseType,
+    uint32_t baseId, ir::SsaDef address, uint32_t offset, bool wrapperStruct) {
+  if (!address && !wrapperStruct)
+    return baseId;
 
   /* Declare resulting pointer type */
-  auto pointeeType = traverseType(m_builder.getOp(base).getType(), address);
+  auto pointeeType = traverseType(baseType, address);
   auto ptrTypeId = getIdForPtrType(getIdForType(pointeeType), storageClass);
+
+  /* Allocate access chain */
+  auto accessChainId = allocId();
 
   /* Ensure that the address is an integer scalar or vector.
    * We already validated everything when traversing the type. */
   const auto& addressOp = m_builder.getOp(address);
   auto addressType = addressOp.getType().getBaseType(0u);
 
-  /* Allocate access chain */
-  auto accessChainId = allocId();
+  /* Number of operands for access chains */
+  util::small_vector<uint32_t, 5u> indexIds;
 
-  if (addressType.isScalar()) {
+  if (wrapperStruct)
+    indexIds.push_back(makeConstU32(0u));
+
+  if (!address) {
+    /* Nothing to do in this case, just unwrap the struct */
+  } else if (addressType.isScalar()) {
     /* Scalar operand, can use directly no matter what it is. */
-    pushOp(m_code, spv::OpAccessChain, ptrTypeId, accessChainId,
-      getIdForDef(base), getIdForDef(address));
+    indexIds.push_back(emitAddressOffset(address, offset));
   } else if (addressOp.isConstant()) {
     /* Unroll constant operands if possible */
-    util::small_vector<uint32_t, 4u> indexIds;
+    for (uint32_t i = 0u; i < addressType.getVectorSize(); i++) {
+      auto constantValue = uint32_t(addressOp.getOperand(i));
 
-    for (uint32_t i = 0u; i < addressType.getVectorSize(); i++)
-      indexIds.push_back(makeConstU32(uint32_t(addressOp.getOperand(i))));
+      if (i + 1u == addressType.getVectorSize())
+        constantValue += offset;
 
-    /* Emit actual access chain instruction */
-    m_code.push_back(makeOpcodeToken(spv::OpAccessChain, 4u + addressType.getVectorSize()));
-    m_code.push_back(ptrTypeId);
-    m_code.push_back(accessChainId);
-    m_code.push_back(getIdForDef(base));
-
-    for (auto index : indexIds)
-      m_code.push_back(index);
+      indexIds.push_back(makeConstU32(constantValue));
+    }
   } else if (addressOp.getOpCode() == ir::OpCode::eCompositeConstruct) {
     /* Unroll vector operands if possible */
-    m_code.push_back(makeOpcodeToken(spv::OpAccessChain, 4u + addressType.getVectorSize()));
-    m_code.push_back(ptrTypeId);
-    m_code.push_back(accessChainId);
-    m_code.push_back(getIdForDef(base));
+    for (uint32_t i = 0u; i < addressType.getVectorSize(); i++) {
+      auto def = ir::SsaDef(addressOp.getOperand(i));
 
-    for (uint32_t i = 0u; i < addressType.getVectorSize(); i++)
-      m_code.push_back(getIdForDef(ir::SsaDef(addressOp.getOperand(i))));
+      uint32_t id = (i + 1u == addressType.getVectorSize())
+        ? emitAddressOffset(def, offset)
+        : getIdForDef(def);
+
+      indexIds.push_back(id);
+    }
   } else {
     /* Dynamically extract vector components */
-    util::small_vector<uint32_t, 4u> indexIds;
-
     auto scalarTypeId = getIdForType(addressType.getBaseType());
     auto addressId = getIdForDef(address);
 
     for (uint32_t i = 0u; i < addressType.getVectorSize(); i++) {
       uint32_t componentId = allocId();
       pushOp(m_code, spv::OpCompositeExtract, scalarTypeId, componentId, addressId, i);
-      indexIds.push_back(componentId);
-    }
 
-    /* Emit actual access chain instruction */
-    m_code.push_back(makeOpcodeToken(spv::OpAccessChain, 4u + addressType.getVectorSize()));
-    m_code.push_back(ptrTypeId);
-    m_code.push_back(accessChainId);
-    m_code.push_back(getIdForDef(base));
+      if (i + 1u == addressType.getVectorSize() && offset) {
+        auto offsetId = allocId();
+
+        pushOp(m_code, spv::OpIAdd, scalarTypeId, offsetId,
+          componentId, makeConstU32(offset));
+
+        indexIds.push_back(offsetId);
+      } else {
+        indexIds.push_back(componentId);
+      }
+    }
+  }
+
+  /* Emit actual access chain instruction */
+  m_code.push_back(makeOpcodeToken(spv::OpAccessChain, 4u + indexIds.size()));
+  m_code.push_back(ptrTypeId);
+  m_code.push_back(accessChainId);
+  m_code.push_back(baseId);
 
     for (auto index : indexIds)
       m_code.push_back(index);
-  }
 
   return accessChainId;
+}
+
+
+uint32_t SpirvBuilder::emitRawStrutcuredElementAddress(const ir::Op& op, uint32_t depth, uint32_t stride) {
+  dxbc_spv_assert(op.getType().isBasicType());
+
+  if (op.isConstant())
+    return makeConstU32(uint32_t(op.getOperand(depth)) * stride);
+
+  auto baseId = 0u;
+
+  if (op.getType().isScalarType()) {
+    /* Use scalar index type as-is */
+    baseId = getIdForDef(op.getDef());
+  } else if (op.getOpCode() == ir::OpCode::eCompositeConstruct) {
+    /* Resolve constants in composites directly */
+    const auto& componentOp = m_builder.getOp((ir::SsaDef(op.getOperand(depth))));
+
+    if (componentOp.isConstant())
+      return makeConstU32(uint32_t(componentOp.getOperand(0u)) * stride);
+
+    baseId = getIdForDef(componentOp.getDef());
+  } else {
+    /* Extract component */
+    baseId = allocId();
+
+    pushOp(m_code, spv::OpCompositeExtract,
+      getIdForType(op.getType().getSubType(0u)), baseId,
+      getIdForDef(op.getDef()), depth);
+  }
+
+  if (stride == 1u)
+    return baseId;
+
+  /* Multiply index value with stride if necessary */
+  auto id = allocId();
+
+  pushOp(m_code, spv::OpIMul,
+    getIdForType(ir::ScalarType::eU32), id,
+    baseId, makeConstU32(stride));
+
+  return id;
+}
+
+
+uint32_t SpirvBuilder::emitRawAccessChainNv(spv::StorageClass storageClass, const ir::Type& type, const ir::Op& resourceOp, uint32_t baseId, ir::SsaDef address) {
+  enableCapability(spv::CapabilityRawAccessChainsNV);
+
+  const auto& addressOp = m_builder.getOp(address);
+
+  /* We can load and store any suitable scalar or vector type directly */
+  auto ptrTypeId = getIdForPtrType(getIdForType(type), storageClass);
+  auto id = allocId();
+
+  /* Resource declarations must be an array or nested array */
+  dxbc_spv_assert(resourceOp.getType().isUnboundedArray());
+
+  auto kind = getResourceKind(resourceOp);
+
+  if (kind == ir::ResourceKind::eBufferRaw) {
+    dxbc_spv_assert(resourceOp.getType().getSubType(0u).isScalarType());
+    dxbc_spv_assert(addressOp.getType().isScalarType());
+
+    /* Compute byte offset from the given element index */
+    auto byteOffsetId = emitRawStrutcuredElementAddress(addressOp, 0u,
+      resourceOp.getType().getSubType(0u).byteSize());
+
+    auto nullId = makeConstU32(0u);
+
+    pushOp(m_code, spv::OpRawAccessChainNV, ptrTypeId,
+      id, baseId, nullId, nullId, byteOffsetId,
+      spv::RawAccessChainOperandsRobustnessPerComponentNVMask);
+  } else if (kind == ir::ResourceKind::eBufferStructured) {
+    dxbc_spv_assert(addressOp.getType().isVectorType());
+
+    /* Compute byte size of the structure based on the resource type */
+    auto structureType = resourceOp.getType().getSubType(0u);
+    dxbc_spv_assert(structureType.isSizedArray());
+
+    auto strideId = makeConstU32(structureType.byteSize());
+
+    /* Compute structure index and byte offset into the structure */
+    auto elementId = emitRawStrutcuredElementAddress(addressOp, 0u, 1u);
+    auto byteOffsetId = emitRawStrutcuredElementAddress(addressOp, 1u,
+      structureType.getSubType(0u).byteSize());
+
+    pushOp(m_code, spv::OpRawAccessChainNV, ptrTypeId,
+      id, baseId, strideId, elementId, byteOffsetId,
+      spv::RawAccessChainOperandsRobustnessPerElementNVMask);
+  } else {
+    /* Invalid kind */
+    dxbc_spv_unreachable();
+  }
+
+  return id;
+}
+
+
+uint32_t SpirvBuilder::emitAccessChain(spv::StorageClass storageClass, ir::SsaDef base, ir::SsaDef address) {
+  const auto& baseOp = m_builder.getOp(base);
+
+  return emitAccessChain(storageClass, baseOp.getType(), getIdForDef(baseOp.getDef()), address, 0u, false);
+}
+
+
+void SpirvBuilder::emitCheckSparseAccess(const ir::Op& op) {
+  auto id = getIdForDef(op.getDef());
+
+  pushOp(m_code, spv::OpImageSparseTexelsResident,
+    getIdForType(op.getType()), id,
+    getIdForDef(ir::SsaDef(op.getOperand(0u))));
+
+  emitDebugName(op.getDef(), id);
 }
 
 
@@ -899,16 +1481,19 @@ void SpirvBuilder::emitLoadVariable(const ir::Op& op) {
 
   auto id = getIdForDef(op.getDef());
 
-  if (op.getOpCode() == ir::OpCode::eLdsLoad) {
-    uint32_t scopeId = makeConstU32(spv::ScopeWorkgroup);
+  SpirvMemoryOperands memoryOperands = { };
 
-    pushOp(m_code, spv::OpLoad, typeId, id, accessChainId,
-      spv::MemoryAccessNonPrivatePointerMask |
-      spv::MemoryAccessMakePointerAvailableMask,
-      scopeId);
-  } else {
-    pushOp(m_code, spv::OpLoad, typeId, id, accessChainId);
+  if (op.getOpCode() == ir::OpCode::eLdsLoad) {
+    memoryOperands.flags |= spv::MemoryAccessNonPrivatePointerMask
+                         |  spv::MemoryAccessMakePointerVisibleMask;
+    memoryOperands.makeVisible = makeConstU32(spv::ScopeWorkgroup);
   }
+
+  m_code.push_back(makeOpcodeToken(spv::OpLoad, 4u + memoryOperands.computeDwordCount()));
+  m_code.push_back(typeId);
+  m_code.push_back(id);
+  m_code.push_back(accessChainId);
+  memoryOperands.pushTo(m_code);
 
   emitDebugName(op.getDef(), id);
 }
@@ -922,16 +1507,18 @@ void SpirvBuilder::emitStoreVariable(const ir::Op& op) {
 
   auto valueId = getIdForDef(ir::SsaDef(op.getOperand(2u)));
 
-  if (op.getOpCode() == ir::OpCode::eLdsStore) {
-    uint32_t scopeId = makeConstU32(spv::ScopeWorkgroup);
+  SpirvMemoryOperands memoryOperands = { };
 
-    pushOp(m_code, spv::OpStore, accessChainId, valueId,
-      spv::MemoryAccessNonPrivatePointerMask |
-      spv::MemoryAccessMakePointerVisibleMask,
-      scopeId);
-  } else {
-    pushOp(m_code, spv::OpStore, accessChainId, valueId);
+  if (op.getOpCode() == ir::OpCode::eLdsStore) {
+    memoryOperands.flags |= spv::MemoryAccessNonPrivatePointerMask
+                         |  spv::MemoryAccessMakePointerAvailableMask;
+    memoryOperands.makeAvailable = makeConstU32(spv::ScopeWorkgroup);
   }
+
+  m_code.push_back(makeOpcodeToken(spv::OpStore, 3u + memoryOperands.computeDwordCount()));
+  m_code.push_back(accessChainId);
+  m_code.push_back(valueId);
+  memoryOperands.pushTo(m_code);
 }
 
 
@@ -1065,6 +1652,19 @@ uint32_t SpirvBuilder::importGlslExt() {
 
 uint32_t SpirvBuilder::allocId() {
   return m_header.boundIds++;
+}
+
+
+void SpirvBuilder::setIdForDef(ir::SsaDef def, uint32_t id) {
+  if (!def)
+    return;
+
+  uint32_t defId = def.getId();
+
+  if (defId >= m_ssaDefsToId.size())
+    m_ssaDefsToId.resize(defId + 1u);
+
+  m_ssaDefsToId[defId] = id;
 }
 
 
@@ -1213,6 +1813,63 @@ uint32_t SpirvBuilder::defType(const ir::Type& type, bool explicitLayout) {
 }
 
 
+uint32_t SpirvBuilder::defStructWrapper(uint32_t typeId) {
+  uint32_t id = allocId();
+
+  pushOp(m_declarations, spv::OpTypeStruct, id, typeId);
+  pushOp(m_decorations, spv::OpMemberDecorate, id, 0u,
+    spv::DecorationOffset, 0u);
+
+  return id;
+}
+
+
+uint32_t SpirvBuilder::defDescriptor(const ir::Op& op, uint32_t typeId, spv::StorageClass storageClass) {
+  uint32_t arraySize = getDescriptorArraySize(op);
+
+  if (arraySize != 1u) {
+    auto id = allocId();
+
+    if (arraySize)
+      pushOp(m_declarations, spv::OpTypeArray, id, typeId, makeConstU32(arraySize));
+    else
+      pushOp(m_declarations, spv::OpTypeRuntimeArray, id, typeId);
+
+    typeId = id;
+  }
+
+  auto ptrTypeId = getIdForPtrType(typeId, storageClass);
+  auto varId = getIdForDef(op.getDef());
+
+  pushOp(m_declarations, spv::OpVariable, ptrTypeId, varId, storageClass);
+
+  /* TODO map binding / set */
+  auto spaceId = uint32_t(op.getOperand(1u));
+  auto regId = uint32_t(op.getOperand(2u));
+
+  pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationDescriptorSet, spaceId);
+  pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationBinding, regId);
+
+  /* Declare resource as read-only or write-only as necessary */
+  if (op.getOpCode() == ir::OpCode::eDclSrv && declaresPlainBufferResource(op))
+    pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationNonWritable);
+
+  if (op.getOpCode() == ir::OpCode::eDclUav) {
+    auto uavFlags = getUavFlags(op);
+
+    if (uavFlags & ir::UavFlag::eReadOnly)
+      pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationNonWritable);
+    if (uavFlags & ir::UavFlag::eWriteOnly)
+      pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationNonReadable);
+  }
+
+  emitDebugName(op.getDef(), varId);
+
+  addEntryPointId(varId);
+  return varId;
+}
+
+
 uint32_t SpirvBuilder::getIdForPtrType(uint32_t typeId, spv::StorageClass storageClass) {
   SpirvPointerTypeKey key = { typeId, storageClass };
 
@@ -1253,6 +1910,23 @@ uint32_t SpirvBuilder::getIdForFuncType(const SpirvFunctionTypeKey& key) {
     m_declarations.push_back(t);
 
   m_funcTypes.insert({ key, id });
+  return id;
+}
+
+
+uint32_t SpirvBuilder::getIdForImageType(const SpirvImageTypeKey& key) {
+  auto entry = m_imageTypes.find(key);
+
+  if (entry != m_imageTypes.end())
+    return entry->second;
+
+  uint32_t id = allocId();
+
+  pushOp(m_declarations, spv::OpTypeImage, id,
+    key.sampledTypeId, uint32_t(key.dim), 0u, /* depth */
+    key.arrayed, key.ms, key.sampled, uint32_t(key.format));
+
+  m_imageTypes.insert({ key, id });
   return id;
 }
 
@@ -1465,6 +2139,34 @@ void SpirvBuilder::addEntryPointId(uint32_t id) {
 }
 
 
+bool SpirvBuilder::declaresPlainBufferResource(ir::Op op) {
+  if (op.getOpCode() == ir::OpCode::eDclCbv ||
+      op.getOpCode() == ir::OpCode::eDclUavCounter)
+    return true;
+
+  if (op.getOpCode() == ir::OpCode::eDclSrv ||
+      op.getOpCode() == ir::OpCode::eDclUav) {
+    auto kind = getResourceKind(op);
+
+    return kind == ir::ResourceKind::eBufferStructured ||
+           kind == ir::ResourceKind::eBufferRaw;
+  }
+
+  return false;
+}
+
+
+uint32_t SpirvBuilder::getDescriptorArraySize(ir::Op op) {
+  dxbc_spv_assert(op.getOpCode() == ir::OpCode::eDclCbv ||
+                  op.getOpCode() == ir::OpCode::eDclSrv ||
+                  op.getOpCode() == ir::OpCode::eDclUav ||
+                  op.getOpCode() == ir::OpCode::eDclUavCounter ||
+                  op.getOpCode() == ir::OpCode::eDclSampler);
+
+  return uint32_t(op.getOperand(3u));
+}
+
+
 ir::Type SpirvBuilder::traverseType(ir::Type type, ir::SsaDef address) const {
   if (!address)
     return type;
@@ -1507,6 +2209,18 @@ ir::Type SpirvBuilder::traverseType(ir::Type type, ir::SsaDef address) const {
 
     return type;
   }
+}
+
+
+ir::UavFlags SpirvBuilder::getUavFlags(const ir::Op& op) {
+  dxbc_spv_assert(op.getOpCode() == ir::OpCode::eDclUav);
+  return ir::UavFlags(op.getOperand(5u));
+}
+
+
+ir::ResourceKind SpirvBuilder::getResourceKind(const ir::Op& op) {
+  dxbc_spv_assert(op.getOpCode() == ir::OpCode::eDclSrv || op.getOpCode() == ir::OpCode::eDclUav);
+  return ir::ResourceKind(op.getOperand(4u));
 }
 
 
