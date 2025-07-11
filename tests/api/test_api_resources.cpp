@@ -218,6 +218,26 @@ Builder make_test_buffer_load(ResourceKind kind, bool uav, bool indexed) {
   builder.add(Op::Semantic(output1Def, 1u, "SV_TARGET"));
   builder.add(Op::OutputStore(output1Def, SsaDef(), data1));
 
+  if (kind == ResourceKind::eBufferStructured) {
+    auto type = BasicType(ScalarType::eU32, 4u);
+
+    auto index2 = builder.makeConstant(16u, 11u);
+    auto data2 = builder.add(Op::BufferLoad(type, descriptor, index2, 4u));
+
+    auto output2Def = builder.add(Op::DclOutput(type, entryPoint, 2u, 0u));
+    builder.add(Op::Semantic(output2Def, 2u, "SV_TARGET"));
+    builder.add(Op::OutputStore(output2Def, SsaDef(), data2));
+  }
+
+  if (kind != ResourceKind::eBufferTyped) {
+    auto type = BasicType(ScalarType::eU32, 1u);
+    auto data3 = builder.add(Op::BufferLoad(type, descriptor, index0, 4u));
+
+    auto output3Def = builder.add(Op::DclOutput(type, entryPoint, 3u, 0u));
+    builder.add(Op::Semantic(output3Def, 3u, "SV_TARGET"));
+    builder.add(Op::OutputStore(output3Def, SsaDef(), data3));
+  }
+
   builder.add(Op::Return());
   return builder;
 }
@@ -250,19 +270,23 @@ Builder make_test_buffer_store(ResourceKind kind, bool indexed) {
 
   Type type = kind == ResourceKind::eBufferTyped
     ? BasicType(ScalarType::eF32, 4u)
-    : BasicType(ScalarType::eU32, 2u);
+    : BasicType(ScalarType::eU32, 3u);
 
   SsaDef value = kind == ResourceKind::eBufferTyped
     ? builder.add(Op::CompositeConstruct(type,
         builder.makeConstant(1.0f), builder.makeConstant(2.0f),
         builder.makeConstant(3.0f), builder.makeConstant(4.0f)))
     : builder.add(Op::CompositeConstruct(type,
-        builder.makeConstant(1u), builder.makeConstant(2u)));
+        builder.makeConstant(1u), builder.makeConstant(2u),
+        builder.makeConstant(3u)));
 
   builder.add(Op::BufferStore(descriptor, index0, value,
     kind == ResourceKind::eBufferTyped ? 0u : 4u));
   builder.add(Op::BufferStore(descriptor, index1, value,
     kind == ResourceKind::eBufferTyped ? 0u : 4u));
+
+  if (kind != ResourceKind::eBufferTyped)
+    builder.add(Op::BufferStore(descriptor, index1, builder.makeConstant(6u), 4u));
 
   builder.add(Op::Return());
   return builder;
