@@ -135,6 +135,12 @@ private:
 
   void emitBufferAtomic(const ir::Op& op);
 
+  void emitImageQuerySize(const ir::Op& op);
+
+  void emitImageQueryMips(const ir::Op& op);
+
+  void emitImageQuerySamples(const ir::Op& op);
+
   void emitConvert(const ir::Op& op);
 
   void emitAtomic(const ir::Op& op, const ir::Type& type, uint32_t operandIndex,
