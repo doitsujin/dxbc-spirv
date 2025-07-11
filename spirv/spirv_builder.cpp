@@ -193,6 +193,15 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eCompositeConstruct:
       return emitCompositeConstruct(op);
 
+    case ir::OpCode::eImageQuerySize:
+      return emitImageQuerySize(op);
+
+    case ir::OpCode::eImageQueryMips:
+      return emitImageQueryMips(op);
+
+    case ir::OpCode::eImageQuerySamples:
+      return emitImageQuerySamples(op);
+
     case ir::OpCode::eCheckSparseAccess:
       return emitCheckSparseAccess(op);
 
@@ -273,9 +282,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eMemoryAtomic:
     case ir::OpCode::eImageLoad:
     case ir::OpCode::eImageStore:
-    case ir::OpCode::eImageQuerySize:
-    case ir::OpCode::eImageQueryMips:
-    case ir::OpCode::eImageQuerySamples:
     case ir::OpCode::eImageSample:
     case ir::OpCode::eImageGather:
     case ir::OpCode::eImageComputeLod:
@@ -1113,6 +1119,131 @@ void SpirvBuilder::emitBufferAtomic(const ir::Op& op) {
     emitAtomic(op, type, 2u, ptrId, spv::ScopeQueueFamily,
       spv::MemorySemanticsImageMemoryMask);
   }
+}
+
+
+void SpirvBuilder::emitImageQuerySize(const ir::Op& op) {
+  enableCapability(spv::CapabilityImageQuery);
+
+  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& dclOp = m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u)));
+
+  auto kind = getResourceKind(dclOp);
+
+  /* Use image dimension rather than component counts, they differ for cubes */
+  uint32_t sizeDimensions = ir::resourceDimensions(kind);
+
+  auto sizeType = op.getType().getSubType(0u);
+  dxbc_spv_assert(sizeType.isBasicType());
+
+  auto scalarType = sizeType.getBaseType(0u).getBaseType();
+  auto layerType = op.getType().getSubType(1u);
+  dxbc_spv_assert(layerType == scalarType);
+
+  /* SPIR-V returns a vector with the layer count in the last component. We also
+   * need to specify the mip level to query for resources that can support mips. */
+  uint32_t queryComponents = sizeDimensions + (resourceIsLayered(kind) ? 1u : 0u);
+
+  auto queryTypeId = getIdForType(ir::BasicType(sizeType.getBaseType(0u).getBaseType(), queryComponents));
+  auto queryId = allocId();
+
+  if (descriptorOp.getType() == ir::ScalarType::eSrv && !resourceIsMultisampled(kind)) {
+    auto mipDef = ir::SsaDef(op.getOperand(1u));
+
+    dxbc_spv_assert(mipDef);
+
+    pushOp(m_code, spv::OpImageQuerySizeLod, queryTypeId, queryId,
+      getIdForDef(descriptorOp.getDef()), getIdForDef(mipDef));
+  } else {
+    pushOp(m_code, spv::OpImageQuerySize,
+      queryTypeId, queryId, getIdForDef(descriptorOp.getDef()));
+  }
+
+  uint32_t sizeId, layerId;
+
+  if (resourceIsLayered(kind)) {
+    /* Extract size vector */
+    auto sizeTypeId = getIdForType(sizeType);
+    sizeId = allocId();
+
+    if (sizeDimensions > 1u) {
+      m_code.push_back(makeOpcodeToken(spv::OpVectorShuffle, 5u + sizeDimensions));
+      m_code.push_back(sizeTypeId);
+      m_code.push_back(sizeId);
+      m_code.push_back(queryId);
+      m_code.push_back(queryId);
+
+      for (uint32_t i = 0u; i < sizeDimensions; i++)
+        m_code.push_back(i);
+    } else {
+      pushOp(m_code, spv::OpCompositeExtract, sizeTypeId,
+        sizeId, queryId, 0u);
+    }
+
+    /* Extract layer count */
+    auto layerTypeId = getIdForType(layerType);
+    layerId = allocId();
+
+    pushOp(m_code, spv::OpCompositeExtract, layerTypeId,
+      layerId, queryId, sizeDimensions);
+  } else {
+    /* Assign constant 1 as the layer count and use size as-is */
+    auto layerTypeId = getIdForType(layerType);
+
+    SpirvConstant constant = { };
+    constant.op = spv::OpConstant;
+    constant.typeId = layerTypeId;
+    constant.constituents[0u] = 1u;
+
+    sizeId = queryId;
+    layerId = getIdForConstant(constant, 1u);
+  }
+
+  /* Assemble final result struct */
+  auto resultTypeId = getIdForType(op.getType());
+  auto id = getIdForDef(op.getDef());
+
+  pushOp(m_code, spv::OpCompositeConstruct,
+    resultTypeId, id, sizeId, layerId);
+
+  emitDebugName(op.getDef(), id);
+}
+
+
+void SpirvBuilder::emitImageQueryMips(const ir::Op& op) {
+  enableCapability(spv::CapabilityImageQuery);
+
+  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+
+  dxbc_spv_assert(descriptorOp.getType() == ir::ScalarType::eSrv);
+  dxbc_spv_assert(!resourceIsMultisampled(getResourceKind(
+    m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u))))));
+
+  auto id = getIdForDef(op.getDef());
+
+  pushOp(m_code, spv::OpImageQueryLevels,
+    getIdForType(op.getType()), id,
+    getIdForDef(descriptorOp.getDef()));
+
+  emitDebugName(op.getDef(), id);
+}
+
+
+void SpirvBuilder::emitImageQuerySamples(const ir::Op& op) {
+  enableCapability(spv::CapabilityImageQuery);
+
+  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+
+  dxbc_spv_assert(resourceIsMultisampled(getResourceKind(
+    m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u))))));
+
+  auto id = getIdForDef(op.getDef());
+
+  pushOp(m_code, spv::OpImageQuerySamples,
+    getIdForType(op.getType()), id,
+    getIdForDef(descriptorOp.getDef()));
+
+  emitDebugName(op.getDef(), id);
 }
 
 
