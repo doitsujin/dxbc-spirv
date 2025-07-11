@@ -170,16 +170,21 @@ SsaDef emit_buffer_descriptor(Builder& builder, SsaDef entryPoint, ResourceKind 
   return builder.add(op);
 }
 
-SsaDef emit_buffer_load_store_address(Builder& builder, SsaDef entryPoint, ResourceKind kind) {
+SsaDef emit_buffer_load_store_address(Builder& builder, SsaDef entryPoint, ResourceKind kind, bool dynamic) {
   auto inputDef = builder.add(Op::DclInput(BasicType(ScalarType::eU32, 2u), entryPoint, 0u, 0u, InterpolationMode::eFlat));
   builder.add(Op::Semantic(inputDef, 0u, "BUFFER_ADDRESS"));
 
-  auto index = builder.add(Op::InputLoad(ScalarType::eU32, inputDef, builder.makeConstant(0u)));
+  auto index = dynamic
+    ? builder.add(Op::InputLoad(ScalarType::eU32, inputDef, builder.makeConstant(0u)))
+    : builder.makeConstant(7u);
 
   if (kind == ResourceKind::eBufferStructured) {
-    auto subIndex = builder.add(Op::InputLoad(ScalarType::eU32, inputDef, builder.makeConstant(1u)));
+    auto subIndex = dynamic
+      ? builder.add(Op::InputLoad(ScalarType::eU32, inputDef, builder.makeConstant(1u)))
+      : builder.makeConstant(3u);
+
     index = builder.add(Op::CompositeConstruct(BasicType(ScalarType::eU32, 2u), index, subIndex));
-  } else if (kind == ResourceKind::eBufferRaw) {
+  } else if (kind == ResourceKind::eBufferRaw && dynamic) {
     index = builder.add(Op::IAdd(ScalarType::eU32, builder.add(Op::IMul(
       ScalarType::eU32, index, builder.makeConstant(4u))), builder.makeConstant(2u)));
   }
@@ -193,18 +198,25 @@ Builder make_test_buffer_load(ResourceKind kind, bool uav, bool indexed) {
 
   builder.add(Op::Label());
   auto descriptor = emit_buffer_descriptor(builder, entryPoint, kind, uav, indexed, false);
-  auto index = emit_buffer_load_store_address(builder, entryPoint, kind);
+  auto index0 = emit_buffer_load_store_address(builder, entryPoint, kind, true);
+  auto index1 = emit_buffer_load_store_address(builder, entryPoint, kind, false);
 
   Type type = kind == ResourceKind::eBufferTyped
     ? BasicType(ScalarType::eF32, 4u)
     : BasicType(ScalarType::eU32, 2u);
 
-  auto data = builder.add(Op::BufferLoad(type, descriptor, index,
+  auto data0 = builder.add(Op::BufferLoad(type, descriptor, index0,
+    kind == ResourceKind::eBufferTyped ? 0u : 4u));
+  auto data1 = builder.add(Op::BufferLoad(type, descriptor, index1,
     kind == ResourceKind::eBufferTyped ? 0u : 4u));
 
-  auto outputDef = builder.add(Op::DclOutput(type, entryPoint, 0u, 0u));
-  builder.add(Op::Semantic(outputDef, 0u, "SV_TARGET"));
-  builder.add(Op::OutputStore(outputDef, SsaDef(), data));
+  auto output0Def = builder.add(Op::DclOutput(type, entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(output0Def, 0u, "SV_TARGET"));
+  builder.add(Op::OutputStore(output0Def, SsaDef(), data0));
+
+  auto output1Def = builder.add(Op::DclOutput(type, entryPoint, 1u, 0u));
+  builder.add(Op::Semantic(output1Def, 1u, "SV_TARGET"));
+  builder.add(Op::OutputStore(output1Def, SsaDef(), data1));
 
   builder.add(Op::Return());
   return builder;
@@ -233,7 +245,8 @@ Builder make_test_buffer_store(ResourceKind kind, bool indexed) {
 
   builder.add(Op::Label());
   auto descriptor = emit_buffer_descriptor(builder, entryPoint, kind, true, indexed, false);
-  auto index = emit_buffer_load_store_address(builder, entryPoint, kind);
+  auto index0 = emit_buffer_load_store_address(builder, entryPoint, kind, true);
+  auto index1 = emit_buffer_load_store_address(builder, entryPoint, kind, false);
 
   Type type = kind == ResourceKind::eBufferTyped
     ? BasicType(ScalarType::eF32, 4u)
@@ -246,7 +259,9 @@ Builder make_test_buffer_store(ResourceKind kind, bool indexed) {
     : builder.add(Op::CompositeConstruct(type,
         builder.makeConstant(1u), builder.makeConstant(2u)));
 
-  builder.add(Op::BufferStore(descriptor, index, value,
+  builder.add(Op::BufferStore(descriptor, index0, value,
+    kind == ResourceKind::eBufferTyped ? 0u : 4u));
+  builder.add(Op::BufferStore(descriptor, index1, value,
     kind == ResourceKind::eBufferTyped ? 0u : 4u));
 
   builder.add(Op::Return());
@@ -259,7 +274,7 @@ Builder make_test_buffer_atomic(ResourceKind kind, bool indexed) {
 
   builder.add(Op::Label());
   auto descriptor = emit_buffer_descriptor(builder, entryPoint, kind, true, indexed, true);
-  auto index = emit_buffer_load_store_address(builder, entryPoint, kind);
+  auto index = emit_buffer_load_store_address(builder, entryPoint, kind, true);
 
   builder.add(Op::BufferAtomic(AtomicOp::eAdd, Type(),
     descriptor, index, builder.makeConstant(16u)));
