@@ -58,10 +58,12 @@ private:
   std::unordered_map<ir::SsaDef, ir::SsaDef> m_debugNames;
   std::unordered_map<SpirvPointerTypeKey, uint32_t> m_ptrTypes;
   std::unordered_map<SpirvFunctionTypeKey, uint32_t> m_funcTypes;
+  std::unordered_map<SpirvImageTypeKey, uint32_t> m_imageTypes;
   std::unordered_map<SpirvConstant, uint32_t> m_constants;
   std::unordered_set<spv::Capability> m_enabledCaps;
   std::unordered_set<std::string> m_enabledExt;
   std::unordered_map<SpirvFunctionParameterKey, uint32_t> m_funcParamIds;
+  std::unordered_map<ir::SsaDef, uint32_t> m_descriptorTypes;
 
   std::vector<uint32_t> m_ssaDefsToId;
 
@@ -115,6 +117,20 @@ private:
 
   void emitDclBuiltInIoVar(const ir::Op& op);
 
+  void emitDclCbv(const ir::Op& op);
+
+  void emitDclSrvUav(const ir::Op& op);
+
+  void emitDescriptorLoad(const ir::Op& op);
+
+  void emitBufferLoad(const ir::Op& op);
+
+  void emitBufferStore(const ir::Op& op);
+
+  void emitBufferQuery(const ir::Op& op);
+
+  void emitConvert(const ir::Op& op);
+
   void emitFunction(const ir::Op& op);
 
   void emitFunctionEnd();
@@ -139,7 +155,18 @@ private:
 
   void emitDebugName(ir::SsaDef def, uint32_t id);
 
+  uint32_t emitAddressOffset(ir::SsaDef def, uint32_t offset);
+
+  uint32_t emitAccessChain(spv::StorageClass storageClass, const ir::Type& baseType,
+    uint32_t baseId, ir::SsaDef address, uint32_t offset, bool wrapperStruct);
+
   uint32_t emitAccessChain(spv::StorageClass storageClass, ir::SsaDef base, ir::SsaDef address);
+
+  uint32_t emitRawStrutcuredElementAddress(const ir::Op& op, uint32_t depth, uint32_t stride);
+
+  uint32_t emitRawAccessChainNv(spv::StorageClass storageClass, const ir::Type& type, const ir::Op& resourceOp, uint32_t baseId, ir::SsaDef address);
+
+  void emitCheckSparseAccess(const ir::Op& op);
 
   void emitLoadDrawParameterBuiltIn(const ir::Op& op, ir::BuiltIn builtIn);
 
@@ -157,15 +184,23 @@ private:
 
   uint32_t allocId();
 
+  void setIdForDef(ir::SsaDef def, uint32_t id);
+
   uint32_t getIdForDef(ir::SsaDef def);
 
   uint32_t getIdForType(const ir::Type& type);
 
   uint32_t defType(const ir::Type& type, bool explicitLayout);
 
+  uint32_t defStructWrapper(uint32_t typeId);
+
+  uint32_t defDescriptor(const ir::Op& op, uint32_t typeId, spv::StorageClass storageClass);
+
   uint32_t getIdForPtrType(uint32_t typeId, spv::StorageClass storageClass);
 
   uint32_t getIdForFuncType(const SpirvFunctionTypeKey& key);
+
+  uint32_t getIdForImageType(const SpirvImageTypeKey& key);
 
   uint32_t getIdForConstant(const SpirvConstant& constant, uint32_t memberCount);
 
@@ -195,7 +230,15 @@ private:
 
   void addEntryPointId(uint32_t id);
 
+  bool declaresPlainBufferResource(ir::Op op);
+
+  uint32_t getDescriptorArraySize(ir::Op op);
+
   ir::Type traverseType(ir::Type type, ir::SsaDef address) const;
+
+  static ir::UavFlags getUavFlags(const ir::Op& op);
+
+  static ir::ResourceKind getResourceKind(const ir::Op& op);
 
   static spv::StorageClass getVariableStorageClass(const ir::Op& op);
 
