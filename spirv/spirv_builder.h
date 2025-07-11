@@ -151,6 +151,8 @@ private:
 
   void emitCompositeConstruct(const ir::Op& op);
 
+  void emitSimpleArithmetic(const ir::Op& op);
+
   uint32_t importGlslExt();
 
   uint32_t allocId();
