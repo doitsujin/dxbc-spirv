@@ -756,30 +756,55 @@ void SpirvBuilder::emitDclSrvUav(const ir::Op& op) {
 }
 
 
-void SpirvBuilder::emitDescriptorLoad(const ir::Op& op) {
+uint32_t SpirvBuilder::getDescriptorArrayIndex(const ir::Op& op) {
   const auto& dclOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
-  auto resourceId = getIdForDef(dclOp.getDef());
 
-  bool isBuffer = declaresPlainBufferResource(dclOp);
-  bool isArray = getDescriptorArraySize(dclOp) != 1u;
+  if (getDescriptorArraySize(dclOp) == 1u)
+    return 0u; /* no array */
 
-  /* Resolve index into descriptor array */
-  uint32_t arrayIndexId = isArray ? getIdForDef(ir::SsaDef(op.getOperand(1u))) : 0u;
-
-  if (arrayIndexId && (op.getFlags() & ir::OpFlag::eNonUniform))
+  if (op.getFlags() & ir::OpFlag::eNonUniform)
     enableCapability(spv::CapabilityShaderNonUniform);
 
-  if (isBuffer) {
-    uint32_t id = getIdForDef(op.getDef());
+  return getIdForDef(ir::SsaDef(op.getOperand(1u)));
+}
+
+
+uint32_t SpirvBuilder::getImageDescriptorPointer(const ir::Op& op) {
+  const auto& dclOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  dxbc_spv_assert(!declaresPlainBufferResource(dclOp));
+
+  auto resourceId = getIdForDef(dclOp.getDef());
+  auto indexId = getDescriptorArrayIndex(op);
+
+  if (!indexId)
+    return resourceId;
+
+  auto typeId = m_descriptorTypes.at(dclOp.getDef());
+  auto ptrTypeId = getIdForPtrType(typeId, spv::StorageClassUniformConstant);
+
+  auto ptrId = allocId();
+  pushOp(m_code, spv::OpAccessChain, ptrTypeId, ptrId, resourceId, indexId);
+  return ptrId;
+}
+
+
+void SpirvBuilder::emitDescriptorLoad(const ir::Op& op) {
+  const auto& dclOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+
+  auto typeId = m_descriptorTypes.at(dclOp.getDef());
+  auto id = getIdForDef(op.getDef());
+
+  if (declaresPlainBufferResource(dclOp)) {
+    auto resourceId = getIdForDef(dclOp.getDef());
+    auto indexId = getDescriptorArrayIndex(op);
 
     auto storageClass = op.getType() == ir::ScalarType::eCbv
       ? spv::StorageClassUniform
       : spv::StorageClassStorageBuffer;
 
-    auto typeId = m_descriptorTypes.at(dclOp.getDef());
     auto ptrTypeId = getIdForPtrType(typeId, storageClass);
 
-    if (!isArray) {
+    if (!indexId) {
       /* No access chain needed, chain into buffer directly */
       setIdForDef(op.getDef(), resourceId);
     } else {
@@ -789,24 +814,13 @@ void SpirvBuilder::emitDescriptorLoad(const ir::Op& op) {
       m_code.push_back(ptrTypeId);
       m_code.push_back(id);
       m_code.push_back(resourceId);
-      m_code.push_back(arrayIndexId);
+      m_code.push_back(indexId);
     }
   } else {
     /* Loading image or sampler descriptors otuside of the block where they are used
      * is technically against spec, but vkd3d-proton has been relying on this for
      * years, so it should be safe to do. */
-    uint32_t id = getIdForDef(op.getDef());
-
-    auto typeId = m_descriptorTypes.at(dclOp.getDef());
-
-    auto ptrTypeId = getIdForPtrType(typeId, spv::StorageClassUniformConstant);
-    auto ptrId = resourceId;
-
-    if (arrayIndexId) {
-      ptrId = allocId();
-      pushOp(m_code, spv::OpAccessChain, ptrTypeId, ptrId, resourceId, arrayIndexId);
-    }
-
+    auto ptrId = getImageDescriptorPointer(op);
     pushOp(m_code, spv::OpLoad, typeId, id, ptrId);
 
     /* Decorate result as non-uniform as necessary */

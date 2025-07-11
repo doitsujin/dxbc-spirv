@@ -121,6 +121,10 @@ private:
 
   void emitDclSrvUav(const ir::Op& op);
 
+  uint32_t getDescriptorArrayIndex(const ir::Op& op);
+
+  uint32_t getImageDescriptorPointer(const ir::Op& op);
+
   void emitDescriptorLoad(const ir::Op& op);
 
   void emitBufferLoad(const ir::Op& op);
