@@ -17,7 +17,7 @@ Builder test_resources_cbv() {
   auto cbvDef = builder.add(Op::DclCbv(Type(vec4Type).addArrayDimension(8u), entryPoint, 0u, 0u, 1u));
   auto cbvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eCbv, cbvDef, builder.makeConstant(0u)));
 
-  auto data = builder.add(Op::BufferLoad(vec4Type, cbvDescriptor, builder.makeConstant(2u)));
+  auto data = builder.add(Op::BufferLoad(vec4Type, cbvDescriptor, builder.makeConstant(2u), 16u));
 
   builder.add(Op::OutputStore(outputDef, SsaDef(), data));
 
@@ -45,7 +45,7 @@ Builder test_resources_cbv_dynamic() {
   auto cbvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eCbv, cbvDef, builder.makeConstant(0u)));
 
   auto data = builder.add(Op::BufferLoad(vec4Type, cbvDescriptor,
-    builder.add(Op::InputLoad(ScalarType::eU32, inputDef, SsaDef()))));
+    builder.add(Op::InputLoad(ScalarType::eU32, inputDef, SsaDef())), 16u));
 
   builder.add(Op::OutputStore(outputDef, SsaDef(), data));
   builder.add(Op::Return());
@@ -69,12 +69,12 @@ Builder test_resources_cbv_indexed() {
 
   auto index = builder.add(Op::Cast(ScalarType::eU32,
     builder.add(Op::BufferLoad(ScalarType::eF32, indexCbvDescriptor,
-      builder.makeConstant(0u, 1u)))));;
+      builder.makeConstant(0u, 1u), 4u))));;
 
   auto dataCbvDef = builder.add(Op::DclCbv(Type(vec4Type).addArrayDimension(8u), entryPoint, 0u, 0u, 256u));
   auto dataCbvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eCbv, dataCbvDef, index));
 
-  auto data = builder.add(Op::BufferLoad(vec4Type, dataCbvDescriptor, builder.makeConstant(2u)));
+  auto data = builder.add(Op::BufferLoad(vec4Type, dataCbvDescriptor, builder.makeConstant(2u), 16u));
 
   builder.add(Op::OutputStore(outputDef, SsaDef(), data));
   builder.add(Op::Return());
@@ -101,7 +101,7 @@ Builder test_resources_cbv_indexed_nonuniform() {
   auto cbvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eCbv, cbvDef,
     builder.add(Op::InputLoad(ScalarType::eU32, inputDef, SsaDef()))).setFlags(OpFlag::eNonUniform));
 
-  auto data = builder.add(Op::BufferLoad(vec4Type, cbvDescriptor, builder.makeConstant(2u)));
+  auto data = builder.add(Op::BufferLoad(vec4Type, cbvDescriptor, builder.makeConstant(2u), 16u));
 
   builder.add(Op::OutputStore(outputDef, SsaDef(), data));
 
@@ -199,7 +199,8 @@ Builder make_test_buffer_load(ResourceKind kind, bool uav, bool indexed) {
     ? BasicType(ScalarType::eF32, 4u)
     : BasicType(ScalarType::eU32, 2u);
 
-  auto data = builder.add(Op::BufferLoad(type, descriptor, index));
+  auto data = builder.add(Op::BufferLoad(type, descriptor, index,
+    kind == ResourceKind::eBufferTyped ? 0u : 4u));
 
   auto outputDef = builder.add(Op::DclOutput(type, entryPoint, 0u, 0u));
   builder.add(Op::Semantic(outputDef, 0u, "SV_TARGET"));
@@ -245,7 +246,8 @@ Builder make_test_buffer_store(ResourceKind kind, bool indexed) {
     : builder.add(Op::CompositeConstruct(type,
         builder.makeConstant(1u), builder.makeConstant(2u)));
 
-  builder.add(Op::BufferStore(descriptor, index, value));
+  builder.add(Op::BufferStore(descriptor, index, value,
+    kind == ResourceKind::eBufferTyped ? 0u : 4u));
 
   builder.add(Op::Return());
   return builder;
@@ -492,7 +494,7 @@ SsaDef emit_image_descriptor_index(Builder& builder, SsaDef entryPoint, bool ind
     auto cbvDef = builder.add(Op::DclCbv(Type(BasicType(ScalarType::eU32, 4u)).addArrayDimension(1u), entryPoint, 0u, 0u, 1u));
     auto cbvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eCbv, cbvDef, builder.makeConstant(0u)));
 
-    index = builder.add(Op::BufferLoad(ScalarType::eU32, cbvDescriptor, builder.makeConstant(0u, 0u)));
+    index = builder.add(Op::BufferLoad(ScalarType::eU32, cbvDescriptor, builder.makeConstant(0u, 0u), 16u));
   } else {
     index = builder.makeConstant(0u);
   }
@@ -1370,7 +1372,7 @@ Builder make_test_buffer_load_sparse_feedback(bool uav) {
     .addStructMember(ScalarType::eU32)
     .addStructMember(texelType);
 
-  auto load = builder.add(Op::BufferLoad(resultType, descriptor, index).setFlags(OpFlag::eSparseFeedback));
+  auto load = builder.add(Op::BufferLoad(resultType, descriptor, index, 0u).setFlags(OpFlag::eSparseFeedback));
 
   auto output0Def = builder.add(Op::DclOutput(texelType, entryPoint, 0u, 0u));
   builder.add(Op::Semantic(output0Def, 0u, "SV_TARGET"));
