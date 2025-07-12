@@ -144,9 +144,13 @@ private:
 
   void emitCounterAtomic(const ir::Op& op);
 
+  uint32_t emitSampledImage(const ir::SsaDef& imageDef, const ir::SsaDef& samplerDef);
+
   uint32_t emitMergeImageCoordLayer(const ir::SsaDef& coordDef, const ir::SsaDef& layerDef);
 
   void emitImageLoad(const ir::Op& op);
+
+  void emitImageComputeLod(const ir::Op& op);
 
   void emitImageQuerySize(const ir::Op& op);
 

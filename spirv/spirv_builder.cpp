@@ -208,6 +208,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eImageLoad:
       return emitImageLoad(op);
 
+    case ir::OpCode::eImageComputeLod:
+      return emitImageComputeLod(op);
+
     case ir::OpCode::eImageQuerySize:
       return emitImageQuerySize(op);
 
@@ -294,7 +297,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eImageStore:
     case ir::OpCode::eImageSample:
     case ir::OpCode::eImageGather:
-    case ir::OpCode::eImageComputeLod:
     case ir::OpCode::ePointer:
     case ir::OpCode::ePointerAddress:
     case ir::OpCode::eEmitVertex:
@@ -1150,6 +1152,23 @@ void SpirvBuilder::emitCounterAtomic(const ir::Op& op) {
 }
 
 
+uint32_t SpirvBuilder::emitSampledImage(const ir::SsaDef& imageDef, const ir::SsaDef& samplerDef) {
+  /* Determine image type for given image descriptor */
+  const auto& imageOp = m_builder.getOp(imageDef);
+  dxbc_spv_assert(imageOp.getType() == ir::ScalarType::eSrv);
+
+  auto imageTypeId = m_descriptorTypes.at(ir::SsaDef(imageOp.getOperand(0u)));
+
+  auto resultTypeId = getIdForSampledImageType(imageTypeId);
+  auto resultId = allocId();
+
+  pushOp(m_code, spv::OpSampledImage, resultTypeId, resultId,
+    getIdForDef(imageDef), getIdForDef(samplerDef));
+
+  return resultId;
+}
+
+
 uint32_t SpirvBuilder::emitMergeImageCoordLayer(const ir::SsaDef& coordDef, const ir::SsaDef& layerDef) {
   if (!layerDef)
     return getIdForDef(coordDef);
@@ -1230,6 +1249,25 @@ void SpirvBuilder::emitImageLoad(const ir::Op& op) {
   m_code.push_back(getIdForDef(descriptorOp.getDef()));
   m_code.push_back(coordId);
   imageOperands.pushTo(m_code);
+
+  emitDebugName(op.getDef(), id);
+}
+
+
+void SpirvBuilder::emitImageComputeLod(const ir::Op& op) {
+  enableCapability(spv::CapabilityImageQuery);
+
+  auto imageDef = ir::SsaDef(op.getOperand(0u));
+  auto samplerDef = ir::SsaDef(op.getOperand(1u));
+  auto coordDef = ir::SsaDef(op.getOperand(2u));
+
+  auto sampledImageId = emitSampledImage(imageDef, samplerDef);
+
+  auto id = getIdForDef(op.getDef());
+
+  pushOp(m_code, spv::OpImageQueryLod,
+    getIdForType(op.getType()), id, sampledImageId,
+    getIdForDef(coordDef));
 
   emitDebugName(op.getDef(), id);
 }
