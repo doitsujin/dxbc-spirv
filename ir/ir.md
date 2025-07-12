@@ -538,9 +538,9 @@ Note that the `FindMsb` instructions follow SPIR-V semantics rather than D3D sem
 | `ir::OpCode`              | Return type  | Arguments... |           |           |
 |---------------------------|--------------|--------------|-----------|-----------|
 | `IAdd`                    | integer      | `%a`         | `%b`      |           |
-| `IAddCarry`               | `vec2<u*>`   | `%a`         | `%b`      |           |
+| `IAddCarry`               | `vec2<u32>`  | `%a`         | `%b`      |           |
 | `ISub`                    | integer      | `%a`         | `%b`      |           |
-| `ISubBorrow`              | `vec2<u*>`   | `%a`         | `%b`      |           |
+| `ISubBorrow`              | `vec2<u32>`  | `%a`         | `%b`      |           |
 | `INeg`                    | integer      | `%a`         |           |           |
 | `IMul`                    | integer      | `%a`         | `%b`      |           |
 | `SDiv`                    | integer      | `%a`         | `%b`      |           |
@@ -552,6 +552,11 @@ Note that the `FindMsb` instructions follow SPIR-V semantics rather than D3D sem
 | `UMax`                    | integer      | `%a`         | `%b`      |           |
 | `UClamp`                  | integer      | `%a`         | `%b`      | `%c`      |
 | `UMsad`                   | integer      | `%ref`       | `%src`    | `%accum`  |
+| `SMulExtended`            | `vec2<i32>`  | `%a`         | `%b`      |           |
+| `UMulExtended`            | `vec2<u32>`  | `%a`         | `%b`      |           |
+
+The instructions `IAddCarry`, `ISubBorrow` and `*MulExtended` return a two-component vector with the low bits in the first
+component, and the high bits (carry / borrow bits) in the second component. These instructions only support 32-bit types.
 
 ## Serialization
 The custom IR can be serialized for in-memory storage as a sequence of tokens that use variable-length encoding to save memory.
