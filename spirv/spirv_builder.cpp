@@ -1803,11 +1803,13 @@ void SpirvBuilder::emitAtomic(const ir::Op& op, const ir::Type& type, uint32_t o
   m_code.push_back(makeConstU32(scope));
   m_code.push_back(makeConstU32(memoryTypes | semantics));
 
-  if (atomicOp == ir::AtomicOp::eCompareExchange)
+  if (atomicOp == ir::AtomicOp::eCompareExchange) {
     m_code.push_back(makeConstU32(memoryTypes | spv::MemorySemanticsAcquireMask));
+    m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(operandIndex + 1u))));
+  }
 
-  for (uint32_t i = 0u; i < argCount; i++)
-    m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(operandIndex + i))));
+  if (argCount)
+    m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(operandIndex))));
 
   emitDebugName(op.getDef(), id);
 }
