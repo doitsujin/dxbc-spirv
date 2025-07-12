@@ -455,8 +455,12 @@ Component-wise comparisons that return a boolean vector.
 | `IEq`                     | `bool`      | `%a`         | `%b` |
 | `INe`                     | `bool`      | `%a`         | `%b` |
 | `SLt`                     | `bool`      | `%a`         | `%b` |
+| `SLe`                     | `bool`      | `%a`         | `%b` |
+| `SGt`                     | `bool`      | `%a`         | `%b` |
 | `SGe`                     | `bool`      | `%a`         | `%b` |
 | `ULt`                     | `bool`      | `%a`         | `%b` |
+| `ULe`                     | `bool`      | `%a`         | `%b` |
+| `UGt`                     | `bool`      | `%a`         | `%b` |
 | `UGe`                     | `bool`      | `%a`         | `%b` |
 
 With the exception of `FNe`, all float comparisons are ordered.

@@ -715,8 +715,12 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eIEq: return os << "IEq";
     case OpCode::eINe: return os << "INe";
     case OpCode::eSLt: return os << "SLt";
+    case OpCode::eSLe: return os << "SLe";
+    case OpCode::eSGt: return os << "SGt";
     case OpCode::eSGe: return os << "SGe";
     case OpCode::eULt: return os << "ULt";
+    case OpCode::eULe: return os << "ULe";
+    case OpCode::eUGt: return os << "UGt";
     case OpCode::eUGe: return os << "UGe";
     case OpCode::eBAnd: return os << "BAnd";
     case OpCode::eBOr: return os << "BOr";
