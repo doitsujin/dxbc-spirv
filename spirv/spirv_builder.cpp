@@ -202,6 +202,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eCompositeConstruct:
       return emitCompositeConstruct(op);
 
+    case ir::OpCode::eImageLoad:
+      return emitImageLoad(op);
+
     case ir::OpCode::eImageQuerySize:
       return emitImageQuerySize(op);
 
@@ -286,7 +289,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eLdsAtomic:
     case ir::OpCode::eImageAtomic:
     case ir::OpCode::eMemoryAtomic:
-    case ir::OpCode::eImageLoad:
     case ir::OpCode::eImageStore:
     case ir::OpCode::eImageSample:
     case ir::OpCode::eImageGather:
@@ -949,16 +951,8 @@ void SpirvBuilder::emitBufferLoad(const ir::Op& op) {
     /* Set up image operands analogous to the memory operands above */
     SpirvImageOperands imageOperands = { };
 
-    if (isUav) {
-      auto uavFlags = getUavFlags(dclOp);
-
-      if (!(uavFlags & ir::UavFlag::eReadOnly)) {
-        imageOperands.flags |= spv::ImageOperandsNonPrivateTexelMask
-                            |  spv::ImageOperandsMakeTexelVisibleMask;
-        imageOperands.makeVisible = makeConstU32((uavFlags & ir::UavFlag::eCoherent)
-          ? spv::ScopeQueueFamily : spv::ScopeWorkgroup);
-      }
-    }
+    if (isUav)
+      setUavImageReadOperands(imageOperands, dclOp);
 
     /* Select correct opcode to emit */
     auto opCode = isUav
@@ -1052,13 +1046,7 @@ void SpirvBuilder::emitBufferStore(const ir::Op& op) {
   } else {
     /* Set up image operands analogous to the memory operands above */
     SpirvImageOperands imageOperands = { };
-
-    if (!(uavFlags & ir::UavFlag::eWriteOnly)) {
-      imageOperands.flags |= spv::ImageOperandsNonPrivateTexelMask
-                          |  spv::ImageOperandsMakeTexelAvailableMask;
-      imageOperands.makeAvailable = makeConstU32((uavFlags & ir::UavFlag::eCoherent)
-        ? spv::ScopeQueueFamily : spv::ScopeWorkgroup);
-    }
+    setUavImageWriteOperands(imageOperands, dclOp);
 
     /* Emit actual image store */
     m_code.push_back(makeOpcodeToken(spv::OpImageWrite, 4u + imageOperands.computeDwordCount()));
@@ -1149,6 +1137,91 @@ void SpirvBuilder::emitCounterAtomic(const ir::Op& op) {
 
   emitAtomic(op, dclOp.getType(), 1u, accessChainId, spv::ScopeQueueFamily,
     spv::MemorySemanticsUniformMemoryMask);
+}
+
+
+uint32_t SpirvBuilder::emitMergeImageCoordLayer(const ir::SsaDef& coordDef, const ir::SsaDef& layerDef) {
+  if (!layerDef)
+    return getIdForDef(coordDef);
+
+  const auto& coordOp = m_builder.getOp(coordDef);
+  const auto& layerOp = m_builder.getOp(layerDef);
+
+  dxbc_spv_assert(coordOp.getType().isBasicType());
+  dxbc_spv_assert(layerOp.getType().isScalarType());
+
+  /* SPIR-V explicitly allows concatenating vectors with CompositeConstruct */
+  auto coordType = coordOp.getType().getBaseType(0u);
+
+  auto mergedType = ir::BasicType(coordType.getBaseType(), coordType.getVectorSize() + 1u);
+  auto mergedId = allocId();
+
+  pushOp(m_code, spv::OpCompositeConstruct,
+    getIdForType(mergedType), mergedId,
+    getIdForDef(coordOp.getDef()),
+    getIdForDef(layerOp.getDef()));
+
+  return mergedId;
+}
+
+
+void SpirvBuilder::emitImageLoad(const ir::Op& op) {
+  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& dclOp = m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u)));
+
+  auto id = getIdForDef(op.getDef());
+
+  bool isUav = descriptorOp.getType() == ir::ScalarType::eUav;
+  bool isSparse = op.getFlags() & ir::OpFlag::eSparseFeedback;
+
+  if (isSparse)
+    enableCapability(spv::CapabilitySparseResidency);
+
+  /* Set up image operands */
+  SpirvImageOperands imageOperands = { };
+
+  if (isUav)
+    setUavImageReadOperands(imageOperands, dclOp);
+
+  auto mipDef = ir::SsaDef(op.getOperand(1u));
+
+  if (mipDef) {
+    imageOperands.flags |= spv::ImageOperandsLodMask;
+    imageOperands.lodIndex = getIdForDef(mipDef);
+  }
+
+  auto sampleDef = ir::SsaDef(op.getOperand(4u));
+
+  if (sampleDef) {
+    imageOperands.flags |= spv::ImageOperandsSampleMask;
+    imageOperands.sampleId = getIdForDef(sampleDef);
+  }
+
+  auto offsetDef = ir::SsaDef(op.getOperand(5u));
+
+  if (offsetDef) {
+    imageOperands.flags |= spv::ImageOperandsConstOffsetMask;
+    imageOperands.constOffset = getIdForDef(offsetDef);
+  }
+
+  /* Build final coordinate vector */
+  auto coordId = emitMergeImageCoordLayer(
+    ir::SsaDef(op.getOperand(3u)),
+    ir::SsaDef(op.getOperand(2u)));
+
+  /* Select correct opcode */
+  auto opCode = isUav
+    ? (isSparse ? spv::OpImageSparseRead : spv::OpImageRead)
+    : (isSparse ? spv::OpImageSparseFetch : spv::OpImageFetch);
+
+  m_code.push_back(makeOpcodeToken(opCode, 5u + imageOperands.computeDwordCount()));
+  m_code.push_back(getIdForType(op.getType()));
+  m_code.push_back(id);
+  m_code.push_back(getIdForDef(descriptorOp.getDef()));
+  m_code.push_back(coordId);
+  imageOperands.pushTo(m_code);
+
+  emitDebugName(op.getDef(), id);
 }
 
 
@@ -2561,6 +2634,34 @@ uint32_t SpirvBuilder::getDescriptorArraySize(const ir::Op& op) {
                   op.getOpCode() == ir::OpCode::eDclSampler);
 
   return uint32_t(op.getOperand(3u));
+}
+
+
+void SpirvBuilder::setUavImageReadOperands(SpirvImageOperands& operands, const ir::Op& uavOp) {
+  dxbc_spv_assert(uavOp.getOpCode() == ir::OpCode::eDclUav);
+
+  auto uavFlags = getUavFlags(uavOp);
+
+  if (!(uavFlags & ir::UavFlag::eReadOnly)) {
+    operands.flags |= spv::ImageOperandsNonPrivateTexelMask
+                   |  spv::ImageOperandsMakeTexelVisibleMask;
+    operands.makeVisible = makeConstU32((uavFlags & ir::UavFlag::eCoherent)
+      ? spv::ScopeQueueFamily : spv::ScopeWorkgroup);
+  }
+}
+
+
+void SpirvBuilder::setUavImageWriteOperands(SpirvImageOperands& operands, const ir::Op& uavOp) {
+  dxbc_spv_assert(uavOp.getOpCode() == ir::OpCode::eDclUav);
+
+  auto uavFlags = getUavFlags(uavOp);
+
+  if (!(uavFlags & ir::UavFlag::eWriteOnly)) {
+    operands.flags |= spv::ImageOperandsNonPrivateTexelMask
+                   |  spv::ImageOperandsMakeTexelAvailableMask;
+    operands.makeAvailable = makeConstU32((uavFlags & ir::UavFlag::eCoherent)
+      ? spv::ScopeQueueFamily : spv::ScopeWorkgroup);
+  }
 }
 
 
