@@ -135,6 +135,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eDclUav:
       return emitDclSrvUav(op);
 
+    case ir::OpCode::eDclUavCounter:
+      return emitDclUavCounter(op);
+
     case ir::OpCode::eDescriptorLoad:
       return emitDescriptorLoad(op);
 
@@ -149,6 +152,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
 
     case ir::OpCode::eBufferAtomic:
       return emitBufferAtomic(op);
+
+    case ir::OpCode::eCounterAtomic:
+      return emitCounterAtomic(op);
 
     case ir::OpCode::eFunction:
       return emitFunction(op);
@@ -269,7 +275,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eDclSpecConstant:
     case ir::OpCode::eDclPushData:
     case ir::OpCode::eDclSampler:
-    case ir::OpCode::eDclUavCounter:
     case ir::OpCode::eDclLds:
     case ir::OpCode::eDclScratch:
     case ir::OpCode::eFunctionCall:
@@ -280,7 +285,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eMemoryStore:
     case ir::OpCode::eLdsAtomic:
     case ir::OpCode::eImageAtomic:
-    case ir::OpCode::eCounterAtomic:
     case ir::OpCode::eMemoryAtomic:
     case ir::OpCode::eImageLoad:
     case ir::OpCode::eImageStore:
@@ -766,6 +770,15 @@ void SpirvBuilder::emitDclSrvUav(const ir::Op& op) {
 }
 
 
+void SpirvBuilder::emitDclUavCounter(const ir::Op& op) {
+  auto structTypeId = defStructWrapper(getIdForType(op.getType()));
+  pushOp(m_decorations, spv::OpDecorate, structTypeId, spv::DecorationBlock);
+
+  defDescriptor(op, structTypeId, spv::StorageClassStorageBuffer);
+  m_descriptorTypes.insert({ op.getDef(), structTypeId });
+}
+
+
 uint32_t SpirvBuilder::getDescriptorArrayIndex(const ir::Op& op) {
   const auto& dclOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
 
@@ -1124,6 +1137,21 @@ void SpirvBuilder::emitBufferAtomic(const ir::Op& op) {
 }
 
 
+void SpirvBuilder::emitCounterAtomic(const ir::Op& op) {
+  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& dclOp = m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u)));
+
+  auto accessChainId = emitAccessChain(spv::StorageClassStorageBuffer,
+    dclOp.getType(), getIdForDef(descriptorOp.getDef()), ir::SsaDef(), 0u, true);
+
+  if (descriptorOp.getFlags() & ir::OpFlag::eNonUniform)
+    pushOp(m_decorations, spv::OpDecorate, accessChainId, spv::DecorationNonUniform);
+
+  emitAtomic(op, dclOp.getType(), 1u, accessChainId, spv::ScopeQueueFamily,
+    spv::MemorySemanticsUniformMemoryMask);
+}
+
+
 void SpirvBuilder::emitImageQuerySize(const ir::Op& op) {
   enableCapability(spv::CapabilityImageQuery);
 
@@ -1357,6 +1385,8 @@ void SpirvBuilder::emitAtomic(const ir::Op& op, const ir::Type& type, uint32_t o
     return std::make_pair(spv::OpNop, 0u);
   } ();
 
+  dxbc_spv_assert(operandIndex + argCount == op.getFirstLiteralOperandIndex());
+
   /* Set up memory semantics */
   auto semantics = spv::MemorySemanticsAcquireReleaseMask;
 
@@ -1364,7 +1394,6 @@ void SpirvBuilder::emitAtomic(const ir::Op& op, const ir::Type& type, uint32_t o
     semantics = spv::MemorySemanticsAcquireMask;
   else if (atomicOp == ir::AtomicOp::eStore)
     semantics = spv::MemorySemanticsReleaseMask;
-
 
   /* Emit atomic instruction */
   uint32_t operandCount = 4u + argCount;
@@ -2206,8 +2235,12 @@ uint32_t SpirvBuilder::defDescriptor(const ir::Op& op, uint32_t typeId, spv::Sto
   pushOp(m_declarations, spv::OpVariable, ptrTypeId, varId, storageClass);
 
   /* TODO map binding / set */
-  auto spaceId = uint32_t(op.getOperand(1u));
-  auto regId = uint32_t(op.getOperand(2u));
+  const auto& bindingOp = op.getOpCode() == ir::OpCode::eDclUavCounter
+    ? m_builder.getOp(ir::SsaDef(op.getOperand(1u)))
+    : op;
+
+  auto spaceId = uint32_t(bindingOp.getOperand(1u));
+  auto regId = uint32_t(bindingOp.getOperand(2u));
 
   pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationDescriptorSet, spaceId);
   pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationBinding, regId);
@@ -2501,7 +2534,7 @@ void SpirvBuilder::addEntryPointId(uint32_t id) {
 }
 
 
-bool SpirvBuilder::declaresPlainBufferResource(ir::Op op) {
+bool SpirvBuilder::declaresPlainBufferResource(const ir::Op& op) {
   if (op.getOpCode() == ir::OpCode::eDclCbv ||
       op.getOpCode() == ir::OpCode::eDclUavCounter)
     return true;
@@ -2518,11 +2551,13 @@ bool SpirvBuilder::declaresPlainBufferResource(ir::Op op) {
 }
 
 
-uint32_t SpirvBuilder::getDescriptorArraySize(ir::Op op) {
+uint32_t SpirvBuilder::getDescriptorArraySize(const ir::Op& op) {
+  if (op.getOpCode() == ir::OpCode::eDclUavCounter)
+    return getDescriptorArraySize(m_builder.getOp(ir::SsaDef(op.getOperand(1u))));
+
   dxbc_spv_assert(op.getOpCode() == ir::OpCode::eDclCbv ||
                   op.getOpCode() == ir::OpCode::eDclSrv ||
                   op.getOpCode() == ir::OpCode::eDclUav ||
-                  op.getOpCode() == ir::OpCode::eDclUavCounter ||
                   op.getOpCode() == ir::OpCode::eDclSampler);
 
   return uint32_t(op.getOperand(3u));
