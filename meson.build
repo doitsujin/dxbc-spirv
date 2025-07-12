@@ -11,9 +11,12 @@ dxbc_spv_files = files([
   'ir/ir_validation.cpp',
 
   'util/util_float16.cpp',
+
+  'spirv/spirv_builder.cpp',
 ])
 
-lib_dxbc_spv = static_library('dxbc_spv', dxbc_spv_files)
+lib_dxbc_spv = static_library('dxbc_spv', dxbc_spv_files,
+  include_directories : [ 'submodules/spirv_headers/include' ])
 
 if get_option('enable_tests')
   subdir('tests')

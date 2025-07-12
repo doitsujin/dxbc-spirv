@@ -17,7 +17,7 @@ Builder test_resources_cbv() {
   auto cbvDef = builder.add(Op::DclCbv(Type(vec4Type).addArrayDimension(8u), entryPoint, 0u, 0u, 1u));
   auto cbvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eCbv, cbvDef, builder.makeConstant(0u)));
 
-  auto data = builder.add(Op::BufferLoad(vec4Type, cbvDescriptor, builder.makeConstant(2u)));
+  auto data = builder.add(Op::BufferLoad(vec4Type, cbvDescriptor, builder.makeConstant(2u), 16u));
 
   builder.add(Op::OutputStore(outputDef, SsaDef(), data));
 
@@ -45,7 +45,7 @@ Builder test_resources_cbv_dynamic() {
   auto cbvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eCbv, cbvDef, builder.makeConstant(0u)));
 
   auto data = builder.add(Op::BufferLoad(vec4Type, cbvDescriptor,
-    builder.add(Op::InputLoad(ScalarType::eU32, inputDef, SsaDef()))));
+    builder.add(Op::InputLoad(ScalarType::eU32, inputDef, SsaDef())), 16u));
 
   builder.add(Op::OutputStore(outputDef, SsaDef(), data));
   builder.add(Op::Return());
@@ -69,12 +69,12 @@ Builder test_resources_cbv_indexed() {
 
   auto index = builder.add(Op::Cast(ScalarType::eU32,
     builder.add(Op::BufferLoad(ScalarType::eF32, indexCbvDescriptor,
-      builder.makeConstant(0u, 1u)))));;
+      builder.makeConstant(0u, 1u), 4u))));;
 
   auto dataCbvDef = builder.add(Op::DclCbv(Type(vec4Type).addArrayDimension(8u), entryPoint, 0u, 0u, 256u));
   auto dataCbvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eCbv, dataCbvDef, index));
 
-  auto data = builder.add(Op::BufferLoad(vec4Type, dataCbvDescriptor, builder.makeConstant(2u)));
+  auto data = builder.add(Op::BufferLoad(vec4Type, dataCbvDescriptor, builder.makeConstant(2u), 16u));
 
   builder.add(Op::OutputStore(outputDef, SsaDef(), data));
   builder.add(Op::Return());
@@ -101,7 +101,7 @@ Builder test_resources_cbv_indexed_nonuniform() {
   auto cbvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eCbv, cbvDef,
     builder.add(Op::InputLoad(ScalarType::eU32, inputDef, SsaDef()))).setFlags(OpFlag::eNonUniform));
 
-  auto data = builder.add(Op::BufferLoad(vec4Type, cbvDescriptor, builder.makeConstant(2u)));
+  auto data = builder.add(Op::BufferLoad(vec4Type, cbvDescriptor, builder.makeConstant(2u), 16u));
 
   builder.add(Op::OutputStore(outputDef, SsaDef(), data));
 
@@ -170,16 +170,21 @@ SsaDef emit_buffer_descriptor(Builder& builder, SsaDef entryPoint, ResourceKind 
   return builder.add(op);
 }
 
-SsaDef emit_buffer_load_store_address(Builder& builder, SsaDef entryPoint, ResourceKind kind) {
+SsaDef emit_buffer_load_store_address(Builder& builder, SsaDef entryPoint, ResourceKind kind, bool dynamic) {
   auto inputDef = builder.add(Op::DclInput(BasicType(ScalarType::eU32, 2u), entryPoint, 0u, 0u, InterpolationMode::eFlat));
   builder.add(Op::Semantic(inputDef, 0u, "BUFFER_ADDRESS"));
 
-  auto index = builder.add(Op::InputLoad(ScalarType::eU32, inputDef, builder.makeConstant(0u)));
+  auto index = dynamic
+    ? builder.add(Op::InputLoad(ScalarType::eU32, inputDef, builder.makeConstant(0u)))
+    : builder.makeConstant(7u);
 
   if (kind == ResourceKind::eBufferStructured) {
-    auto subIndex = builder.add(Op::InputLoad(ScalarType::eU32, inputDef, builder.makeConstant(1u)));
+    auto subIndex = dynamic
+      ? builder.add(Op::InputLoad(ScalarType::eU32, inputDef, builder.makeConstant(1u)))
+      : builder.makeConstant(3u);
+
     index = builder.add(Op::CompositeConstruct(BasicType(ScalarType::eU32, 2u), index, subIndex));
-  } else if (kind == ResourceKind::eBufferRaw) {
+  } else if (kind == ResourceKind::eBufferRaw && dynamic) {
     index = builder.add(Op::IAdd(ScalarType::eU32, builder.add(Op::IMul(
       ScalarType::eU32, index, builder.makeConstant(4u))), builder.makeConstant(2u)));
   }
@@ -193,17 +198,45 @@ Builder make_test_buffer_load(ResourceKind kind, bool uav, bool indexed) {
 
   builder.add(Op::Label());
   auto descriptor = emit_buffer_descriptor(builder, entryPoint, kind, uav, indexed, false);
-  auto index = emit_buffer_load_store_address(builder, entryPoint, kind);
+  auto index0 = emit_buffer_load_store_address(builder, entryPoint, kind, true);
+  auto index1 = emit_buffer_load_store_address(builder, entryPoint, kind, false);
 
   Type type = kind == ResourceKind::eBufferTyped
     ? BasicType(ScalarType::eF32, 4u)
     : BasicType(ScalarType::eU32, 2u);
 
-  auto data = builder.add(Op::BufferLoad(type, descriptor, index));
+  auto data0 = builder.add(Op::BufferLoad(type, descriptor, index0,
+    kind == ResourceKind::eBufferTyped ? 0u : 4u));
+  auto data1 = builder.add(Op::BufferLoad(type, descriptor, index1,
+    kind == ResourceKind::eBufferTyped ? 0u : 4u));
 
-  auto outputDef = builder.add(Op::DclOutput(type, entryPoint, 0u, 0u));
-  builder.add(Op::Semantic(outputDef, 0u, "SV_TARGET"));
-  builder.add(Op::OutputStore(outputDef, SsaDef(), data));
+  auto output0Def = builder.add(Op::DclOutput(type, entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(output0Def, 0u, "SV_TARGET"));
+  builder.add(Op::OutputStore(output0Def, SsaDef(), data0));
+
+  auto output1Def = builder.add(Op::DclOutput(type, entryPoint, 1u, 0u));
+  builder.add(Op::Semantic(output1Def, 1u, "SV_TARGET"));
+  builder.add(Op::OutputStore(output1Def, SsaDef(), data1));
+
+  if (kind == ResourceKind::eBufferStructured) {
+    auto type = BasicType(ScalarType::eU32, 4u);
+
+    auto index2 = builder.makeConstant(16u, 11u);
+    auto data2 = builder.add(Op::BufferLoad(type, descriptor, index2, 4u));
+
+    auto output2Def = builder.add(Op::DclOutput(type, entryPoint, 2u, 0u));
+    builder.add(Op::Semantic(output2Def, 2u, "SV_TARGET"));
+    builder.add(Op::OutputStore(output2Def, SsaDef(), data2));
+  }
+
+  if (kind != ResourceKind::eBufferTyped) {
+    auto type = BasicType(ScalarType::eU32, 1u);
+    auto data3 = builder.add(Op::BufferLoad(type, descriptor, index0, 4u));
+
+    auto output3Def = builder.add(Op::DclOutput(type, entryPoint, 3u, 0u));
+    builder.add(Op::Semantic(output3Def, 3u, "SV_TARGET"));
+    builder.add(Op::OutputStore(output3Def, SsaDef(), data3));
+  }
 
   builder.add(Op::Return());
   return builder;
@@ -232,20 +265,28 @@ Builder make_test_buffer_store(ResourceKind kind, bool indexed) {
 
   builder.add(Op::Label());
   auto descriptor = emit_buffer_descriptor(builder, entryPoint, kind, true, indexed, false);
-  auto index = emit_buffer_load_store_address(builder, entryPoint, kind);
+  auto index0 = emit_buffer_load_store_address(builder, entryPoint, kind, true);
+  auto index1 = emit_buffer_load_store_address(builder, entryPoint, kind, false);
 
   Type type = kind == ResourceKind::eBufferTyped
     ? BasicType(ScalarType::eF32, 4u)
-    : BasicType(ScalarType::eU32, 2u);
+    : BasicType(ScalarType::eU32, 3u);
 
   SsaDef value = kind == ResourceKind::eBufferTyped
     ? builder.add(Op::CompositeConstruct(type,
         builder.makeConstant(1.0f), builder.makeConstant(2.0f),
         builder.makeConstant(3.0f), builder.makeConstant(4.0f)))
     : builder.add(Op::CompositeConstruct(type,
-        builder.makeConstant(1u), builder.makeConstant(2u)));
+        builder.makeConstant(1u), builder.makeConstant(2u),
+        builder.makeConstant(3u)));
 
-  builder.add(Op::BufferStore(descriptor, index, value));
+  builder.add(Op::BufferStore(descriptor, index0, value,
+    kind == ResourceKind::eBufferTyped ? 0u : 4u));
+  builder.add(Op::BufferStore(descriptor, index1, value,
+    kind == ResourceKind::eBufferTyped ? 0u : 4u));
+
+  if (kind != ResourceKind::eBufferTyped)
+    builder.add(Op::BufferStore(descriptor, index1, builder.makeConstant(6u), 4u));
 
   builder.add(Op::Return());
   return builder;
@@ -257,7 +298,7 @@ Builder make_test_buffer_atomic(ResourceKind kind, bool indexed) {
 
   builder.add(Op::Label());
   auto descriptor = emit_buffer_descriptor(builder, entryPoint, kind, true, indexed, true);
-  auto index = emit_buffer_load_store_address(builder, entryPoint, kind);
+  auto index = emit_buffer_load_store_address(builder, entryPoint, kind, true);
 
   builder.add(Op::BufferAtomic(AtomicOp::eAdd, Type(),
     descriptor, index, builder.makeConstant(16u)));
@@ -492,7 +533,7 @@ SsaDef emit_image_descriptor_index(Builder& builder, SsaDef entryPoint, bool ind
     auto cbvDef = builder.add(Op::DclCbv(Type(BasicType(ScalarType::eU32, 4u)).addArrayDimension(1u), entryPoint, 0u, 0u, 1u));
     auto cbvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eCbv, cbvDef, builder.makeConstant(0u)));
 
-    index = builder.add(Op::BufferLoad(ScalarType::eU32, cbvDescriptor, builder.makeConstant(0u, 0u)));
+    index = builder.add(Op::BufferLoad(ScalarType::eU32, cbvDescriptor, builder.makeConstant(0u, 0u), 16u));
   } else {
     index = builder.makeConstant(0u);
   }
@@ -1370,7 +1411,7 @@ Builder make_test_buffer_load_sparse_feedback(bool uav) {
     .addStructMember(ScalarType::eU32)
     .addStructMember(texelType);
 
-  auto load = builder.add(Op::BufferLoad(resultType, descriptor, index).setFlags(OpFlag::eSparseFeedback));
+  auto load = builder.add(Op::BufferLoad(resultType, descriptor, index, 0u).setFlags(OpFlag::eSparseFeedback));
 
   auto output0Def = builder.add(Op::DclOutput(texelType, entryPoint, 0u, 0u));
   builder.add(Op::Semantic(output0Def, 0u, "SV_TARGET"));

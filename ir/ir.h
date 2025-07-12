@@ -1823,17 +1823,19 @@ public:
       .addOperand(Operand(index));
   }
 
-  static Op BufferLoad(Type type, SsaDef descriptor, SsaDef address) {
+  static Op BufferLoad(Type type, SsaDef descriptor, SsaDef address, uint32_t alignment) {
     return Op(OpCode::eBufferLoad, type)
       .addOperand(Operand(descriptor))
-      .addOperand(Operand(address));
+      .addOperand(Operand(address))
+      .addOperand(Operand(alignment));
   }
 
-  static Op BufferStore(SsaDef descriptor, SsaDef address, SsaDef value) {
+  static Op BufferStore(SsaDef descriptor, SsaDef address, SsaDef value, uint32_t alignment) {
     return Op(OpCode::eBufferStore, Type())
       .addOperand(Operand(descriptor))
       .addOperand(Operand(address))
-      .addOperand(Operand(value));
+      .addOperand(Operand(value))
+      .addOperand(Operand(alignment));
   }
 
   static Op BufferQuerySize(SsaDef descriptor) {
@@ -1841,17 +1843,19 @@ public:
       .addOperand(Operand(descriptor));
   }
 
-  static Op MemoryLoad(Type type, SsaDef pointer, SsaDef address) {
+  static Op MemoryLoad(Type type, SsaDef pointer, SsaDef address, uint32_t alignment) {
     return Op(OpCode::eMemoryLoad, type)
       .addOperand(Operand(pointer))
-      .addOperand(Operand(address));
+      .addOperand(Operand(address))
+      .addOperand(Operand(alignment));
   }
 
-  static Op MemoryStore(SsaDef pointer, SsaDef address, SsaDef value) {
+  static Op MemoryStore(SsaDef pointer, SsaDef address, SsaDef value, uint32_t alignment) {
     return Op(OpCode::eMemoryStore, Type())
       .addOperand(Operand(pointer))
       .addOperand(Operand(address))
-      .addOperand(Operand(value));
+      .addOperand(Operand(value))
+      .addOperand(Operand(alignment));
   }
 
   template<typename... T>

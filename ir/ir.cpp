@@ -248,6 +248,14 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
     case OpCode::eFRound:
       return 1u;
 
+    case OpCode::eBufferLoad:
+    case OpCode::eMemoryLoad:
+      return 2u;
+
+    case OpCode::eBufferStore:
+    case OpCode::eMemoryStore:
+      return 3u;
+
     case OpCode::eEntryPoint:
     case OpCode::eLabel:
     case OpCode::eLdsAtomic:
