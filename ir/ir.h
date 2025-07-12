@@ -936,9 +936,13 @@ enum class OpCode : uint16_t {
   eIEq                          = 583u,
   eINe                          = 584u,
   eSLt                          = 585u,
-  eSGe                          = 586u,
-  eULt                          = 587u,
-  eUGe                          = 588u,
+  eSLe                          = 586u,
+  eSGt                          = 587u,
+  eSGe                          = 588u,
+  eULt                          = 589u,
+  eULe                          = 590u,
+  eUGt                          = 591u,
+  eUGe                          = 592u,
 
   eBAnd                         = 608u,
   eBOr                          = 609u,
@@ -2094,6 +2098,18 @@ public:
       .addOperand(Operand(b));
   }
 
+  static Op SLe(SsaDef a, SsaDef b) {
+    return Op(OpCode::eSLe, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op SGt(SsaDef a, SsaDef b) {
+    return Op(OpCode::eSGt, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
   static Op SGe(SsaDef a, SsaDef b) {
     return Op(OpCode::eSGe, ScalarType::eBool)
       .addOperand(Operand(a))
@@ -2102,6 +2118,18 @@ public:
 
   static Op ULt(SsaDef a, SsaDef b) {
     return Op(OpCode::eULt, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op ULe(SsaDef a, SsaDef b) {
+    return Op(OpCode::eULe, ScalarType::eBool)
+      .addOperand(Operand(a))
+      .addOperand(Operand(b));
+  }
+
+  static Op UGt(SsaDef a, SsaDef b) {
+    return Op(OpCode::eUGt, ScalarType::eBool)
       .addOperand(Operand(a))
       .addOperand(Operand(b));
   }
