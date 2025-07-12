@@ -152,6 +152,8 @@ private:
 
   void emitImageStore(const ir::Op& op);
 
+  void emitImageAtomic(const ir::Op& op);
+
   void emitImageSample(const ir::Op& op);
 
   void emitImageGather(const ir::Op& op);
