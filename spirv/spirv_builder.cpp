@@ -351,6 +351,8 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eUMax:
     case ir::OpCode::eUClamp:
     case ir::OpCode::eUMSad:
+    case ir::OpCode::eSMulExtended:
+    case ir::OpCode::eUMulExtended:
       /* TODO implement */
       std::cerr << "Unimplemented opcode " << op.getOpCode() << std::endl;
       break;

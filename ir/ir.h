@@ -1003,6 +1003,8 @@ enum class OpCode : uint16_t {
   eUMax                         = 748u,
   eUClamp                       = 749u,
   eUMSad                        = 750u,
+  eSMulExtended                 = 751u,
+  eUMulExtended                 = 752u,
 
   Count
 };
