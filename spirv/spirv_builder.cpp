@@ -128,6 +128,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
       /* No-op, resolved when declaring function */
       return;
 
+    case ir::OpCode::eDclSampler:
+      return emitDclSampler(op);
+
     case ir::OpCode::eDclCbv:
       return emitDclCbv(op);
 
@@ -277,7 +280,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eSetTessDomain:
     case ir::OpCode::eDclSpecConstant:
     case ir::OpCode::eDclPushData:
-    case ir::OpCode::eDclSampler:
     case ir::OpCode::eDclLds:
     case ir::OpCode::eDclScratch:
     case ir::OpCode::eFunctionCall:
@@ -634,6 +636,14 @@ void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
   }
 
   addEntryPointId(varId);
+}
+
+
+void SpirvBuilder::emitDclSampler(const ir::Op& op) {
+  auto samplerTypeId = getIdForSamplerType();
+
+  defDescriptor(op, samplerTypeId, spv::StorageClassUniformConstant);
+  m_descriptorTypes.insert({ op.getDef(), samplerTypeId });
 }
 
 
@@ -2396,6 +2406,17 @@ uint32_t SpirvBuilder::getIdForImageType(const SpirvImageTypeKey& key) {
 
   m_imageTypes.insert({ key, id });
   return id;
+}
+
+
+uint32_t SpirvBuilder::getIdForSamplerType() {
+  if (m_samplerTypeId)
+    return m_samplerTypeId;
+
+  m_samplerTypeId = allocId();
+
+  pushOp(m_declarations, spv::OpTypeSampler, m_samplerTypeId);
+  return m_samplerTypeId;
 }
 
 
