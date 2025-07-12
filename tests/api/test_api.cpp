@@ -1,4 +1,5 @@
 #include "test_api.h"
+#include "test_api_arithmetic.h"
 #include "test_api_io.h"
 #include "test_api_resources.h"
 
@@ -200,6 +201,15 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
 
   ADD_TEST(test_resource_uav_buffer_load_sparse_feedback);
   ADD_TEST(test_resource_uav_image_load_sparse_feedback);
+
+  ADD_TEST(test_arithmetic_fp32);
+  ADD_TEST(test_arithmetic_fp32_precise);
+  ADD_TEST(test_arithmetic_fp32_special);
+
+  ADD_TEST(test_arithmetic_fp64);
+
+  ADD_TEST(test_arithmetic_fp16_scalar);
+  ADD_TEST(test_arithmetic_fp16_vector);
 
 return result;
 #undef ADD_TEST

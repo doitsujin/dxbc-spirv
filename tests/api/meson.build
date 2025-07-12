@@ -1,5 +1,6 @@
 test_api_files = files([
   'test_api.cpp',
+  'test_api_arithmetic.cpp',
   'test_api_io.cpp',
   'test_api_resources.cpp',
 ])
