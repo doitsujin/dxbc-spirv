@@ -211,6 +211,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eImageSample:
       return emitImageSample(op);
 
+    case ir::OpCode::eImageGather:
+      return emitImageGather(op);
+
     case ir::OpCode::eImageComputeLod:
       return emitImageComputeLod(op);
 
@@ -302,7 +305,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eImageAtomic:
     case ir::OpCode::eMemoryAtomic:
     case ir::OpCode::eImageStore:
-    case ir::OpCode::eImageGather:
     case ir::OpCode::ePointer:
     case ir::OpCode::ePointerAddress:
     case ir::OpCode::eEmitVertex:
@@ -1350,6 +1352,74 @@ void SpirvBuilder::emitImageSample(const ir::Op& op) {
 
   if (isDepthCompare)
     m_code.push_back(getIdForDef(depthCompareDef));
+
+  imageOperands.pushTo(m_code);
+
+  emitDebugName(op.getDef(), id);
+}
+
+
+void SpirvBuilder::emitImageGather(const ir::Op& op) {
+  auto imageDef = ir::SsaDef(op.getOperand(0u));
+  auto samplerDef = ir::SsaDef(op.getOperand(1u));
+
+  auto sampledImageId = emitSampledImage(imageDef, samplerDef);
+
+  /* Build final coordinate vector */
+  auto layerDef = ir::SsaDef(op.getOperand(2u));
+  auto coordDef = ir::SsaDef(op.getOperand(3u));
+
+  auto coordId = emitMergeImageCoordLayer(coordDef, layerDef);
+
+  /* Set up image operands with optional arguments */
+  SpirvImageOperands imageOperands = { };
+
+  /* Handle offset. This may not actually be constant,  */
+  auto offsetDef = ir::SsaDef(op.getOperand(4u));
+
+  if (offsetDef) {
+    if (m_builder.getOp(offsetDef).isConstant()) {
+      imageOperands.flags |= spv::ImageOperandsConstOffsetMask;
+      imageOperands.constOffset = getIdForDef(offsetDef);
+    } else {
+      enableCapability(spv::CapabilityImageGatherExtended);
+
+      imageOperands.flags |= spv::ImageOperandsOffsetMask;
+      imageOperands.dynamicOffset = getIdForDef(offsetDef);
+    }
+  }
+
+  /* Depth reference. If not null, this is a depth-compare op. */
+  auto depthCompareDef = ir::SsaDef(op.getOperand(5u));
+
+  /* Component to gather */
+  auto component = uint32_t(op.getOperand(6u));
+
+  /* Select opcode */
+  bool isSparse = op.getFlags() & ir::OpFlag::eSparseFeedback;
+
+  if (isSparse)
+    enableCapability(spv::CapabilitySparseResidency);
+
+  bool isDepthCompare = bool(depthCompareDef);
+
+  auto opCode = isDepthCompare
+    ? (isSparse ? spv::OpImageSparseDrefGather : spv::OpImageDrefGather)
+    : (isSparse ? spv::OpImageSparseGather : spv::OpImageGather);
+
+  /* Emit actual image gather instruction */
+  auto id = getIdForDef(op.getDef());
+
+  m_code.push_back(makeOpcodeToken(opCode, 6u + imageOperands.computeDwordCount()));
+  m_code.push_back(getIdForType(op.getType()));
+  m_code.push_back(id);
+  m_code.push_back(sampledImageId);
+  m_code.push_back(coordId);
+
+  if (isDepthCompare)
+    m_code.push_back(getIdForDef(depthCompareDef));
+  else
+    m_code.push_back(makeConstU32(component));
 
   imageOperands.pushTo(m_code);
 
