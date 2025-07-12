@@ -293,9 +293,14 @@ The `ir::AtomicOp` parameter is a literal enum value, thus the last parameter.
 
 The `%layer` parameter is `null` for non-arrayed image types.
 
-For `ir::AtomicOp::CompareExchange`, the first operand contains the desired value to compare
-to, and the second operand will be the value to store if the comparison succeeds. The operation
-returns the value at the given memory location before any exchange can take place.
+#### Operations
+- `Load`: Atomically loads a value. This instruction is generated when an atomic instruction has
+  no side effects. Must not have a `void` return type.
+- `Store`: Atomically stores a value. This instruction is generated when the result of an atomic
+  exchange instruction goes unused.
+- `Inc` and `Dec` are equivalent to `Add` or `Sub` with a constant value of `1`, respectively.
+- `CompareExchange` has two operands: The value to compare to first, and the value to store on
+  success second.
 
 ### Image instructions
 | `ir::OpCode`         | Return type      | Arguments...  |                   |             |              |              |             |              |          |           |       |             |
@@ -533,9 +538,9 @@ Note that the `FindMsb` instructions follow SPIR-V semantics rather than D3D sem
 | `ir::OpCode`              | Return type  | Arguments... |           |           |
 |---------------------------|--------------|--------------|-----------|-----------|
 | `IAdd`                    | integer      | `%a`         | `%b`      |           |
-| `IAddCarry`               | `vec2<i*/u*>`| `%a`         | `%b`      |           |
+| `IAddCarry`               | `vec2<u*>`   | `%a`         | `%b`      |           |
 | `ISub`                    | integer      | `%a`         | `%b`      |           |
-| `ISubBorrow`              | `vec2<i*/u*>`| `%a`         | `%b`      |           |
+| `ISubBorrow`              | `vec2<u*>`   | `%a`         | `%b`      |           |
 | `INeg`                    | integer      | `%a`         |           |           |
 | `IMul`                    | integer      | `%a`         | `%b`      |           |
 | `SDiv`                    | integer      | `%a`         | `%b`      |           |
