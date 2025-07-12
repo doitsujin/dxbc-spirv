@@ -208,6 +208,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eImageLoad:
       return emitImageLoad(op);
 
+    case ir::OpCode::eImageSample:
+      return emitImageSample(op);
+
     case ir::OpCode::eImageComputeLod:
       return emitImageComputeLod(op);
 
@@ -295,7 +298,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eImageAtomic:
     case ir::OpCode::eMemoryAtomic:
     case ir::OpCode::eImageStore:
-    case ir::OpCode::eImageSample:
     case ir::OpCode::eImageGather:
     case ir::OpCode::ePointer:
     case ir::OpCode::ePointerAddress:
@@ -1234,9 +1236,10 @@ void SpirvBuilder::emitImageLoad(const ir::Op& op) {
   }
 
   /* Build final coordinate vector */
-  auto coordId = emitMergeImageCoordLayer(
-    ir::SsaDef(op.getOperand(3u)),
-    ir::SsaDef(op.getOperand(2u)));
+  auto layerDef = ir::SsaDef(op.getOperand(2u));
+  auto coordDef = ir::SsaDef(op.getOperand(3u));
+
+  auto coordId = emitMergeImageCoordLayer(coordDef, layerDef);
 
   /* Select correct opcode */
   auto opCode = isUav
@@ -1248,6 +1251,104 @@ void SpirvBuilder::emitImageLoad(const ir::Op& op) {
   m_code.push_back(id);
   m_code.push_back(getIdForDef(descriptorOp.getDef()));
   m_code.push_back(coordId);
+  imageOperands.pushTo(m_code);
+
+  emitDebugName(op.getDef(), id);
+}
+
+
+void SpirvBuilder::emitImageSample(const ir::Op& op) {
+  auto imageDef = ir::SsaDef(op.getOperand(0u));
+  auto samplerDef = ir::SsaDef(op.getOperand(1u));
+
+  auto sampledImageId = emitSampledImage(imageDef, samplerDef);
+
+  /* Build final coordinate vector */
+  auto layerDef = ir::SsaDef(op.getOperand(2u));
+  auto coordDef = ir::SsaDef(op.getOperand(3u));
+
+  auto coordId = emitMergeImageCoordLayer(coordDef, layerDef);
+
+  /* Set up image operands with optional arguments */
+  SpirvImageOperands imageOperands = { };
+
+  /* Handle constant offset */
+  auto offsetDef = ir::SsaDef(op.getOperand(4u));
+
+  if (offsetDef) {
+    imageOperands.flags |= spv::ImageOperandsConstOffsetMask;
+    imageOperands.constOffset = getIdForDef(offsetDef);
+  }
+
+  /* Handle explicit LOD index */
+  auto lodIndexDef = ir::SsaDef(op.getOperand(5u));
+
+  if (lodIndexDef) {
+    imageOperands.flags |= spv::ImageOperandsLodMask;
+    imageOperands.lodIndex = getIdForDef(lodIndexDef);
+  }
+
+  /* Handle LOD bias for implicit LOD */
+  auto lodBiasDef = ir::SsaDef(op.getOperand(6u));
+
+  if (lodBiasDef) {
+    imageOperands.flags |= spv::ImageOperandsBiasMask;
+    imageOperands.lodBias = getIdForDef(lodBiasDef);
+  }
+
+  /* Handle minimum LOD clamp for implicit LOD */
+  auto lodClampDef = ir::SsaDef(op.getOperand(7u));
+
+  if (lodClampDef) {
+    enableCapability(spv::CapabilityMinLod);
+
+    imageOperands.flags |= spv::ImageOperandsMinLodMask;
+    imageOperands.minLod = getIdForDef(lodClampDef);
+  }
+
+  /* Handle derivatives for explicit LOD */
+  auto derivXDef = ir::SsaDef(op.getOperand(8u));
+  auto derivYDef = ir::SsaDef(op.getOperand(9u));
+
+  if (derivXDef && derivYDef) {
+    imageOperands.flags |= spv::ImageOperandsGradMask;
+    imageOperands.gradX = getIdForDef(derivXDef);
+    imageOperands.gradY = getIdForDef(derivYDef);
+  }
+
+  /* Depth reference. If not null, this is a depth-compare op. */
+  auto depthCompareDef = ir::SsaDef(op.getOperand(10u));
+
+  /* Select opcode based on op properties */
+  bool isSparse = op.getFlags() & ir::OpFlag::eSparseFeedback;
+
+  if (isSparse)
+    enableCapability(spv::CapabilitySparseResidency);
+
+  bool isExplicitLod = imageOperands.flags & (spv::ImageOperandsLodMask | spv::ImageOperandsGradMask);
+  bool isDepthCompare = bool(depthCompareDef);
+
+  auto opCode = isDepthCompare
+    ? (isExplicitLod
+      ? (isSparse ? spv::OpImageSparseSampleDrefExplicitLod : spv::OpImageSampleDrefExplicitLod)
+      : (isSparse ? spv::OpImageSparseSampleDrefImplicitLod : spv::OpImageSampleDrefImplicitLod))
+    : (isExplicitLod
+      ? (isSparse ? spv::OpImageSparseSampleExplicitLod : spv::OpImageSampleExplicitLod)
+      : (isSparse ? spv::OpImageSparseSampleImplicitLod : spv::OpImageSampleImplicitLod));
+
+  /* Emit actual image sample instruction */
+  auto id = getIdForDef(op.getDef());
+
+  m_code.push_back(makeOpcodeToken(opCode,
+    5u + (isDepthCompare ? 1u : 0u) + imageOperands.computeDwordCount()));
+  m_code.push_back(getIdForType(op.getType()));
+  m_code.push_back(id);
+  m_code.push_back(sampledImageId);
+  m_code.push_back(coordId);
+
+  if (isDepthCompare)
+    m_code.push_back(getIdForDef(depthCompareDef));
+
   imageOperands.pushTo(m_code);
 
   emitDebugName(op.getDef(), id);

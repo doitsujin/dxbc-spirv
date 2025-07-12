@@ -150,6 +150,8 @@ private:
 
   void emitImageLoad(const ir::Op& op);
 
+  void emitImageSample(const ir::Op& op);
+
   void emitImageComputeLod(const ir::Op& op);
 
   void emitImageQuerySize(const ir::Op& op);
