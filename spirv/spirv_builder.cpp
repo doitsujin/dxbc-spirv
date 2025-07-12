@@ -211,6 +211,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eImageStore:
       return emitImageStore(op);
 
+    case ir::OpCode::eImageAtomic:
+      return emitImageAtomic(op);
+
     case ir::OpCode::eImageSample:
       return emitImageSample(op);
 
@@ -305,7 +308,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eMemoryLoad:
     case ir::OpCode::eMemoryStore:
     case ir::OpCode::eLdsAtomic:
-    case ir::OpCode::eImageAtomic:
     case ir::OpCode::eMemoryAtomic:
     case ir::OpCode::ePointer:
     case ir::OpCode::ePointerAddress:
@@ -1286,6 +1288,35 @@ void SpirvBuilder::emitImageStore(const ir::Op& op) {
   m_code.push_back(coordId);
   m_code.push_back(getIdForDef(valueDef));
   imageOperands.pushTo(m_code);
+}
+
+
+void SpirvBuilder::emitImageAtomic(const ir::Op& op) {
+  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& dclOp = m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u)));
+
+  /* Build coordinate vector */
+  auto layerDef = ir::SsaDef(op.getOperand(1u));
+  auto coordDef = ir::SsaDef(op.getOperand(2u));
+
+  auto coordId = emitMergeImageCoordLayer(coordDef, layerDef);
+
+  /* OpImageTexelPointer takes a pointer to an image descriptor */
+  auto type = dclOp.getType();
+
+  auto ptrTypeId = getIdForPtrType(getIdForType(type), spv::StorageClassImage);
+  auto ptrId = allocId();
+
+  pushOp(m_code, spv::OpImageTexelPointer, ptrTypeId, ptrId,
+    getImageDescriptorPointer(descriptorOp), coordId,
+    makeConstU32(0u));
+
+  /* Declare pointer as non-uniform if necessary */
+  if (descriptorOp.getFlags() & ir::OpFlag::eNonUniform)
+    pushOp(m_decorations, spv::OpDecorate, ptrId, spv::DecorationNonUniform);
+
+  emitAtomic(op, type, 3u, ptrId, spv::ScopeQueueFamily,
+    spv::MemorySemanticsImageMemoryMask);
 }
 
 
