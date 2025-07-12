@@ -83,6 +83,8 @@ private:
 
   uint32_t m_glslExtId = 0u;
 
+  uint32_t m_samplerTypeId = 0u;
+
   struct {
     ir::Op blockLabel = { };
   } m_structure;
@@ -116,6 +118,8 @@ private:
   uint32_t emitBuiltInDrawParameter(spv::BuiltIn builtIn);
 
   void emitDclBuiltInIoVar(const ir::Op& op);
+
+  void emitDclSampler(const ir::Op& op);
 
   void emitDclCbv(const ir::Op& op);
 
@@ -226,6 +230,8 @@ private:
   uint32_t getIdForFuncType(const SpirvFunctionTypeKey& key);
 
   uint32_t getIdForImageType(const SpirvImageTypeKey& key);
+
+  uint32_t getIdForSamplerType();
 
   uint32_t getIdForConstant(const SpirvConstant& constant, uint32_t memberCount);
 
