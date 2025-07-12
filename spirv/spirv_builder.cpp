@@ -113,6 +113,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eConstant:
       return emitConstant(op);
 
+    case ir::OpCode::eSetCsWorkgroupSize:
+      return emitSetCsWorkgroupSize(op);
+
     case ir::OpCode::eDclInput:
     case ir::OpCode::eDclOutput:
       return emitDclIoVar(op);
@@ -254,7 +257,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eUDiv:
       return emitSimpleArithmetic(op);
 
-    case ir::OpCode::eSetCsWorkgroupSize:
     case ir::OpCode::eSetGsInstances:
     case ir::OpCode::eSetGsInputPrimitive:
     case ir::OpCode::eSetGsOutputVertices:
@@ -1982,6 +1984,17 @@ void SpirvBuilder::emitSimpleArithmetic(const ir::Op& op) {
     pushOp(m_declarations, spv::OpDecorate, id, spv::DecorationNoContraction);
 
   emitDebugName(op.getDef(), id);
+}
+
+
+void SpirvBuilder::emitSetCsWorkgroupSize(const ir::Op& op) {
+  auto x = uint32_t(op.getOperand(1u));
+  auto y = uint32_t(op.getOperand(2u));
+  auto z = uint32_t(op.getOperand(3u));
+
+  pushOp(m_executionModes, spv::OpExecutionModeId, m_entryPointId,
+    spv::ExecutionModeLocalSizeId,
+    makeConstU32(x), makeConstU32(y), makeConstU32(z));
 }
 
 

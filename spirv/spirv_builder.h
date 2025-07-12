@@ -195,6 +195,8 @@ private:
 
   void emitSimpleArithmetic(const ir::Op& op);
 
+  void emitSetCsWorkgroupSize(const ir::Op& op);
+
   uint32_t importGlslExt();
 
   uint32_t allocId();
