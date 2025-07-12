@@ -139,6 +139,10 @@ private:
 
   void emitCounterAtomic(const ir::Op& op);
 
+  uint32_t emitMergeImageCoordLayer(const ir::SsaDef& coordDef, const ir::SsaDef& layerDef);
+
+  void emitImageLoad(const ir::Op& op);
+
   void emitImageQuerySize(const ir::Op& op);
 
   void emitImageQueryMips(const ir::Op& op);
@@ -254,6 +258,10 @@ private:
   bool declaresPlainBufferResource(const ir::Op& op);
 
   uint32_t getDescriptorArraySize(const ir::Op& op);
+
+  void setUavImageReadOperands(SpirvImageOperands& operands, const ir::Op& uavOp);
+
+  void setUavImageWriteOperands(SpirvImageOperands& operands, const ir::Op& uavOp);
 
   ir::Type traverseType(ir::Type type, ir::SsaDef address) const;
 
