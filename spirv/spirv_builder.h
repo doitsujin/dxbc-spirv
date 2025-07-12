@@ -121,6 +121,8 @@ private:
 
   void emitDclSrvUav(const ir::Op& op);
 
+  void emitDclUavCounter(const ir::Op& op);
+
   uint32_t getDescriptorArrayIndex(const ir::Op& op);
 
   uint32_t getImageDescriptorPointer(const ir::Op& op);
@@ -134,6 +136,8 @@ private:
   void emitBufferQuery(const ir::Op& op);
 
   void emitBufferAtomic(const ir::Op& op);
+
+  void emitCounterAtomic(const ir::Op& op);
 
   void emitImageQuerySize(const ir::Op& op);
 
@@ -247,9 +251,9 @@ private:
 
   void addEntryPointId(uint32_t id);
 
-  bool declaresPlainBufferResource(ir::Op op);
+  bool declaresPlainBufferResource(const ir::Op& op);
 
-  uint32_t getDescriptorArraySize(ir::Op op);
+  uint32_t getDescriptorArraySize(const ir::Op& op);
 
   ir::Type traverseType(ir::Type type, ir::SsaDef address) const;
 
