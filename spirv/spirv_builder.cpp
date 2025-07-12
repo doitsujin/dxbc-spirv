@@ -208,6 +208,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eImageLoad:
       return emitImageLoad(op);
 
+    case ir::OpCode::eImageStore:
+      return emitImageStore(op);
+
     case ir::OpCode::eImageSample:
       return emitImageSample(op);
 
@@ -304,7 +307,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eLdsAtomic:
     case ir::OpCode::eImageAtomic:
     case ir::OpCode::eMemoryAtomic:
-    case ir::OpCode::eImageStore:
     case ir::OpCode::ePointer:
     case ir::OpCode::ePointerAddress:
     case ir::OpCode::eEmitVertex:
@@ -1258,6 +1260,32 @@ void SpirvBuilder::emitImageLoad(const ir::Op& op) {
   imageOperands.pushTo(m_code);
 
   emitDebugName(op.getDef(), id);
+}
+
+
+void SpirvBuilder::emitImageStore(const ir::Op& op) {
+  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& dclOp = m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u)));
+
+  /* Set up image operands */
+  SpirvImageOperands imageOperands = { };
+  setUavImageWriteOperands(imageOperands, dclOp);
+
+  /* Build final coordinate vector */
+  auto layerDef = ir::SsaDef(op.getOperand(1u));
+  auto coordDef = ir::SsaDef(op.getOperand(2u));
+
+  auto coordId = emitMergeImageCoordLayer(coordDef, layerDef);
+
+  /* Value to store */
+  auto valueDef = ir::SsaDef(op.getOperand(3u));
+
+  /* Emit image store */
+  m_code.push_back(makeOpcodeToken(spv::OpImageWrite, 4u + imageOperands.computeDwordCount()));
+  m_code.push_back(getIdForDef(descriptorOp.getDef()));
+  m_code.push_back(coordId);
+  m_code.push_back(getIdForDef(valueDef));
+  imageOperands.pushTo(m_code);
 }
 
 
