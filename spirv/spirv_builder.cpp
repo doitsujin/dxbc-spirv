@@ -233,6 +233,10 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eCast:
       return emitConvert(op);
 
+    case ir::OpCode::eDerivX:
+    case ir::OpCode::eDerivY:
+      return emitDerivative(op);
+
     case ir::OpCode::eFEq:
     case ir::OpCode::eFNe:
     case ir::OpCode::eFLt:
@@ -307,8 +311,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eInterpolateAtCentroid:
     case ir::OpCode::eInterpolateAtSample:
     case ir::OpCode::eInterpolateAtOffset:
-    case ir::OpCode::eDerivX:
-    case ir::OpCode::eDerivY:
     case ir::OpCode::eRovScopedLockBegin:
     case ir::OpCode::eRovScopedLockEnd:
     case ir::OpCode::eFAbs:
@@ -1572,6 +1574,41 @@ void SpirvBuilder::emitConvert(const ir::Op& op) {
   auto dstId = getIdForDef(op.getDef());
 
   pushOp(m_code, spvOp, dstTypeId, dstId, srcId);
+}
+
+
+void SpirvBuilder::emitDerivative(const ir::Op& op) {
+  /* Select SPIR-V opcode based on the selected derivative mode */
+  auto mode = ir::DerivativeMode(op.getOperand(op.getFirstLiteralOperandIndex()));
+
+  if (mode != ir::DerivativeMode::eDefault)
+    enableCapability(spv::CapabilityDerivativeControl);
+
+  auto opCode = [&] {
+    bool isX = op.getOpCode() == ir::OpCode::eDerivX;
+
+    switch (mode) {
+      case ir::DerivativeMode::eDefault:
+        return isX ? spv::OpDPdx : spv::OpDPdy;
+
+      case ir::DerivativeMode::eFine:
+        return isX ? spv::OpDPdxFine : spv::OpDPdyFine;
+
+      case ir::DerivativeMode::eCoarse:
+        return isX ? spv::OpDPdxCoarse : spv::OpDPdyCoarse;
+    }
+
+    dxbc_spv_unreachable();
+    return spv::OpNop;
+  } ();
+
+  /* Emit instruction */
+  auto id = getIdForDef(op.getDef());
+
+  pushOp(m_code, opCode, getIdForType(op.getType()), id,
+    getIdForDef(ir::SsaDef(op.getOperand(0u))));
+
+  emitDebugName(op.getDef(), id);
 }
 
 
