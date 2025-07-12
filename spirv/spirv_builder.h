@@ -63,6 +63,7 @@ private:
   std::unordered_set<spv::Capability> m_enabledCaps;
   std::unordered_set<std::string> m_enabledExt;
   std::unordered_map<SpirvFunctionParameterKey, uint32_t> m_funcParamIds;
+  std::unordered_map<uint32_t, uint32_t> m_sampledImageTypeIds;
   std::unordered_map<ir::SsaDef, uint32_t> m_descriptorTypes;
 
   std::vector<uint32_t> m_ssaDefsToId;
@@ -232,6 +233,8 @@ private:
   uint32_t getIdForImageType(const SpirvImageTypeKey& key);
 
   uint32_t getIdForSamplerType();
+
+  uint32_t getIdForSampledImageType(uint32_t imageTypeId);
 
   uint32_t getIdForConstant(const SpirvConstant& constant, uint32_t memberCount);
 

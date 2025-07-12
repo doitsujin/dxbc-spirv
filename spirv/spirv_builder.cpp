@@ -2420,6 +2420,20 @@ uint32_t SpirvBuilder::getIdForSamplerType() {
 }
 
 
+uint32_t SpirvBuilder::getIdForSampledImageType(uint32_t imageTypeId) {
+  auto entry = m_sampledImageTypeIds.find(imageTypeId);
+
+  if (entry != m_sampledImageTypeIds.end())
+    return entry->second;
+
+  uint32_t id = allocId();
+
+  pushOp(m_declarations, spv::OpTypeSampledImage, id, imageTypeId);
+  m_sampledImageTypeIds.insert({ imageTypeId, id });
+  return id;
+}
+
+
 uint32_t SpirvBuilder::getIdForConstant(const SpirvConstant& constant, uint32_t memberCount) {
   auto entry = m_constants.find(constant);
 
