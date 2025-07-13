@@ -354,13 +354,8 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eInterpolateAtOffset:
     case ir::OpCode::eRovScopedLockBegin:
     case ir::OpCode::eRovScopedLockEnd:
-    case ir::OpCode::eFDot:
-    case ir::OpCode::eFDotLegacy:
-    case ir::OpCode::eFMulLegacy:
-    case ir::OpCode::eFMadLegacy:
     case ir::OpCode::eIAddCarry:
     case ir::OpCode::eISubBorrow:
-    case ir::OpCode::eUMSad:
     case ir::OpCode::eSMulExtended:
     case ir::OpCode::eUMulExtended:
       /* TODO implement */
@@ -385,8 +380,14 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eScopedSwitchBreak:
     case ir::OpCode::eScopedEndSwitch:
     case ir::OpCode::eConsumeAs:
+    case ir::OpCode::eFDot:
+    case ir::OpCode::eFDotLegacy:
+    case ir::OpCode::eFMulLegacy:
+    case ir::OpCode::eFMadLegacy:
+    case ir::OpCode::eUMSad:
     case ir::OpCode::Count:
       /* Invalid opcodes */
+      std::cerr << "Invalid opcode " << op.getOpCode() << std::endl;
       break;
   }
 
