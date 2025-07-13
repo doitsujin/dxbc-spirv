@@ -290,10 +290,11 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eISub:
     case ir::OpCode::eINeg:
     case ir::OpCode::eIMul:
-    case ir::OpCode::eSDiv:
     case ir::OpCode::eUDiv:
+    case ir::OpCode::eUMod:
       return emitSimpleArithmetic(op);
 
+    case ir::OpCode::eIAbs:
     case ir::OpCode::eFAbs:
     case ir::OpCode::eFMad:
     case ir::OpCode::eFFract:
@@ -2403,8 +2404,8 @@ void SpirvBuilder::emitSimpleArithmetic(const ir::Op& op) {
       case ir::OpCode::eISub:         return spv::OpISub;
       case ir::OpCode::eINeg:         return spv::OpSNegate;
       case ir::OpCode::eIMul:         return spv::OpIMul;
-      case ir::OpCode::eSDiv:         return spv::OpSDiv;
       case ir::OpCode::eUDiv:         return spv::OpUDiv;
+      case ir::OpCode::eUMod:         return spv::OpUMod;
 
       default:
         dxbc_spv_unreachable();
@@ -2430,6 +2431,7 @@ void SpirvBuilder::emitSimpleArithmetic(const ir::Op& op) {
 void SpirvBuilder::emitExtendedGlslArithmetic(const ir::Op& op) {
   auto extOp = [&] {
     switch (op.getOpCode()) {
+      case ir::OpCode::eIAbs: return GLSLstd450SAbs;
       case ir::OpCode::eFAbs: return GLSLstd450FAbs;
       case ir::OpCode::eFMad: return GLSLstd450Fma;
       case ir::OpCode::eFFract: return GLSLstd450Fract;
