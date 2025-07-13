@@ -224,6 +224,11 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_arithmetic_uint16_scalar);
   ADD_TEST(test_arithmetic_uint16_vector);
 
+  ADD_TEST(test_arithmetic_sint32_compare);
+  ADD_TEST(test_arithmetic_uint32_compare);
+  ADD_TEST(test_arithmetic_sint16_compare);
+  ADD_TEST(test_arithmetic_uint16_compare);
+
 return result;
 #undef ADD_TEST
 }
