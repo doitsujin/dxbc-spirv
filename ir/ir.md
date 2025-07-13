@@ -552,10 +552,11 @@ Note that the `FindMsb` instructions follow SPIR-V semantics rather than D3D sem
 | `IAddCarry`               | `vec2<u32>`  | `%a`         | `%b`      |           |
 | `ISub`                    | integer      | `%a`         | `%b`      |           |
 | `ISubBorrow`              | `vec2<u32>`  | `%a`         | `%b`      |           |
+| `IAbs`                    | integer      | `%a`         |           |           |
 | `INeg`                    | integer      | `%a`         |           |           |
 | `IMul`                    | integer      | `%a`         | `%b`      |           |
-| `SDiv`                    | integer      | `%a`         | `%b`      |           |
 | `UDiv`                    | integer      | `%a`         | `%b`      |           |
+| `UMod`                    | integer      | `%a`         | `%b`      |           |
 | `SMin`                    | integer      | `%a`         | `%b`      |           |
 | `SMax`                    | integer      | `%a`         | `%b`      |           |
 | `SClamp`                  | integer      | `%a`         | `%b`      | `%c`      |

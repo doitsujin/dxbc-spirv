@@ -773,9 +773,10 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eISub: return os << "ISub";
     case OpCode::eISubBorrow: return os << "ISubBorrow";
     case OpCode::eINeg: return os << "INeg";
+    case OpCode::eIAbs: return os << "IAbs";
     case OpCode::eIMul: return os << "IMul";
-    case OpCode::eSDiv: return os << "SDiv";
     case OpCode::eUDiv: return os << "UDiv";
+    case OpCode::eUMod: return os << "UMod";
     case OpCode::eSMin: return os << "SMin";
     case OpCode::eSMax: return os << "SMax";
     case OpCode::eSClamp: return os << "SClamp";

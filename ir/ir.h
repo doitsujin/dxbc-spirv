@@ -998,19 +998,20 @@ enum class OpCode : uint16_t {
   eIAddCarry                    = 737u,
   eISub                         = 738u,
   eISubBorrow                   = 739u,
-  eINeg                         = 740u,
-  eIMul                         = 741u,
-  eSDiv                         = 742u,
-  eUDiv                         = 743u,
-  eSMin                         = 744u,
-  eSMax                         = 745u,
-  eSClamp                       = 746u,
-  eUMin                         = 747u,
-  eUMax                         = 748u,
-  eUClamp                       = 749u,
-  eUMSad                        = 750u,
-  eSMulExtended                 = 751u,
-  eUMulExtended                 = 752u,
+  eIAbs                         = 740u,
+  eINeg                         = 741u,
+  eIMul                         = 742u,
+  eSMulExtended                 = 743u,
+  eUMulExtended                 = 744u,
+  eUDiv                         = 745u,
+  eUMod                         = 746u,
+  eSMin                         = 747u,
+  eSMax                         = 748u,
+  eSClamp                       = 749u,
+  eUMin                         = 750u,
+  eUMax                         = 751u,
+  eUClamp                       = 752u,
+  eUMSad                        = 753u,
 
   Count
 };
@@ -2442,14 +2443,14 @@ public:
       .addOperand(Operand(b));
   }
 
-  static Op SDiv(Type type, SsaDef a, SsaDef b) {
-    return Op(OpCode::eSDiv, type)
+  static Op UDiv(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eUDiv, type)
       .addOperand(Operand(a))
       .addOperand(Operand(b));
   }
 
-  static Op UDiv(Type type, SsaDef a, SsaDef b) {
-    return Op(OpCode::eUDiv, type)
+  static Op UMod(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eUMod, type)
       .addOperand(Operand(a))
       .addOperand(Operand(b));
   }
