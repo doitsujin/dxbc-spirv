@@ -441,7 +441,7 @@ stage, barriers with a wider execution scope are only meaningful in hull and com
 | `RovScopedLockEnd`        | `void`      |              |                         |
 
 ### Comparison instructions
-Component-wise comparisons that return a boolean vector.
+Component-wise comparisons that return a boolean. Operands must be scalar.
 
 | `ir::OpCode`              | Return type | Arguments... |      |
 |---------------------------|-------------|--------------|------|
