@@ -119,6 +119,63 @@ Builder make_test_float_arithmetic(BasicType type, bool precise) {
 }
 
 
+Builder make_test_float_compare(ScalarType type) {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::eCompute);
+  builder.add(Op::SetCsWorkgroupSize(entryPoint, 1u, 1u, 1u));
+  builder.add(Op::Label());
+
+  auto srvType = Type(ScalarType::eF32).addArrayDimension(1u).addArrayDimension(0u);
+  auto uavType = Type(ScalarType::eU32).addArrayDimension(1u).addArrayDimension(0u);
+
+  auto srv = builder.add(Op::DclSrv(srvType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured));
+  auto uav = builder.add(Op::DclUav(uavType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured, UavFlag::eWriteOnly));
+
+  auto srvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eSrv, srv, builder.makeConstant(0u)));
+  auto uavDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eUav, uav, builder.makeConstant(0u)));
+
+  static const std::vector<std::pair<ir::OpCode, uint32_t>> tests = {
+    { ir::OpCode::eFEq, 2u },
+    { ir::OpCode::eFNe, 2u },
+    { ir::OpCode::eFLt, 2u },
+    { ir::OpCode::eFLe, 2u },
+    { ir::OpCode::eFGt, 2u },
+    { ir::OpCode::eFGe, 2u },
+    { ir::OpCode::eFIsNan, 1u },
+  };
+
+  /* Reuse the same operands for all ops */
+  std::array<SsaDef, 2u> operands;
+
+  for (uint32_t i = 0u; i < operands.size(); i++) {
+    auto indexDef = builder.makeConstant(i, 0u);
+    operands[i] = builder.add(Op::BufferLoad(ScalarType::eF32, srvDescriptor, indexDef, 4u));
+
+    if (type != ScalarType::eF32)
+      operands[i] = builder.add(Op::ConvertFtoF(type, operands[i]));
+  }
+
+  uint32_t uavIndex = 0u;
+
+  for (const auto& e : tests) {
+    Op op(e.first, ScalarType::eBool);
+
+    for (uint32_t i = 0u; i < e.second; i++)
+      op.addOperand(Operand(operands.at(i)));
+
+    auto resultDef = builder.add(std::move(op));
+    resultDef = builder.add(Op::Select(ScalarType::eU32, resultDef,
+      builder.makeConstant(1u), builder.makeConstant(0u)));
+
+    auto indexDef = builder.makeConstant(uavIndex++, 0u);
+    builder.add(Op::BufferStore(uavDescriptor, indexDef, resultDef, 4u));
+  }
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+
 Builder test_arithmetic_fp32() {
   return make_test_float_arithmetic(ScalarType::eF32, false);
 }
@@ -161,8 +218,16 @@ Builder test_arithmetic_fp32_special() {
   return builder;
 }
 
+Builder test_arithmetic_fp32_compare() {
+  return make_test_float_compare(ScalarType::eF32);
+}
+
 Builder test_arithmetic_fp64() {
   return make_test_float_arithmetic(ScalarType::eF64, false);
+}
+
+Builder test_arithmetic_fp64_compare() {
+  return make_test_float_compare(ScalarType::eF64);
 }
 
 Builder test_arithmetic_fp16_scalar() {
@@ -171,6 +236,10 @@ Builder test_arithmetic_fp16_scalar() {
 
 Builder test_arithmetic_fp16_vector() {
   return make_test_float_arithmetic(BasicType(ScalarType::eF16, 2u), false);
+}
+
+Builder test_arithmetic_fp16_compare() {
+  return make_test_float_compare(ScalarType::eF16);
 }
 
 }
