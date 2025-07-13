@@ -511,11 +511,11 @@ Maps boolean values to values of any other type.
 | `FCos`                    | `f32`        | `%a`         |         |       |
 
 Note that `FDot*` instructions takes vector arguments and returns a scalar. This instruction
-should be lowered to a sequence of `FMul*` and `FMad*` instructions.
+**must** be lowered to a sequence of `FMul*` and `FMad*` instructions.
 
 The `mode` parameter for `FRound` is a constant enum `ir::RoundMode`.
 
-The `*Legacy` instructions follow D3D9 rules w.r.t. multiplication.
+The `*Legacy` instructions follow D3D9 rules w.r.t. multiplication by zero and **must** be lowered.
 
 ### Bitwise instructions
 | `ir::OpCode`              | Return type  | Arguments... |           |           |          |
