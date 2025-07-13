@@ -217,6 +217,13 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_arithmetic_fp16_packing);
   ADD_TEST(test_arithmetic_fp16_packing_legacy);
 
+  ADD_TEST(test_arithmetic_sint32);
+  ADD_TEST(test_arithmetic_uint32);
+  ADD_TEST(test_arithmetic_sint16_scalar);
+  ADD_TEST(test_arithmetic_sint16_vector);
+  ADD_TEST(test_arithmetic_uint16_scalar);
+  ADD_TEST(test_arithmetic_uint16_vector);
+
 return result;
 #undef ADD_TEST
 }
