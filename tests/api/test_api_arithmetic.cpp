@@ -341,4 +341,146 @@ Builder test_arithmetic_fp16_packing_legacy() {
   return builder;
 }
 
+
+struct ArithmeticIntTest {
+  ir::OpCode opCode = ir::OpCode();
+  uint32_t operandCount = 0u;
+  ScalarType requiredType = ScalarType::eUnknown;
+};
+
+Builder make_test_int_arithmetic(BasicType type) {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::eCompute);
+  builder.add(Op::SetCsWorkgroupSize(entryPoint, 1u, 1u, 1u));
+  builder.add(Op::Label());
+
+  auto bufType = Type(ScalarType::eU32).addArrayDimension(1u).addArrayDimension(0u);
+
+  auto srv = builder.add(Op::DclSrv(bufType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured));
+  auto uav = builder.add(Op::DclUav(bufType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured, UavFlag::eWriteOnly));
+
+  auto srvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eSrv, srv, builder.makeConstant(0u)));
+  auto uavDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eUav, uav, builder.makeConstant(0u)));
+
+  static const std::vector<ArithmeticIntTest> tests = {
+    { ir::OpCode::eIAnd, 2 },
+    { ir::OpCode::eIOr, 2 },
+    { ir::OpCode::eIXor, 2 },
+    { ir::OpCode::eINot, 1 },
+    { ir::OpCode::eIAdd, 2 },
+    { ir::OpCode::eISub, 2 },
+    { ir::OpCode::eINeg, 1 },
+    { ir::OpCode::eIAbs, 1 },
+    { ir::OpCode::eIMul, 2 },
+    { ir::OpCode::eIShl, 2 },
+    { ir::OpCode::eSShr, 2 },
+    { ir::OpCode::eUShr, 2 },
+    /* Unsigned-only ops */
+    { ir::OpCode::eUDiv, 2, ScalarType::eU32 },
+    { ir::OpCode::eUDiv, 2, ScalarType::eU16 },
+    { ir::OpCode::eUMod, 2, ScalarType::eU32 },
+    { ir::OpCode::eUMod, 2, ScalarType::eU16 },
+    { ir::OpCode::eUMin, 2, ScalarType::eU32 },
+    { ir::OpCode::eUMin, 2, ScalarType::eU16 },
+    { ir::OpCode::eUMax, 2, ScalarType::eU32 },
+    { ir::OpCode::eUMax, 2, ScalarType::eU16 },
+    { ir::OpCode::eUClamp, 3, ScalarType::eU32 },
+    { ir::OpCode::eUClamp, 3, ScalarType::eU16 },
+    /* Signed-only ops */
+    { ir::OpCode::eSMin, 2, ScalarType::eI32 },
+    { ir::OpCode::eSMin, 2, ScalarType::eI16 },
+    { ir::OpCode::eSMax, 2, ScalarType::eI32 },
+    { ir::OpCode::eSMax, 2, ScalarType::eI16 },
+    { ir::OpCode::eSClamp, 3, ScalarType::eI32 },
+    { ir::OpCode::eSClamp, 3, ScalarType::eI16 },
+    /* Ops only supported on 32-bit types */
+    { ir::OpCode::eIBitInsert, 4, ScalarType::eU32 },
+    { ir::OpCode::eIBitInsert, 4, ScalarType::eI32 },
+    { ir::OpCode::eSBitExtract, 3, ScalarType::eI32 },
+    { ir::OpCode::eUBitExtract, 3, ScalarType::eU32 },
+    { ir::OpCode::eIBitCount, 1, ScalarType::eI32 },
+    { ir::OpCode::eIBitCount, 1, ScalarType::eU32 },
+    { ir::OpCode::eIBitReverse, 1, ScalarType::eI32 },
+    { ir::OpCode::eIBitReverse, 1, ScalarType::eU32 },
+    { ir::OpCode::eIFindLsb, 1, ScalarType::eI32 },
+    { ir::OpCode::eIFindLsb, 1, ScalarType::eU32 },
+    { ir::OpCode::eSFindMsb, 1, ScalarType::eI32 },
+    { ir::OpCode::eUFindMsb, 1, ScalarType::eU32 },
+  };
+
+  uint32_t srvOffset = 0u;
+
+  /* Result of last instruction */
+  auto resultDef = SsaDef();
+
+  for (const auto& e : tests) {
+    if (e.requiredType != ScalarType::eUnknown &&
+        e.requiredType != type.getBaseType())
+      continue;
+
+    Op op(e.opCode, type);
+
+    uint32_t n = 0u;
+
+    if (resultDef) {
+      op.addOperand(Operand(resultDef));
+      n++;
+    }
+
+    while (n < e.operandCount) {
+      auto operandDef = builder.add(Op::BufferLoad(ScalarType::eU32,
+        srvDescriptor, builder.makeConstant(srvOffset++, 0u), 4u));
+
+      if (type != ScalarType::eU32) {
+        operandDef = type.byteSize() != sizeof(uint32_t)
+          ? builder.add(Op::ConvertItoI(type, operandDef))
+          : builder.add(Op::Cast(type, operandDef));
+      }
+
+      op.addOperand(Operand(operandDef));
+      n++;
+    }
+
+    resultDef = builder.add(std::move(op));
+  }
+
+  /* Convert final result back to F32 and store */
+  if (type != ScalarType::eU32) {
+    resultDef = type.byteSize() != sizeof(uint32_t)
+      ? builder.add(Op::ConvertItoI(ScalarType::eU32, resultDef))
+      : builder.add(Op::Cast(ScalarType::eU32, resultDef));
+  }
+
+  builder.add(Op::BufferStore(uavDescriptor,
+    builder.makeConstant(0u, 0u), resultDef, 4u));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+
+Builder test_arithmetic_sint32() {
+  return make_test_int_arithmetic(ScalarType::eI32);
+}
+
+Builder test_arithmetic_uint32() {
+  return make_test_int_arithmetic(ScalarType::eU32);
+}
+
+Builder test_arithmetic_sint16_scalar() {
+  return make_test_int_arithmetic(ScalarType::eI16);
+}
+
+Builder test_arithmetic_sint16_vector() {
+  return make_test_int_arithmetic(BasicType(ScalarType::eI16, 2u));
+}
+
+Builder test_arithmetic_uint16_scalar() {
+  return make_test_int_arithmetic(ScalarType::eU16);
+}
+
+Builder test_arithmetic_uint16_vector() {
+  return make_test_int_arithmetic(BasicType(ScalarType::eU16, 2u));
+}
+
 }
