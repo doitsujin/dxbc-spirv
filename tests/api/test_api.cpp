@@ -205,11 +205,14 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_arithmetic_fp32);
   ADD_TEST(test_arithmetic_fp32_precise);
   ADD_TEST(test_arithmetic_fp32_special);
+  ADD_TEST(test_arithmetic_fp32_compare);
 
   ADD_TEST(test_arithmetic_fp64);
+  ADD_TEST(test_arithmetic_fp64_compare);
 
   ADD_TEST(test_arithmetic_fp16_scalar);
   ADD_TEST(test_arithmetic_fp16_vector);
+  ADD_TEST(test_arithmetic_fp16_compare);
 
 return result;
 #undef ADD_TEST
