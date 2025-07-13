@@ -865,8 +865,10 @@ enum class OpCode : uint16_t {
   eConvertFtoI                  = 193u,
   eConvertItoF                  = 194u,
   eConvertItoI                  = 195u,
-  eCast                         = 196u,
-  eConsumeAs                    = 197u,
+  eConvertF32toPackedF16        = 196u,
+  eConvertPackedF16toF32        = 197u,
+  eCast                         = 198u,
+  eConsumeAs                    = 199u,
 
   eCompositeInsert              = 224u,
   eCompositeExtract             = 225u,
@@ -1712,6 +1714,16 @@ public:
 
   static Op ConvertItoI(Type type, SsaDef value) {
     return Op(OpCode::eConvertItoI, type)
+      .addOperand(Operand(value));
+  }
+
+  static Op ConvertF32toPackedF16(SsaDef value) {
+    return Op(OpCode::eConvertF32toPackedF16, ScalarType::eU32)
+      .addOperand(Operand(value));
+  }
+
+  static Op ConvertPackedF16toF32(SsaDef value) {
+    return Op(OpCode::eConvertPackedF16toF32, BasicType(ScalarType::eF32, 2u))
       .addOperand(Operand(value));
   }
 
