@@ -656,6 +656,8 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eConvertFtoI: return os << "ConvertFtoI";
     case OpCode::eConvertItoF: return os << "ConvertItoF";
     case OpCode::eConvertItoI: return os << "ConvertItoI";
+    case OpCode::eConvertF32toPackedF16: return os << "ConvertF32toPackedF16";
+    case OpCode::eConvertPackedF16toF32: return os << "ConvertPackedF16toF32";
     case OpCode::eCast: return os << "Cast";
     case OpCode::eConsumeAs: return os << "ConsumeAs";
     case OpCode::eCompositeInsert: return os << "CompositeInsert";

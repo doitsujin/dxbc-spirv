@@ -95,14 +95,16 @@ These instructions provide additional information that may affect the execution 
 All operands bar the `%EntryPoint` operand are literal constants.
 
 ### Type conversion instructions
-| `ir::OpCode`         | Return type      | Argument         |
-|----------------------|------------------|------------------|
-| `ConvertFtoF`        | any              | `%value`         |
-| `ConvertFtoI`        | any              | `%value`         |
-| `ConvertItoF`        | any              | `%value`         |
-| `ConvertItoI`        | any              | `%value`         |
-| `Cast`               | any              | `%value`         |
-| `ConsumeAs`          | any              | `%value`         |
+| `ir::OpCode`            | Return type      | Argument         |
+|-------------------------|------------------|------------------|
+| `ConvertFtoF`           | any              | `%value`         |
+| `ConvertFtoI`           | any              | `%value`         |
+| `ConvertItoF`           | any              | `%value`         |
+| `ConvertItoI`           | any              | `%value`         |
+| `ConvertF32toPackedF16` | `u32`            | `%value`         |
+| `ConvertPackedF16toF32` | `vec2<f32>`      | `%value`         |
+| `Cast`                  | any              | `%value`         |
+| `ConsumeAs`             | any              | `%value`         |
 
 If the result type and source type are the same, the conversion operation is a no-op and will be removed by a lowering pass.
 
@@ -114,6 +116,11 @@ Semantics are as follows:
 - `ConvertItoI` converts between integer types of different size. If the result type is larger than the source and the source
   is signed, it will be sign-extended, otherwise it will be zero-extended. If the result type is smaller, excess bits are discarded.
   If the two types only differ in signedness, this instruction is identical in behaviour to `Cast` and will be lowered to it.
+- `ConvertF32toPackedF16` takes a vector of `f32`, performs a conversion to `f16`, and packs both into a single unsigned integer with
+  the first component of the vector stored in the lower 16 bits of the result. This instruction does not require hardware support
+  for 16-bit floating point arithmetic. The float conversion must use round-to-zero semantics.
+- `ConvertPackedF16toF32` takes a single `u32` as two packed `f16` and converts them to an `f32` vector. This instruction does not require
+  hardware support for 16-bit floating point arithmetic.
 - `Cast` is a bit-pattern preserving cast between different types that must have the same bit size. Vector types are allowed.
 
 `ConsumeAs` is a helper instruction that is used to resolve and back-propagate expression types in an untyped IR, and will be
