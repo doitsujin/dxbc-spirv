@@ -11,9 +11,12 @@ Builder test_arithmetic_fp32_compare();
 
 Builder test_arithmetic_fp64();
 Builder test_arithmetic_fp64_compare();
+Builder test_arithmetic_fp64_packing();
 
 Builder test_arithmetic_fp16_scalar();
 Builder test_arithmetic_fp16_vector();
 Builder test_arithmetic_fp16_compare();
+Builder test_arithmetic_fp16_packing();
+Builder test_arithmetic_fp16_packing_legacy();
 
 }
