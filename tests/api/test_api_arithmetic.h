@@ -26,4 +26,9 @@ Builder test_arithmetic_sint16_vector();
 Builder test_arithmetic_uint16_scalar();
 Builder test_arithmetic_uint16_vector();
 
+Builder test_arithmetic_sint32_compare();
+Builder test_arithmetic_uint32_compare();
+Builder test_arithmetic_sint16_compare();
+Builder test_arithmetic_uint16_compare();
+
 }

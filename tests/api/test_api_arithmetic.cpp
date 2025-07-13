@@ -483,4 +483,85 @@ Builder test_arithmetic_uint16_vector() {
   return make_test_int_arithmetic(BasicType(ScalarType::eU16, 2u));
 }
 
+
+Builder make_test_int_compare(ScalarType type) {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::eCompute);
+  builder.add(Op::SetCsWorkgroupSize(entryPoint, 1u, 1u, 1u));
+  builder.add(Op::Label());
+
+  bool isSigned = BasicType(type).isSignedIntType();
+  auto plainType = isSigned ? ScalarType::eI32 : ScalarType::eU32;
+
+  auto srvType = Type(plainType).addArrayDimension(1u).addArrayDimension(0u);
+  auto uavType = Type(ScalarType::eU32).addArrayDimension(1u).addArrayDimension(0u);
+
+  auto srv = builder.add(Op::DclSrv(srvType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured));
+  auto uav = builder.add(Op::DclUav(uavType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured, UavFlag::eWriteOnly));
+
+  auto srvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eSrv, srv, builder.makeConstant(0u)));
+  auto uavDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eUav, uav, builder.makeConstant(0u)));
+
+  static const std::vector<ir::OpCode> tests = {
+    ir::OpCode::eIEq,
+    ir::OpCode::eINe,
+    ir::OpCode::eSLt,
+    ir::OpCode::eSLe,
+    ir::OpCode::eSGt,
+    ir::OpCode::eSGe,
+    ir::OpCode::eULt,
+    ir::OpCode::eULe,
+    ir::OpCode::eUGt,
+    ir::OpCode::eUGe,
+  };
+
+  /* Reuse the same operands for all ops */
+  std::array<SsaDef, 2u> operands;
+
+  for (uint32_t i = 0u; i < operands.size(); i++) {
+    auto indexDef = builder.makeConstant(i, 0u);
+    operands[i] = builder.add(Op::BufferLoad(plainType, srvDescriptor, indexDef, 4u));
+
+    if (type != plainType)
+      operands[i] = builder.add(Op::ConvertItoI(type, operands[i]));
+  }
+
+  uint32_t uavIndex = 0u;
+
+  for (const auto& e : tests) {
+    auto op = Op(e, ScalarType::eBool)
+      .addOperand(Operand(operands.at(0u)))
+      .addOperand(Operand(operands.at(1u)));
+
+    auto resultDef = builder.add(std::move(op));
+    resultDef = builder.add(Op::Select(ScalarType::eU32, resultDef,
+      builder.makeConstant(1u), builder.makeConstant(0u)));
+
+    auto indexDef = builder.makeConstant(uavIndex++, 0u);
+    builder.add(Op::BufferStore(uavDescriptor, indexDef, resultDef, 4u));
+  }
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+
+Builder test_arithmetic_sint32_compare() {
+  return make_test_int_compare(ScalarType::eI32);
+}
+
+Builder test_arithmetic_uint32_compare() {
+  return make_test_int_compare(ScalarType::eU32);
+}
+
+Builder test_arithmetic_sint16_compare() {
+  return make_test_int_compare(ScalarType::eI16);
+}
+
+Builder test_arithmetic_uint16_compare() {
+  return make_test_int_compare(ScalarType::eU16);
+}
+
+
+
 }
