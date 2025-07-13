@@ -230,6 +230,36 @@ Builder test_arithmetic_fp64_compare() {
   return make_test_float_compare(ScalarType::eF64);
 }
 
+Builder test_arithmetic_fp64_packing() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::eCompute);
+  builder.add(Op::SetCsWorkgroupSize(entryPoint, 1u, 1u, 1u));
+  builder.add(Op::Label());
+
+  auto bufType = Type(ScalarType::eU32).addArrayDimension(2u).addArrayDimension(0u);
+
+  auto srv = builder.add(Op::DclSrv(bufType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured));
+  auto uav = builder.add(Op::DclUav(bufType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured, UavFlag::eWriteOnly));
+
+  auto srvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eSrv, srv, builder.makeConstant(0u)));
+  auto uavDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eUav, uav, builder.makeConstant(0u)));
+
+  auto vec2Type = BasicType(ScalarType::eU32, 2u);
+
+  auto load0Def = builder.add(Op::BufferLoad(vec2Type, srvDescriptor, builder.makeConstant(0u, 0u), 4u));
+  auto load1Def = builder.add(Op::BufferLoad(vec2Type, srvDescriptor, builder.makeConstant(1u, 0u), 4u));
+
+  auto vec0Def = builder.add(Op::Cast(ScalarType::eF64, load0Def));
+  auto vec1Def = builder.add(Op::Cast(ScalarType::eF64, load1Def));
+
+  auto resultDef = builder.add(Op::FAdd(ScalarType::eF64, vec0Def, vec1Def));
+  resultDef = builder.add(Op::Cast(vec2Type, resultDef));
+
+  builder.add(Op::BufferStore(uavDescriptor, builder.makeConstant(0u, 0u), resultDef, 4u));
+  builder.add(Op::Return());
+  return builder;
+}
+
 Builder test_arithmetic_fp16_scalar() {
   return make_test_float_arithmetic(ScalarType::eF16, false);
 }
@@ -240,6 +270,75 @@ Builder test_arithmetic_fp16_vector() {
 
 Builder test_arithmetic_fp16_compare() {
   return make_test_float_compare(ScalarType::eF16);
+}
+
+Builder test_arithmetic_fp16_packing() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::eCompute);
+  builder.add(Op::SetCsWorkgroupSize(entryPoint, 1u, 1u, 1u));
+  builder.add(Op::Label());
+
+  auto bufType = Type(ScalarType::eU32).addArrayDimension(1u).addArrayDimension(0u);
+
+  auto srv = builder.add(Op::DclSrv(bufType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured));
+  auto uav = builder.add(Op::DclUav(bufType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured, UavFlag::eWriteOnly));
+
+  auto srvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eSrv, srv, builder.makeConstant(0u)));
+  auto uavDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eUav, uav, builder.makeConstant(0u)));
+
+  auto load0Def = builder.add(Op::BufferLoad(ScalarType::eU32, srvDescriptor, builder.makeConstant(0u, 0u), 4u));
+  auto load1Def = builder.add(Op::BufferLoad(ScalarType::eU32, srvDescriptor, builder.makeConstant(1u, 0u), 4u));
+
+  auto vec2Type = BasicType(ScalarType::eF16, 2u);
+
+  auto vec0Def = builder.add(Op::Cast(vec2Type, load0Def));
+  auto vec1Def = builder.add(Op::Cast(vec2Type, load1Def));
+
+  auto resultDef = builder.add(Op::FAdd(vec2Type, vec0Def, vec1Def));
+  resultDef = builder.add(Op::Cast(ScalarType::eU32, resultDef));
+
+  builder.add(Op::BufferStore(uavDescriptor, builder.makeConstant(0u, 0u), resultDef, 4u));
+  builder.add(Op::Return());
+  return builder;
+}
+
+
+Builder test_arithmetic_fp16_packing_legacy() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::eCompute);
+  builder.add(Op::SetCsWorkgroupSize(entryPoint, 1u, 1u, 1u));
+  builder.add(Op::Label());
+
+  auto bufType = Type(ScalarType::eU32).addArrayDimension(1u).addArrayDimension(0u);
+
+  auto srv = builder.add(Op::DclSrv(bufType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured));
+  auto uav = builder.add(Op::DclUav(bufType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured, UavFlag::eWriteOnly));
+
+  auto srvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eSrv, srv, builder.makeConstant(0u)));
+  auto uavDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eUav, uav, builder.makeConstant(0u)));
+
+  auto load0Def = builder.add(Op::BufferLoad(ScalarType::eU32, srvDescriptor, builder.makeConstant(0u, 0u), 4u));
+  auto load1Def = builder.add(Op::BufferLoad(ScalarType::eU32, srvDescriptor, builder.makeConstant(1u, 0u), 4u));
+
+  auto vec2Type = BasicType(ScalarType::eF32, 2u);
+
+  auto vec0Def = builder.add(Op::ConvertPackedF16toF32(load0Def));
+  auto vec1Def = builder.add(Op::ConvertPackedF16toF32(load1Def));
+
+  std::array<SsaDef, 2u> scalars = { };
+
+  for (uint32_t i = 0u; i < 2u; i++) {
+    scalars.at(i) = builder.add(Op::FAdd(ScalarType::eF32,
+      builder.add(Op::CompositeExtract(ScalarType::eF32, vec0Def, builder.makeConstant(i))),
+      builder.add(Op::CompositeExtract(ScalarType::eF32, vec1Def, builder.makeConstant(i)))));
+  }
+
+  auto resultDef = builder.add(Op::CompositeConstruct(vec2Type, scalars.at(0), scalars.at(1u)));
+  resultDef = builder.add(Op::ConvertF32toPackedF16(resultDef));
+
+  builder.add(Op::BufferStore(uavDescriptor, builder.makeConstant(0u, 0u), resultDef, 4u));
+  builder.add(Op::Return());
+  return builder;
 }
 
 }
