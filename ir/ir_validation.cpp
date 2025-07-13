@@ -640,7 +640,7 @@ bool Validator::validateImageOps(std::ostream& str) const {
         mip = SsaDef(op->getOperand(1u));
 
         expectedType = Type()
-          .addStructMember(BasicType(ScalarType::eU32, resourceCoordComponentCount(kind)))
+          .addStructMember(BasicType(ScalarType::eU32, resourceDimensions(kind)))
           .addStructMember(ScalarType::eU32);
       } break;
 
