@@ -222,6 +222,12 @@ private:
 
   void emitSimpleArithmetic(const ir::Op& op);
 
+  void emitExtendedGlslArithmetic(const ir::Op& op);
+
+  void emitFRcp(const ir::Op& op);
+
+  void emitFRound(const ir::Op& op);
+
   void emitSetCsWorkgroupSize(const ir::Op& op);
 
   uint32_t importGlslExt();

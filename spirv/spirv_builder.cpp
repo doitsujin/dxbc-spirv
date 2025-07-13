@@ -256,8 +256,12 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eIEq:
     case ir::OpCode::eINe:
     case ir::OpCode::eSLt:
+    case ir::OpCode::eSLe:
+    case ir::OpCode::eSGt:
     case ir::OpCode::eSGe:
     case ir::OpCode::eULt:
+    case ir::OpCode::eULe:
+    case ir::OpCode::eUGt:
     case ir::OpCode::eUGe:
     case ir::OpCode::eBAnd:
     case ir::OpCode::eBOr:
@@ -277,6 +281,8 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eIBitInsert:
     case ir::OpCode::eUBitExtract:
     case ir::OpCode::eSBitExtract:
+    case ir::OpCode::eIBitCount:
+    case ir::OpCode::eIBitReverse:
     case ir::OpCode::eIShl:
     case ir::OpCode::eSShr:
     case ir::OpCode::eUShr:
@@ -287,6 +293,35 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eSDiv:
     case ir::OpCode::eUDiv:
       return emitSimpleArithmetic(op);
+
+    case ir::OpCode::eFAbs:
+    case ir::OpCode::eFMad:
+    case ir::OpCode::eFFract:
+    case ir::OpCode::eFSin:
+    case ir::OpCode::eFCos:
+    case ir::OpCode::eFExp2:
+    case ir::OpCode::eFLog2:
+    case ir::OpCode::eFSqrt:
+    case ir::OpCode::eFRsq:
+    case ir::OpCode::eFMin:
+    case ir::OpCode::eSMin:
+    case ir::OpCode::eUMin:
+    case ir::OpCode::eFMax:
+    case ir::OpCode::eSMax:
+    case ir::OpCode::eUMax:
+    case ir::OpCode::eFClamp:
+    case ir::OpCode::eSClamp:
+    case ir::OpCode::eUClamp:
+    case ir::OpCode::eIFindLsb:
+    case ir::OpCode::eSFindMsb:
+    case ir::OpCode::eUFindMsb:
+      return emitExtendedGlslArithmetic(op);
+
+    case ir::OpCode::eFRcp:
+      return emitFRcp(op);
+
+    case ir::OpCode::eFRound:
+      return emitFRound(op);
 
     case ir::OpCode::eSetGsInstances:
     case ir::OpCode::eSetGsInputPrimitive:
@@ -319,37 +354,12 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eInterpolateAtOffset:
     case ir::OpCode::eRovScopedLockBegin:
     case ir::OpCode::eRovScopedLockEnd:
-    case ir::OpCode::eFAbs:
     case ir::OpCode::eFDot:
     case ir::OpCode::eFDotLegacy:
     case ir::OpCode::eFMulLegacy:
-    case ir::OpCode::eFMad:
     case ir::OpCode::eFMadLegacy:
-    case ir::OpCode::eFRcp:
-    case ir::OpCode::eFSqrt:
-    case ir::OpCode::eFRsq:
-    case ir::OpCode::eFExp2:
-    case ir::OpCode::eFLog2:
-    case ir::OpCode::eFFract:
-    case ir::OpCode::eFMin:
-    case ir::OpCode::eFMax:
-    case ir::OpCode::eFClamp:
-    case ir::OpCode::eFSin:
-    case ir::OpCode::eFCos:
-    case ir::OpCode::eFRound:
-    case ir::OpCode::eIBitCount:
-    case ir::OpCode::eIBitReverse:
-    case ir::OpCode::eIFindLsb:
-    case ir::OpCode::eSFindMsb:
-    case ir::OpCode::eUFindMsb:
     case ir::OpCode::eIAddCarry:
     case ir::OpCode::eISubBorrow:
-    case ir::OpCode::eSMin:
-    case ir::OpCode::eSMax:
-    case ir::OpCode::eSClamp:
-    case ir::OpCode::eUMin:
-    case ir::OpCode::eUMax:
-    case ir::OpCode::eUClamp:
     case ir::OpCode::eUMSad:
     case ir::OpCode::eSMulExtended:
     case ir::OpCode::eUMulExtended:
@@ -2356,8 +2366,12 @@ void SpirvBuilder::emitSimpleArithmetic(const ir::Op& op) {
       case ir::OpCode::eIEq:          return spv::OpIEqual;
       case ir::OpCode::eINe:          return spv::OpINotEqual;
       case ir::OpCode::eSLt:          return spv::OpSLessThan;
+      case ir::OpCode::eSLe:          return spv::OpSLessThanEqual;
+      case ir::OpCode::eSGt:          return spv::OpSGreaterThan;
       case ir::OpCode::eSGe:          return spv::OpSGreaterThanEqual;
       case ir::OpCode::eULt:          return spv::OpULessThan;
+      case ir::OpCode::eULe:          return spv::OpULessThanEqual;
+      case ir::OpCode::eUGt:          return spv::OpUGreaterThan;
       case ir::OpCode::eUGe:          return spv::OpUGreaterThanEqual;
       case ir::OpCode::eBAnd:         return spv::OpLogicalAnd;
       case ir::OpCode::eBOr:          return spv::OpLogicalOr;
@@ -2377,6 +2391,8 @@ void SpirvBuilder::emitSimpleArithmetic(const ir::Op& op) {
       case ir::OpCode::eIBitInsert:   return spv::OpBitFieldInsert;
       case ir::OpCode::eUBitExtract:  return spv::OpBitFieldUExtract;
       case ir::OpCode::eSBitExtract:  return spv::OpBitFieldSExtract;
+      case ir::OpCode::eIBitCount:    return spv::OpBitCount;
+      case ir::OpCode::eIBitReverse:  return spv::OpBitReverse;
       case ir::OpCode::eIShl:         return spv::OpShiftLeftLogical;
       case ir::OpCode::eSShr:         return spv::OpShiftRightArithmetic;
       case ir::OpCode::eUShr:         return spv::OpShiftRightLogical;
@@ -2402,11 +2418,126 @@ void SpirvBuilder::emitSimpleArithmetic(const ir::Op& op) {
     m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(i))));
 
   if (op.getFlags() & ir::OpFlag::ePrecise)
-    pushOp(m_declarations, spv::OpDecorate, id, spv::DecorationNoContraction);
+    pushOp(m_decorations, spv::OpDecorate, id, spv::DecorationNoContraction);
 
   emitDebugName(op.getDef(), id);
 }
 
+
+void SpirvBuilder::emitExtendedGlslArithmetic(const ir::Op& op) {
+  auto extOp = [&] {
+    switch (op.getOpCode()) {
+      case ir::OpCode::eFAbs: return GLSLstd450FAbs;
+      case ir::OpCode::eFMad: return GLSLstd450Fma;
+      case ir::OpCode::eFFract: return GLSLstd450Fract;
+      case ir::OpCode::eFSin: return GLSLstd450Sin;
+      case ir::OpCode::eFCos: return GLSLstd450Cos;
+      case ir::OpCode::eFExp2: return GLSLstd450Exp2;
+      case ir::OpCode::eFLog2: return GLSLstd450Log2;
+      case ir::OpCode::eFSqrt: return GLSLstd450Sqrt;
+      case ir::OpCode::eFRsq: return GLSLstd450InverseSqrt;
+      case ir::OpCode::eFMin: return GLSLstd450NMin;
+      case ir::OpCode::eSMin: return GLSLstd450SMin;
+      case ir::OpCode::eUMin: return GLSLstd450UMin;
+      case ir::OpCode::eFMax: return GLSLstd450NMax;
+      case ir::OpCode::eSMax: return GLSLstd450SMax;
+      case ir::OpCode::eUMax: return GLSLstd450UMax;
+      case ir::OpCode::eFClamp: return GLSLstd450NClamp;
+      case ir::OpCode::eSClamp: return GLSLstd450SClamp;
+      case ir::OpCode::eUClamp: return GLSLstd450UClamp;
+      case ir::OpCode::eIFindLsb: return GLSLstd450FindILsb;
+      case ir::OpCode::eSFindMsb: return GLSLstd450FindSMsb;
+      case ir::OpCode::eUFindMsb: return GLSLstd450FindUMsb;
+      default: dxbc_spv_unreachable();
+    }
+
+    return GLSLstd450Bad;
+  } ();
+
+  /* Emit GLSL extended instruction */
+  auto id = getIdForDef(op.getDef());
+
+  m_code.push_back(makeOpcodeToken(spv::OpExtInst, 5u + op.getOperandCount()));
+  m_code.push_back(getIdForType(op.getType()));
+  m_code.push_back(id);
+  m_code.push_back(importGlslExt());
+  m_code.push_back(uint32_t(extOp));
+
+  for (uint32_t i = 0u; i < op.getOperandCount(); i++)
+    m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(i))));
+
+  if (op.getFlags() & ir::OpFlag::ePrecise)
+    pushOp(m_decorations, spv::OpDecorate, id, spv::DecorationNoContraction);
+
+  emitDebugName(op.getDef(), id);
+}
+
+
+void SpirvBuilder::emitFRcp(const ir::Op& op) {
+  dxbc_spv_assert(op.getType().isBasicType());
+
+  auto type = op.getType().getBaseType(0u);
+  dxbc_spv_assert(type.isFloatType());
+
+  /* Need to emit constant 1 based on the float type */
+  ir::Op constantOp(ir::OpCode::eConstant, type);
+
+  ir::Operand constantScalar = [&] {
+    switch (type.getBaseType()) {
+      case ir::ScalarType::eF16: return ir::Operand(util::float16_t(1.0f));
+      case ir::ScalarType::eF32: return ir::Operand(1.0f);
+      case ir::ScalarType::eF64: return ir::Operand(1.0);
+      default: dxbc_spv_unreachable();
+    }
+
+    return ir::Operand();
+  } ();
+
+  for (uint32_t i = 0u; i < type.getVectorSize(); i++)
+    constantOp.addOperand(constantScalar);
+
+  uint32_t operandIndex = 0u;
+  uint32_t constantOneId = makeBasicConst(type, constantOp, operandIndex);
+
+  /* Emit FDiv instruction with the given constant */
+  auto id = getIdForDef(op.getDef());
+
+  pushOp(m_code, spv::OpFDiv, getIdForType(type), id, constantOneId,
+    getIdForDef(ir::SsaDef(op.getOperand(0u))));
+
+  if (op.getFlags() & ir::OpFlag::ePrecise)
+    pushOp(m_decorations, spv::OpDecorate, id, spv::DecorationNoContraction);
+
+  emitDebugName(op.getDef(), id);
+}
+
+
+void SpirvBuilder::emitFRound(const ir::Op& op) {
+  auto id = getIdForDef(op.getDef());
+
+  auto valueDef = ir::SsaDef(op.getOperand(0u));
+  auto roundingMode = ir::RoundMode(op.getOperand(1u));
+
+  auto opCode = [&] {
+    switch (roundingMode) {
+      case ir::RoundMode::eZero: return GLSLstd450Trunc;
+      case ir::RoundMode::eNearestEven: return GLSLstd450RoundEven;
+      case ir::RoundMode::eNegativeInf: return GLSLstd450Floor;
+      case ir::RoundMode::ePositiveInf: return GLSLstd450Ceil;
+    }
+
+    dxbc_spv_unreachable();
+    return GLSLstd450Bad;
+  } ();
+
+  pushOp(m_code, spv::OpExtInst, getIdForType(op.getType()), id,
+    importGlslExt(), opCode, getIdForDef(valueDef));
+
+  if (op.getFlags() & ir::OpFlag::ePrecise)
+    pushOp(m_decorations, spv::OpDecorate, id, spv::DecorationNoContraction);
+
+  emitDebugName(op.getDef(), id);
+}
 
 void SpirvBuilder::emitSetCsWorkgroupSize(const ir::Op& op) {
   auto x = uint32_t(op.getOperand(1u));
