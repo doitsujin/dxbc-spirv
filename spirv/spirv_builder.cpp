@@ -315,6 +315,8 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eIFindLsb:
     case ir::OpCode::eSFindMsb:
     case ir::OpCode::eUFindMsb:
+    case ir::OpCode::eConvertF32toPackedF16:
+    case ir::OpCode::eConvertPackedF16toF32:
       return emitExtendedGlslArithmetic(op);
 
     case ir::OpCode::eFRcp:
@@ -2449,6 +2451,8 @@ void SpirvBuilder::emitExtendedGlslArithmetic(const ir::Op& op) {
       case ir::OpCode::eIFindLsb: return GLSLstd450FindILsb;
       case ir::OpCode::eSFindMsb: return GLSLstd450FindSMsb;
       case ir::OpCode::eUFindMsb: return GLSLstd450FindUMsb;
+      case ir::OpCode::eConvertF32toPackedF16: return GLSLstd450PackHalf2x16;
+      case ir::OpCode::eConvertPackedF16toF32: return GLSLstd450UnpackHalf2x16;
       default: dxbc_spv_unreachable();
     }
 
