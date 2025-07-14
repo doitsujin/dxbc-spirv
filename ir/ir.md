@@ -263,6 +263,7 @@ value around and feed it back into a shader later, or potentially use it in exte
 | `BufferQuerySize`    | `u32`        | `%descriptor`      |                                |          |         |
 | `MemoryLoad`         | any          | `%Pointer`         | `%address` into pointee type   | `align`  |         |
 | `MemoryStore`        | any          | `%Pointer`         | `%address` into pointee type   | `%value` | `align` |
+| `ConstantLoad`       | any          | `%Constant`        | `%address` into pointee type   |                    |
 
 Note that `SrvLoad`, `UavLoad` and `UavStore` instructions can only be used on raw, structured or typed buffer instructions. Image
 resources can only be accessed via image instructions.
@@ -291,6 +292,9 @@ a vector, but the final destination type is scalar. This can allow for more effi
 
 The `align` parameter for `Memory*` and `Buffer` instructions is a literal constant that represents the smallest guaranteed alignment for
 the operation, and will be at least equal to the size of the scalar type being accessed.
+
+The `ConstantLoad` instruction can be used to dynamically index into a constant array. If the array is a vector array, the vector
+component index must be constant.
 
 ### Atomic instructions
 | `ir::OpCode`         | Return type      | Arguments...      |                              |                |                |                |

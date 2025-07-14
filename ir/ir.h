@@ -895,6 +895,7 @@ enum class OpCode : uint16_t {
   eBufferQuerySize              = 303u,
   eMemoryLoad                   = 304u,
   eMemoryStore                  = 305u,
+  eConstantLoad                 = 306u,
 
   eLdsAtomic                    = 320u,
   eBufferAtomic                 = 321u,
@@ -1885,6 +1886,12 @@ public:
       .addOperand(Operand(address))
       .addOperand(Operand(value))
       .addOperand(Operand(alignment));
+  }
+
+  static Op ConstantLoad(Type type, SsaDef constant, SsaDef address) {
+    return Op(OpCode::eConstantLoad, type)
+      .addOperand(Operand(constant))
+      .addOperand(Operand(address));
   }
 
   template<typename... T>

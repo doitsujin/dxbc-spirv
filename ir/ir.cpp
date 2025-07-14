@@ -683,6 +683,7 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eBufferQuerySize: return os << "BufferQuerySize";
     case OpCode::eMemoryLoad: return os << "MemoryLoad";
     case OpCode::eMemoryStore: return os << "MemoryStore";
+    case OpCode::eConstantLoad: return os << "ConstantLoad";
     case OpCode::eLdsAtomic: return os << "LdsAtomic";
     case OpCode::eBufferAtomic: return os << "BufferAtomic";
     case OpCode::eImageAtomic: return os << "ImageAtomic";
