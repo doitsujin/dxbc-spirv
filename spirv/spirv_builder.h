@@ -114,6 +114,8 @@ private:
 
   void emitInterpolationModes(uint32_t id, ir::InterpolationModes modes);
 
+  void emitDclLds(const ir::Op& op);
+
   void emitDclScratch(const ir::Op& op);
 
   void emitDclIoVar(const ir::Op& op);
