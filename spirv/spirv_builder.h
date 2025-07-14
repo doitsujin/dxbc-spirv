@@ -170,7 +170,7 @@ private:
 
   void emitDerivative(const ir::Op& op);
 
-  void emitAtomic(const ir::Op& op, const ir::Type& type, uint32_t operandIndex,
+  void emitAtomic(const ir::Op& op, const ir::Type& type, ir::SsaDef operandDef,
       uint32_t ptrId, spv::Scope scope, spv::MemorySemanticsMask memoryTypes);
 
   void emitFunction(const ir::Op& op);
@@ -231,6 +231,8 @@ private:
   void emitFRound(const ir::Op& op);
 
   void emitSetCsWorkgroupSize(const ir::Op& op);
+
+  uint32_t emitExtractComponent(ir::SsaDef vectorDef, uint32_t index);
 
   uint32_t importGlslExt();
 
