@@ -274,6 +274,8 @@ private:
 
   uint32_t getIdForConstantNull(const ir::Type& type);
 
+  spv::Scope getUavCoherentScope(ir::UavFlags flags);
+
   spv::Scope translateScope(ir::Scope scope);
 
   uint32_t translateMemoryTypes(ir::MemoryTypeFlags memoryFlags);
