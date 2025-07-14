@@ -335,6 +335,11 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eFRound:
       return emitFRound(op);
 
+    case ir::OpCode::eInterpolateAtCentroid:
+    case ir::OpCode::eInterpolateAtSample:
+    case ir::OpCode::eInterpolateAtOffset:
+      return emitInterpolation(op);
+
     case ir::OpCode::eSetGsInstances:
     case ir::OpCode::eSetGsInputPrimitive:
     case ir::OpCode::eSetGsOutputVertices:
@@ -361,9 +366,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eEmitVertex:
     case ir::OpCode::eEmitPrimitive:
     case ir::OpCode::eDemote:
-    case ir::OpCode::eInterpolateAtCentroid:
-    case ir::OpCode::eInterpolateAtSample:
-    case ir::OpCode::eInterpolateAtOffset:
     case ir::OpCode::eRovScopedLockBegin:
     case ir::OpCode::eRovScopedLockEnd:
       /* TODO implement */
@@ -2614,6 +2616,47 @@ void SpirvBuilder::emitFRound(const ir::Op& op) {
 
   emitDebugName(op.getDef(), id);
 }
+
+
+void SpirvBuilder::emitInterpolation(const ir::Op& op) {
+  enableCapability(spv::CapabilityInterpolationFunction);
+
+  const auto& inputOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+
+  dxbc_spv_assert(inputOp.getOpCode() == ir::OpCode::eDclInput ||
+                  inputOp.getOpCode() == ir::OpCode::eDclInputBuiltIn);
+
+  /* Determine opcode */
+  auto extOp = [&] {
+    switch (op.getOpCode()) {
+      case ir::OpCode::eInterpolateAtCentroid: return GLSLstd450InterpolateAtCentroid;
+      case ir::OpCode::eInterpolateAtSample: return GLSLstd450InterpolateAtSample;
+      case ir::OpCode::eInterpolateAtOffset: return GLSLstd450InterpolateAtOffset;
+      default: dxbc_spv_unreachable();
+    }
+
+    return GLSLstd450Bad;
+  } ();
+
+  /* Emit GLSL extended instruction */
+  auto id = getIdForDef(op.getDef());
+
+  m_code.push_back(makeOpcodeToken(spv::OpExtInst, 5u + op.getOperandCount()));
+  m_code.push_back(getIdForType(op.getType()));
+  m_code.push_back(id);
+  m_code.push_back(importGlslExt());
+  m_code.push_back(uint32_t(extOp));
+
+  for (uint32_t i = 0u; i < op.getOperandCount(); i++)
+    m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(i))));
+
+  if (op.getFlags() & ir::OpFlag::ePrecise)
+    pushOp(m_decorations, spv::OpDecorate, id, spv::DecorationNoContraction);
+
+  emitDebugName(op.getDef(), id);
+}
+
+
 
 void SpirvBuilder::emitSetCsWorkgroupSize(const ir::Op& op) {
   auto x = uint32_t(op.getOperand(1u));
