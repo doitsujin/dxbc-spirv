@@ -31,6 +31,8 @@ Builder test_arithmetic_uint32_compare();
 Builder test_arithmetic_sint16_compare();
 Builder test_arithmetic_uint16_compare();
 
+Builder test_arithmetic_int_extended();
+
 Builder test_arithmetic_bool();
 
 }
