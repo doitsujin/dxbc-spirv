@@ -230,6 +230,8 @@ private:
 
   void emitFRound(const ir::Op& op);
 
+  void emitInterpolation(const ir::Op& op);
+
   void emitSetCsWorkgroupSize(const ir::Op& op);
 
   uint32_t emitExtractComponent(ir::SsaDef vectorDef, uint32_t index);
