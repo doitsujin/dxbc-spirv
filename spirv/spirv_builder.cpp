@@ -153,6 +153,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eDclUavCounter:
       return emitDclUavCounter(op);
 
+    case ir::OpCode::eConstantLoad:
+      return emitConstantLoad(op);
+
     case ir::OpCode::eDescriptorLoad:
       return emitDescriptorLoad(op);
 
@@ -901,6 +904,44 @@ uint32_t SpirvBuilder::getImageDescriptorPointer(const ir::Op& op) {
   auto ptrId = allocId();
   pushOp(m_code, spv::OpAccessChain, ptrTypeId, ptrId, resourceId, indexId);
   return ptrId;
+}
+
+
+void SpirvBuilder::emitConstantLoad(const ir::Op& op) {
+  /* Declare private variable for constant data */
+  const auto& constantOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  dxbc_spv_assert(constantOp.isConstant());
+
+  auto entry = m_constantVars.find(constantOp.getDef());
+
+  uint32_t varId = 0u;
+
+  if (entry == m_constantVars.end()) {
+    varId = allocId();
+
+    auto typeId = getIdForType(constantOp.getType());
+    auto ptrTypeId = getIdForPtrType(typeId, spv::StorageClassPrivate);
+
+    pushOp(m_declarations, spv::OpVariable, ptrTypeId, varId,
+      spv::StorageClassPrivate, getIdForDef(constantOp.getDef()));
+
+    addEntryPointId(varId);
+
+    m_constantVars.insert({ constantOp.getDef(), varId });
+  } else {
+    varId = entry->second;
+  }
+
+  /* Emit access chain to access private variable */
+  auto addressDef = ir::SsaDef(op.getOperand(1u));
+
+  auto accessChainId = emitAccessChain(spv::StorageClassPrivate,
+    constantOp.getType(), varId, addressDef, 0u, false);
+
+  auto id = getIdForDef(op.getDef());
+  pushOp(m_code, spv::OpLoad, getIdForType(op.getType()), id, accessChainId);
+
+  emitDebugName(op.getDef(), id);
 }
 
 

@@ -65,6 +65,7 @@ private:
   std::unordered_map<SpirvFunctionParameterKey, uint32_t> m_funcParamIds;
   std::unordered_map<uint32_t, uint32_t> m_sampledImageTypeIds;
   std::unordered_map<ir::SsaDef, uint32_t> m_descriptorTypes;
+  std::unordered_map<ir::SsaDef, uint32_t> m_constantVars;
 
   std::vector<uint32_t> m_ssaDefsToId;
 
@@ -137,6 +138,8 @@ private:
   uint32_t getDescriptorArrayIndex(const ir::Op& op);
 
   uint32_t getImageDescriptorPointer(const ir::Op& op);
+
+  void emitConstantLoad(const ir::Op& op);
 
   void emitDescriptorLoad(const ir::Op& op);
 
