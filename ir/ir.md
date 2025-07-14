@@ -301,13 +301,17 @@ The `ir::AtomicOp` parameter is a literal enum value, thus the last parameter.
 The `%layer` parameter is `null` for non-arrayed image types.
 
 #### Operations
+Unless otherwise noted, the `%operand` parameter is a scalar integer whose type matches that of
+the return type and resource type exactly.
+
 - `Load`: Atomically loads a value. This instruction is generated when an atomic instruction has
-  no side effects. Must not have a `void` return type.
+  no side effects. Must not have a `void` return type. `%operand` will be `null`.
 - `Store`: Atomically stores a value. This instruction is generated when the result of an atomic
   exchange instruction goes unused.
 - `Inc` and `Dec` are equivalent to `Add` or `Sub` with a constant value of `1`, respectively.
-- `CompareExchange` has two operands: The value to compare to first, and the value to store on
-  success second.
+  `%operand` will be `null`.
+- `CompareExchange` takes a `vec2<u32/i32>` as an operand: The value to compare to first, and the
+  value to store on success second.
 
 ### Image instructions
 | `ir::OpCode`         | Return type      | Arguments...  |                   |             |              |              |             |              |          |           |       |             |

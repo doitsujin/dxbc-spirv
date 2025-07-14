@@ -300,11 +300,11 @@ Builder make_test_buffer_atomic(ResourceKind kind, bool indexed) {
   auto descriptor = emit_buffer_descriptor(builder, entryPoint, kind, true, indexed, true);
   auto index = emit_buffer_load_store_address(builder, entryPoint, kind, true);
 
-  auto def = builder.add(Op::BufferAtomic(AtomicOp::eLoad, ScalarType::eU32, descriptor, index));
+  auto def = builder.add(Op::BufferAtomic(AtomicOp::eLoad, ScalarType::eU32, descriptor, index, SsaDef()));
   def = builder.add(Op::BufferAtomic(AtomicOp::eExchange, ScalarType::eU32, descriptor, index,
     builder.add(Op::IAdd(ScalarType::eU32, def, builder.makeConstant(10u)))));
   def = builder.add(Op::BufferAtomic(AtomicOp::eCompareExchange, ScalarType::eU32, descriptor, index,
-    builder.makeConstant(10u), def));
+    builder.add(Op::CompositeConstruct(BasicType(ScalarType::eU32, 2u), builder.makeConstant(10u), def))));
   def = builder.add(Op::BufferAtomic(AtomicOp::eAdd, ScalarType::eU32, descriptor, index, def));
   def = builder.add(Op::BufferAtomic(AtomicOp::eSub, ScalarType::eU32, descriptor, index, def));
   def = builder.add(Op::BufferAtomic(AtomicOp::eSMin, ScalarType::eU32, descriptor, index, def));
@@ -314,8 +314,8 @@ Builder make_test_buffer_atomic(ResourceKind kind, bool indexed) {
   def = builder.add(Op::BufferAtomic(AtomicOp::eAnd, ScalarType::eU32, descriptor, index, def));
   def = builder.add(Op::BufferAtomic(AtomicOp::eOr, ScalarType::eU32, descriptor, index, def));
   def = builder.add(Op::BufferAtomic(AtomicOp::eXor, ScalarType::eU32, descriptor, index, def));
-  def = builder.add(Op::BufferAtomic(AtomicOp::eInc, ScalarType::eU32, descriptor, index));
-  def = builder.add(Op::BufferAtomic(AtomicOp::eDec, ScalarType::eU32, descriptor, index));
+  def = builder.add(Op::BufferAtomic(AtomicOp::eInc, ScalarType::eU32, descriptor, index, SsaDef()));
+  def = builder.add(Op::BufferAtomic(AtomicOp::eDec, ScalarType::eU32, descriptor, index, SsaDef()));
   builder.add(Op::BufferAtomic(AtomicOp::eStore, Type(), descriptor, index, def));
 
   builder.add(Op::Return());

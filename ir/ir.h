@@ -1878,30 +1878,30 @@ public:
   }
 
   template<typename... T>
-  static Op LdsAtomic(AtomicOp op, Type type, SsaDef decl, SsaDef address, T... args) {
+  static Op LdsAtomic(AtomicOp op, Type type, SsaDef decl, SsaDef address, SsaDef operands) {
     return Op(OpCode::eLdsAtomic, type)
       .addOperand(Operand(decl))
       .addOperand(Operand(address))
-      .addOperands(Operand(SsaDef(args))...)
+      .addOperand(Operand(operands))
       .addOperand(Operand(op));
   }
 
   template<typename... T>
-  static Op BufferAtomic(AtomicOp op, Type type, SsaDef descriptor, SsaDef address, T... args) {
+  static Op BufferAtomic(AtomicOp op, Type type, SsaDef descriptor, SsaDef address, SsaDef operands) {
     return Op(OpCode::eBufferAtomic, type)
       .addOperand(Operand(descriptor))
       .addOperand(Operand(address))
-      .addOperands(Operand(SsaDef(args))...)
+      .addOperand(Operand(operands))
       .addOperand(Operand(op));
   }
 
   template<typename... T>
-  static Op ImageAtomic(AtomicOp op, Type type, SsaDef descriptor, SsaDef layer, SsaDef coord, T... args) {
+  static Op ImageAtomic(AtomicOp op, Type type, SsaDef descriptor, SsaDef layer, SsaDef coord, SsaDef operands) {
     return Op(OpCode::eImageAtomic, type)
       .addOperand(Operand(descriptor))
       .addOperand(Operand(layer))
       .addOperand(Operand(coord))
-      .addOperands(Operand(SsaDef(args))...)
+      .addOperand(Operand(operands))
       .addOperand(Operand(op));
   }
 
@@ -1913,11 +1913,11 @@ public:
   }
 
   template<typename... T>
-  static Op MemoryAtomic(AtomicOp op, Type type, SsaDef pointer, SsaDef address, T... args) {
+  static Op MemoryAtomic(AtomicOp op, Type type, SsaDef pointer, SsaDef address, SsaDef operands) {
     return Op(OpCode::eMemoryAtomic, type)
       .addOperand(Operand(pointer))
       .addOperand(Operand(address))
-      .addOperands(Operand(SsaDef(args))...)
+      .addOperand(Operand(operands))
       .addOperand(Operand(op));
   }
 
