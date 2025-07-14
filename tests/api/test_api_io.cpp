@@ -225,4 +225,98 @@ Builder test_io_vs_viewport() {
   return builder;
 }
 
+Builder test_io_ps_interpolate_centroid() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+
+  builder.add(Op::Label());
+
+  auto in0Def = builder.add(Op::DclInput(ScalarType::eF32, entryPoint, 0u, 0u, InterpolationMode::eNoPerspective));
+  builder.add(Op::Semantic(in0Def, 0u, "IN_SCALAR"));
+
+  auto in1Def = builder.add(Op::DclInput(BasicType(ScalarType::eF32, 3u), entryPoint, 1u, 0u, InterpolationModes()));
+  builder.add(Op::Semantic(in1Def, 0u, "IN_VECTOR"));
+
+  auto out0Def = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(out0Def, 0u, "SV_TARGET"));
+
+  auto out1Def = builder.add(Op::DclOutput(BasicType(ScalarType::eF32, 3u), entryPoint, 1u, 0u));
+  builder.add(Op::Semantic(out1Def, 1u, "SV_TARGET"));
+
+  builder.add(Op::OutputStore(out0Def, SsaDef(),
+    builder.add(Op::InterpolateAtCentroid(ScalarType::eF32, in0Def))));
+
+  builder.add(Op::OutputStore(out1Def, SsaDef(),
+    builder.add(Op::InterpolateAtCentroid(BasicType(ScalarType::eF32, 3u), in1Def))));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+Builder test_io_ps_interpolate_sample() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+
+  builder.add(Op::Label());
+
+  auto sampleIdDef = builder.add(Op::DclInputBuiltIn(ScalarType::eU32, entryPoint, BuiltIn::eSampleId, InterpolationMode::eFlat));
+  builder.add(Op::Semantic(sampleIdDef, 0u, "SV_SAMPLEINDEX"));
+
+  auto in0Def = builder.add(Op::DclInput(ScalarType::eF32, entryPoint, 0u, 0u, InterpolationMode::eNoPerspective));
+  builder.add(Op::Semantic(in0Def, 0u, "IN_SCALAR"));
+
+  auto in1Def = builder.add(Op::DclInput(BasicType(ScalarType::eF32, 3u), entryPoint, 1u, 0u, InterpolationModes()));
+  builder.add(Op::Semantic(in1Def, 0u, "IN_VECTOR"));
+
+  auto out0Def = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(out0Def, 0u, "SV_TARGET"));
+
+  auto out1Def = builder.add(Op::DclOutput(BasicType(ScalarType::eF32, 3u), entryPoint, 1u, 0u));
+  builder.add(Op::Semantic(out1Def, 1u, "SV_TARGET"));
+
+  builder.add(Op::OutputStore(out0Def, SsaDef(),
+    builder.add(Op::InterpolateAtSample(ScalarType::eF32, in0Def,
+      builder.add(Op::InputLoad(ScalarType::eU32, sampleIdDef, SsaDef()))))));
+
+  builder.add(Op::OutputStore(out1Def, SsaDef(),
+    builder.add(Op::InterpolateAtSample(BasicType(ScalarType::eF32, 3u), in1Def,
+      builder.add(Op::InputLoad(ScalarType::eU32, sampleIdDef, SsaDef()))))));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+Builder test_io_ps_interpolate_offset() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+
+  builder.add(Op::Label());
+
+  auto offsetInputDef = builder.add(Op::DclInput(BasicType(ScalarType::eF32, 2u), entryPoint, 2u, 0u, InterpolationModes()));
+  builder.add(Op::Semantic(offsetInputDef, 0u, "OFFSET"));
+
+  auto in0Def = builder.add(Op::DclInput(ScalarType::eF32, entryPoint, 0u, 0u, InterpolationMode::eNoPerspective));
+  builder.add(Op::Semantic(in0Def, 0u, "IN_SCALAR"));
+
+  auto in1Def = builder.add(Op::DclInput(BasicType(ScalarType::eF32, 3u), entryPoint, 1u, 0u, InterpolationModes()));
+  builder.add(Op::Semantic(in1Def, 0u, "IN_VECTOR"));
+
+  auto out0Def = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(out0Def, 0u, "SV_TARGET"));
+
+  auto out1Def = builder.add(Op::DclOutput(BasicType(ScalarType::eF32, 3u), entryPoint, 1u, 0u));
+  builder.add(Op::Semantic(out1Def, 1u, "SV_TARGET"));
+
+  auto offsetDef = builder.add(Op::InputLoad(BasicType(ScalarType::eF32, 2u), offsetInputDef, SsaDef()));
+
+  builder.add(Op::OutputStore(out0Def, SsaDef(),
+    builder.add(Op::InterpolateAtOffset(ScalarType::eF32, in0Def, offsetDef))));
+
+  builder.add(Op::OutputStore(out1Def, SsaDef(),
+    builder.add(Op::InterpolateAtOffset(BasicType(ScalarType::eF32, 3u), in1Def, offsetDef))));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
 }

@@ -13,4 +13,8 @@ Builder test_io_vs_clip_cull_dist();
 Builder test_io_vs_layer();
 Builder test_io_vs_viewport();
 
+Builder test_io_ps_interpolate_centroid();
+Builder test_io_ps_interpolate_sample();
+Builder test_io_ps_interpolate_offset();
+
 }

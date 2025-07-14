@@ -30,6 +30,10 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_io_vs_layer);
   ADD_TEST(test_io_vs_viewport);
 
+  ADD_TEST(test_io_ps_interpolate_centroid);
+  ADD_TEST(test_io_ps_interpolate_sample);
+  ADD_TEST(test_io_ps_interpolate_offset);
+
   ADD_TEST(test_resources_cbv);
   ADD_TEST(test_resources_cbv_dynamic);
   ADD_TEST(test_resources_cbv_indexed);
