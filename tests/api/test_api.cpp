@@ -229,6 +229,8 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_arithmetic_sint16_compare);
   ADD_TEST(test_arithmetic_uint16_compare);
 
+  ADD_TEST(test_arithmetic_int_extended);
+
   ADD_TEST(test_arithmetic_bool);
 
 return result;

@@ -563,6 +563,67 @@ Builder test_arithmetic_uint16_compare() {
 }
 
 
+Builder test_arithmetic_int_extended() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::eCompute);
+  builder.add(Op::SetCsWorkgroupSize(entryPoint, 1u, 1u, 1u));
+  builder.add(Op::Label());
+
+  auto uvec2Type = BasicType(ScalarType::eU32, 2u);
+
+  auto srvType = Type(ScalarType::eU32).addArrayDimension(2u).addArrayDimension(0u);
+  auto uavType = Type(ScalarType::eU32).addArrayDimension(2u).addArrayDimension(0u);
+
+  auto srv = builder.add(Op::DclSrv(srvType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured));
+  auto uav = builder.add(Op::DclUav(uavType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured, UavFlag::eWriteOnly));
+
+  auto srvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eSrv, srv, builder.makeConstant(0u)));
+  auto uavDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eUav, uav, builder.makeConstant(0u)));
+
+  static const std::vector<std::pair<ir::OpCode, ScalarType>> tests = {
+    { ir::OpCode::eIAddCarry, ScalarType::eU32 },
+    { ir::OpCode::eISubBorrow, ScalarType::eU32 },
+    { ir::OpCode::eSMulExtended, ScalarType::eI32 },
+    { ir::OpCode::eUMulExtended, ScalarType::eU32 },
+  };
+
+  uint32_t srvIndex = 0u;
+  uint32_t uavIndex = 0u;
+
+  for (const auto& test : tests) {
+    auto loadDef = builder.add(Op::BufferLoad(uvec2Type, srvDescriptor,
+      builder.makeConstant(srvIndex++, 0u), 8u));
+
+    auto a = builder.add(Op::CompositeExtract(ScalarType::eU32, loadDef, builder.makeConstant(0u)));
+    auto b = builder.add(Op::CompositeExtract(ScalarType::eU32, loadDef, builder.makeConstant(1u)));
+
+    if (test.second != ScalarType::eU32) {
+      a = builder.add(Op::Cast(test.second, a));
+      b = builder.add(Op::Cast(test.second, b));
+    }
+
+    auto resultDef = builder.add(Op(test.first, BasicType(test.second, 2u))
+      .addOperand(Operand(a))
+      .addOperand(Operand(b)));
+
+    if (test.second != ScalarType::eU32) {
+      a = builder.add(Op::CompositeExtract(test.second, resultDef, builder.makeConstant(0u)));
+      b = builder.add(Op::CompositeExtract(test.second, resultDef, builder.makeConstant(1u)));
+
+      a = builder.add(Op::Cast(ScalarType::eU32, a));
+      b = builder.add(Op::Cast(ScalarType::eU32, b));
+
+      resultDef = builder.add(Op::CompositeConstruct(uvec2Type, a, b));
+    }
+
+    builder.add(Op::BufferStore(uavDescriptor, builder.makeConstant(uavIndex++, 0u), resultDef, 8u));
+  }
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+
 Builder test_arithmetic_bool() {
   Builder builder;
   auto entryPoint = setupTestFunction(builder, ShaderStage::eCompute);
