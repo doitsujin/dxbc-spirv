@@ -171,8 +171,12 @@ SsaDef emit_buffer_descriptor(Builder& builder, SsaDef entryPoint, ResourceKind 
 }
 
 SsaDef emit_buffer_load_store_address(Builder& builder, SsaDef entryPoint, ResourceKind kind, bool dynamic) {
-  auto inputDef = builder.add(Op::DclInput(BasicType(ScalarType::eU32, 2u), entryPoint, 0u, 0u, InterpolationMode::eFlat));
-  builder.add(Op::Semantic(inputDef, 0u, "BUFFER_ADDRESS"));
+  auto inputDef = SsaDef();
+
+  if (dynamic) {
+    inputDef = builder.add(Op::DclInput(BasicType(ScalarType::eU32, 2u), entryPoint, 0u, 0u, InterpolationMode::eFlat));
+    builder.add(Op::Semantic(inputDef, 0u, "BUFFER_ADDRESS"));
+  }
 
   auto index = dynamic
     ? builder.add(Op::InputLoad(ScalarType::eU32, inputDef, builder.makeConstant(0u)))
