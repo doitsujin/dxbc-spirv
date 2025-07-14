@@ -171,6 +171,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eCounterAtomic:
       return emitCounterAtomic(op);
 
+    case ir::OpCode::eLdsAtomic:
+      return emitLdsAtomic(op);
+
     case ir::OpCode::eFunction:
       return emitFunction(op);
 
@@ -368,7 +371,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eSpecConstantLoad:
     case ir::OpCode::eMemoryLoad:
     case ir::OpCode::eMemoryStore:
-    case ir::OpCode::eLdsAtomic:
     case ir::OpCode::eMemoryAtomic:
     case ir::OpCode::ePointer:
     case ir::OpCode::ePointerAddress:
@@ -1220,6 +1222,23 @@ void SpirvBuilder::emitCounterAtomic(const ir::Op& op) {
 
   emitAtomic(op, dclOp.getType(), ir::SsaDef(), accessChainId, spv::ScopeQueueFamily,
     spv::MemorySemanticsUniformMemoryMask);
+}
+
+
+void SpirvBuilder::emitLdsAtomic(const ir::Op& op) {
+  /* Trivially traverse LDS type and emit atomic operation */
+  const auto& dclOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+
+  auto addressDef = ir::SsaDef(op.getOperand(1u));
+  auto operandDef = ir::SsaDef(op.getOperand(2u));
+
+  auto type = traverseType(dclOp.getType(), addressDef);
+
+  auto ptrId = emitAccessChain(spv::StorageClassWorkgroup,
+    dclOp.getType(), getIdForDef(dclOp.getDef()), addressDef, 0u, false);
+
+  emitAtomic(op, type, operandDef, ptrId, spv::ScopeWorkgroup,
+    spv::MemorySemanticsWorkgroupMemoryMask);
 }
 
 
