@@ -603,6 +603,7 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eEntryPoint: return os << "EntryPoint";
     case OpCode::eDebugName: return os << "DebugName";
     case OpCode::eConstant: return os << "Constant";
+    case OpCode::eUndef: return os << "Undef";
     case OpCode::eSemantic: return os << "Semantic";
     case OpCode::eSetCsWorkgroupSize: return os << "SetCsWorkgroupSize";
     case OpCode::eSetGsInstances: return os << "SetGsInstances";

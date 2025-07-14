@@ -179,6 +179,11 @@ public:
     return add(Op::Constant(args...));
   }
 
+  /** Adds an undefined value */
+  SsaDef makeUndef(const Type& type) {
+    return add(Op::Undef(type));
+  }
+
   /** Convenince method to add an instruction either after the
    *  current insertion cursor, or the end of the declarative
    *  block if the op in question is declarative.
