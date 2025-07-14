@@ -802,7 +802,8 @@ enum class OpCode : uint16_t {
   eEntryPoint                   = 1u,
   eDebugName                    = 2u,
   eConstant                     = 3u,
-  eSemantic                     = 4u,
+  eUndef                        = 4u,
+  eSemantic                     = 5u,
 
   eSetCsWorkgroupSize           = 16u,
   eSetGsInstances               = 17u,
@@ -1293,6 +1294,11 @@ public:
     return m_opCode == OpCode::eConstant;
   }
 
+  /** Checks whether instruction is an undefined value. */
+  bool isUndef() const {
+    return m_opCode == OpCode::eUndef;
+  }
+
   /** Checks whether operation has a valid opcode. */
   explicit operator bool () const {
     return m_opCode != OpCode::eUnknown;
@@ -1357,6 +1363,10 @@ public:
       .addOperand(Operand(v1))
       .addOperand(Operand(v2))
       .addOperand(Operand(v3));
+  }
+
+  static Op Undef(const Type& type) {
+    return Op(OpCode::eUndef, type);
   }
 
   /** Helper to construct debug name ops */

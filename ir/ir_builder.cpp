@@ -195,7 +195,7 @@ void Builder::resetCursor() {
 
 
 std::pair<SsaDef, bool> Builder::writeOp(Op&& op) {
-  if (op.isConstant()) {
+  if (op.isConstant() || op.isUndef()) {
     SsaDef def = lookupConstant(op);
 
     if (def)

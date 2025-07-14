@@ -68,12 +68,17 @@ operands depending on its size. Literal strings are null-terminated.
 | `ir::OpCode`         | Return type | Arguments...                    |
 |----------------------|-------------|---------------------------------|
 | `Constant`           | any         | Literals for each member        |
+| `Undef`              | any         | None                            |
 
 Constant literals are flattened according to the type definition:
 - For a scalar, one token is used.
 - A vector of size `n` is stored as `n` consecutive scalars.
 - For a structure, members are stored consecutively.
 - For an array, elements are stored consecutively.
+
+`Undef` returns an undefined value of any given type, and is commonly found as an operand
+to `Phi` instructions. For robustness reasons, it is advised to zero-initialize variables
+anyway.
 
 ### Mode setting instructions
 
