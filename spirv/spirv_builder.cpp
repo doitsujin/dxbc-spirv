@@ -1125,6 +1125,7 @@ void SpirvBuilder::emitBufferAtomic(const ir::Op& op) {
   const auto& dclOp = m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u)));
 
   auto addressDef = ir::SsaDef(op.getOperand(1u));
+  auto operandDef = ir::SsaDef(op.getOperand(2u));
 
   if (declaresPlainBufferResource(dclOp)) {
     auto type = traverseType(dclOp.getType(), addressDef);
@@ -1140,7 +1141,7 @@ void SpirvBuilder::emitBufferAtomic(const ir::Op& op) {
     if (descriptorOp.getFlags() & ir::OpFlag::eNonUniform)
       pushOp(m_decorations, spv::OpDecorate, accessChainId, spv::DecorationNonUniform);
 
-    emitAtomic(op, type, 2u, accessChainId, spv::ScopeQueueFamily,
+    emitAtomic(op, type, operandDef, accessChainId, spv::ScopeQueueFamily,
       spv::MemorySemanticsUniformMemoryMask);
   } else {
     /* OpImageTexelPointer is annoying and takes a pointer to an image descriptor,
@@ -1159,7 +1160,7 @@ void SpirvBuilder::emitBufferAtomic(const ir::Op& op) {
     if (descriptorOp.getFlags() & ir::OpFlag::eNonUniform)
       pushOp(m_decorations, spv::OpDecorate, ptrId, spv::DecorationNonUniform);
 
-    emitAtomic(op, type, 2u, ptrId, spv::ScopeQueueFamily,
+    emitAtomic(op, type, operandDef, ptrId, spv::ScopeQueueFamily,
       spv::MemorySemanticsImageMemoryMask);
   }
 }
@@ -1175,7 +1176,7 @@ void SpirvBuilder::emitCounterAtomic(const ir::Op& op) {
   if (descriptorOp.getFlags() & ir::OpFlag::eNonUniform)
     pushOp(m_decorations, spv::OpDecorate, accessChainId, spv::DecorationNonUniform);
 
-  emitAtomic(op, dclOp.getType(), 1u, accessChainId, spv::ScopeQueueFamily,
+  emitAtomic(op, dclOp.getType(), ir::SsaDef(), accessChainId, spv::ScopeQueueFamily,
     spv::MemorySemanticsUniformMemoryMask);
 }
 
@@ -1316,6 +1317,7 @@ void SpirvBuilder::emitImageAtomic(const ir::Op& op) {
   /* Build coordinate vector */
   auto layerDef = ir::SsaDef(op.getOperand(1u));
   auto coordDef = ir::SsaDef(op.getOperand(2u));
+  auto operandDef = ir::SsaDef(op.getOperand(3u));
 
   auto coordId = emitMergeImageCoordLayer(coordDef, layerDef);
 
@@ -1333,7 +1335,7 @@ void SpirvBuilder::emitImageAtomic(const ir::Op& op) {
   if (descriptorOp.getFlags() & ir::OpFlag::eNonUniform)
     pushOp(m_decorations, spv::OpDecorate, ptrId, spv::DecorationNonUniform);
 
-  emitAtomic(op, type, 3u, ptrId, spv::ScopeQueueFamily,
+  emitAtomic(op, type, operandDef, ptrId, spv::ScopeQueueFamily,
     spv::MemorySemanticsImageMemoryMask);
 }
 
@@ -1759,7 +1761,7 @@ void SpirvBuilder::emitDerivative(const ir::Op& op) {
 }
 
 
-void SpirvBuilder::emitAtomic(const ir::Op& op, const ir::Type& type, uint32_t operandIndex,
+void SpirvBuilder::emitAtomic(const ir::Op& op, const ir::Type& type, ir::SsaDef operandDef,
     uint32_t ptrId, spv::Scope scope, spv::MemorySemanticsMask memoryTypes) {
   dxbc_spv_assert(op.getType().isVoidType() || op.getType() == type);
 
@@ -1791,7 +1793,11 @@ void SpirvBuilder::emitAtomic(const ir::Op& op, const ir::Type& type, uint32_t o
     return std::make_pair(spv::OpNop, 0u);
   } ();
 
-  dxbc_spv_assert(operandIndex + argCount == op.getFirstLiteralOperandIndex());
+  const auto& operandOp = m_builder.getOp(operandDef);
+
+  dxbc_spv_assert(operandOp.getType() == (argCount
+    ? ir::BasicType(type.getBaseType(0u).getBaseType(), argCount)
+    : ir::BasicType()));
 
   /* Set up memory semantics */
   auto semantics = spv::MemorySemanticsAcquireReleaseMask;
@@ -1800,6 +1806,12 @@ void SpirvBuilder::emitAtomic(const ir::Op& op, const ir::Type& type, uint32_t o
     semantics = spv::MemorySemanticsAcquireMask;
   else if (atomicOp == ir::AtomicOp::eStore)
     semantics = spv::MemorySemanticsReleaseMask;
+
+  /* Decompose composite arg */
+  std::array<uint32_t, 2u> argIds = { };
+
+  for (uint32_t i = 0u; i < argCount; i++)
+    argIds.at(i) = emitExtractComponent(operandDef, i);
 
   /* Emit atomic instruction */
   uint32_t operandCount = 4u + argCount;
@@ -1823,11 +1835,13 @@ void SpirvBuilder::emitAtomic(const ir::Op& op, const ir::Type& type, uint32_t o
 
   if (atomicOp == ir::AtomicOp::eCompareExchange) {
     m_code.push_back(makeConstU32(memoryTypes | spv::MemorySemanticsAcquireMask));
-    m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(operandIndex + 1u))));
-  }
 
-  if (argCount)
-    m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(operandIndex))));
+    /* Operands are in reverse order here */
+    m_code.push_back(argIds.at(1u));
+    m_code.push_back(argIds.at(0u));
+  } else if (argCount) {
+    m_code.push_back(argIds.at(0u));
+  }
 
   emitDebugName(op.getDef(), id);
 }
@@ -2605,6 +2619,28 @@ void SpirvBuilder::emitSetCsWorkgroupSize(const ir::Op& op) {
     makeConstU32(x), makeConstU32(y), makeConstU32(z));
 }
 
+
+uint32_t SpirvBuilder::emitExtractComponent(ir::SsaDef vectorDef, uint32_t index) {
+  const auto& op = m_builder.getOp(vectorDef);
+  dxbc_spv_assert(op.getType().isBasicType() && index < op.getType().getBaseType(0u).getVectorSize());
+
+  if (op.getType().isScalarType())
+    return getIdForDef(vectorDef);
+
+  if (op.isConstant())
+    return makeConstant(op.getType().getSubType(0u), op, index);
+
+  if (op.getOpCode() == ir::OpCode::eCompositeConstruct)
+    return getIdForDef(ir::SsaDef(op.getOperand(index)));
+
+  auto id = allocId();
+
+  pushOp(m_code, spv::OpCompositeExtract,
+    getIdForType(op.getType().getBaseType(0u).getBaseType()), id,
+    getIdForDef(vectorDef), index);
+
+  return id;
+}
 
 uint32_t SpirvBuilder::importGlslExt() {
   if (!m_glslExtId) {
