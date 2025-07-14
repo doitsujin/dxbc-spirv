@@ -240,4 +240,33 @@ Builder test_misc_lds_atomic() {
   return builder;
 }
 
+Builder test_misc_constant_load() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::eVertex);
+  builder.add(Op::Label());
+
+  auto inDef = builder.add(Op::DclInputBuiltIn(ScalarType::eU32, entryPoint, BuiltIn::eVertexId));
+  builder.add(Op::Semantic(inDef, 0u, "SV_VERTEXID"));
+
+  auto posOutDef = builder.add(Op::DclOutputBuiltIn(BasicType(ScalarType::eF32, 4u), entryPoint, BuiltIn::ePosition));
+  builder.add(Op::Semantic(posOutDef, 0u, "SV_POSITION"));
+
+  auto constantDef = builder.add(Op(OpCode::eConstant, Type(BasicType(ScalarType::eF32, 4u)).addArrayDimension(5u))
+    .addOperands(Operand(0.0f), Operand(0.0f), Operand(0.0f), Operand(0.0f))
+    .addOperands(Operand(0.0f), Operand(1.0f), Operand(0.0f), Operand(0.0f))
+    .addOperands(Operand(1.0f), Operand(0.0f), Operand(0.0f), Operand(0.0f))
+    .addOperands(Operand(1.0f), Operand(1.0f), Operand(0.0f), Operand(0.0f))
+    .addOperands(Operand(0.0f), Operand(0.0f), Operand(0.0f), Operand(0.0f)));
+
+  auto vertexId = builder.add(Op::InputLoad(ScalarType::eU32, inDef, SsaDef()));
+  auto indexDef = builder.add(Op::UMin(ScalarType::eU32, vertexId, builder.makeConstant(4u)));
+
+  auto data = builder.add(Op::ConstantLoad(
+    BasicType(ScalarType::eF32, 4), constantDef, indexDef));
+
+  builder.add(Op::OutputStore(posOutDef, SsaDef(), data));
+  builder.add(Op::Return());
+  return builder;
+}
+
 }
