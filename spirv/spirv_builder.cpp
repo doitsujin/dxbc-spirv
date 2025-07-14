@@ -116,6 +116,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eConstant:
       return emitConstant(op);
 
+    case ir::OpCode::eUndef:
+      return emitUndef(op);
+
     case ir::OpCode::eSetCsWorkgroupSize:
       return emitSetCsWorkgroupSize(op);
 
@@ -494,6 +497,11 @@ void SpirvBuilder::emitInterpolationModes(uint32_t id, ir::InterpolationModes mo
     if (modes & mode.first)
       pushOp(m_decorations, spv::OpDecorate, id, mode.second);
   }
+}
+
+
+void SpirvBuilder::emitUndef(const ir::Op& op) {
+  setIdForDef(op.getDef(), getIdForConstantNull(op.getType()));
 }
 
 
@@ -3084,6 +3092,15 @@ uint32_t SpirvBuilder::getIdForConstant(const SpirvConstant& constant, uint32_t 
 
   m_constants.insert({ constant, id });
   return id;
+}
+
+
+uint32_t SpirvBuilder::getIdForConstantNull(const ir::Type& type) {
+  SpirvConstant constant = { };
+  constant.op = spv::OpConstantNull;
+  constant.typeId = getIdForType(type);
+
+  return getIdForConstant(constant, 0u);
 }
 
 
