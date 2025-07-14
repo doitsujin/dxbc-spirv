@@ -1,4 +1,5 @@
 #include <cstring>
+#include <sstream>
 #include <iostream>
 
 #include "spirv_builder.h"
@@ -90,6 +91,8 @@ void SpirvBuilder::processDebugNames() {
 
   for (auto op = decls.first; op != decls.second; op++) {
     if (op->getOpCode() == ir::OpCode::eDebugName)
+      m_debugNames.insert_or_assign(ir::SsaDef(op->getOperand(0u)), op->getDef());
+    else if (op->getOpCode() == ir::OpCode::eSemantic)
       m_debugNames.insert({ ir::SsaDef(op->getOperand(0u)), op->getDef() });
   }
 }
@@ -1966,9 +1969,17 @@ void SpirvBuilder::emitDebugName(ir::SsaDef def, uint32_t id) {
     return;
 
   const auto& debugOp = m_builder.getOp(e->second);
-  dxbc_spv_assert(debugOp.getOpCode() == ir::OpCode::eDebugName);
 
-  setDebugName(id, debugOp.getLiteralString(1u).c_str());
+  if (debugOp.getOpCode() == ir::OpCode::eDebugName) {
+    setDebugName(id, debugOp.getLiteralString(1u).c_str());
+  } else if (debugOp.getOpCode() == ir::OpCode::eSemantic) {
+    std::stringstream str;
+    str << debugOp.getLiteralString(2u);
+    str << uint32_t(debugOp.getOperand(1u));
+    setDebugName(id, str.str().c_str());
+  } else {
+    dxbc_spv_unreachable();
+  }
 }
 
 
