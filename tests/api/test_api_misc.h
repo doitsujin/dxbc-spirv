@@ -5,5 +5,7 @@
 namespace dxbc_spv::test_api {
 
 Builder test_misc_scratch();
+Builder test_misc_lds();
+Builder test_misc_lds_atomic();
 
 }

@@ -239,6 +239,8 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_arithmetic_bool);
 
   ADD_TEST(test_misc_scratch);
+  ADD_TEST(test_misc_lds);
+  ADD_TEST(test_misc_lds_atomic);
 
 return result;
 #undef ADD_TEST
