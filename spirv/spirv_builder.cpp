@@ -1059,17 +1059,12 @@ void SpirvBuilder::emitBufferStore(const ir::Op& op) {
       storeIds.push_back(std::make_pair(accessChainId, getIdForDef(valueOp.getDef())));
     } else {
       /* Extract scalars from vector and scalarize access chains */
-      auto valueId = getIdForDef(valueOp.getDef());
-
       for (uint32_t i = 0u; i < accessType.getBaseType(0u).getVectorSize(); i++) {
         auto accessChainId = emitAccessChain(spv::StorageClassStorageBuffer, dclOp.getType(),
           getIdForDef(descriptorOp.getDef()), addressDef, i, hasWrapperStruct);
-        auto componentId = allocId();
 
-        pushOp(m_code, spv::OpCompositeExtract,
-          getIdForType(addressedType), componentId, valueId, i);
-
-        storeIds.push_back(std::make_pair(accessChainId, componentId));
+        storeIds.push_back(std::make_pair(accessChainId,
+          emitExtractComponent(valueOp.getDef(), i)));
       }
     }
 
