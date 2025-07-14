@@ -224,6 +224,8 @@ private:
 
   void emitExtendedGlslArithmetic(const ir::Op& op);
 
+  void emitExtendedIntArithmetic(const ir::Op& op);
+
   void emitFRcp(const ir::Op& op);
 
   void emitFRound(const ir::Op& op);

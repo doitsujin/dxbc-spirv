@@ -320,6 +320,12 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eConvertPackedF16toF32:
       return emitExtendedGlslArithmetic(op);
 
+    case ir::OpCode::eIAddCarry:
+    case ir::OpCode::eISubBorrow:
+    case ir::OpCode::eSMulExtended:
+    case ir::OpCode::eUMulExtended:
+      return emitExtendedIntArithmetic(op);
+
     case ir::OpCode::eFRcp:
       return emitFRcp(op);
 
@@ -357,10 +363,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eInterpolateAtOffset:
     case ir::OpCode::eRovScopedLockBegin:
     case ir::OpCode::eRovScopedLockEnd:
-    case ir::OpCode::eIAddCarry:
-    case ir::OpCode::eISubBorrow:
-    case ir::OpCode::eSMulExtended:
-    case ir::OpCode::eUMulExtended:
       /* TODO implement */
       std::cerr << "Unimplemented opcode " << op.getOpCode() << std::endl;
       break;
@@ -2477,6 +2479,53 @@ void SpirvBuilder::emitExtendedGlslArithmetic(const ir::Op& op) {
     pushOp(m_decorations, spv::OpDecorate, id, spv::DecorationNoContraction);
 
   emitDebugName(op.getDef(), id);
+}
+
+
+void SpirvBuilder::emitExtendedIntArithmetic(const ir::Op& op) {
+  dxbc_spv_assert(op.getType().isVectorType() && op.getType().getBaseType(0u).getVectorSize() == 2u);
+
+  /* Figure out opcode */
+  spv::Op opCode = [&] {
+    switch (op.getOpCode()) {
+      case ir::OpCode::eIAddCarry: return spv::OpIAddCarry;
+      case ir::OpCode::eISubBorrow: return spv::OpISubBorrow;
+      case ir::OpCode::eSMulExtended: return spv::OpSMulExtended;
+      case ir::OpCode::eUMulExtended: return spv::OpUMulExtended;
+      default: dxbc_spv_unreachable();
+    }
+
+    return spv::OpNop;
+  } ();
+
+  /* Emit actual operation that returns a struct */
+  auto resultType = op.getType().getBaseType(0u);
+
+  auto structTypeId = getIdForType(ir::Type()
+    .addStructMember(resultType.getBaseType())
+    .addStructMember(resultType.getBaseType()));
+
+  auto opId = allocId();
+
+  pushOp(m_code, opCode, structTypeId, opId,
+    getIdForDef(ir::SsaDef(op.getOperand(0u))),
+    getIdForDef(ir::SsaDef(op.getOperand(1u))));
+
+  /* Repack result struct as a vector */
+  auto scalarTypeId = getIdForType(resultType.getBaseType());
+
+  auto loId = allocId();
+  auto hiId = allocId();
+
+  pushOp(m_code, spv::OpCompositeExtract, scalarTypeId, loId, opId, 0u);
+  pushOp(m_code, spv::OpCompositeExtract, scalarTypeId, hiId, opId, 1u);
+
+  auto resultTypeId = getIdForType(resultType);
+  auto resultId = getIdForDef(op.getDef());
+
+  pushOp(m_code, spv::OpCompositeConstruct, resultTypeId, resultId, loId, hiId);
+
+  emitDebugName(op.getDef(), resultId);
 }
 
 
