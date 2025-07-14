@@ -109,9 +109,9 @@ All operands bar the `%EntryPoint` operand are literal constants.
 If the result type and source type are the same, the conversion operation is a no-op and will be removed by a lowering pass.
 
 Semantics are as follows:
-- `ConvertFtoF` converts between float types of a different width. If the result type is smaller than the
-  source type, round-to-zero semantics are required but no specific denorm behaviour is specified.
-- `ConvertFToI` is a saturating conversion from a float type to a signed or unsigned integer, with round-to-zero semantics.
+- `ConvertFtoF` converts between float types of a different width. For conversions from `f64`, round-even semantics are required
+  but denorms may or may not get flushed.
+- `ConvertFToI` is a conversion from a float type to a signed or unsigned integer, with round-to-zero semantics.
 - `ConvertIToF` is a value-preserving conversion from a signed or unsigned integer to any float type with round-even semantics.
 - `ConvertItoI` converts between integer types of different size. If the result type is larger than the source and the source
   is signed, it will be sign-extended, otherwise it will be zero-extended. If the result type is smaller, excess bits are discarded.
