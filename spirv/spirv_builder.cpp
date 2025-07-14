@@ -119,6 +119,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eSetCsWorkgroupSize:
       return emitSetCsWorkgroupSize(op);
 
+    case ir::OpCode::eDclLds:
+      return emitDclLds(op);
+
     case ir::OpCode::eDclScratch:
       return emitDclScratch(op);
 
@@ -354,7 +357,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eSetTessDomain:
     case ir::OpCode::eDclSpecConstant:
     case ir::OpCode::eDclPushData:
-    case ir::OpCode::eDclLds:
     case ir::OpCode::eFunctionCall:
     case ir::OpCode::eBarrier:
     case ir::OpCode::eParamLoad:
@@ -490,6 +492,21 @@ void SpirvBuilder::emitInterpolationModes(uint32_t id, ir::InterpolationModes mo
     if (modes & mode.first)
       pushOp(m_decorations, spv::OpDecorate, id, mode.second);
   }
+}
+
+
+void SpirvBuilder::emitDclLds(const ir::Op& op) {
+  /* Plain shared variable, use type as-is. */
+  auto varId = getIdForDef(op.getDef());
+
+  emitDebugName(op.getDef(), varId);
+
+  auto typeId = getIdForType(op.getType());
+  auto ptrTypeId = getIdForPtrType(typeId, spv::StorageClassWorkgroup);
+
+  pushOp(m_declarations, spv::OpVariable, ptrTypeId, varId, spv::StorageClassWorkgroup);
+
+  addEntryPointId(varId);
 }
 
 
