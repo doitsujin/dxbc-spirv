@@ -197,6 +197,8 @@ private:
 
   void emitStructuredInfo(const ir::Op& op);
 
+  void emitBarrier(const ir::Op& op);
+
   void emitMemoryModel();
 
   void emitDebugName(ir::SsaDef def, uint32_t id);
@@ -267,6 +269,10 @@ private:
   uint32_t getIdForSampledImageType(uint32_t imageTypeId);
 
   uint32_t getIdForConstant(const SpirvConstant& constant, uint32_t memberCount);
+
+  spv::Scope translateScope(ir::Scope scope);
+
+  uint32_t translateMemoryTypes(ir::MemoryTypeFlags memoryFlags);
 
   uint32_t makeScalarConst(ir::ScalarType type, const ir::Op& op, uint32_t& operandIndex);
 

@@ -346,6 +346,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eInterpolateAtOffset:
       return emitInterpolation(op);
 
+    case ir::OpCode::eBarrier:
+      return emitBarrier(op);
+
     case ir::OpCode::eSetGsInstances:
     case ir::OpCode::eSetGsInputPrimitive:
     case ir::OpCode::eSetGsOutputVertices:
@@ -358,7 +361,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eDclSpecConstant:
     case ir::OpCode::eDclPushData:
     case ir::OpCode::eFunctionCall:
-    case ir::OpCode::eBarrier:
     case ir::OpCode::eParamLoad:
     case ir::OpCode::eSpecConstantLoad:
     case ir::OpCode::eMemoryLoad:
@@ -1982,6 +1984,24 @@ void SpirvBuilder::emitStructuredInfo(const ir::Op& op) {
 }
 
 
+void SpirvBuilder::emitBarrier(const ir::Op& op) {
+  auto execScope = ir::Scope(op.getOperand(0u));
+  auto memScope = ir::Scope(op.getOperand(1u));
+  auto memTypes = ir::MemoryTypeFlags(op.getOperand(2u));
+
+  if (execScope == ir::Scope::eThread) {
+    pushOp(m_code, spv::OpMemoryBarrier,
+      makeConstU32(translateScope(memScope)),
+      makeConstU32(translateMemoryTypes(memTypes)));
+  } else {
+    pushOp(m_code, spv::OpControlBarrier,
+      makeConstU32(translateScope(execScope)),
+      makeConstU32(translateScope(memScope)),
+      makeConstU32(translateMemoryTypes(memTypes)));
+  }
+}
+
+
 void SpirvBuilder::emitMemoryModel() {
   enableCapability(spv::CapabilityShader);
   enableCapability(spv::CapabilityPhysicalStorageBufferAddresses);
@@ -3064,6 +3084,49 @@ uint32_t SpirvBuilder::getIdForConstant(const SpirvConstant& constant, uint32_t 
 
   m_constants.insert({ constant, id });
   return id;
+}
+
+
+spv::Scope SpirvBuilder::translateScope(ir::Scope scope) {
+  switch (scope) {
+    case ir::Scope::eThread:
+      return spv::ScopeInvocation;
+
+    case ir::Scope::eQuad:
+    case ir::Scope::eSubgroup:
+      return spv::ScopeSubgroup;
+
+    case ir::Scope::eWorkgroup:
+      return spv::ScopeWorkgroup;
+
+    case ir::Scope::eGlobal:
+      return spv::ScopeQueueFamily;
+  }
+
+  dxbc_spv_unreachable();
+  return spv::ScopeInvocation;
+}
+
+
+uint32_t SpirvBuilder::translateMemoryTypes(ir::MemoryTypeFlags memoryFlags) {
+  uint32_t result = 0u;
+
+  if (memoryFlags & ir::MemoryType::eLds)
+    result |= spv::MemorySemanticsWorkgroupMemoryMask;
+
+  if (memoryFlags & ir::MemoryType::eUavBuffer)
+    result |= spv::MemorySemanticsUniformMemoryMask;
+
+  if (memoryFlags & ir::MemoryType::eUavImage)
+    result |= spv::MemorySemanticsImageMemoryMask;
+
+  if (memoryFlags) {
+    result |= spv::MemorySemanticsAcquireReleaseMask |
+              spv::MemorySemanticsMakeAvailableMask |
+              spv::MemorySemanticsMakeVisibleMask;
+  }
+
+  return result;
 }
 
 
