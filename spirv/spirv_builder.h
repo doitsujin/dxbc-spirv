@@ -112,6 +112,8 @@ private:
 
   void emitConstant(const ir::Op& op);
 
+  void emitUndef(const ir::Op& op);
+
   void emitInterpolationModes(uint32_t id, ir::InterpolationModes modes);
 
   void emitDclLds(const ir::Op& op);
@@ -269,6 +271,8 @@ private:
   uint32_t getIdForSampledImageType(uint32_t imageTypeId);
 
   uint32_t getIdForConstant(const SpirvConstant& constant, uint32_t memberCount);
+
+  uint32_t getIdForConstantNull(const ir::Type& type);
 
   spv::Scope translateScope(ir::Scope scope);
 
