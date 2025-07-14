@@ -973,11 +973,10 @@ void SpirvBuilder::emitBufferLoad(const ir::Op& op) {
     if (isUav) {
       auto uavFlags = getUavFlags(dclOp);
 
-      if (!(uavFlags & ir::UavFlag::eReadOnly)) {
+      if (!(uavFlags & ir::UavFlag::eReadOnly) && getUavCoherentScope(uavFlags) != spv::ScopeInvocation) {
         memoryOperands.flags |= spv::MemoryAccessNonPrivatePointerMask
                              |  spv::MemoryAccessMakePointerVisibleMask;
-        memoryOperands.makeVisible = makeConstU32((uavFlags & ir::UavFlag::eCoherent)
-          ? spv::ScopeQueueFamily : spv::ScopeWorkgroup);
+        memoryOperands.makeVisible = makeConstU32(getUavCoherentScope(uavFlags));
       }
     }
 
@@ -1080,11 +1079,10 @@ void SpirvBuilder::emitBufferStore(const ir::Op& op) {
     /* Set up memory operands depending on resource usage */
     SpirvMemoryOperands memoryOperands = { };
 
-    if (!(uavFlags & ir::UavFlag::eWriteOnly)) {
+    if (!(uavFlags & ir::UavFlag::eWriteOnly) && getUavCoherentScope(uavFlags) != spv::ScopeInvocation) {
       memoryOperands.flags |= spv::MemoryAccessNonPrivatePointerMask
                            |  spv::MemoryAccessMakePointerAvailableMask;
-      memoryOperands.makeAvailable = makeConstU32((uavFlags & ir::UavFlag::eCoherent)
-        ? spv::ScopeQueueFamily : spv::ScopeWorkgroup);
+      memoryOperands.makeAvailable = makeConstU32(getUavCoherentScope(uavFlags));
     }
 
     /* Pairs of scalarized access chains and values to store */
@@ -3104,6 +3102,17 @@ uint32_t SpirvBuilder::getIdForConstantNull(const ir::Type& type) {
 }
 
 
+spv::Scope SpirvBuilder::getUavCoherentScope(ir::UavFlags flags) {
+  if (flags & ir::UavFlag::eCoherent)
+    return spv::ScopeQueueFamily;
+
+  if (m_stage == ir::ShaderStage::eCompute)
+    return spv::ScopeWorkgroup;
+
+  return spv::ScopeInvocation;
+}
+
+
 spv::Scope SpirvBuilder::translateScope(ir::Scope scope) {
   switch (scope) {
     case ir::Scope::eThread:
@@ -3370,11 +3379,10 @@ void SpirvBuilder::setUavImageReadOperands(SpirvImageOperands& operands, const i
 
   auto uavFlags = getUavFlags(uavOp);
 
-  if (!(uavFlags & ir::UavFlag::eReadOnly)) {
+  if (!(uavFlags & ir::UavFlag::eReadOnly) && getUavCoherentScope(uavFlags) != spv::ScopeInvocation) {
     operands.flags |= spv::ImageOperandsNonPrivateTexelMask
                    |  spv::ImageOperandsMakeTexelVisibleMask;
-    operands.makeVisible = makeConstU32((uavFlags & ir::UavFlag::eCoherent)
-      ? spv::ScopeQueueFamily : spv::ScopeWorkgroup);
+    operands.makeVisible = makeConstU32(getUavCoherentScope(uavFlags));
   }
 }
 
@@ -3384,11 +3392,10 @@ void SpirvBuilder::setUavImageWriteOperands(SpirvImageOperands& operands, const 
 
   auto uavFlags = getUavFlags(uavOp);
 
-  if (!(uavFlags & ir::UavFlag::eWriteOnly)) {
+  if (!(uavFlags & ir::UavFlag::eWriteOnly) && getUavCoherentScope(uavFlags) != spv::ScopeInvocation) {
     operands.flags |= spv::ImageOperandsNonPrivateTexelMask
                    |  spv::ImageOperandsMakeTexelAvailableMask;
-    operands.makeAvailable = makeConstU32((uavFlags & ir::UavFlag::eCoherent)
-      ? spv::ScopeQueueFamily : spv::ScopeWorkgroup);
+    operands.makeAvailable = makeConstU32(getUavCoherentScope(uavFlags));
   }
 }
 
