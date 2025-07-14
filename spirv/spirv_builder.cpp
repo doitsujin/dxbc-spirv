@@ -119,6 +119,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eSetCsWorkgroupSize:
       return emitSetCsWorkgroupSize(op);
 
+    case ir::OpCode::eDclScratch:
+      return emitDclScratch(op);
+
     case ir::OpCode::eDclInput:
     case ir::OpCode::eDclOutput:
       return emitDclIoVar(op);
@@ -352,7 +355,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eDclSpecConstant:
     case ir::OpCode::eDclPushData:
     case ir::OpCode::eDclLds:
-    case ir::OpCode::eDclScratch:
     case ir::OpCode::eFunctionCall:
     case ir::OpCode::eBarrier:
     case ir::OpCode::eParamLoad:
@@ -488,6 +490,21 @@ void SpirvBuilder::emitInterpolationModes(uint32_t id, ir::InterpolationModes mo
     if (modes & mode.first)
       pushOp(m_decorations, spv::OpDecorate, id, mode.second);
   }
+}
+
+
+void SpirvBuilder::emitDclScratch(const ir::Op& op) {
+  /* Declare scratch as a simpe private variable */
+  auto varId = getIdForDef(op.getDef());
+
+  emitDebugName(op.getDef(), varId);
+
+  auto typeId = getIdForType(op.getType());
+  auto ptrTypeId = getIdForPtrType(typeId, spv::StorageClassPrivate);
+
+  pushOp(m_declarations, spv::OpVariable, ptrTypeId, varId, spv::StorageClassPrivate);
+
+  addEntryPointId(varId);
 }
 
 

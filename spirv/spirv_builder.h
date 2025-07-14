@@ -114,6 +114,8 @@ private:
 
   void emitInterpolationModes(uint32_t id, ir::InterpolationModes modes);
 
+  void emitDclScratch(const ir::Op& op);
+
   void emitDclIoVar(const ir::Op& op);
 
   uint32_t emitBuiltInDrawParameter(spv::BuiltIn builtIn);
