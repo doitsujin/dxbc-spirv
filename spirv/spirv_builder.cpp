@@ -1889,6 +1889,8 @@ void SpirvBuilder::emitLabel(const ir::Op& op) {
 
 
 void SpirvBuilder::emitBranch(const ir::Op& op) {
+  emitStructuredInfo(m_structure.blockLabel);
+
   pushOp(m_code, spv::OpBranch, getIdForDef(ir::SsaDef(op.getOperand(0u))));
 
   m_structure.blockLabel = ir::Op();
@@ -1947,9 +1949,7 @@ void SpirvBuilder::emitReturn(const ir::Op& op) {
 
 
 void SpirvBuilder::emitPhi(const ir::Op& op) {
-  emitStructuredInfo(m_structure.blockLabel);
-
-  m_code.push_back(makeOpcodeToken(spv::OpPhi, 2u + op.getOperandCount()));
+  m_code.push_back(makeOpcodeToken(spv::OpPhi, 3u + op.getOperandCount()));
   m_code.push_back(getIdForType(op.getType()));
   m_code.push_back(getIdForDef(op.getDef()));
 
@@ -1958,8 +1958,6 @@ void SpirvBuilder::emitPhi(const ir::Op& op) {
     m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(i + 1u))));
     m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(i))));
   }
-
-  m_structure.blockLabel = ir::Op();
 }
 
 
