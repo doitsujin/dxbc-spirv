@@ -227,7 +227,7 @@ Shader I/O and certain resource access operations may use arrays, structs or vec
 
 For `CompositeConstruct`, the constituents must match the composite member type exactly. It is not allowed to pass flattened scalar values.
 
-The `%address` parameter is a vector or scalar of an integer type.
+The `%address` parameter is a constant vector or scalar of an integer type.
 
 ### Sparse feedback
 Instructions decorated with the `SparseFeedback` flag return a struct type with the following members:
