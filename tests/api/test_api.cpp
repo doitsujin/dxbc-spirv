@@ -1,6 +1,7 @@
 #include "test_api.h"
 #include "test_api_arithmetic.h"
 #include "test_api_io.h"
+#include "test_api_misc.h"
 #include "test_api_resources.h"
 
 namespace dxbc_spv::test_api {
@@ -236,6 +237,8 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_arithmetic_int_extended);
 
   ADD_TEST(test_arithmetic_bool);
+
+  ADD_TEST(test_misc_scratch);
 
 return result;
 #undef ADD_TEST
