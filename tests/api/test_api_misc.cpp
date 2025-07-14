@@ -88,4 +88,156 @@ Builder test_misc_scratch() {
   return builder;
 }
 
+
+Builder test_misc_lds() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::eCompute);
+  builder.add(Op::SetCsWorkgroupSize(entryPoint, 32u, 1u, 1u));
+  auto baseBlock = builder.add(Op::Label());
+
+  auto gidInputDef = builder.add(Op::DclInputBuiltIn(BasicType(ScalarType::eU32, 3u), entryPoint, BuiltIn::eGlobalThreadId));
+  builder.add(Op::Semantic(gidInputDef, 0u, "SV_DispatchThreadID"));
+
+  auto tidInputDef = builder.add(Op::DclInputBuiltIn(ScalarType::eU32, entryPoint, BuiltIn::eLocalThreadIndex));
+  builder.add(Op::Semantic(tidInputDef, 0u, "SV_GroupIndex"));
+
+  auto gid = builder.add(Op::InputLoad(ScalarType::eU32, gidInputDef, builder.makeConstant(0u)));
+  auto tid = builder.add(Op::InputLoad(ScalarType::eU32, tidInputDef, SsaDef()));
+
+  auto bufferType = Type(ScalarType::eF32).addArrayDimension(1u).addArrayDimension(0u);
+
+  auto srvDef = builder.add(Op::DclSrv(bufferType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured));
+  auto srvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eSrv, srvDef, builder.makeConstant(0u)));
+  builder.add(Op::DebugName(srvDef, "t0"));
+
+  auto uavDef = builder.add(Op::DclUav(bufferType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured, UavFlag::eWriteOnly));
+  auto uavDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eUav, uavDef, builder.makeConstant(0u)));
+  builder.add(Op::DebugName(uavDef, "u0"));
+
+  auto ldsType = Type(ScalarType::eF32).addArrayDimension(32u);
+  auto ldsDef = builder.add(Op::DclLds(ldsType, entryPoint));
+  builder.add(Op::DebugName(ldsDef, "g0"));
+
+  auto dataDef = builder.add(Op::BufferLoad(ScalarType::eF32, srvDescriptor,
+    builder.add(Op::CompositeConstruct(BasicType(ScalarType::eU32, 2u), gid, builder.makeConstant(0u))), 4u));
+  builder.add(Op::LdsStore(ldsDef, tid, dataDef));
+
+  auto loopCounterInitDef = builder.makeConstant(16u);
+  auto reductionInit = builder.makeUndef(ScalarType::eF32);
+
+  /* Reserve loop labels */
+  auto labelLoopBody = builder.add(Op::Label());
+  auto labelLoopContinue = builder.add(Op::Label());
+  auto labelLoopMerge = builder.add(Op::Label());
+
+  /* Loop header with phis etc */
+  auto labelLoopHeader = builder.addBefore(labelLoopBody,
+    Op::LabelLoop(labelLoopMerge, labelLoopBody));
+  builder.addBefore(labelLoopHeader, Op::Branch(labelLoopHeader));
+
+  builder.setCursor(labelLoopHeader);
+
+  auto loopCounterPhi = Op::Phi(ScalarType::eU32);
+  auto loopCounterPhiDef = builder.add(loopCounterPhi);
+
+  builder.add(Op::Branch(labelLoopBody));
+
+  /* Loop body */
+  builder.setCursor(labelLoopBody);
+
+  auto labelReductionRead = builder.addAfter(labelLoopBody, Op::Label());
+  auto labelReductionMerge = builder.addAfter(labelReductionRead, Op::Label());
+  builder.rewriteOp(labelLoopBody, Op::LabelSelection(labelReductionMerge));
+
+  builder.add(Op::Barrier(Scope::eWorkgroup, Scope::eWorkgroup, MemoryType::eLds));
+
+  auto tidCond = builder.add(Op::ULt(tid, loopCounterPhiDef));
+  builder.add(Op::BranchConditional(tidCond, labelReductionRead, labelReductionMerge));
+
+  builder.setCursor(labelReductionRead);
+
+  auto reductionValue = builder.add(Op::FAdd(ScalarType::eF32,
+    builder.add(Op::LdsLoad(ScalarType::eF32, ldsDef, tid)),
+    builder.add(Op::LdsLoad(ScalarType::eF32, ldsDef, builder.add(Op::IAdd(ScalarType::eU32, tid, loopCounterPhiDef))))));
+
+  builder.add(Op::Branch(labelReductionMerge));
+
+  builder.setCursor(labelReductionMerge);
+
+  auto labelReductionWrite = builder.addAfter(labelReductionMerge, Op::Label());
+  builder.rewriteOp(labelReductionMerge, Op::LabelSelection(labelLoopContinue));
+
+  auto reductionPhi = builder.add(Op::Phi(ScalarType::eF32)
+    .addPhi(labelLoopBody, reductionInit)
+    .addPhi(labelReductionRead, reductionValue));
+
+  builder.add(Op::Barrier(Scope::eWorkgroup, Scope::eWorkgroup, MemoryType::eLds));
+  builder.add(Op::BranchConditional(tidCond, labelReductionWrite, labelLoopContinue));
+
+  builder.setCursor(labelReductionWrite);
+  builder.add(Op::LdsStore(ldsDef, tid, reductionPhi));
+  builder.add(Op::Branch(labelLoopContinue));
+
+  /* Loop continue block */
+  builder.setCursor(labelLoopContinue);
+
+  /* Adjust loop counter and properly emit phi */
+  auto loopCounterIterDef = builder.add(Op::UShr(ScalarType::eU32, loopCounterPhiDef, builder.makeConstant(1u)));
+
+  loopCounterPhi.addPhi(baseBlock, loopCounterInitDef);
+  loopCounterPhi.addPhi(labelLoopContinue, loopCounterIterDef);
+
+  builder.rewriteOp(loopCounterPhiDef, std::move(loopCounterPhi));
+
+  /* Check loop counter value and branch */
+  auto cond = builder.add(Op::INe(loopCounterIterDef, builder.makeConstant(0u)));
+  builder.add(Op::BranchConditional(cond, labelLoopHeader, labelLoopMerge));
+
+  builder.setCursor(labelLoopMerge);
+  builder.add(Op::Barrier(Scope::eWorkgroup, Scope::eWorkgroup, MemoryType::eLds));
+
+  /* Write back */
+  builder.add(Op::BufferStore(uavDescriptor,
+    builder.add(Op::CompositeConstruct(BasicType(ScalarType::eU32, 2u), gid, builder.makeConstant(0u))),
+    builder.add(Op::LdsLoad(ScalarType::eF32, ldsDef, builder.makeConstant(0u))), 4u));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+Builder test_misc_lds_atomic() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::eCompute);
+  builder.add(Op::SetCsWorkgroupSize(entryPoint, 1u, 1u, 1u));
+  builder.add(Op::Label());
+
+  auto gidInputDef = builder.add(Op::DclInputBuiltIn(BasicType(ScalarType::eU32, 3u), entryPoint, BuiltIn::eGlobalThreadId));
+  auto gid = builder.add(Op::InputLoad(ScalarType::eU32, gidInputDef, builder.makeConstant(0u)));
+
+  builder.add(Op::Semantic(gidInputDef, 0u, "SV_DispatchThreadID"));
+
+  auto bufferType = Type(ScalarType::eI32).addArrayDimension(1u).addArrayDimension(0u);
+
+  auto srvDef = builder.add(Op::DclSrv(bufferType, entryPoint, 0u, 1u, 1u, ResourceKind::eBufferStructured));
+  auto srvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eSrv, srvDef, builder.makeConstant(0u)));
+
+  auto uavDef = builder.add(Op::DclUav(bufferType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured, UavFlag::eWriteOnly));
+  auto uavDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eUav, uavDef, builder.makeConstant(0u)));
+
+  auto ldsType = Type(ScalarType::eI32).addArrayDimension(1u);
+  auto ldsDef = builder.add(Op::DclLds(ldsType, entryPoint));
+  builder.add(Op::DebugName(ldsDef, "g0"));
+
+  auto dataDef = builder.add(Op::BufferLoad(ScalarType::eI32, srvDescriptor,
+    builder.add(Op::CompositeConstruct(BasicType(ScalarType::eU32, 2u), gid, builder.makeConstant(0u))), 4u));
+  auto resultDef = builder.add(Op::LdsAtomic(AtomicOp::eAdd, ScalarType::eI32, ldsDef, builder.makeConstant(0u), dataDef));
+
+  builder.add(Op::BufferStore(uavDescriptor,
+    builder.add(Op::CompositeConstruct(BasicType(ScalarType::eU32, 2u), gid, builder.makeConstant(0u))),
+    resultDef, 4u));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
 }
