@@ -79,6 +79,8 @@ bool Validator::validateShaderIo(std::ostream& str) const {
   constexpr static uint32_t MaxLocations = 32u;
   constexpr static uint32_t MaxComponents = 4u;
 
+  std::array<uint8_t, 2u * MaxLocations> componentMask = { };
+
   for (auto op = m_builder.getDeclarations().first; op != m_builder.getDeclarations().second; op++) {
     bool isIo = op->getOpCode() == OpCode::eDclInput ||
                 op->getOpCode() == OpCode::eDclInputBuiltIn ||
@@ -124,8 +126,6 @@ bool Validator::validateShaderIo(std::ostream& str) const {
                    op->getOpCode() == OpCode::eDclInputBuiltIn;
 
     /* Validate I/O location and component assignments */
-    std::array<uint8_t, MaxLocations> componentMask = { };
-
     if (!isBuiltIn) {
       uint32_t location = uint32_t(op->getOperand(1u));
       uint32_t component = uint32_t(op->getOperand(2u));
@@ -149,14 +149,15 @@ bool Validator::validateShaderIo(std::ostream& str) const {
       }
 
       uint32_t componentBits = ((1u << base.getVectorSize()) - 1u) << component;
+      uint32_t baseLocation = isInput ? 0u : MaxLocations;
 
-      if (componentMask.at(location) & componentBits) {
+      if (componentMask.at(location + baseLocation) & componentBits) {
         str << "I/O component overlap at location " << location << ", component " << component << std::endl;
         m_disasm.disassembleOp(str, *op);
         return false;
       }
 
-      componentMask.at(location) |= componentBits;
+      componentMask.at(location + baseLocation) |= componentBits;
     }
 
     if (isInput) {
