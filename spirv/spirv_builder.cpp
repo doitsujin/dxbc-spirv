@@ -122,6 +122,18 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eSetCsWorkgroupSize:
       return emitSetCsWorkgroupSize(op);
 
+    case ir::OpCode::eSetGsInstances:
+      return emitSetGsInstances(op);
+
+    case ir::OpCode::eSetGsInputPrimitive:
+      return emitSetGsInputPrimitive(op);
+
+    case ir::OpCode::eSetGsOutputVertices:
+      return emitSetGsOutputVertices(op);
+
+    case ir::OpCode::eSetGsOutputPrimitive:
+      return emitSetGsOutputPrimitive(op);
+
     case ir::OpCode::eDclLds:
       return emitDclLds(op);
 
@@ -152,6 +164,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
 
     case ir::OpCode::eDclUavCounter:
       return emitDclUavCounter(op);
+
+    case ir::OpCode::eDclXfb:
+      return emitDclXfb(op);
 
     case ir::OpCode::eConstantLoad:
       return emitConstantLoad(op);
@@ -358,10 +373,10 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eBarrier:
       return emitBarrier(op);
 
-    case ir::OpCode::eSetGsInstances:
-    case ir::OpCode::eSetGsInputPrimitive:
-    case ir::OpCode::eSetGsOutputVertices:
-    case ir::OpCode::eSetGsOutputPrimitive:
+    case ir::OpCode::eEmitVertex:
+    case ir::OpCode::eEmitPrimitive:
+      return emitGsEmit(op);
+
     case ir::OpCode::eSetPsEarlyFragmentTest:
     case ir::OpCode::eSetPsDepthGreaterEqual:
     case ir::OpCode::eSetPsDepthLessEqual:
@@ -377,8 +392,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eMemoryAtomic:
     case ir::OpCode::ePointer:
     case ir::OpCode::ePointerAddress:
-    case ir::OpCode::eEmitVertex:
-    case ir::OpCode::eEmitPrimitive:
     case ir::OpCode::eDemote:
     case ir::OpCode::eRovScopedLockBegin:
     case ir::OpCode::eRovScopedLockEnd:
@@ -557,9 +570,16 @@ void SpirvBuilder::emitDclIoVar(const ir::Op& op) {
   pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationLocation, uint32_t(op.getOperand(1u)));
   pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationComponent, uint32_t(op.getOperand(2u)));
 
-  if (op.getOpCode() == ir::OpCode::eDclInput && m_stage == ir::ShaderStage::ePixel) {
+  bool isInput = op.getOpCode() == ir::OpCode::eDclInput;
+
+  if (isInput && m_stage == ir::ShaderStage::ePixel) {
     auto interpolationModes = ir::InterpolationModes(op.getOperand(3u));
     emitInterpolationModes(varId, interpolationModes);
+  }
+
+  if (isMultiStreamGs() && !isInput) {
+    pushOp(m_decorations, spv::OpDecorate, varId,
+      spv::DecorationStream, uint32_t(op.getOperand(3u)));
   }
 
   addEntryPointId(varId);
@@ -719,7 +739,24 @@ void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
     emitInterpolationModes(varId, interpolationModes);
   }
 
+  /* Set up stream decoration for GS */
+  if (isMultiStreamGs() && !isInput) {
+    pushOp(m_decorations, spv::OpDecorate, varId,
+      spv::DecorationStream, uint32_t(op.getOperand(2u)));
+  }
+
   addEntryPointId(varId);
+}
+
+
+void SpirvBuilder::emitDclXfb(const ir::Op& op) {
+  enableCapability(spv::CapabilityTransformFeedback);
+
+  auto varId = getIdForDef(ir::SsaDef(op.getOperand(0u)));
+
+  pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationXfbBuffer, uint32_t(op.getOperand(1u)));
+  pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationXfbStride, uint32_t(op.getOperand(2u)));
+  pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationOffset, uint32_t(op.getOperand(3u)));
 }
 
 
@@ -2068,6 +2105,36 @@ void SpirvBuilder::emitBarrier(const ir::Op& op) {
 }
 
 
+void SpirvBuilder::emitGsEmit(const ir::Op& op) {
+  bool needsStreamIndex = isMultiStreamGs();
+
+  auto opCode = [&] {
+    switch (op.getOpCode()) {
+      case ir::OpCode::eEmitVertex:
+        return needsStreamIndex
+          ? spv::OpEmitStreamVertex
+          : spv::OpEmitVertex;
+
+      case ir::OpCode::eEmitPrimitive:
+        return needsStreamIndex
+          ? spv::OpEndStreamPrimitive
+          : spv::OpEndPrimitive;
+
+      default:
+        dxbc_spv_unreachable();
+        return spv::OpNop;
+    }
+  } ();
+
+  m_code.push_back(makeOpcodeToken(opCode, needsStreamIndex ? 2u : 1u));
+
+  if (needsStreamIndex) {
+    auto streamIndex = uint32_t(op.getOperand(0u));
+    m_code.push_back(makeConstU32(streamIndex));
+  }
+}
+
+
 void SpirvBuilder::emitMemoryModel() {
   enableCapability(spv::CapabilityShader);
   enableCapability(spv::CapabilityPhysicalStorageBufferAddresses);
@@ -2787,6 +2854,70 @@ void SpirvBuilder::emitSetCsWorkgroupSize(const ir::Op& op) {
 }
 
 
+void SpirvBuilder::emitSetGsInstances(const ir::Op& op) {
+  auto instanceCount = uint32_t(op.getOperand(1u));
+
+  pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId,
+    spv::ExecutionModeInvocations, instanceCount);
+}
+
+
+void SpirvBuilder::emitSetGsInputPrimitive(const ir::Op& op) {
+  auto primitiveType = ir::PrimitiveType(op.getOperand(1u));
+
+  auto execMode = [&] {
+    switch (primitiveType) {
+      case ir::PrimitiveType::ePoints:        return spv::ExecutionModeInputPoints;
+      case ir::PrimitiveType::eLines:         return spv::ExecutionModeInputLines;
+      case ir::PrimitiveType::eLinesAdj:      return spv::ExecutionModeInputLinesAdjacency;
+      case ir::PrimitiveType::eTriangles:     return spv::ExecutionModeTriangles;
+      case ir::PrimitiveType::eTrianglesAdj:  return spv::ExecutionModeInputTrianglesAdjacency;
+      /* Don't support patches here */
+      default: dxbc_spv_unreachable();
+    }
+
+    return spv::ExecutionMode();
+  } ();
+
+  pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId, execMode);
+}
+
+
+void SpirvBuilder::emitSetGsOutputVertices(const ir::Op& op) {
+  auto vertexCount = uint32_t(op.getOperand(1u));
+
+  pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId,
+    spv::ExecutionModeOutputVertices, vertexCount);
+}
+
+
+void SpirvBuilder::emitSetGsOutputPrimitive(const ir::Op& op) {
+  auto primitiveType = ir::PrimitiveType(op.getOperand(1u));
+  auto stream = uint32_t(ir::PrimitiveType(op.getOperand(2u)));
+
+  auto execMode = [&] {
+    switch (primitiveType) {
+      case ir::PrimitiveType::ePoints: return spv::ExecutionModeOutputPoints;
+      case ir::PrimitiveType::eLines: return spv::ExecutionModeOutputLineStrip;
+      case ir::PrimitiveType::eTriangles: return spv::ExecutionModeOutputTriangleStrip;
+      default: dxbc_spv_unreachable();
+    }
+
+    return spv::ExecutionMode();
+  } ();
+
+  /* We cannot express different primitive types per stream, so only do it
+   * once and hope that they are all the same. */
+  if (!m_geometry.streamMask)
+    pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId, execMode);
+
+  if (stream)
+    enableCapability(spv::CapabilityGeometryStreams);
+
+  m_geometry.streamMask |= 1u << stream;
+}
+
+
 uint32_t SpirvBuilder::emitExtractComponent(ir::SsaDef vectorDef, uint32_t index) {
   const auto& op = m_builder.getOp(vectorDef);
   dxbc_spv_assert(op.getType().isBasicType() && index < op.getType().getBaseType(0u).getVectorSize());
@@ -3502,6 +3633,11 @@ ir::Type SpirvBuilder::traverseType(ir::Type type, ir::SsaDef address) const {
 
     return type;
   }
+}
+
+
+bool SpirvBuilder::isMultiStreamGs() const {
+  return m_geometry.streamMask > 1u;
 }
 
 
