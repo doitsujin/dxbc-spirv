@@ -17,4 +17,14 @@ Builder test_io_ps_interpolate_centroid();
 Builder test_io_ps_interpolate_sample();
 Builder test_io_ps_interpolate_offset();
 
+Builder test_io_gs_basic_point();
+Builder test_io_gs_basic_line();
+Builder test_io_gs_basic_line_adj();
+Builder test_io_gs_basic_triangle();
+Builder test_io_gs_basic_triangle_adj();
+Builder test_io_gs_instanced();
+Builder test_io_gs_xfb();
+Builder test_io_gs_multi_stream_xfb_raster_0();
+Builder test_io_gs_multi_stream_xfb_raster_1();
+
 }
