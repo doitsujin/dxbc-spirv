@@ -149,6 +149,7 @@ with a scalar type of `ir::Type::Unknown`. In the final shader binary, no `Consu
 | `DclLds`             | any              | `%EntryPoint`    |                  |           |                |                     |                 |
 | `DclScratch`         | any              | `%EntryPoint`    |                  |           |                |                     |                 |
 | `DclTmp`             | any              | `%EntryPoint`    |                  |           |                |                     |                 |
+| `DclXfb`             | `void`           | `%DclOutput*`    | xfb buffer       | stride    | offset         |                     |                 |
 | `DclParam`           | any              |                  |                  |           |                |                     |                 |
 
 The `count` parameter for `DclSampler`, `DclSrv`, `DclCbv` and `DclUav` instructions is a literal constant declareing the size of the
@@ -188,6 +189,8 @@ built-ins are also exposed as an array, but they are inherently always patch con
 Likewise, `DclInput*` instructions for per-vertex inputs in geometry shaders and hull shaders will use a sized array type.
 
 For `DclOutput*` instructions, the `stream` parameter is only defined in geometry shaders.
+
+The `DclXfb` instruction declares transform feedback properties for an **existing** output.
 
 #### Resource return types
 The return type for a typed resource declaration (i.e. image or typed buffer) is a scalar of the sampled type.

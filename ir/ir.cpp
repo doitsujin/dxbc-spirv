@@ -243,6 +243,7 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
     case OpCode::eDclCbv:
     case OpCode::eDclSrv:
     case OpCode::eDclUav:
+    case OpCode::eDclXfb:
     case OpCode::eDerivX:
     case OpCode::eDerivY:
     case OpCode::eFRound:
@@ -630,6 +631,7 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eDclScratch: return os << "DclScratch";
     case OpCode::eDclTmp: return os << "DclTmp";
     case OpCode::eDclParam: return os << "DclParam";
+    case OpCode::eDclXfb: return os << "DclXfb";
     case OpCode::eFunction: return os << "Function";
     case OpCode::eFunctionEnd: return os << "FunctionEnd";
     case OpCode::eFunctionCall: return os << "FunctionCall";

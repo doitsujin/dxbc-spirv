@@ -841,6 +841,7 @@ enum class OpCode : uint16_t {
   eDclScratch                   = 44u,
   eDclTmp                       = 45u,
   eDclParam                     = 46u,
+  eDclXfb                       = 47u,
 
   /** Last valid opcode for declarative instructions */
   eLastDeclarative              = 63u,
@@ -1523,6 +1524,14 @@ public:
 
   static Op DclParam(Type type) {
     return Op(OpCode::eDclParam, type);
+  }
+
+  static Op DclXfb(SsaDef output, uint32_t buffer, uint32_t stride, uint32_t offset) {
+    return Op(OpCode::eDclXfb, Type())
+      .addOperand(Operand(output))
+      .addOperand(Operand(buffer))
+      .addOperand(Operand(stride))
+      .addOperand(Operand(offset));
   }
 
   /** Helpers to construct mode setting ops */
