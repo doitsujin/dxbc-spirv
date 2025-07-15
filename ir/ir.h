@@ -1553,7 +1553,7 @@ public:
   }
 
   static Op SetGsOutputPrimitive(SsaDef def, PrimitiveType type, uint32_t stream) {
-    return Op(OpCode::eSetGsInputPrimitive, Type())
+    return Op(OpCode::eSetGsOutputPrimitive, Type())
       .addOperand(Operand(def))
       .addOperand(Operand(type))
       .addOperand(Operand(stream));
