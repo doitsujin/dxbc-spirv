@@ -92,6 +92,10 @@ private:
   } m_structure;
 
   struct {
+    uint32_t streamMask = 0u;
+  } m_geometry;
+
+  struct {
     uint32_t controlPointFuncId = 0u;
     uint32_t patchConstantFuncId = 0u;
   } m_tessControl;
@@ -126,6 +130,8 @@ private:
   uint32_t emitBuiltInDrawParameter(spv::BuiltIn builtIn);
 
   void emitDclBuiltInIoVar(const ir::Op& op);
+
+  void emitDclXfb(const ir::Op& op);
 
   void emitDclSampler(const ir::Op& op);
 
@@ -206,6 +212,8 @@ private:
 
   void emitBarrier(const ir::Op& op);
 
+  void emitGsEmit(const ir::Op& op);
+
   void emitMemoryModel();
 
   void emitDebugName(ir::SsaDef def, uint32_t id);
@@ -246,6 +254,14 @@ private:
   void emitInterpolation(const ir::Op& op);
 
   void emitSetCsWorkgroupSize(const ir::Op& op);
+
+  void emitSetGsInstances(const ir::Op& op);
+
+  void emitSetGsInputPrimitive(const ir::Op& op);
+
+  void emitSetGsOutputVertices(const ir::Op& op);
+
+  void emitSetGsOutputPrimitive(const ir::Op& op);
 
   uint32_t emitExtractComponent(ir::SsaDef vectorDef, uint32_t index);
 
@@ -320,6 +336,8 @@ private:
   void setUavImageWriteOperands(SpirvImageOperands& operands, const ir::Op& uavOp);
 
   ir::Type traverseType(ir::Type type, ir::SsaDef address) const;
+
+  bool isMultiStreamGs() const;
 
   static ir::UavFlags getUavFlags(const ir::Op& op);
 
