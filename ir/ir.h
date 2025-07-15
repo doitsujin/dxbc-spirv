@@ -575,7 +575,7 @@ inline uint32_t primitiveVertexCount(PrimitiveType type) {
     case PrimitiveType::eLines: return 2u;
     case PrimitiveType::eLinesAdj: return 4u;
     case PrimitiveType::eTriangles: return 3u;
-    case PrimitiveType::eTrianglesAdj: return 3u;
+    case PrimitiveType::eTrianglesAdj: return 6u;
 
     default: {
       uint32_t patchSize = uint32_t(type) - uint32_t(PrimitiveType::ePatch);
