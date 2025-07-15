@@ -296,6 +296,10 @@ public:
     m_members[0u] = base;
   }
 
+  /** Initializes basic vector type */
+  Type(ScalarType base, uint32_t vectorSize)
+  : Type(BasicType(base, vectorSize)) { }
+
   /** Queries base member type. */
   BasicType getBaseType(uint32_t memberIdx) const {
     return memberIdx < m_structSize ? m_members[memberIdx] : BasicType();
@@ -366,6 +370,12 @@ public:
 
   /** Adds an array dimension. Pass a size of 0 for an unbounded array. */
   Type& addArrayDimension(uint32_t size);
+
+  /** Adds multiple array dimensions */
+  template<typename... T>
+  Type& addArrayDimensions(T... args) {
+    return (addArrayDimension(args), ...);
+  }
 
   /** Constructs type from indexing into it once, with the given index.
    *  Note that the index value is only relevant for struct types. */
