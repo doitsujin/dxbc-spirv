@@ -35,6 +35,16 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_io_ps_interpolate_sample);
   ADD_TEST(test_io_ps_interpolate_offset);
 
+  ADD_TEST(test_io_gs_basic_point);
+  ADD_TEST(test_io_gs_basic_line);
+  ADD_TEST(test_io_gs_basic_line_adj);
+  ADD_TEST(test_io_gs_basic_triangle);
+  ADD_TEST(test_io_gs_basic_triangle_adj);
+  ADD_TEST(test_io_gs_instanced);
+  ADD_TEST(test_io_gs_xfb);
+  ADD_TEST(test_io_gs_multi_stream_xfb_raster_0);
+  ADD_TEST(test_io_gs_multi_stream_xfb_raster_1);
+
   ADD_TEST(test_resources_cbv);
   ADD_TEST(test_resources_cbv_dynamic);
   ADD_TEST(test_resources_cbv_indexed);
