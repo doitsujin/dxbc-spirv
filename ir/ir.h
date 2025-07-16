@@ -1914,7 +1914,6 @@ public:
       .addOperand(address);
   }
 
-  template<typename... T>
   static Op LdsAtomic(AtomicOp op, Type type, SsaDef decl, SsaDef address, SsaDef operands) {
     return Op(OpCode::eLdsAtomic, type)
       .addOperand(decl)
@@ -1923,7 +1922,6 @@ public:
       .addOperand(op);
   }
 
-  template<typename... T>
   static Op BufferAtomic(AtomicOp op, Type type, SsaDef descriptor, SsaDef address, SsaDef operands) {
     return Op(OpCode::eBufferAtomic, type)
       .addOperand(descriptor)
@@ -1932,7 +1930,6 @@ public:
       .addOperand(op);
   }
 
-  template<typename... T>
   static Op ImageAtomic(AtomicOp op, Type type, SsaDef descriptor, SsaDef layer, SsaDef coord, SsaDef operands) {
     return Op(OpCode::eImageAtomic, type)
       .addOperand(descriptor)
@@ -1942,14 +1939,12 @@ public:
       .addOperand(op);
   }
 
-  template<typename... T>
   static Op CounterAtomic(AtomicOp op, Type type, SsaDef descriptor) {
     return Op(OpCode::eCounterAtomic, type)
       .addOperand(descriptor)
       .addOperand(op);
   }
 
-  template<typename... T>
   static Op MemoryAtomic(AtomicOp op, Type type, SsaDef pointer, SsaDef address, SsaDef operands) {
     return Op(OpCode::eMemoryAtomic, type)
       .addOperand(pointer)
