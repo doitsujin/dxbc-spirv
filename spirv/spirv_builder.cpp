@@ -283,6 +283,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eMemoryStore:
       return emitMemoryStore(op);
 
+    case ir::OpCode::eMemoryAtomic:
+      return emitMemoryAtomic(op);
+
     case ir::OpCode::eCounterAtomic:
       return emitCounterAtomic(op);
 
@@ -490,11 +493,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
 
     case ir::OpCode::ePointer:
       return emitPointer(op);
-
-    case ir::OpCode::eMemoryAtomic:
-      /* TODO implement */
-      std::cerr << "Unimplemented opcode " << op.getOpCode() << std::endl;
-      break;
 
     case ir::OpCode::eUnknown:
     case ir::OpCode::eLastDeclarative:
@@ -1589,6 +1587,26 @@ void SpirvBuilder::emitMemoryStore(const ir::Op& op) {
   m_code.push_back(accessChainId);
   m_code.push_back(getIdForDef(valueDef));
   memoryOperands.pushTo(m_code);
+}
+
+
+void SpirvBuilder::emitMemoryAtomic(const ir::Op& op) {
+  const auto& ptrOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+
+  auto addressDef = ir::SsaDef(op.getOperand(1u));
+  auto operandDef = ir::SsaDef(op.getOperand(2u));
+
+  auto type = traverseType(ptrOp.getType(), addressDef);
+
+  /* Emit access chain */
+  bool hasWrapperStruct = !ptrOp.getType().isStructType();
+
+  auto accessChainId = emitAccessChain(spv::StorageClassPhysicalStorageBuffer,
+    ptrOp.getType(), getIdForDef(ptrOp.getDef()), addressDef, 0u, hasWrapperStruct);
+
+  /* Emit atomic */
+  emitAtomic(op, type, operandDef, accessChainId,
+    spv::ScopeQueueFamily, spv::MemorySemanticsUniformMemoryMask);
 }
 
 
