@@ -215,6 +215,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eSetPsEarlyFragmentTest:
       return emitSetPsEarlyFragmentTest();
 
+    case ir::OpCode::eDclSpecConstant:
+      return emitDclSpecConstant(op);
+
     case ir::OpCode::eDclLds:
       return emitDclLds(op);
 
@@ -473,9 +476,7 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eRovScopedLockEnd:
       return emitRovLockEnd(op);
 
-    case ir::OpCode::eDclSpecConstant:
     case ir::OpCode::eDclPushData:
-    case ir::OpCode::eSpecConstantLoad:
     case ir::OpCode::eMemoryLoad:
     case ir::OpCode::eMemoryStore:
     case ir::OpCode::eMemoryAtomic:
@@ -606,6 +607,62 @@ void SpirvBuilder::emitInterpolationModes(uint32_t id, ir::InterpolationModes mo
 
 void SpirvBuilder::emitUndef(const ir::Op& op) {
   setIdForDef(op.getDef(), getIdForConstantNull(op.getType()));
+}
+
+
+void SpirvBuilder::emitDclSpecConstant(const ir::Op& op) {
+  dxbc_spv_assert(op.getType().isScalarType());
+
+  auto typeId = getIdForType(op.getType());
+  auto id = getIdForDef(op.getDef());
+
+  auto specId = uint32_t(op.getOperand(1u));
+  auto specValue = op.getOperand(2u);
+
+  switch (op.getType().getBaseType(0u).getBaseType()) {
+    case ir::ScalarType::eBool: {
+      auto op = bool(specValue)
+        ? spv::OpSpecConstantTrue
+        : spv::OpSpecConstantFalse;
+
+      pushOp(m_declarations, op, typeId, id);
+    } break;
+
+    case ir::ScalarType::eI8:
+    case ir::ScalarType::eU8: {
+      pushOp(m_declarations, spv::OpSpecConstant, typeId, id, uint8_t(specValue));
+    } break;
+
+    case ir::ScalarType::eI16:
+    case ir::ScalarType::eU16:
+    case ir::ScalarType::eF16: {
+      pushOp(m_declarations, spv::OpSpecConstant, typeId, id, uint16_t(specValue));
+    } break;
+
+    case ir::ScalarType::eI32:
+    case ir::ScalarType::eU32:
+    case ir::ScalarType::eF32: {
+      pushOp(m_declarations, spv::OpSpecConstant, typeId, id, uint32_t(specValue));
+    } break;
+
+    case ir::ScalarType::eI64:
+    case ir::ScalarType::eU64:
+    case ir::ScalarType::eF64: {
+      /* Default value requires two opcode tokens */
+      auto literal = uint64_t(specValue);
+
+      pushOp(m_declarations, spv::OpSpecConstant, typeId, id,
+        uint32_t(literal), uint32_t(literal >> 32u));
+    } break;
+
+    default:
+      dxbc_spv_unreachable();
+      break;
+  }
+
+  pushOp(m_decorations, spv::OpDecorate, id, spv::DecorationSpecId, specId);
+
+  emitDebugName(op.getDef(), id);
 }
 
 
