@@ -18,4 +18,7 @@ struct NamedTest {
  *  may be used to retrieve only a subset of the named tests. */
 std::vector<NamedTest> enumerateTests(const char* filter);
 
+/** Retrieves lowering tests specific to the SPIR-V backend. */
+std::vector<NamedTest> enumerateSpirvTests(const char* filter);
+
 }

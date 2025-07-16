@@ -123,6 +123,7 @@ void runTests(const Options& options, const std::vector<NamedTest>& tests) {
 void run(const Options& options) {
   const char* filter = !options.testFilter.empty() ? options.testFilter.c_str() : nullptr;
   runTests(options, test_api::enumerateTests(filter));
+  runTests(options, test_api::enumerateSpirvTests(filter));
 }
 
 }
