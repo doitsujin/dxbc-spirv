@@ -138,6 +138,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eSetPsDepthLessEqual:
       return emitSetPsDepthMode(op);
 
+    case ir::OpCode::eSetPsEarlyFragmentTest:
+      return emitSetPsEarlyFragmentTest();
+
     case ir::OpCode::eDclLds:
       return emitDclLds(op);
 
@@ -384,7 +387,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eDemote:
       return emitDemote();
 
-    case ir::OpCode::eSetPsEarlyFragmentTest:
     case ir::OpCode::eSetTessPrimitive:
     case ir::OpCode::eSetTessDomain:
     case ir::OpCode::eDclSpecConstant:
@@ -2932,11 +2934,20 @@ void SpirvBuilder::emitSetGsOutputPrimitive(const ir::Op& op) {
 
 
 void SpirvBuilder::emitSetPsDepthMode(const ir::Op& op) {
+  dxbc_spv_assert(m_stage == ir::ShaderStage::ePixel);
+
   auto mode = op.getOpCode() == ir::OpCode::eSetPsDepthLessEqual
     ? spv::ExecutionModeDepthLess
     : spv::ExecutionModeDepthGreater;
 
   pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId, mode);
+}
+
+
+void SpirvBuilder::emitSetPsEarlyFragmentTest() {
+  dxbc_spv_assert(m_stage == ir::ShaderStage::ePixel);
+
+  pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId, spv::ExecutionModeEarlyFragmentTests);
 }
 
 
