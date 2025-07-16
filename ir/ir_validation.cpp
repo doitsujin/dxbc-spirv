@@ -360,7 +360,64 @@ bool Validator::validateLoadStoreOps(std::ostream& str) const {
 
     uint32_t dclArgIndex = code == OpCode::eParamLoad ? 1u : 0u;
 
-    Type dclType = m_builder.getOp(SsaDef(op->getOperand(dclArgIndex))).getType();
+    /* Check whether the base instruction is valid */
+    const auto& dclOp = m_builder.getOp(SsaDef(op->getOperand(dclArgIndex)));
+
+    bool dclIsValid = true;
+
+    switch (code) {
+      case OpCode::eTmpLoad:
+      case OpCode::eTmpStore:
+        dclIsValid = dclOp.getOpCode() == OpCode::eDclTmp;
+        break;
+
+      case OpCode::eScratchLoad:
+      case OpCode::eScratchStore:
+        dclIsValid = dclOp.getOpCode() == OpCode::eDclScratch;
+        break;
+
+      case OpCode::ePushDataLoad:
+        dclIsValid = dclOp.getOpCode() == OpCode::eDclPushData;
+        break;
+
+      case OpCode::eInputLoad:
+        dclIsValid = dclOp.getOpCode() == OpCode::eDclInput ||
+                     dclOp.getOpCode() == OpCode::eDclInputBuiltIn;
+        break;
+
+      case OpCode::eLdsLoad:
+      case OpCode::eLdsStore:
+        dclIsValid = dclOp.getOpCode() == OpCode::eDclLds;
+        break;
+
+      case OpCode::eOutputLoad:
+      case OpCode::eOutputStore:
+        dclIsValid = dclOp.getOpCode() == OpCode::eDclOutput ||
+                     dclOp.getOpCode() == OpCode::eDclOutputBuiltIn;
+        break;
+
+      case OpCode::eBufferLoad:
+      case OpCode::eBufferStore:
+        dclIsValid = dclOp.getOpCode() == OpCode::eDescriptorLoad;
+        break;
+
+      case OpCode::eMemoryLoad:
+      case OpCode::eMemoryStore:
+        dclIsValid = dclOp.getOpCode() == OpCode::ePointer;
+        break;
+
+
+      default:
+        break;
+    }
+
+    if (!dclIsValid) {
+      str << "Base op " << dclOp.getOpCode() << " not valid for instruction." << std::endl;
+      m_disasm.disassembleOp(str, *op);
+      return false;
+    }
+
+    Type dclType = dclOp.getType();
     Type valType = isStore
       ? m_builder.getOp(SsaDef(op->getOperand(op->getFirstLiteralOperandIndex() - 1u))).getType()
       : op->getType();
