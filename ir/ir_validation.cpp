@@ -360,7 +360,9 @@ bool Validator::validateLoadStoreOps(std::ostream& str) const {
     bool isBuffer = code == OpCode::eBufferLoad ||
                     code == OpCode::eBufferStore;
 
-    Type dclType = m_builder.getOp(SsaDef(op->getOperand(0u))).getType();
+    uint32_t dclArgIndex = code == OpCode::eParamLoad ? 1u : 0u;
+
+    Type dclType = m_builder.getOp(SsaDef(op->getOperand(dclArgIndex))).getType();
     Type valType = isStore
       ? m_builder.getOp(SsaDef(op->getOperand(op->getFirstLiteralOperandIndex() - 1u))).getType()
       : op->getType();
