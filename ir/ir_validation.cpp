@@ -208,8 +208,14 @@ bool Validator::validateShaderIo(std::ostream& str) const {
           expectedType = Type(base);
 
           if (isInput || type.isArrayType()) {
-            uint32_t size = std::max(type.getArraySize(0u), 1u);
-            expectedType.addArrayDimension(size);
+            bool isControlPointId = isBuiltIn &&
+              (BuiltIn(op->getOperand(1u)) == BuiltIn::eTessControlPointId ||
+               BuiltIn(op->getOperand(1u)) == BuiltIn::ePrimitiveId);
+
+            if (!isControlPointId) {
+              uint32_t size = std::max(type.getArraySize(0u), 1u);
+              expectedType.addArrayDimension(size);
+            }
           }
         } break;
 
