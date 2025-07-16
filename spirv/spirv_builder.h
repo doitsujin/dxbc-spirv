@@ -246,6 +246,8 @@ private:
 
   void emitRovLockEnd(const ir::Op& op);
 
+  void emitPointer(const ir::Op& op);
+
   void emitMemoryModel();
 
   void emitDebugName(ir::SsaDef def, uint32_t id);
