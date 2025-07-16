@@ -96,6 +96,8 @@ private:
   } m_geometry;
 
   struct {
+    bool needsIoBarrier = false;
+    uint32_t invocationId = 0u;
     uint32_t controlPointFuncId = 0u;
     uint32_t patchConstantFuncId = 0u;
   } m_tessControl;
@@ -110,6 +112,8 @@ private:
   void processDebugNames();
 
   void finalize();
+
+  void emitHsEntryPoint();
 
   void emitInstruction(const ir::Op& op);
 
