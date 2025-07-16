@@ -715,7 +715,6 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eImageGather: return os << "ImageGather";
     case OpCode::eImageComputeLod: return os << "ImageComputeLod";
     case OpCode::ePointer: return os << "Pointer";
-    case OpCode::ePointerAddress: return os << "PointerAddress";
     case OpCode::eEmitVertex: return os << "EmitVertex";
     case OpCode::eEmitPrimitive: return os << "EmitPrimitive";
     case OpCode::eDemote: return os << "Demote";

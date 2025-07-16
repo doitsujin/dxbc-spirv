@@ -364,7 +364,6 @@ Raw pointers can be used to access memory via the `MemoryLoad`, `MemoryStore` an
 | `ir::OpCode`         | Return type      | Arguments          |                |
 |----------------------|------------------|--------------------|----------------|
 | `Pointer`            | any              | `%address` (`u64`) | `ir::UavFlags` |
-| `PointerAddress`     | `u64`            | `%Pointer`         |                |
 
 The return type of the `Pointer` instruction is the pointee type, and may be any scalar, vector, struct or
 array type.
