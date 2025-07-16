@@ -34,6 +34,10 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_io_ps_interpolate_centroid);
   ADD_TEST(test_io_ps_interpolate_sample);
   ADD_TEST(test_io_ps_interpolate_offset);
+  ADD_TEST(test_io_ps_export_depth);
+  ADD_TEST(test_io_ps_export_depth_less);
+  ADD_TEST(test_io_ps_export_depth_greater);
+  ADD_TEST(test_io_ps_export_stencil);
 
   ADD_TEST(test_io_gs_basic_point);
   ADD_TEST(test_io_gs_basic_line);
