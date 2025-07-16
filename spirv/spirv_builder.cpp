@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstring>
 #include <sstream>
 #include <iostream>
@@ -218,6 +219,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eDclSpecConstant:
       return emitDclSpecConstant(op);
 
+    case ir::OpCode::eDclPushData:
+      return emitDclPushData(op);
+
     case ir::OpCode::eDclLds:
       return emitDclLds(op);
 
@@ -251,6 +255,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
 
     case ir::OpCode::eDclXfb:
       return emitDclXfb(op);
+
+    case ir::OpCode::ePushDataLoad:
+      return emitPushDataLoad(op);
 
     case ir::OpCode::eConstantLoad:
       return emitConstantLoad(op);
@@ -311,7 +318,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
 
     case ir::OpCode::eScratchLoad:
     case ir::OpCode::eLdsLoad:
-    case ir::OpCode::ePushDataLoad:
     case ir::OpCode::eInputLoad:
     case ir::OpCode::eOutputLoad:
       return emitLoadVariable(op);
@@ -476,7 +482,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eRovScopedLockEnd:
       return emitRovLockEnd(op);
 
-    case ir::OpCode::eDclPushData:
     case ir::OpCode::eMemoryLoad:
     case ir::OpCode::eMemoryStore:
     case ir::OpCode::eMemoryAtomic:
@@ -663,6 +668,41 @@ void SpirvBuilder::emitDclSpecConstant(const ir::Op& op) {
   pushOp(m_decorations, spv::OpDecorate, id, spv::DecorationSpecId, specId);
 
   emitDebugName(op.getDef(), id);
+}
+
+
+void SpirvBuilder::emitDclPushData(const ir::Op& op) {
+  auto type = op.getType();
+  dxbc_spv_assert(!type.isArrayType());
+
+  /* TODO map stage to base offset */
+  auto byteOffset = uint32_t(op.getOperand(1u));
+
+  /* Work out where to insert new entries */
+  auto iter = std::find_if(m_pushData.members.begin(), m_pushData.members.end(),
+    [byteOffset] (const PushDataInfo& info) {
+      return byteOffset < info.offset;
+    });
+
+  if (type.isStructType()) {
+    /* Unroll struct, we need to pack things into a different struct later. */
+    PushDataInfo info = { };
+    info.def = op.getDef();
+
+    for (uint32_t i = 0u; i < type.getStructMemberCount(); i++) {
+      info.member = i;
+      info.offset = byteOffset + type.byteOffset(i);
+
+      iter = m_pushData.members.insert(iter, info) + 1u;
+    }
+  } else {
+    PushDataInfo info = { };
+    info.def = op.getDef();
+    info.member = 0u;
+    info.offset = byteOffset;
+
+    m_pushData.members.insert(iter, info);
+  }
 }
 
 
@@ -1096,6 +1136,53 @@ uint32_t SpirvBuilder::getImageDescriptorPointer(const ir::Op& op) {
   auto ptrId = allocId();
   pushOp(m_code, spv::OpAccessChain, ptrTypeId, ptrId, resourceId, indexId);
   return ptrId;
+}
+
+
+void SpirvBuilder::emitPushDataLoad(const ir::Op& op) {
+  const auto& dclOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& addressOp = m_builder.getOp(ir::SsaDef(op.getOperand(1u)));
+
+  dxbc_spv_assert(!addressOp || addressOp.isConstant());
+
+  /* Consume struct member index as necessary */
+  uint32_t addressIndex = 0u;
+  uint32_t member = 0u;
+
+  if (dclOp.getType().isStructType())
+    member = uint32_t(addressOp.getOperand(addressIndex++));
+
+  /* Find which member this maps to within the push data struct */
+  auto iter = std::find_if(m_pushData.members.begin(), m_pushData.members.end(),
+    [&] (const PushDataInfo& e) {
+      return e.def == dclOp.getDef() && e.member == member;
+    });
+
+  dxbc_spv_assert(iter != m_pushData.members.end());
+
+  member = std::distance(m_pushData.members.begin(), iter);
+
+  /* Emit access chain into push data block */
+  auto typeId = getIdForType(op.getType());
+
+  auto ptrTypeId = getIdForPtrType(typeId, spv::StorageClassPushConstant);
+  auto ptrId = allocId();
+
+  m_code.push_back(makeOpcodeToken(spv::OpInBoundsAccessChain,
+    5u + addressOp.getOperandCount() - addressIndex));
+  m_code.push_back(ptrTypeId);
+  m_code.push_back(ptrId);
+  m_code.push_back(getIdForPushDataBlock());
+  m_code.push_back(makeConstU32(member));
+
+  for (uint32_t i = addressIndex; i < addressOp.getOperandCount(); i++)
+    m_code.push_back(makeConstU32(uint32_t(addressOp.getOperand(i))));
+
+  /* Emit actual load */
+  auto id = getIdForDef(op.getDef());
+  pushOp(m_code, spv::OpLoad, typeId, id, ptrId);
+
+  emitDebugName(op.getDef(), id);
 }
 
 
@@ -3649,6 +3736,52 @@ spv::Scope SpirvBuilder::getUavCoherentScope(ir::UavFlags flags) {
     return spv::ScopeWorkgroup;
 
   return spv::ScopeInvocation;
+}
+
+
+uint32_t SpirvBuilder::getIdForPushDataBlock() {
+  if (!m_pushData.blockId) {
+    /* Declare struct type with explicit layout */
+    auto typeId = allocId();
+    auto memberCount = uint32_t(m_pushData.members.size());
+
+    /* Declare member types before messing around with the stream */
+    util::small_vector<uint32_t, 64u> memberTypeIds;
+
+    for (uint32_t i = 0u; i < memberCount; i++) {
+      const auto& info = m_pushData.members[i];
+
+      auto memberType = m_builder.getOp(info.def).getType().getBaseType(info.member);
+      memberTypeIds.push_back(getIdForType(memberType));
+
+      pushOp(m_decorations, spv::OpMemberDecorate, typeId, i, spv::DecorationOffset, info.offset);
+    }
+
+    /* Insert actual struct type and decorations */
+    m_declarations.push_back(makeOpcodeToken(spv::OpTypeStruct, 2u + memberCount));
+    m_declarations.push_back(typeId);
+
+    for (uint32_t i = 0u; i < memberCount; i++)
+      m_declarations.push_back(memberTypeIds[i]);
+
+    pushOp(m_decorations, spv::OpDecorate, typeId, spv::DecorationBlock);
+
+    /* Declare push data variable */
+    m_pushData.blockId = allocId();
+
+    auto varTypeId = getIdForPtrType(typeId, spv::StorageClassPushConstant);
+    pushOp(m_declarations, spv::OpVariable, varTypeId, m_pushData.blockId, spv::StorageClassPushConstant);
+
+    addEntryPointId(m_pushData.blockId);
+
+    /* Set debug name for the struct */
+    if (m_options.includeDebugNames) {
+      setDebugName(typeId, "push_data_t");
+      setDebugName(m_pushData.blockId, "push_data");
+    }
+  }
+
+  return m_pushData.blockId;
 }
 
 
