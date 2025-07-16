@@ -947,6 +947,17 @@ void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
       spv::DecorationStream, uint32_t(op.getOperand(2u)));
   }
 
+  /* Some outputs need to be consistent between different shaders */
+  bool isInvariant = builtIn == ir::BuiltIn::ePosition ||
+                     builtIn == ir::BuiltIn::eClipDistance ||
+                     builtIn == ir::BuiltIn::eCullDistance ||
+                     builtIn == ir::BuiltIn::eTessFactorInner ||
+                     builtIn == ir::BuiltIn::eTessFactorOuter ||
+                     builtIn == ir::BuiltIn::eDepth;
+
+  if (!isInput && isInvariant)
+    pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationInvariant);
+
   addEntryPointId(varId);
 }
 
