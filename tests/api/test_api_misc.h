@@ -10,5 +10,8 @@ Builder test_misc_lds_atomic();
 Builder test_misc_constant_load();
 Builder test_misc_ps_demote();
 Builder test_misc_ps_early_z();
+Builder test_misc_function();
+Builder test_misc_function_with_args();
+Builder test_misc_function_with_return();
 
 }
