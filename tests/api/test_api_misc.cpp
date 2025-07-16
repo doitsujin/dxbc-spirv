@@ -314,4 +314,29 @@ Builder test_misc_ps_demote() {
   return builder;
 }
 
+Builder test_misc_ps_early_z() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+
+  builder.add(Op::SetPsEarlyFragmentTest(entryPoint));
+  builder.add(Op::Label());
+
+  auto indexInDef = builder.add(Op::DclInput(ScalarType::eU32, entryPoint, 0u, 0u, InterpolationMode::eFlat));
+  builder.add(Op::Semantic(indexInDef, 0u, "INDEX"));
+  builder.add(Op::DebugName(indexInDef, "v0"));
+
+  auto uavDef = builder.add(Op::DclUav(Type(ScalarType::eU32).addArrayDimension(0u),
+    entryPoint, 0u, 0u, 1u, ResourceKind::eBufferRaw, UavFlags()));
+  builder.add(Op::DebugName(uavDef, "u0"));
+
+  auto uavDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eUav, uavDef, builder.makeConstant(0u)));
+  auto index = builder.add(Op::InputLoad(ScalarType::eU32, indexInDef, SsaDef()));
+
+  builder.add(Op::BufferAtomic(AtomicOp::eOr, Type(),
+    uavDescriptor, index, builder.makeConstant(1u)));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
 }

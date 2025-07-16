@@ -9,5 +9,6 @@ Builder test_misc_lds();
 Builder test_misc_lds_atomic();
 Builder test_misc_constant_load();
 Builder test_misc_ps_demote();
+Builder test_misc_ps_early_z();
 
 }
