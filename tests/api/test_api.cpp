@@ -262,6 +262,9 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_misc_constant_load);
   ADD_TEST(test_misc_ps_demote);
   ADD_TEST(test_misc_ps_early_z);
+  ADD_TEST(test_misc_function);
+  ADD_TEST(test_misc_function_with_args);
+  ADD_TEST(test_misc_function_with_return);
 
 return result;
 #undef ADD_TEST

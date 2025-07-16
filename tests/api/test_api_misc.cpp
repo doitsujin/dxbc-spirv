@@ -339,4 +339,141 @@ Builder test_misc_ps_early_z() {
   return builder;
 }
 
+Builder test_misc_function() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+  auto mainFunc = ir::SsaDef(builder.getOp(entryPoint).getOperand(0u));
+
+  auto outDef = builder.add(Op::DclOutput(Type(ScalarType::eF32, 4u), entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(outDef, 0u, "SV_TARGET"));
+
+  /* Emit function */
+  builder.setCursor(SsaDef());
+
+  auto func = builder.add(Op::Function(Type()));
+  builder.add(Op::Label());
+  builder.add(Op::OutputStore(outDef, SsaDef(), builder.makeConstant(1.0f, 2.0f, 3.0f, 4.0f)));
+  builder.add(Op::Return());
+  auto funcEnd = builder.add(Op::FunctionEnd());
+
+  /* Emit function call */
+  builder.setCursor(mainFunc);
+  builder.add(Op::Label());
+  builder.add(Op::FunctionCall(Type(), func));
+  builder.add(Op::Return());
+
+  /* Move function to correct spot */
+  builder.reorderBefore(mainFunc, func, funcEnd);
+  return builder;
+}
+
+Builder test_misc_function_with_args() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+  auto mainFunc = ir::SsaDef(builder.getOp(entryPoint).getOperand(0u));
+
+  auto outDef = builder.add(Op::DclOutput(Type(ScalarType::eF32, 4u), entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(outDef, 0u, "SV_TARGET"));
+
+  /* Emit function */
+  builder.setCursor(SsaDef());
+
+  auto paramR = builder.add(Op::DclParam(ScalarType::eF32));
+  auto paramG = builder.add(Op::DclParam(ScalarType::eF32));
+  auto paramB = builder.add(Op::DclParam(ScalarType::eF32));
+  auto paramA = builder.add(Op::DclParam(ScalarType::eF32));
+
+  builder.add(Op::DebugName(paramR, "r"));
+  builder.add(Op::DebugName(paramG, "g"));
+  builder.add(Op::DebugName(paramB, "b"));
+  builder.add(Op::DebugName(paramA, "a"));
+
+  auto func = builder.add(Op::Function(Type())
+    .addParam(paramR)
+    .addParam(paramG)
+    .addParam(paramB)
+    .addParam(paramA));
+
+  builder.add(Op::Label());
+  builder.add(Op::OutputStore(outDef, builder.makeConstant(0u),
+    builder.add(Op::ParamLoad(ScalarType::eF32, func, paramR))));
+  builder.add(Op::OutputStore(outDef, builder.makeConstant(1u),
+    builder.add(Op::ParamLoad(ScalarType::eF32, func, paramG))));
+  builder.add(Op::OutputStore(outDef, builder.makeConstant(2u),
+    builder.add(Op::ParamLoad(ScalarType::eF32, func, paramB))));
+  builder.add(Op::OutputStore(outDef, builder.makeConstant(3u),
+    builder.add(Op::ParamLoad(ScalarType::eF32, func, paramA))));
+  builder.add(Op::Return());
+  auto funcEnd = builder.add(Op::FunctionEnd());
+
+  /* Emit function call */
+  builder.setCursor(mainFunc);
+  builder.add(Op::Label());
+  builder.add(Op::FunctionCall(Type(), func)
+    .addParam(builder.makeConstant(1.0f))
+    .addParam(builder.makeConstant(2.0f))
+    .addParam(builder.makeConstant(3.0f))
+    .addParam(builder.makeConstant(4.0f)));
+  builder.add(Op::Return());
+
+  /* Move function to correct spot */
+  builder.reorderBefore(mainFunc, func, funcEnd);
+  return builder;
+}
+
+Builder test_misc_function_with_return() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+  auto mainFunc = ir::SsaDef(builder.getOp(entryPoint).getOperand(0u));
+
+  auto outDef = builder.add(Op::DclOutput(Type(ScalarType::eF32, 4u), entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(outDef, 0u, "SV_TARGET"));
+
+  /* Emit function */
+  builder.setCursor(SsaDef());
+
+  auto paramR = builder.add(Op::DclParam(ScalarType::eF32));
+  auto paramG = builder.add(Op::DclParam(ScalarType::eF32));
+  auto paramB = builder.add(Op::DclParam(ScalarType::eF32));
+  auto paramA = builder.add(Op::DclParam(ScalarType::eF32));
+
+  builder.add(Op::DebugName(paramR, "r"));
+  builder.add(Op::DebugName(paramG, "g"));
+  builder.add(Op::DebugName(paramB, "b"));
+  builder.add(Op::DebugName(paramA, "a"));
+
+  auto func = builder.add(Op::Function(Type(ScalarType::eF32, 4u))
+    .addParam(paramR)
+    .addParam(paramG)
+    .addParam(paramB)
+    .addParam(paramA));
+
+  builder.add(Op::Label());
+  auto a = builder.add(Op::ParamLoad(ScalarType::eF32, func, paramA));
+  auto r = builder.add(Op::ParamLoad(ScalarType::eF32, func, paramR));
+  r = builder.add(Op::FMul(ScalarType::eF32, r, a));
+  auto g = builder.add(Op::ParamLoad(ScalarType::eF32, func, paramG));
+  g = builder.add(Op::FMul(ScalarType::eF32, g, a));
+  auto b = builder.add(Op::ParamLoad(ScalarType::eF32, func, paramB));
+  b = builder.add(Op::FMul(ScalarType::eF32, b, a));
+  builder.add(Op::Return(Type(ScalarType::eF32, 4u),
+    builder.add(Op::CompositeConstruct(Type(ScalarType::eF32, 4u), r, g, b, a))));
+  auto funcEnd = builder.add(Op::FunctionEnd());
+
+  /* Emit function call */
+  builder.setCursor(mainFunc);
+  builder.add(Op::Label());
+  auto color = builder.add(Op::FunctionCall(Type(ScalarType::eF32, 4u), func)
+    .addParam(builder.makeConstant(0.2f))
+    .addParam(builder.makeConstant(0.5f))
+    .addParam(builder.makeConstant(1.0f))
+    .addParam(builder.makeConstant(0.8f)));
+  builder.add(Op::OutputStore(outDef, SsaDef(), color));
+  builder.add(Op::Return());
+
+  /* Move function to correct spot */
+  builder.reorderBefore(mainFunc, func, funcEnd);
+  return builder;
+}
+
 }
