@@ -449,6 +449,7 @@ std::ostream& operator << (std::ostream& os, const BuiltIn& builtIn) {
     case BuiltIn::eIsFrontFace:         return os << "IsFrontFace";
     case BuiltIn::eDepth:               return os << "Depth";
     case BuiltIn::eStencilRef:          return os << "StencilRef";
+    case BuiltIn::eIsFullyCovered:      return os << "IsFullyCovered";
     case BuiltIn::eWorkgroupId:         return os << "WorkgroupId";
     case BuiltIn::eGlobalThreadId:      return os << "GlobalThreadId";
     case BuiltIn::eLocalThreadId:       return os << "LocalThreadId";

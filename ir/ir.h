@@ -661,18 +661,21 @@ enum class BuiltIn : uint32_t {
   /** Stencil reference in fragment shader. Output only. Must be declared
    *  as a scalar unsigned integer. */
   eStencilRef         = 19u,
+  /** Whether the current fragment is fully covered. Only valid in fragment
+   *  shaders. Must be a boolean. */
+  eIsFullyCovered     = 20u,
   /** Workgroup ID in compute shader. Must be declared as a three-component
    *  unsigned integer vector. */
-  eWorkgroupId        = 20u,
+  eWorkgroupId        = 21u,
   /** Global thread ID in compute shader. Must be declared as a
    *  three-component unsigned integer vector. */
-  eGlobalThreadId     = 21u,
+  eGlobalThreadId     = 22u,
   /** Local thread ID in compute shader. Must be declared as a
    *  three-component unsigned integer vector. */
-  eLocalThreadId      = 22u,
+  eLocalThreadId      = 23u,
   /** Flattened local thread ID in compute shader. Must be declared
    *  as a scalar unsigned integer. */
-  eLocalThreadIndex   = 23u,
+  eLocalThreadIndex   = 24u,
 };
 
 
