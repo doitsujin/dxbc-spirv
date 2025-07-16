@@ -214,6 +214,8 @@ private:
 
   void emitGsEmit(const ir::Op& op);
 
+  void emitDemote();
+
   void emitMemoryModel();
 
   void emitDebugName(ir::SsaDef def, uint32_t id);

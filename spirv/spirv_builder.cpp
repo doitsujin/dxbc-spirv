@@ -377,6 +377,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eEmitPrimitive:
       return emitGsEmit(op);
 
+    case ir::OpCode::eDemote:
+      return emitDemote();
+
     case ir::OpCode::eSetPsEarlyFragmentTest:
     case ir::OpCode::eSetPsDepthGreaterEqual:
     case ir::OpCode::eSetPsDepthLessEqual:
@@ -392,7 +395,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eMemoryAtomic:
     case ir::OpCode::ePointer:
     case ir::OpCode::ePointerAddress:
-    case ir::OpCode::eDemote:
     case ir::OpCode::eRovScopedLockBegin:
     case ir::OpCode::eRovScopedLockEnd:
       /* TODO implement */
@@ -2132,6 +2134,13 @@ void SpirvBuilder::emitGsEmit(const ir::Op& op) {
     auto streamIndex = uint32_t(op.getOperand(0u));
     m_code.push_back(makeConstU32(streamIndex));
   }
+}
+
+
+void SpirvBuilder::emitDemote() {
+  enableCapability(spv::CapabilityDemoteToHelperInvocation);
+
+  pushOp(m_code, spv::OpDemoteToHelperInvocation);
 }
 
 
