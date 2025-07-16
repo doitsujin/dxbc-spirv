@@ -134,6 +134,10 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eSetGsOutputPrimitive:
       return emitSetGsOutputPrimitive(op);
 
+    case ir::OpCode::eSetPsDepthGreaterEqual:
+    case ir::OpCode::eSetPsDepthLessEqual:
+      return emitSetPsDepthMode(op);
+
     case ir::OpCode::eDclLds:
       return emitDclLds(op);
 
@@ -381,8 +385,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
       return emitDemote();
 
     case ir::OpCode::eSetPsEarlyFragmentTest:
-    case ir::OpCode::eSetPsDepthGreaterEqual:
-    case ir::OpCode::eSetPsDepthLessEqual:
     case ir::OpCode::eSetTessPrimitive:
     case ir::OpCode::eSetTessDomain:
     case ir::OpCode::eDclSpecConstant:
@@ -708,11 +710,13 @@ void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
       case ir::BuiltIn::eIsFrontFace:
         return spv::BuiltInFrontFacing;
 
-      case ir::BuiltIn::eDepth:
-        return spv::BuiltInFragDepth;
+      case ir::BuiltIn::eDepth: {
+        pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId, spv::ExecutionModeDepthReplacing);
+      } return spv::BuiltInFragDepth;
 
       case ir::BuiltIn::eStencilRef: {
         enableCapability(spv::CapabilityStencilExportEXT);
+        pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId, spv::ExecutionModeStencilRefReplacingEXT);
         return spv::BuiltInFragStencilRefEXT;
       }
 
@@ -2924,6 +2928,15 @@ void SpirvBuilder::emitSetGsOutputPrimitive(const ir::Op& op) {
     enableCapability(spv::CapabilityGeometryStreams);
 
   m_geometry.streamMask |= 1u << stream;
+}
+
+
+void SpirvBuilder::emitSetPsDepthMode(const ir::Op& op) {
+  auto mode = op.getOpCode() == ir::OpCode::eSetPsDepthLessEqual
+    ? spv::ExecutionModeDepthLess
+    : spv::ExecutionModeDepthGreater;
+
+  pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId, mode);
 }
 
 

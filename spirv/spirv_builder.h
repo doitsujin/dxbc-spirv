@@ -265,6 +265,8 @@ private:
 
   void emitSetGsOutputPrimitive(const ir::Op& op);
 
+  void emitSetPsDepthMode(const ir::Op& op);
+
   uint32_t emitExtractComponent(ir::SsaDef vectorDef, uint32_t index);
 
   uint32_t importGlslExt();
