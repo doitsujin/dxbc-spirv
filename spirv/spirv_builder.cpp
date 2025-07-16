@@ -908,6 +908,10 @@ void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
         return spv::BuiltInFragStencilRefEXT;
       }
 
+      case ir::BuiltIn::eIsFullyCovered: {
+        enableCapability(spv::CapabilityFragmentFullyCoveredEXT);
+      } return spv::BuiltInFullyCoveredEXT;
+
       case ir::BuiltIn::eWorkgroupId:
         return spv::BuiltInWorkgroupId;
 
