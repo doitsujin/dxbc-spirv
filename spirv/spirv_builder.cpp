@@ -610,7 +610,8 @@ void SpirvBuilder::emitDclLds(const ir::Op& op) {
   auto typeId = getIdForType(op.getType());
   auto ptrTypeId = getIdForPtrType(typeId, spv::StorageClassWorkgroup);
 
-  pushOp(m_declarations, spv::OpVariable, ptrTypeId, varId, spv::StorageClassWorkgroup);
+  pushOp(m_declarations, spv::OpVariable, ptrTypeId, varId,
+    spv::StorageClassWorkgroup, getIdForConstantNull(op.getType()));
 
   addEntryPointId(varId);
 }
@@ -625,7 +626,8 @@ void SpirvBuilder::emitDclScratch(const ir::Op& op) {
   auto typeId = getIdForType(op.getType());
   auto ptrTypeId = getIdForPtrType(typeId, spv::StorageClassPrivate);
 
-  pushOp(m_declarations, spv::OpVariable, ptrTypeId, varId, spv::StorageClassPrivate);
+  pushOp(m_declarations, spv::OpVariable, ptrTypeId, varId,
+    spv::StorageClassPrivate, getIdForConstantNull(op.getType()));
 
   addEntryPointId(varId);
 }
