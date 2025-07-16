@@ -461,6 +461,12 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eDemote:
       return emitDemote();
 
+    case ir::OpCode::eRovScopedLockBegin:
+      return emitRovLockBegin(op);
+
+    case ir::OpCode::eRovScopedLockEnd:
+      return emitRovLockEnd(op);
+
     case ir::OpCode::eDclSpecConstant:
     case ir::OpCode::eDclPushData:
     case ir::OpCode::eFunctionCall:
@@ -471,8 +477,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eMemoryAtomic:
     case ir::OpCode::ePointer:
     case ir::OpCode::ePointerAddress:
-    case ir::OpCode::eRovScopedLockBegin:
-    case ir::OpCode::eRovScopedLockEnd:
       /* TODO implement */
       std::cerr << "Unimplemented opcode " << op.getOpCode() << std::endl;
       break;
@@ -2182,12 +2186,12 @@ void SpirvBuilder::emitBarrier(const ir::Op& op) {
   if (execScope == ir::Scope::eThread) {
     pushOp(m_code, spv::OpMemoryBarrier,
       makeConstU32(translateScope(memScope)),
-      makeConstU32(translateMemoryTypes(memTypes)));
+      makeConstU32(translateMemoryTypes(memTypes, spv::MemorySemanticsAcquireReleaseMask)));
   } else {
     pushOp(m_code, spv::OpControlBarrier,
       makeConstU32(translateScope(execScope)),
       makeConstU32(translateScope(memScope)),
-      makeConstU32(translateMemoryTypes(memTypes)));
+      makeConstU32(translateMemoryTypes(memTypes, spv::MemorySemanticsAcquireReleaseMask)));
   }
 }
 
@@ -2226,6 +2230,68 @@ void SpirvBuilder::emitDemote() {
   enableCapability(spv::CapabilityDemoteToHelperInvocation);
 
   pushOp(m_code, spv::OpDemoteToHelperInvocation);
+}
+
+
+void SpirvBuilder::emitRovLockBegin(const ir::Op& op) {
+  dxbc_spv_assert(m_stage == ir::ShaderStage::ePixel);
+
+  /* Enable cap and execution mode for lock scope */
+  auto scope = ir::RovScope(op.getOperand(1u));
+
+  auto [cap, mode] = [&] {
+    switch (scope) {
+      case ir::RovScope::eSample:
+        return std::make_pair(
+          spv::CapabilityFragmentShaderSampleInterlockEXT,
+          spv::ExecutionModeSampleInterlockOrderedEXT);
+
+      case ir::RovScope::ePixel:
+        return std::make_pair(
+          spv::CapabilityFragmentShaderPixelInterlockEXT,
+          spv::ExecutionModePixelInterlockOrderedEXT);
+
+      case ir::RovScope::eVrsBlock:
+        return std::make_pair(
+          spv::CapabilityFragmentShaderShadingRateInterlockEXT,
+          spv::ExecutionModeShadingRateInterlockOrderedEXT);
+
+      case ir::RovScope::eFlagEnum:
+        break;
+    }
+
+    dxbc_spv_unreachable();
+    return std::make_pair(spv::Capability(), spv::ExecutionMode());
+  } ();
+
+  enableCapability(cap);
+
+  pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId, mode);
+
+  /* Begin locked scope */
+  pushOp(m_code, spv::OpBeginInvocationInterlockEXT);
+
+  /* Emit memory barrier to make prior writes visible */
+  auto memoryTypes = ir::MemoryTypeFlags(op.getOperand(0u));
+  dxbc_spv_assert(memoryTypes);
+
+  pushOp(m_code, spv::OpMemoryBarrier, makeConstU32(spv::ScopeQueueFamily),
+    makeConstU32(translateMemoryTypes(memoryTypes, spv::MemorySemanticsAcquireMask)));
+}
+
+
+void SpirvBuilder::emitRovLockEnd(const ir::Op& op) {
+  dxbc_spv_assert(m_stage == ir::ShaderStage::ePixel);
+
+  /* Emit memory barrier to make prior writes available */
+  auto memoryTypes = ir::MemoryTypeFlags(op.getOperand(0u));
+  dxbc_spv_assert(memoryTypes);
+
+  pushOp(m_code, spv::OpMemoryBarrier, makeConstU32(spv::ScopeQueueFamily),
+    makeConstU32(translateMemoryTypes(memoryTypes, spv::MemorySemanticsReleaseMask)));
+
+  /* End locked scope */
+  pushOp(m_code, spv::OpEndInvocationInterlockEXT);
 }
 
 
@@ -3502,7 +3568,7 @@ spv::Scope SpirvBuilder::translateScope(ir::Scope scope) {
 }
 
 
-uint32_t SpirvBuilder::translateMemoryTypes(ir::MemoryTypeFlags memoryFlags) {
+uint32_t SpirvBuilder::translateMemoryTypes(ir::MemoryTypeFlags memoryFlags, spv::MemorySemanticsMask base) {
   uint32_t result = 0u;
 
   if (memoryFlags & ir::MemoryType::eLds)
@@ -3515,9 +3581,13 @@ uint32_t SpirvBuilder::translateMemoryTypes(ir::MemoryTypeFlags memoryFlags) {
     result |= spv::MemorySemanticsImageMemoryMask;
 
   if (memoryFlags) {
-    result |= spv::MemorySemanticsAcquireReleaseMask |
-              spv::MemorySemanticsMakeAvailableMask |
-              spv::MemorySemanticsMakeVisibleMask;
+    result |= base;
+
+    if (base != spv::MemorySemanticsReleaseMask)
+      result |= spv::MemorySemanticsMakeVisibleMask;
+
+    if (base != spv::MemorySemanticsAcquireMask)
+      result |= spv::MemorySemanticsMakeAvailableMask;
   }
 
   return result;
@@ -3672,6 +3742,7 @@ void SpirvBuilder::enableCapability(spv::Capability cap) {
   switch (cap) {
     case spv::CapabilityFragmentShaderSampleInterlockEXT:
     case spv::CapabilityFragmentShaderPixelInterlockEXT:
+    case spv::CapabilityFragmentShaderShadingRateInterlockEXT:
       enableExtension("SPV_EXT_fragment_shader_interlock");
       break;
 
