@@ -183,6 +183,8 @@ private:
 
   void emitMemoryStore(const ir::Op& op);
 
+  void emitMemoryAtomic(const ir::Op& op);
+
   void emitCounterAtomic(const ir::Op& op);
 
   void emitLdsAtomic(const ir::Op& op);
