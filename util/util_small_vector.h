@@ -61,6 +61,9 @@ public:
 
   constexpr static size_t EmbeddedCapacity = N;
 
+  using iterator = T*;
+  using const_iterator = const T*;
+
   small_vector()
   : small_vector(Allocator()) { }
 
@@ -243,6 +246,18 @@ public:
     erase(std::distance(cbegin(), iter));
   }
 
+  /** Inserts element at given iterator */
+  iterator insert(const_iterator iter, const T& element) {
+    auto ptr = insert(std::distance(cbegin(), iter));
+    return new (ptr) T(element);
+  }
+
+  /** Move-inserts element at given iterator */
+  iterator insert(const_iterator iter, T&& element) {
+    auto ptr = insert(std::distance(cbegin(), iter));
+    return new (ptr) T(std::move(element));
+  }
+
   /** Removes last element from array. */
   void pop_back() {
     std::launder(ptr(--m_state.size))->~T();
@@ -385,6 +400,21 @@ private:
 
     for (size_t i = 0; i < other.size(); i++)
       emplace_back(other[i]);
+  }
+
+  /** Ensures free element at given index */
+  T* insert(size_t idx) {
+    size_t last = size();
+    reserve(last + 1u);
+
+    while (last > idx) {
+      auto prev = std::launder(ptr(last - 1u));
+      new (ptr(last--)) T(std::move(*prev));
+      prev->~T();
+    }
+
+    m_state.size++;
+    return ptr(idx);
   }
 
 };
