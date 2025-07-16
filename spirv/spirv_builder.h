@@ -107,6 +107,17 @@ private:
     uint32_t baseInstance = 0u;
   } m_drawParams;
 
+  struct PushDataInfo {
+    ir::SsaDef def;
+    uint32_t member;
+    uint32_t offset;
+  };
+
+  struct {
+    uint32_t blockId = 0u;
+    util::small_vector<PushDataInfo, 64u> members;
+  } m_pushData;
+
   uint32_t m_entryPointId = 0u;
 
   void processDebugNames();
@@ -126,6 +137,8 @@ private:
   void emitInterpolationModes(uint32_t id, ir::InterpolationModes modes);
 
   void emitDclSpecConstant(const ir::Op& op);
+
+  void emitDclPushData(const ir::Op& op);
 
   void emitDclLds(const ir::Op& op);
 
@@ -150,6 +163,8 @@ private:
   uint32_t getDescriptorArrayIndex(const ir::Op& op);
 
   uint32_t getImageDescriptorPointer(const ir::Op& op);
+
+  void emitPushDataLoad(const ir::Op& op);
 
   void emitConstantLoad(const ir::Op& op);
 
@@ -322,6 +337,8 @@ private:
   uint32_t getIdForConstant(const SpirvConstant& constant, uint32_t memberCount);
 
   uint32_t getIdForConstantNull(const ir::Type& type);
+
+  uint32_t getIdForPushDataBlock();
 
   spv::Scope getUavCoherentScope(ir::UavFlags flags);
 
