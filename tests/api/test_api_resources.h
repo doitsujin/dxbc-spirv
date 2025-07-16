@@ -176,4 +176,6 @@ Builder test_resource_srv_image_gather_depth_sparse_feedback();
 Builder test_resource_uav_buffer_load_sparse_feedback();
 Builder test_resource_uav_image_load_sparse_feedback();
 
+Builder test_resource_rov();
+
 }
