@@ -3,6 +3,9 @@
 #include "test_api_io.h"
 #include "test_api_misc.h"
 #include "test_api_resources.h"
+#include "test_api_spirv.h"
+
+#define ADD_TEST(test) addTest(result, filter, #test, &test)
 
 namespace dxbc_spv::test_api {
 
@@ -19,7 +22,6 @@ void addTest(std::vector<NamedTest>& tests, const char* filter,
 }
 
 std::vector<NamedTest> enumerateTests(const char* filter) {
-#define ADD_TEST(test) addTest(result, filter, #test, &test)
   std::vector<NamedTest> result;
 
   ADD_TEST(test_io_vs);
@@ -266,8 +268,16 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_misc_function_with_args);
   ADD_TEST(test_misc_function_with_return);
 
-return result;
-#undef ADD_TEST
+  return result;
+}
+
+
+std::vector<NamedTest> enumerateSpirvTests(const char* filter) {
+  std::vector<NamedTest> result;
+
+  ADD_TEST(test_spirv_spec_constant);
+
+  return result;
 }
 
 }
