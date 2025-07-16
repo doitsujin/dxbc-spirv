@@ -276,6 +276,7 @@ std::vector<NamedTest> enumerateSpirvTests(const char* filter) {
   std::vector<NamedTest> result;
 
   ADD_TEST(test_spirv_spec_constant);
+  ADD_TEST(test_spirv_push_data);
 
   return result;
 }
