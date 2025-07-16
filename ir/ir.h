@@ -599,7 +599,6 @@ enum class TessPartitioning : uint32_t {
   eInteger    = 0u,
   eFractOdd   = 1u,
   eFractEven  = 2u,
-  ePow2       = 3u,
 };
 
 
