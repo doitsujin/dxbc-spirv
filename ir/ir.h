@@ -368,6 +368,11 @@ public:
   /** Adds a struct member. */
   Type& addStructMember(BasicType type);
 
+  /** Adds a struct member. */
+  Type& addStructMember(ScalarType type, uint32_t count) {
+    return addStructMember(BasicType(type, count));
+  }
+
   /** Adds an array dimension. Pass a size of 0 for an unbounded array. */
   Type& addArrayDimension(uint32_t size);
 
