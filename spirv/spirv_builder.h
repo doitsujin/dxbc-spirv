@@ -220,6 +220,10 @@ private:
 
   void emitDemote();
 
+  void emitRovLockBegin(const ir::Op& op);
+
+  void emitRovLockEnd(const ir::Op& op);
+
   void emitMemoryModel();
 
   void emitDebugName(ir::SsaDef def, uint32_t id);
@@ -315,7 +319,7 @@ private:
 
   spv::Scope translateScope(ir::Scope scope);
 
-  uint32_t translateMemoryTypes(ir::MemoryTypeFlags memoryFlags);
+  uint32_t translateMemoryTypes(ir::MemoryTypeFlags memoryFlags, spv::MemorySemanticsMask base);
 
   uint32_t makeScalarConst(ir::ScalarType type, const ir::Op& op, uint32_t& operandIndex);
 
