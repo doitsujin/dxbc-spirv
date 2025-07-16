@@ -1261,8 +1261,9 @@ public:
   }
 
   /** Appends an operand and increments operand count. */
-  Op& addOperand(Operand arg) {
-    m_operands.push_back(arg);
+  template<typename T>
+  Op& addOperand(T arg) {
+    m_operands.push_back(Operand(arg));
     return *this;
   }
 
@@ -1332,49 +1333,49 @@ public:
   /** Helpers to construct entry point op. */
   static Op EntryPoint(SsaDef function, ShaderStage stage) {
     return Op(OpCode::eEntryPoint, Type())
-      .addOperand(Operand(function))
-      .addOperand(Operand(stage));
+      .addOperand(function)
+      .addOperand(stage);
   };
 
   static Op EntryPoint(SsaDef controlPointFunction, SsaDef patchConstantFunction, ShaderStage stage) {
     return Op(OpCode::eEntryPoint, Type())
-      .addOperand(Operand(controlPointFunction))
-      .addOperand(Operand(patchConstantFunction))
-      .addOperand(Operand(stage));
+      .addOperand(controlPointFunction)
+      .addOperand(patchConstantFunction)
+      .addOperand(stage);
   };
 
   /** Helpers to construct scalar and vector constants */
   template<typename T>
   static Op Constant(T v) {
     auto t = Type(BasicType::from(T(), 1u));
-    return Op(OpCode::eConstant, t).addOperand(Operand(v));
+    return Op(OpCode::eConstant, t).addOperand(v);
   }
 
   template<typename T>
   static Op Constant(T v0, T v1) {
     auto t = Type(BasicType::from(T(), 2u));
     return Op(OpCode::eConstant, t)
-      .addOperand(Operand(v0))
-      .addOperand(Operand(v1));
+      .addOperand(v0)
+      .addOperand(v1);
   }
 
   template<typename T>
   static Op Constant(T v0, T v1, T v2) {
     auto t = Type(BasicType::from(T(), 3u));
     return Op(OpCode::eConstant, t)
-      .addOperand(Operand(v0))
-      .addOperand(Operand(v1))
-      .addOperand(Operand(v2));
+      .addOperand(v0)
+      .addOperand(v1)
+      .addOperand(v2);
   }
 
   template<typename T>
   static Op Constant(T v0, T v1, T v2, T v3) {
     auto t = Type(BasicType::from(T(), 4u));
     return Op(OpCode::eConstant, t)
-      .addOperand(Operand(v0))
-      .addOperand(Operand(v1))
-      .addOperand(Operand(v2))
-      .addOperand(Operand(v3));
+      .addOperand(v0)
+      .addOperand(v1)
+      .addOperand(v2)
+      .addOperand(v3);
   }
 
   static Op Undef(const Type& type) {
@@ -1384,142 +1385,142 @@ public:
   /** Helper to construct debug name ops */
   static Op DebugName(SsaDef def, const char* name) {
     return Op(OpCode::eDebugName, Type())
-      .addOperand(Operand(def))
+      .addOperand(def)
       .addLiteralString(name);
   }
 
   static Op Semantic(SsaDef def, uint32_t index, const char* name) {
     return Op(OpCode::eSemantic, Type())
-      .addOperand(Operand(def))
-      .addOperand(Operand(index))
+      .addOperand(def)
+      .addOperand(index)
       .addLiteralString(name);
   }
 
   /** Helper to construct declaration ops */
   static Op DclInput(Type type, SsaDef entryPoint, uint32_t location, uint32_t component) {
     return Op(OpCode::eDclInput, type)
-      .addOperand(Operand(entryPoint))
-      .addOperand(Operand(location))
-      .addOperand(Operand(component));
+      .addOperand(entryPoint)
+      .addOperand(location)
+      .addOperand(component);
   }
 
   static Op DclInput(Type type, SsaDef entryPoint, uint32_t location, uint32_t component, InterpolationModes interpolation) {
     return Op(OpCode::eDclInput, type)
-      .addOperand(Operand(entryPoint))
-      .addOperand(Operand(location))
-      .addOperand(Operand(component))
-      .addOperand(Operand(interpolation));
+      .addOperand(entryPoint)
+      .addOperand(location)
+      .addOperand(component)
+      .addOperand(interpolation);
   }
 
   static Op DclInputBuiltIn(Type type, SsaDef entryPoint, BuiltIn builtin) {
     return Op(OpCode::eDclInputBuiltIn, type)
-      .addOperand(Operand(entryPoint))
-      .addOperand(Operand(builtin));
+      .addOperand(entryPoint)
+      .addOperand(builtin);
   }
 
   static Op DclInputBuiltIn(Type type, SsaDef entryPoint, BuiltIn builtin, InterpolationModes interpolation) {
     return Op(OpCode::eDclInputBuiltIn, type)
-      .addOperand(Operand(entryPoint))
-      .addOperand(Operand(builtin))
-      .addOperand(Operand(interpolation));
+      .addOperand(entryPoint)
+      .addOperand(builtin)
+      .addOperand(interpolation);
   }
 
   static Op DclOutput(Type type, SsaDef entryPoint, uint32_t location, uint32_t component) {
     return Op(OpCode::eDclOutput, type)
-      .addOperand(Operand(entryPoint))
-      .addOperand(Operand(location))
-      .addOperand(Operand(component));
+      .addOperand(entryPoint)
+      .addOperand(location)
+      .addOperand(component);
   }
 
   static Op DclOutput(Type type, SsaDef entryPoint, uint32_t location, uint32_t component, uint32_t gsStream) {
     return Op(OpCode::eDclOutput, type)
-      .addOperand(Operand(entryPoint))
-      .addOperand(Operand(location))
-      .addOperand(Operand(component))
-      .addOperand(Operand(gsStream));
+      .addOperand(entryPoint)
+      .addOperand(location)
+      .addOperand(component)
+      .addOperand(gsStream);
   }
 
   static Op DclOutputBuiltIn(Type type, SsaDef entryPoint, BuiltIn builtin) {
     return Op(OpCode::eDclOutputBuiltIn, type)
-      .addOperand(Operand(entryPoint))
-      .addOperand(Operand(builtin));
+      .addOperand(entryPoint)
+      .addOperand(builtin);
   }
 
   static Op DclOutputBuiltIn(Type type, SsaDef entryPoint, BuiltIn builtin, uint32_t gsStream) {
     return Op(OpCode::eDclOutputBuiltIn, type)
-      .addOperand(Operand(entryPoint))
-      .addOperand(Operand(builtin))
-      .addOperand(Operand(gsStream));
+      .addOperand(entryPoint)
+      .addOperand(builtin)
+      .addOperand(gsStream);
   }
 
   static Op DclSpecConstant(Type type, SsaDef entryPoint, uint32_t specId, Operand defaultValue) {
     return Op(OpCode::eDclSpecConstant, type)
-      .addOperand(Operand(entryPoint))
-      .addOperand(Operand(specId))
+      .addOperand(entryPoint)
+      .addOperand(specId)
       .addOperand(defaultValue);
   }
 
   static Op DclPushData(Type type, SsaDef entryPoint, uint32_t offset, ShaderStageMask stageMask) {
     return Op(OpCode::eDclPushData, type)
-      .addOperand(Operand(entryPoint))
-      .addOperand(Operand(offset))
-      .addOperand(Operand(stageMask));
+      .addOperand(entryPoint)
+      .addOperand(offset)
+      .addOperand(stageMask);
   }
 
   static Op DclSampler(SsaDef entryPoint, uint32_t regSpace, uint32_t regIdx, uint32_t count) {
     return Op(OpCode::eDclSampler, Type())
-      .addOperand(Operand(entryPoint))
-      .addOperand(Operand(regSpace))
-      .addOperand(Operand(regIdx))
-      .addOperand(Operand(count));
+      .addOperand(entryPoint)
+      .addOperand(regSpace)
+      .addOperand(regIdx)
+      .addOperand(count);
   }
 
   static Op DclCbv(Type type, SsaDef entryPoint, uint32_t regSpace, uint32_t regIdx, uint32_t count) {
     return Op(OpCode::eDclCbv, type)
-      .addOperand(Operand(entryPoint))
-      .addOperand(Operand(regSpace))
-      .addOperand(Operand(regIdx))
-      .addOperand(Operand(count));
+      .addOperand(entryPoint)
+      .addOperand(regSpace)
+      .addOperand(regIdx)
+      .addOperand(count);
   }
 
   static Op DclSrv(Type type, SsaDef entryPoint, uint32_t regSpace, uint32_t regIdx, uint32_t count, ResourceKind kind) {
     return Op(OpCode::eDclSrv, type)
-      .addOperand(Operand(entryPoint))
-      .addOperand(Operand(regSpace))
-      .addOperand(Operand(regIdx))
-      .addOperand(Operand(count))
-      .addOperand(Operand(kind));
+      .addOperand(entryPoint)
+      .addOperand(regSpace)
+      .addOperand(regIdx)
+      .addOperand(count)
+      .addOperand(kind);
   }
 
   static Op DclUav(Type type, SsaDef entryPoint, uint32_t regSpace, uint32_t regIdx, uint32_t count, ResourceKind kind, UavFlags flags) {
     return Op(OpCode::eDclUav, type)
-      .addOperand(Operand(entryPoint))
-      .addOperand(Operand(regSpace))
-      .addOperand(Operand(regIdx))
-      .addOperand(Operand(count))
-      .addOperand(Operand(kind))
-      .addOperand(Operand(flags));
+      .addOperand(entryPoint)
+      .addOperand(regSpace)
+      .addOperand(regIdx)
+      .addOperand(count)
+      .addOperand(kind)
+      .addOperand(flags);
   }
 
   static Op DclUavCounter(SsaDef entryPoint, SsaDef uav) {
     return Op(OpCode::eDclUavCounter, ScalarType::eU32)
-      .addOperand(Operand(entryPoint))
-      .addOperand(Operand(uav));
+      .addOperand(entryPoint)
+      .addOperand(uav);
   }
 
   static Op DclLds(Type type, SsaDef entryPoint) {
     return Op(OpCode::eDclLds, type)
-      .addOperand(Operand(entryPoint));
+      .addOperand(entryPoint);
   }
 
   static Op DclScratch(Type type, SsaDef entryPoint) {
     return Op(OpCode::eDclScratch, type)
-      .addOperand(Operand(entryPoint));
+      .addOperand(entryPoint);
   }
 
   static Op DclTmp(Type type, SsaDef entryPoint) {
     return Op(OpCode::eDclTmp, type)
-      .addOperand(Operand(entryPoint));
+      .addOperand(entryPoint);
   }
 
   static Op DclParam(Type type) {
@@ -1528,64 +1529,64 @@ public:
 
   static Op DclXfb(SsaDef output, uint32_t buffer, uint32_t stride, uint32_t offset) {
     return Op(OpCode::eDclXfb, Type())
-      .addOperand(Operand(output))
-      .addOperand(Operand(buffer))
-      .addOperand(Operand(stride))
-      .addOperand(Operand(offset));
+      .addOperand(output)
+      .addOperand(buffer)
+      .addOperand(stride)
+      .addOperand(offset);
   }
 
   /** Helpers to construct mode setting ops */
   static Op SetCsWorkgroupSize(SsaDef def, uint32_t x, uint32_t y, uint32_t z) {
     return Op(OpCode::eSetCsWorkgroupSize, Type())
-      .addOperand(Operand(def))
-      .addOperand(Operand(x))
-      .addOperand(Operand(y))
-      .addOperand(Operand(z));
+      .addOperand(def)
+      .addOperand(x)
+      .addOperand(y)
+      .addOperand(z);
   }
 
   static Op SetGsInstances(SsaDef def, uint32_t n) {
     return Op(OpCode::eSetGsInstances, Type())
-      .addOperand(Operand(def))
-      .addOperand(Operand(n));
+      .addOperand(def)
+      .addOperand(n);
   }
 
   static Op SetGsInputPrimitive(SsaDef def, PrimitiveType type) {
     return Op(OpCode::eSetGsInputPrimitive, Type())
-      .addOperand(Operand(def))
-      .addOperand(Operand(type));
+      .addOperand(def)
+      .addOperand(type);
   }
 
   static Op SetGsOutputVertices(SsaDef def, uint32_t n) {
     return Op(OpCode::eSetGsOutputVertices, Type())
-      .addOperand(Operand(def))
-      .addOperand(Operand(n));
+      .addOperand(def)
+      .addOperand(n);
   }
 
   static Op SetGsOutputPrimitive(SsaDef def, PrimitiveType type, uint32_t stream) {
     return Op(OpCode::eSetGsOutputPrimitive, Type())
-      .addOperand(Operand(def))
-      .addOperand(Operand(type))
-      .addOperand(Operand(stream));
+      .addOperand(def)
+      .addOperand(type)
+      .addOperand(stream);
   }
 
   static Op SetPsEarlyFragmentTest(SsaDef def) {
-    return Op(OpCode::eSetPsEarlyFragmentTest, Type()).addOperand(Operand(def));
+    return Op(OpCode::eSetPsEarlyFragmentTest, Type()).addOperand(def);
   }
 
   static Op SetPsDepthGreaterEqual(SsaDef def) {
-    return Op(OpCode::eSetPsDepthGreaterEqual, Type()).addOperand(Operand(def));
+    return Op(OpCode::eSetPsDepthGreaterEqual, Type()).addOperand(def);
   }
 
   static Op SetPsDepthLessEqual(SsaDef def) {
-    return Op(OpCode::eSetPsDepthLessEqual, Type()).addOperand(Operand(def));
+    return Op(OpCode::eSetPsDepthLessEqual, Type()).addOperand(def);
   }
 
   static Op SetTessPrimitive(SsaDef def, PrimitiveType type, TessWindingOrder winding, TessPartitioning partitioning) {
     return Op(OpCode::eSetTessPrimitive, Type())
-      .addOperand(Operand(def))
-      .addOperand(Operand(type))
-      .addOperand(Operand(winding))
-      .addOperand(Operand(partitioning));
+      .addOperand(def)
+      .addOperand(type)
+      .addOperand(winding)
+      .addOperand(partitioning);
   }
 
   /* Helpers for function-related instructions */
@@ -1599,53 +1600,53 @@ public:
 
   static Op FunctionCall(Type type, SsaDef function) {
     return Op(OpCode::eFunctionCall, type)
-      .addOperand(Operand(function));
+      .addOperand(function);
   }
 
   Op& addParam(SsaDef param) {
-    return addOperand(Operand(param));
+    return addOperand(param);
   }
 
   /* Helpers for structured control-flow instructions */
   static Op Label() {
     return Op(OpCode::eLabel, Type())
-      .addOperand(Operand(Construct::eNone));
+      .addOperand(Construct::eNone);
   }
 
   static Op LabelSelection(SsaDef mergeBlock) {
     return Op(OpCode::eLabel, Type())
-      .addOperand(Operand(mergeBlock))
-      .addOperand(Operand(Construct::eStructuredSelection));
+      .addOperand(mergeBlock)
+      .addOperand(Construct::eStructuredSelection);
   }
 
   static Op LabelLoop(SsaDef mergeBlock, SsaDef continueBlock) {
     return Op(OpCode::eLabel, Type())
-      .addOperand(Operand(mergeBlock))
-      .addOperand(Operand(continueBlock))
-      .addOperand(Operand(Construct::eStructuredLoop));
+      .addOperand(mergeBlock)
+      .addOperand(continueBlock)
+      .addOperand(Construct::eStructuredLoop);
   }
 
   static Op Branch(SsaDef block) {
     return Op(OpCode::eBranch, Type())
-      .addOperand(Operand(block));
+      .addOperand(block);
   }
 
   static Op BranchConditional(SsaDef cond, SsaDef trueBlock, SsaDef falseBlock) {
     return Op(OpCode::eBranchConditional, Type())
-      .addOperand(Operand(cond))
-      .addOperand(Operand(trueBlock))
-      .addOperand(Operand(falseBlock));
+      .addOperand(cond)
+      .addOperand(trueBlock)
+      .addOperand(falseBlock);
   }
 
   static Op Switch(SsaDef value, SsaDef defaultBlock) {
     return Op(OpCode::eSwitch, Type())
-      .addOperand(Operand(value))
-      .addOperand(Operand(defaultBlock));
+      .addOperand(value)
+      .addOperand(defaultBlock);
   }
 
   Op& addCase(SsaDef value, SsaDef block) {
-    return addOperand(Operand(value))
-          .addOperand(Operand(block));
+    return addOperand(value)
+          .addOperand(block);
   }
 
   static Op Unreachable() {
@@ -1657,8 +1658,8 @@ public:
   }
 
   Op& addPhi(SsaDef block, SsaDef value) {
-    return addOperand(Operand(block))
-          .addOperand(Operand(value));
+    return addOperand(block)
+          .addOperand(value);
   }
 
   static Op Return() {
@@ -1667,12 +1668,12 @@ public:
 
   static Op Return(Type type, SsaDef value) {
     return Op(OpCode::eReturn, type)
-      .addOperand(Operand(value));
+      .addOperand(value);
   }
 
   static Op ScopedIf(SsaDef cond) {
     return Op(OpCode::eScopedIf, Type())
-      .addOperand(Operand(cond));
+      .addOperand(cond);
   }
 
   static Op ScopedElse() {
@@ -1701,7 +1702,7 @@ public:
 
   static Op ScopedSwitch(SsaDef value) {
     return Op(OpCode::eScopedSwitch, Type())
-      .addOperand(Operand(value));
+      .addOperand(value);
   }
 
   static Op ScopedSwitchCase(Operand literal) {
@@ -1723,328 +1724,328 @@ public:
 
   static Op Barrier(Scope execScope, Scope memScope, MemoryTypeFlags memTypes) {
     return Op(OpCode::eBarrier, Type())
-      .addOperand(Operand(execScope))
-      .addOperand(Operand(memScope))
-      .addOperand(Operand(memTypes));
+      .addOperand(execScope)
+      .addOperand(memScope)
+      .addOperand(memTypes);
   }
 
   static Op ConvertFtoF(Type type, SsaDef value) {
     return Op(OpCode::eConvertFtoF, type)
-      .addOperand(Operand(value));
+      .addOperand(value);
   }
 
   static Op ConvertFtoI(Type type, SsaDef value) {
     return Op(OpCode::eConvertFtoI, type)
-      .addOperand(Operand(value));
+      .addOperand(value);
   }
 
   static Op ConvertItoF(Type type, SsaDef value) {
     return Op(OpCode::eConvertItoF, type)
-      .addOperand(Operand(value));
+      .addOperand(value);
   }
 
   static Op ConvertItoI(Type type, SsaDef value) {
     return Op(OpCode::eConvertItoI, type)
-      .addOperand(Operand(value));
+      .addOperand(value);
   }
 
   static Op ConvertF32toPackedF16(SsaDef value) {
     return Op(OpCode::eConvertF32toPackedF16, ScalarType::eU32)
-      .addOperand(Operand(value));
+      .addOperand(value);
   }
 
   static Op ConvertPackedF16toF32(SsaDef value) {
     return Op(OpCode::eConvertPackedF16toF32, BasicType(ScalarType::eF32, 2u))
-      .addOperand(Operand(value));
+      .addOperand(value);
   }
 
   static Op Cast(Type type, SsaDef value) {
     return Op(OpCode::eCast, type)
-      .addOperand(Operand(value));
+      .addOperand(value);
   }
 
   static Op ConsumeAs(Type type, SsaDef value) {
     return Op(OpCode::eConsumeAs, type)
-      .addOperand(Operand(value));
+      .addOperand(value);
   }
 
   static Op CompositeInsert(Type type, SsaDef composite, SsaDef address, SsaDef value) {
     return Op(OpCode::eCompositeInsert, type)
-      .addOperand(Operand(composite))
-      .addOperand(Operand(address))
-      .addOperand(Operand(value));
+      .addOperand(composite)
+      .addOperand(address)
+      .addOperand(value);
   }
 
   static Op CompositeExtract(Type type, SsaDef composite, SsaDef address) {
     return Op(OpCode::eCompositeExtract, type)
-      .addOperand(Operand(composite))
-      .addOperand(Operand(address));
+      .addOperand(composite)
+      .addOperand(address);
   }
 
   template<typename... T>
   static Op CompositeConstruct(Type type, T... args) {
     return Op(OpCode::eCompositeConstruct, type)
-      .addOperands(Operand(SsaDef(args))...);
+      .addOperands(SsaDef(args)...);
   }
 
   static Op CheckSparseAccess(SsaDef feedback) {
     return Op(OpCode::eCheckSparseAccess, ScalarType::eBool)
-      .addOperand(Operand(feedback));
+      .addOperand(feedback);
   }
 
   static Op ParamLoad(Type type, SsaDef function, SsaDef decl) {
     return Op(OpCode::eParamLoad, type)
-      .addOperand(Operand(function))
-      .addOperand(Operand(decl));
+      .addOperand(function)
+      .addOperand(decl);
   }
 
   static Op TmpLoad(Type type, SsaDef decl) {
     return Op(OpCode::eTmpLoad, type)
-      .addOperand(Operand(decl));
+      .addOperand(decl);
   }
 
   static Op TmpStore(SsaDef decl, SsaDef value) {
     return Op(OpCode::eTmpStore, Type())
-      .addOperand(Operand(decl))
-      .addOperand(Operand(value));
+      .addOperand(decl)
+      .addOperand(value);
   }
 
   static Op ScratchLoad(Type type, SsaDef decl, SsaDef address) {
     return Op(OpCode::eScratchLoad, type)
-      .addOperand(Operand(decl))
-      .addOperand(Operand(address));
+      .addOperand(decl)
+      .addOperand(address);
   }
 
   static Op ScratchStore(SsaDef decl, SsaDef address, SsaDef value) {
     return Op(OpCode::eScratchStore, Type())
-      .addOperand(Operand(decl))
-      .addOperand(Operand(address))
-      .addOperand(Operand(value));
+      .addOperand(decl)
+      .addOperand(address)
+      .addOperand(value);
   }
 
   static Op LdsLoad(Type type, SsaDef decl, SsaDef address) {
     return Op(OpCode::eLdsLoad, type)
-      .addOperand(Operand(decl))
-      .addOperand(Operand(address));
+      .addOperand(decl)
+      .addOperand(address);
   }
 
   static Op LdsStore(SsaDef decl, SsaDef address, SsaDef value) {
     return Op(OpCode::eLdsStore, Type())
-      .addOperand(Operand(decl))
-      .addOperand(Operand(address))
-      .addOperand(Operand(value));
+      .addOperand(decl)
+      .addOperand(address)
+      .addOperand(value);
   }
 
   static Op PushDataLoad(Type type, SsaDef decl, SsaDef address) {
     return Op(OpCode::ePushDataLoad, type)
-      .addOperand(Operand(decl))
-      .addOperand(Operand(address));
+      .addOperand(decl)
+      .addOperand(address);
   }
 
   static Op SpecConstantLoad(Type type, SsaDef decl, SsaDef address) {
     return Op(OpCode::eSpecConstantLoad, type)
-      .addOperand(Operand(decl))
-      .addOperand(Operand(address));
+      .addOperand(decl)
+      .addOperand(address);
   }
 
   static Op InputLoad(Type type, SsaDef decl, SsaDef address) {
     return Op(OpCode::eInputLoad, type)
-      .addOperand(Operand(decl))
-      .addOperand(Operand(address));
+      .addOperand(decl)
+      .addOperand(address);
   }
 
   static Op OutputLoad(Type type, SsaDef decl, SsaDef address) {
     return Op(OpCode::eOutputLoad, type)
-      .addOperand(Operand(decl))
-      .addOperand(Operand(address));
+      .addOperand(decl)
+      .addOperand(address);
   }
 
   static Op OutputStore(SsaDef decl, SsaDef address, SsaDef value) {
     return Op(OpCode::eOutputStore, Type())
-      .addOperand(Operand(decl))
-      .addOperand(Operand(address))
-      .addOperand(Operand(value));
+      .addOperand(decl)
+      .addOperand(address)
+      .addOperand(value);
   }
 
   static Op DescriptorLoad(Type type, SsaDef decl, SsaDef index) {
     return Op(OpCode::eDescriptorLoad, type)
-      .addOperand(Operand(decl))
-      .addOperand(Operand(index));
+      .addOperand(decl)
+      .addOperand(index);
   }
 
   static Op BufferLoad(Type type, SsaDef descriptor, SsaDef address, uint32_t alignment) {
     return Op(OpCode::eBufferLoad, type)
-      .addOperand(Operand(descriptor))
-      .addOperand(Operand(address))
-      .addOperand(Operand(alignment));
+      .addOperand(descriptor)
+      .addOperand(address)
+      .addOperand(alignment);
   }
 
   static Op BufferStore(SsaDef descriptor, SsaDef address, SsaDef value, uint32_t alignment) {
     return Op(OpCode::eBufferStore, Type())
-      .addOperand(Operand(descriptor))
-      .addOperand(Operand(address))
-      .addOperand(Operand(value))
-      .addOperand(Operand(alignment));
+      .addOperand(descriptor)
+      .addOperand(address)
+      .addOperand(value)
+      .addOperand(alignment);
   }
 
   static Op BufferQuerySize(SsaDef descriptor) {
     return Op(OpCode::eBufferQuerySize, ScalarType::eU32)
-      .addOperand(Operand(descriptor));
+      .addOperand(descriptor);
   }
 
   static Op MemoryLoad(Type type, SsaDef pointer, SsaDef address, uint32_t alignment) {
     return Op(OpCode::eMemoryLoad, type)
-      .addOperand(Operand(pointer))
-      .addOperand(Operand(address))
-      .addOperand(Operand(alignment));
+      .addOperand(pointer)
+      .addOperand(address)
+      .addOperand(alignment);
   }
 
   static Op MemoryStore(SsaDef pointer, SsaDef address, SsaDef value, uint32_t alignment) {
     return Op(OpCode::eMemoryStore, Type())
-      .addOperand(Operand(pointer))
-      .addOperand(Operand(address))
-      .addOperand(Operand(value))
-      .addOperand(Operand(alignment));
+      .addOperand(pointer)
+      .addOperand(address)
+      .addOperand(value)
+      .addOperand(alignment);
   }
 
   static Op ConstantLoad(Type type, SsaDef constant, SsaDef address) {
     return Op(OpCode::eConstantLoad, type)
-      .addOperand(Operand(constant))
-      .addOperand(Operand(address));
+      .addOperand(constant)
+      .addOperand(address);
   }
 
   template<typename... T>
   static Op LdsAtomic(AtomicOp op, Type type, SsaDef decl, SsaDef address, SsaDef operands) {
     return Op(OpCode::eLdsAtomic, type)
-      .addOperand(Operand(decl))
-      .addOperand(Operand(address))
-      .addOperand(Operand(operands))
-      .addOperand(Operand(op));
+      .addOperand(decl)
+      .addOperand(address)
+      .addOperand(operands)
+      .addOperand(op);
   }
 
   template<typename... T>
   static Op BufferAtomic(AtomicOp op, Type type, SsaDef descriptor, SsaDef address, SsaDef operands) {
     return Op(OpCode::eBufferAtomic, type)
-      .addOperand(Operand(descriptor))
-      .addOperand(Operand(address))
-      .addOperand(Operand(operands))
-      .addOperand(Operand(op));
+      .addOperand(descriptor)
+      .addOperand(address)
+      .addOperand(operands)
+      .addOperand(op);
   }
 
   template<typename... T>
   static Op ImageAtomic(AtomicOp op, Type type, SsaDef descriptor, SsaDef layer, SsaDef coord, SsaDef operands) {
     return Op(OpCode::eImageAtomic, type)
-      .addOperand(Operand(descriptor))
-      .addOperand(Operand(layer))
-      .addOperand(Operand(coord))
-      .addOperand(Operand(operands))
-      .addOperand(Operand(op));
+      .addOperand(descriptor)
+      .addOperand(layer)
+      .addOperand(coord)
+      .addOperand(operands)
+      .addOperand(op);
   }
 
   template<typename... T>
   static Op CounterAtomic(AtomicOp op, Type type, SsaDef descriptor) {
     return Op(OpCode::eCounterAtomic, type)
-      .addOperand(Operand(descriptor))
-      .addOperand(Operand(op));
+      .addOperand(descriptor)
+      .addOperand(op);
   }
 
   template<typename... T>
   static Op MemoryAtomic(AtomicOp op, Type type, SsaDef pointer, SsaDef address, SsaDef operands) {
     return Op(OpCode::eMemoryAtomic, type)
-      .addOperand(Operand(pointer))
-      .addOperand(Operand(address))
-      .addOperand(Operand(operands))
-      .addOperand(Operand(op));
+      .addOperand(pointer)
+      .addOperand(address)
+      .addOperand(operands)
+      .addOperand(op);
   }
 
   static Op ImageLoad(Type type, SsaDef descriptor, SsaDef mip, SsaDef layer, SsaDef coord, SsaDef sample, SsaDef offset) {
     return Op(OpCode::eImageLoad, type)
-      .addOperand(Operand(descriptor))
-      .addOperand(Operand(mip))
-      .addOperand(Operand(layer))
-      .addOperand(Operand(coord))
-      .addOperand(Operand(sample))
-      .addOperand(Operand(offset));
+      .addOperand(descriptor)
+      .addOperand(mip)
+      .addOperand(layer)
+      .addOperand(coord)
+      .addOperand(sample)
+      .addOperand(offset);
   }
 
   static Op ImageStore(SsaDef descriptor, SsaDef layer, SsaDef coord, SsaDef value) {
     return Op(OpCode::eImageStore, Type())
-      .addOperand(Operand(descriptor))
-      .addOperand(Operand(layer))
-      .addOperand(Operand(coord))
-      .addOperand(Operand(value));
+      .addOperand(descriptor)
+      .addOperand(layer)
+      .addOperand(coord)
+      .addOperand(value);
   }
 
   static Op ImageQuerySize(Type type, SsaDef descriptor, SsaDef mip) {
     return Op(OpCode::eImageQuerySize, type)
-      .addOperand(Operand(descriptor))
-      .addOperand(Operand(mip));
+      .addOperand(descriptor)
+      .addOperand(mip);
   }
 
   static Op ImageQueryMips(Type type, SsaDef descriptor) {
     return Op(OpCode::eImageQueryMips, type)
-      .addOperand(Operand(descriptor));
+      .addOperand(descriptor);
   }
 
   static Op ImageQuerySamples(Type type, SsaDef descriptor) {
     return Op(OpCode::eImageQuerySamples, type)
-      .addOperand(Operand(descriptor));
+      .addOperand(descriptor);
   }
 
   static Op ImageSample(Type type, SsaDef descriptor, SsaDef sampler,
       SsaDef layer, SsaDef coord, SsaDef offset, SsaDef lodIndex, SsaDef lodBias, SsaDef lodClamp,
       SsaDef derivX, SsaDef derivY, SsaDef depthValue) {
     return Op(OpCode::eImageSample, type)
-      .addOperand(Operand(descriptor))
-      .addOperand(Operand(sampler))
-      .addOperand(Operand(layer))
-      .addOperand(Operand(coord))
-      .addOperand(Operand(offset))
-      .addOperand(Operand(lodIndex))
-      .addOperand(Operand(lodBias))
-      .addOperand(Operand(lodClamp))
-      .addOperand(Operand(derivX))
-      .addOperand(Operand(derivY))
-      .addOperand(Operand(depthValue));
+      .addOperand(descriptor)
+      .addOperand(sampler)
+      .addOperand(layer)
+      .addOperand(coord)
+      .addOperand(offset)
+      .addOperand(lodIndex)
+      .addOperand(lodBias)
+      .addOperand(lodClamp)
+      .addOperand(derivX)
+      .addOperand(derivY)
+      .addOperand(depthValue);
   }
 
   static Op ImageGather(Type type, SsaDef descriptor, SsaDef sampler,
       SsaDef layer, SsaDef coord, SsaDef offset, SsaDef depthValue, uint32_t component) {
     return Op(OpCode::eImageGather, type)
-      .addOperand(Operand(descriptor))
-      .addOperand(Operand(sampler))
-      .addOperand(Operand(layer))
-      .addOperand(Operand(coord))
-      .addOperand(Operand(offset))
-      .addOperand(Operand(depthValue))
-      .addOperand(Operand(component));
+      .addOperand(descriptor)
+      .addOperand(sampler)
+      .addOperand(layer)
+      .addOperand(coord)
+      .addOperand(offset)
+      .addOperand(depthValue)
+      .addOperand(component);
   }
 
   static Op ImageComputeLod(Type type, SsaDef descriptor, SsaDef sampler, SsaDef coord) {
     return Op(OpCode::eImageComputeLod, type)
-      .addOperand(Operand(descriptor))
-      .addOperand(Operand(sampler))
-      .addOperand(Operand(coord));
+      .addOperand(descriptor)
+      .addOperand(sampler)
+      .addOperand(coord);
   }
 
   static Op Pointer(Type type, SsaDef address) {
     return Op(OpCode::ePointer, type)
-      .addOperand(Operand(address));
+      .addOperand(address);
   }
 
   static Op PointerAddress(SsaDef pointer) {
     return Op(OpCode::ePointerAddress, ScalarType::eU64)
-      .addOperand(Operand(pointer));
+      .addOperand(pointer);
   }
 
   static Op EmitVertex(uint32_t stream) {
     return Op(OpCode::eEmitVertex, Type())
-      .addOperand(Operand(stream));
+      .addOperand(stream);
   }
 
   static Op EmitPrimitive(uint32_t stream) {
     return Op(OpCode::eEmitPrimitive, Type())
-      .addOperand(Operand(stream));
+      .addOperand(stream);
   }
 
   static Op Demote() {
@@ -2053,31 +2054,31 @@ public:
 
   static Op InterpolateAtCentroid(Type type, SsaDef input) {
     return Op(OpCode::eInterpolateAtCentroid, type)
-      .addOperand(Operand(input));
+      .addOperand(input);
   }
 
   static Op InterpolateAtSample(Type type, SsaDef input, SsaDef sample) {
     return Op(OpCode::eInterpolateAtSample, type)
-      .addOperand(Operand(input))
-      .addOperand(Operand(sample));
+      .addOperand(input)
+      .addOperand(sample);
   }
 
   static Op InterpolateAtOffset(Type type, SsaDef input, SsaDef offset) {
     return Op(OpCode::eInterpolateAtOffset, type)
-      .addOperand(Operand(input))
-      .addOperand(Operand(offset));
+      .addOperand(input)
+      .addOperand(offset);
   }
 
   static Op DerivX(Type type, SsaDef value, DerivativeMode mode) {
     return Op(OpCode::eDerivX, type)
-      .addOperand(Operand(value))
-      .addOperand(Operand(mode));
+      .addOperand(value)
+      .addOperand(mode);
   }
 
   static Op DerivY(Type type, SsaDef value, DerivativeMode mode) {
     return Op(OpCode::eDerivY, type)
-      .addOperand(Operand(value))
-      .addOperand(Operand(mode));
+      .addOperand(value)
+      .addOperand(mode);
   }
 
   static Op RovScopedLockBegin() {
@@ -2090,450 +2091,450 @@ public:
 
   static Op FEq(SsaDef a, SsaDef b) {
     return Op(OpCode::eFEq, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op FNe(SsaDef a, SsaDef b) {
     return Op(OpCode::eFNe, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op FLt(SsaDef a, SsaDef b) {
     return Op(OpCode::eFLt, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op FLe(SsaDef a, SsaDef b) {
     return Op(OpCode::eFLe, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op FGt(SsaDef a, SsaDef b) {
     return Op(OpCode::eFGt, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op FGe(SsaDef a, SsaDef b) {
     return Op(OpCode::eFGe, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op FIsNan(SsaDef a) {
     return Op(OpCode::eFIsNan, ScalarType::eBool)
-      .addOperand(Operand(a));
+      .addOperand(a);
   }
 
   static Op IEq(SsaDef a, SsaDef b) {
     return Op(OpCode::eIEq, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op INe(SsaDef a, SsaDef b) {
     return Op(OpCode::eINe, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op SLt(SsaDef a, SsaDef b) {
     return Op(OpCode::eSLt, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op SLe(SsaDef a, SsaDef b) {
     return Op(OpCode::eSLe, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op SGt(SsaDef a, SsaDef b) {
     return Op(OpCode::eSGt, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op SGe(SsaDef a, SsaDef b) {
     return Op(OpCode::eSGe, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op ULt(SsaDef a, SsaDef b) {
     return Op(OpCode::eULt, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op ULe(SsaDef a, SsaDef b) {
     return Op(OpCode::eULe, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op UGt(SsaDef a, SsaDef b) {
     return Op(OpCode::eUGt, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op UGe(SsaDef a, SsaDef b) {
     return Op(OpCode::eUGe, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op BAnd(SsaDef a, SsaDef b) {
     return Op(OpCode::eBAnd, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op BOr(SsaDef a, SsaDef b) {
     return Op(OpCode::eBOr, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op BEq(SsaDef a, SsaDef b) {
     return Op(OpCode::eBEq, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op BNe(SsaDef a, SsaDef b) {
     return Op(OpCode::eBNe, ScalarType::eBool)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op BNot(SsaDef a) {
     return Op(OpCode::eBNot, ScalarType::eBool)
-      .addOperand(Operand(a));
+      .addOperand(a);
   }
 
   static Op Select(Type type, SsaDef cond, SsaDef t, SsaDef f) {
     return Op(OpCode::eSelect, type)
-      .addOperand(Operand(cond))
-      .addOperand(Operand(t))
-      .addOperand(Operand(f));
+      .addOperand(cond)
+      .addOperand(t)
+      .addOperand(f);
   }
 
   static Op FAbs(Type type, SsaDef a) {
     return Op(OpCode::eFAbs, type)
-      .addOperand(Operand(a));
+      .addOperand(a);
   }
 
   static Op FNeg(Type type, SsaDef a) {
     return Op(OpCode::eFNeg, type)
-      .addOperand(Operand(a));
+      .addOperand(a);
   }
 
   static Op FAdd(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eFAdd, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op FSub(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eFSub, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op FMul(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eFMul, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op FMulLegacy(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eFMulLegacy, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op FMad(Type type, SsaDef a, SsaDef b, SsaDef c) {
     return Op(OpCode::eFMad, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b))
-      .addOperand(Operand(c));
+      .addOperand(a)
+      .addOperand(b)
+      .addOperand(c);
   }
 
   static Op FMadLegacy(Type type, SsaDef a, SsaDef b, SsaDef c) {
     return Op(OpCode::eFMadLegacy, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b))
-      .addOperand(Operand(c));
+      .addOperand(a)
+      .addOperand(b)
+      .addOperand(c);
   }
 
   static Op FDiv(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eFDiv, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op FRcp(Type type, SsaDef a) {
     return Op(OpCode::eFRcp, type)
-      .addOperand(Operand(a));
+      .addOperand(a);
   }
 
   static Op FSqrt(Type type, SsaDef a) {
     return Op(OpCode::eFSqrt, type)
-      .addOperand(Operand(a));
+      .addOperand(a);
   }
 
   static Op FRsq(Type type, SsaDef a) {
     return Op(OpCode::eFRsq, type)
-      .addOperand(Operand(a));
+      .addOperand(a);
   }
 
   static Op FExp2(Type type, SsaDef a) {
     return Op(OpCode::eFExp2, type)
-      .addOperand(Operand(a));
+      .addOperand(a);
   }
 
   static Op FLog2(Type type, SsaDef a) {
     return Op(OpCode::eFLog2, type)
-      .addOperand(Operand(a));
+      .addOperand(a);
   }
 
   static Op FFract(Type type, SsaDef a) {
     return Op(OpCode::eFFract, type)
-      .addOperand(Operand(a));
+      .addOperand(a);
   }
 
   static Op FRound(Type type, SsaDef a, RoundMode mode) {
     return Op(OpCode::eFRound, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(mode));
+      .addOperand(a)
+      .addOperand(mode);
   }
 
   static Op FMin(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eFMin, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op FMax(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eFMax, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op FDot(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eFDot, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op FDotLegacy(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eFDotLegacy, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op FClamp(Type type, SsaDef a, SsaDef lo, SsaDef hi) {
     return Op(OpCode::eFClamp, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(lo))
-      .addOperand(Operand(hi));
+      .addOperand(a)
+      .addOperand(lo)
+      .addOperand(hi);
   }
 
   static Op FSin(Type type, SsaDef a) {
     return Op(OpCode::eFSin, type)
-      .addOperand(Operand(a));
+      .addOperand(a);
   }
 
   static Op FCos(Type type, SsaDef a) {
     return Op(OpCode::eFCos, type)
-      .addOperand(Operand(a));
+      .addOperand(a);
   }
 
   static Op IAnd(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eIAnd, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op IOr(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eIOr, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op IXor(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eIXor, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op INot(Type type, SsaDef a) {
     return Op(OpCode::eINot, type)
-      .addOperand(Operand(a));
+      .addOperand(a);
   }
 
   static Op IBitInsert(Type type, SsaDef base, SsaDef insert, SsaDef offset, SsaDef count) {
     return Op(OpCode::eIBitInsert, type)
-      .addOperand(Operand(base))
-      .addOperand(Operand(insert))
-      .addOperand(Operand(offset))
-      .addOperand(Operand(count));
+      .addOperand(base)
+      .addOperand(insert)
+      .addOperand(offset)
+      .addOperand(count);
   }
 
   static Op UBitExtract(Type type, SsaDef base, SsaDef offset, SsaDef count) {
     return Op(OpCode::eUBitExtract, type)
-      .addOperand(Operand(base))
-      .addOperand(Operand(offset))
-      .addOperand(Operand(count));
+      .addOperand(base)
+      .addOperand(offset)
+      .addOperand(count);
   }
 
   static Op SBitExtract(Type type, SsaDef base, SsaDef offset, SsaDef count) {
     return Op(OpCode::eSBitExtract, type)
-      .addOperand(Operand(base))
-      .addOperand(Operand(offset))
-      .addOperand(Operand(count));
+      .addOperand(base)
+      .addOperand(offset)
+      .addOperand(count);
   }
 
   static Op IShl(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eIShl, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op SShr(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eSShr, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op UShr(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eUShr, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op IBitCount(Type type, SsaDef a) {
     return Op(OpCode::eIBitCount, type)
-      .addOperand(Operand(a));
+      .addOperand(a);
   }
 
   static Op IBitReverse(Type type, SsaDef a) {
     return Op(OpCode::eIBitReverse, type)
-      .addOperand(Operand(a));
+      .addOperand(a);
   }
 
   static Op IFindLsb(Type type, SsaDef a) {
     return Op(OpCode::eIFindLsb, type)
-      .addOperand(Operand(a));
+      .addOperand(a);
   }
 
   static Op SFindMsb(Type type, SsaDef a) {
     return Op(OpCode::eSFindMsb, type)
-      .addOperand(Operand(a));
+      .addOperand(a);
   }
 
   static Op UFindMsb(Type type, SsaDef a) {
     return Op(OpCode::eUFindMsb, type)
-      .addOperand(Operand(a));
+      .addOperand(a);
   }
 
   static Op IAdd(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eIAdd, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op IAddCarry(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eIAddCarry, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op ISub(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eISub, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op ISubBorrow(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eISubBorrow, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op INeg(Type type, SsaDef a) {
     return Op(OpCode::eINeg, type)
-      .addOperand(Operand(a));
+      .addOperand(a);
   }
 
   static Op IMul(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eIMul, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op UDiv(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eUDiv, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op UMod(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eUMod, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op SMin(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eSMin, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op SMax(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eSMax, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op SClamp(Type type, SsaDef a, SsaDef lo, SsaDef hi) {
     return Op(OpCode::eSClamp, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(lo))
-      .addOperand(Operand(hi));
+      .addOperand(a)
+      .addOperand(lo)
+      .addOperand(hi);
   }
 
   static Op UMin(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eUMin, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op UMax(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eUMax, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(b));
+      .addOperand(a)
+      .addOperand(b);
   }
 
   static Op UClamp(Type type, SsaDef a, SsaDef lo, SsaDef hi) {
     return Op(OpCode::eUClamp, type)
-      .addOperand(Operand(a))
-      .addOperand(Operand(lo))
-      .addOperand(Operand(hi));
+      .addOperand(a)
+      .addOperand(lo)
+      .addOperand(hi);
   }
 
   static Op UMSad(Type type, SsaDef ref, SsaDef src, SsaDef accum) {
     return Op(OpCode::eUMSad, type)
-      .addOperand(Operand(ref))
-      .addOperand(Operand(src))
-      .addOperand(Operand(accum));
+      .addOperand(ref)
+      .addOperand(src)
+      .addOperand(accum);
   }
 
 private:
