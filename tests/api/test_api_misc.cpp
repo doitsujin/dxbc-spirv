@@ -269,4 +269,49 @@ Builder test_misc_constant_load() {
   return builder;
 }
 
+Builder test_misc_ps_demote() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+  auto baseLabel = builder.add(Op::Label());
+
+  auto coordInDef = builder.add(Op::DclInput(Type(ScalarType::eF32, 2u), entryPoint, 0u, 0u, InterpolationModes()));
+  builder.add(Op::Semantic(coordInDef, 0u, "TEXCOORD"));
+  builder.add(Op::DebugName(coordInDef, "v0"));
+
+  auto colorOutDef = builder.add(Op::DclOutput(Type(ScalarType::eF32, 4u), entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(colorOutDef, 0u, "SV_TARGET"));
+  builder.add(Op::DebugName(colorOutDef, "o0"));
+
+  auto textureDef = builder.add(Op::DclSrv(ScalarType::eF32, entryPoint, 0u, 0u, 1u, ResourceKind::eImage2D));
+  builder.add(Op::DebugName(textureDef, "t0"));
+
+  auto samplerDef = builder.add(Op::DclSampler(entryPoint, 0u, 0u, 1u));
+  builder.add(Op::DebugName(samplerDef, "s0"));
+
+  auto textureDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eSrv, textureDef, builder.makeConstant(0u)));
+  auto samplerDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eSampler, samplerDef, builder.makeConstant(0u)));
+
+  auto coord = builder.add(Op::InputLoad(Type(ScalarType::eF32, 2u), coordInDef, SsaDef()));
+
+  auto color = builder.add(Op::ImageSample(Type(ScalarType::eF32, 4u),
+    textureDescriptor, samplerDescriptor, SsaDef(), coord, SsaDef(), SsaDef(), SsaDef(), SsaDef(), SsaDef(), SsaDef(), SsaDef()));
+
+  auto alpha = builder.add(Op::CompositeExtract(ScalarType::eF32, color, builder.makeConstant(3u)));
+  auto alphaTest = builder.add(Op::FLt(alpha, builder.makeConstant(0.005f)));
+
+  auto labelDiscard = builder.add(Op::Label());
+  builder.add(Op::Demote());
+
+  auto labelMerge(builder.add(Op::Label()));
+
+  builder.addBefore(labelDiscard, Op::BranchConditional(alphaTest, labelDiscard, labelMerge));
+  builder.addBefore(labelMerge, Op::Branch(labelMerge));
+
+  builder.rewriteOp(baseLabel, Op::LabelSelection(labelMerge));
+
+  builder.add(Op::OutputStore(colorOutDef, SsaDef(), color));
+  builder.add(Op::Return());
+  return builder;
+}
+
 }
