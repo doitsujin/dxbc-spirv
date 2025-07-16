@@ -277,6 +277,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eBufferAtomic:
       return emitBufferAtomic(op);
 
+    case ir::OpCode::eMemoryLoad:
+      return emitMemoryLoad(op);
+
     case ir::OpCode::eCounterAtomic:
       return emitCounterAtomic(op);
 
@@ -485,7 +488,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::ePointer:
       return emitPointer(op);
 
-    case ir::OpCode::eMemoryLoad:
     case ir::OpCode::eMemoryStore:
     case ir::OpCode::eMemoryAtomic:
       /* TODO implement */
@@ -1296,7 +1298,7 @@ void SpirvBuilder::emitBufferLoad(const ir::Op& op) {
     if (isUav) {
       auto uavFlags = getUavFlags(dclOp);
 
-      if (!(uavFlags & ir::UavFlag::eReadOnly) && getUavCoherentScope(uavFlags) != spv::ScopeInvocation)
+      if (getUavCoherentScope(uavFlags) != spv::ScopeInvocation)
         memoryOperands.flags |= spv::MemoryAccessNonPrivatePointerMask;
     }
 
@@ -1399,7 +1401,7 @@ void SpirvBuilder::emitBufferStore(const ir::Op& op) {
     /* Set up memory operands depending on resource usage */
     SpirvMemoryOperands memoryOperands = { };
 
-    if (!(uavFlags & ir::UavFlag::eWriteOnly) && getUavCoherentScope(uavFlags) != spv::ScopeInvocation)
+    if (getUavCoherentScope(uavFlags) != spv::ScopeInvocation)
       memoryOperands.flags |= spv::MemoryAccessNonPrivatePointerMask;
 
     /* Pairs of scalarized access chains and values to store */
@@ -1522,6 +1524,39 @@ void SpirvBuilder::emitBufferAtomic(const ir::Op& op) {
     emitAtomic(op, type, operandDef, ptrId, spv::ScopeQueueFamily,
       spv::MemorySemanticsImageMemoryMask);
   }
+}
+
+
+void SpirvBuilder::emitMemoryLoad(const ir::Op& op) {
+  const auto& ptrOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  auto addressDef = ir::SsaDef(op.getOperand(1u));
+
+  /* Set up memory operands based on pointer properties */
+  auto ptrFlags = ir::UavFlags(ptrOp.getOperand(1u));
+
+  SpirvMemoryOperands memoryOperands = { };
+  memoryOperands.flags |= spv::MemoryAccessAlignedMask;
+  memoryOperands.alignment = uint32_t(op.getOperand(op.getFirstLiteralOperandIndex()));
+
+  if (getUavCoherentScope(ptrFlags) != spv::ScopeInvocation)
+    memoryOperands.flags |= spv::MemoryAccessNonPrivatePointerMask;
+
+  /* Emit access chain */
+  bool hasWrapperStruct = !ptrOp.getType().isStructType();
+
+  auto accessChainId = emitAccessChain(spv::StorageClassPhysicalStorageBuffer,
+    ptrOp.getType(), getIdForDef(ptrOp.getDef()), addressDef, 0u, hasWrapperStruct);
+
+  /* Emit load op */
+  auto id = getIdForDef(op.getDef());
+
+  m_code.push_back(makeOpcodeToken(spv::OpLoad, 4u + memoryOperands.computeDwordCount()));
+  m_code.push_back(getIdForType(op.getType()));
+  m_code.push_back(id);
+  m_code.push_back(accessChainId);
+  memoryOperands.pushTo(m_code);
+
+  emitDebugName(op.getDef(), id);
 }
 
 
@@ -3791,6 +3826,9 @@ uint32_t SpirvBuilder::getIdForConstantNull(const ir::Type& type) {
 
 
 spv::Scope SpirvBuilder::getUavCoherentScope(ir::UavFlags flags) {
+  if (flags & (ir::UavFlag::eReadOnly | ir::UavFlag::eWriteOnly))
+    return spv::ScopeInvocation;
+
   if (flags & ir::UavFlag::eCoherent)
     return spv::ScopeQueueFamily;
 
@@ -4132,7 +4170,7 @@ void SpirvBuilder::setUavImageReadOperands(SpirvImageOperands& operands, const i
 
   auto uavFlags = getUavFlags(uavOp);
 
-  if (!(uavFlags & ir::UavFlag::eReadOnly) && getUavCoherentScope(uavFlags) != spv::ScopeInvocation)
+  if (getUavCoherentScope(uavFlags) != spv::ScopeInvocation)
     operands.flags |= spv::ImageOperandsNonPrivateTexelMask;
 }
 
@@ -4142,7 +4180,7 @@ void SpirvBuilder::setUavImageWriteOperands(SpirvImageOperands& operands, const 
 
   auto uavFlags = getUavFlags(uavOp);
 
-  if (!(uavFlags & ir::UavFlag::eWriteOnly) && getUavCoherentScope(uavFlags) != spv::ScopeInvocation)
+  if (getUavCoherentScope(uavFlags) != spv::ScopeInvocation)
     operands.flags |= spv::ImageOperandsNonPrivateTexelMask;
 }
 

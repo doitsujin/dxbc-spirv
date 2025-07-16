@@ -179,6 +179,8 @@ private:
 
   void emitBufferAtomic(const ir::Op& op);
 
+  void emitMemoryLoad(const ir::Op& op);
+
   void emitCounterAtomic(const ir::Op& op);
 
   void emitLdsAtomic(const ir::Op& op);
