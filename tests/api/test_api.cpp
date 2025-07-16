@@ -223,6 +223,8 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_resource_uav_buffer_load_sparse_feedback);
   ADD_TEST(test_resource_uav_image_load_sparse_feedback);
 
+  ADD_TEST(test_resource_rov);
+
   ADD_TEST(test_arithmetic_fp32);
   ADD_TEST(test_arithmetic_fp32_precise);
   ADD_TEST(test_arithmetic_fp32_special);

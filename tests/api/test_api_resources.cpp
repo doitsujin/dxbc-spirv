@@ -1507,6 +1507,44 @@ Builder make_test_image_load_sparse_feedback(bool uav) {
 
 }
 
+
+Builder test_resource_rov() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+
+  builder.add(Op::Label());
+
+  auto uav = builder.add(Op::DclUav(ScalarType::eF32, entryPoint, 0u, 0u, 1u,
+    ResourceKind::eImage2D, UavFlag::eCoherent | UavFlag::eRasterizerOrdered));
+  auto uavDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eUav, uav, builder.makeConstant(0u)));
+
+  auto positionDef = builder.add(Op::DclInputBuiltIn(Type(ScalarType::eF32, 4u),
+    entryPoint, BuiltIn::ePosition, InterpolationModes()));
+
+  auto coord = builder.add(Op::CompositeConstruct(Type(ScalarType::eI32, 2u),
+    builder.add(Op::ConvertFtoI(ScalarType::eI32,
+      builder.add(Op::InputLoad(ScalarType::eF32, positionDef, builder.makeConstant(0u))))),
+    builder.add(Op::ConvertFtoI(ScalarType::eI32,
+      builder.add(Op::InputLoad(ScalarType::eF32, positionDef, builder.makeConstant(1u)))))));
+
+  builder.add(Op::RovScopedLockBegin(MemoryType::eUavImage, RovScope::ePixel));
+
+  auto color = builder.add(Op::ImageLoad(Type(ScalarType::eF32, 4u),
+    uavDescriptor, SsaDef(), SsaDef(), coord, SsaDef(), SsaDef()));
+
+  auto red = builder.add(Op::CompositeExtract(ScalarType::eF32, color, builder.makeConstant(0u)));
+  red = builder.add(Op::FMul(ScalarType::eF32, red, builder.makeConstant(2.0f)));
+  color = builder.add(Op::CompositeInsert(Type(ScalarType::eF32, 4u), color, builder.makeConstant(0u), red));
+
+  builder.add(Op::ImageStore(uavDescriptor, SsaDef(), coord, color));
+
+  builder.add(Op::RovScopedLockEnd(MemoryType::eUavImage));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+
 Builder make_test_image_sample_sparse_feedback(bool depthCompare) {
   Builder builder;
   auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
