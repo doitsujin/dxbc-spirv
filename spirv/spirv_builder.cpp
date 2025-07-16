@@ -3705,10 +3705,24 @@ uint32_t SpirvBuilder::makeScalarConst(ir::ScalarType type, const ir::Op& op, ui
       return makeConstBool(bool(op.getOperand(operandIndex++)));
 
     case ir::ScalarType::eI8:
-    case ir::ScalarType::eU8:
+    case ir::ScalarType::eU8: {
+      SpirvConstant constant = { };
+      constant.op = spv::OpConstant;
+      constant.typeId = getIdForType(type);
+      constant.constituents[0u] = uint8_t(op.getOperand(operandIndex++));
+      return getIdForConstant(constant, 1u);
+    }
+
     case ir::ScalarType::eI16:
     case ir::ScalarType::eU16:
-    case ir::ScalarType::eF16:
+    case ir::ScalarType::eF16: {
+      SpirvConstant constant = { };
+      constant.op = spv::OpConstant;
+      constant.typeId = getIdForType(type);
+      constant.constituents[0u] = uint16_t(op.getOperand(operandIndex++));
+      return getIdForConstant(constant, 1u);
+    }
+
     case ir::ScalarType::eI32:
     case ir::ScalarType::eU32:
     case ir::ScalarType::eF32: {
