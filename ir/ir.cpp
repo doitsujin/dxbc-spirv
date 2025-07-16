@@ -233,6 +233,7 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
     case OpCode::eSetGsOutputPrimitive:
     case OpCode::eSetTessPrimitive:
     case OpCode::eSetTessDomain:
+    case OpCode::eSetTessControlPoints:
     case OpCode::eDclInput:
     case OpCode::eDclInputBuiltIn:
     case OpCode::eDclOutput:
@@ -616,6 +617,7 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eSetPsDepthLessEqual: return os << "SetPsDepthLessEqual";
     case OpCode::eSetTessPrimitive: return os << "SetTessPrimitive";
     case OpCode::eSetTessDomain: return os << "SetTessDomain";
+    case OpCode::eSetTessControlPoints: return os << "SetTessControlPoints";
     case OpCode::eDclInput: return os << "DclInput";
     case OpCode::eDclInputBuiltIn: return os << "DclInputBuiltIn";
     case OpCode::eDclOutput: return os << "DclOutput";

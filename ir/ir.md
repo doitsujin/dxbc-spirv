@@ -96,6 +96,7 @@ These instructions provide additional information that may affect the execution 
 | `SetPsDepthLessEqual`    | `void`      | `%EntryPoint` |                      |                        |                         |
 | `SetTessPrimitive`       | `void`      | `%EntryPoint` | `ir::PrimitiveType`  | `ir::TessWindingOrder` | `ir::TessPartitioning`  |
 | `SetTessDomain`          | `void`      | `%EntryPoint` | `ir::PrimitiveType`  |                        |                         |
+| `SetTessControlPoints`   | `void`      | `%EntryPoint` | `n_in`               | `n_out`                |                         |
 
 All operands bar the `%EntryPoint` operand are literal constants.
 
