@@ -825,6 +825,7 @@ enum class OpCode : uint16_t {
   eSetPsDepthLessEqual          = 23u,
   eSetTessPrimitive             = 24u,
   eSetTessDomain                = 25u,
+  eSetTessControlPoints         = 26u,
 
   eDclInput                     = 32u,
   eDclInputBuiltIn              = 33u,
@@ -1587,6 +1588,19 @@ public:
       .addOperand(type)
       .addOperand(winding)
       .addOperand(partitioning);
+  }
+
+  static Op SetTessDomain(SsaDef def, PrimitiveType domain) {
+   return Op(OpCode::eSetTessDomain, Type())
+      .addOperand(def)
+      .addOperand(domain);
+  }
+
+  static Op SetTessControlPoints(SsaDef def, uint32_t inCount, uint32_t outCount) {
+    return Op(OpCode::eSetTessControlPoints, Type())
+      .addOperand(def)
+      .addOperand(inCount)
+      .addOperand(outCount);
   }
 
   /* Helpers for function-related instructions */
