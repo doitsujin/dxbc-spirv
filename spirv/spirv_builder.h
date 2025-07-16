@@ -198,6 +198,10 @@ private:
 
   void emitFunctionEnd();
 
+  void emitFunctionCall(const ir::Op& op);
+
+  void emitParamLoad(const ir::Op& op);
+
   void emitLabel(const ir::Op& op);
 
   void emitBranch(const ir::Op& op);
@@ -290,6 +294,8 @@ private:
   uint32_t allocId();
 
   void setIdForDef(ir::SsaDef def, uint32_t id);
+
+  bool hasIdForDef(ir::SsaDef def) const;
 
   uint32_t getIdForDef(ir::SsaDef def);
 

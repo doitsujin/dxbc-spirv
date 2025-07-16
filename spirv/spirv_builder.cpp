@@ -279,6 +279,12 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eFunctionEnd:
       return emitFunctionEnd();
 
+    case ir::OpCode::eFunctionCall:
+      return emitFunctionCall(op);
+
+    case ir::OpCode::eParamLoad:
+      return emitParamLoad(op);
+
     case ir::OpCode::eLabel:
       return emitLabel(op);
 
@@ -469,8 +475,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
 
     case ir::OpCode::eDclSpecConstant:
     case ir::OpCode::eDclPushData:
-    case ir::OpCode::eFunctionCall:
-    case ir::OpCode::eParamLoad:
     case ir::OpCode::eSpecConstantLoad:
     case ir::OpCode::eMemoryLoad:
     case ir::OpCode::eMemoryStore:
@@ -2136,7 +2140,6 @@ void SpirvBuilder::emitReturn(const ir::Op& op) {
     pushOp(m_code, spv::OpReturn);
   } else {
     pushOp(m_code, spv::OpReturnValue,
-      getIdForType(op.getType()),
       getIdForDef(ir::SsaDef(op.getOperand(0u))));
   }
 
@@ -2357,8 +2360,8 @@ void SpirvBuilder::emitFunction(const ir::Op& op) {
 
     emitDebugName(paramDef, spvId);
 
-    pushOp(m_code, spv::OpFunctionParameter,
-      getIdForType(typeKey.paramTypes[i]), spvId);
+    auto typeId = getIdForType(typeKey.paramTypes[i]);
+    pushOp(m_code, spv::OpFunctionParameter, typeId, spvId);
 
     SpirvFunctionParameterKey key = { };
     key.funcDef = op.getDef();
@@ -2371,6 +2374,42 @@ void SpirvBuilder::emitFunction(const ir::Op& op) {
 
 void SpirvBuilder::emitFunctionEnd() {
   pushOp(m_code, spv::OpFunctionEnd);
+}
+
+
+void SpirvBuilder::emitFunctionCall(const ir::Op& op) {
+  auto id = getIdForDef(op.getDef());
+
+  m_code.push_back(makeOpcodeToken(spv::OpFunctionCall, 3u + op.getOperandCount()));
+  m_code.push_back(getIdForType(op.getType()));
+  m_code.push_back(id);
+
+  for (uint32_t i = 0u; i < op.getOperandCount(); i++)
+    m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(i))));
+
+  emitDebugName(op.getDef(), id);
+}
+
+
+void SpirvBuilder::emitParamLoad(const ir::Op& op) {
+  SpirvFunctionParameterKey key = { };
+  key.funcDef = ir::SsaDef(op.getOperand(0u));
+  key.paramDef = ir::SsaDef(op.getOperand(1u));
+
+  dxbc_spv_assert(m_funcParamIds.find(key) != m_funcParamIds.end());
+
+  auto typeId = getIdForType(op.getType());
+  auto paramId = m_funcParamIds.at(key);
+  auto id = paramId;
+
+  if (hasIdForDef(op.getDef())) {
+    id = getIdForDef(op.getDef());
+    pushOp(m_code, spv::OpCopyObject, typeId, id, paramId);
+  } else {
+    setIdForDef(op.getDef(), paramId);
+  }
+
+  emitDebugName(op.getDef(), id);
 }
 
 
@@ -3212,6 +3251,15 @@ void SpirvBuilder::setIdForDef(ir::SsaDef def, uint32_t id) {
     m_ssaDefsToId.resize(defId + 1u);
 
   m_ssaDefsToId[defId] = id;
+}
+
+
+bool SpirvBuilder::hasIdForDef(ir::SsaDef def) const {
+  if (!def)
+    return false;
+
+  uint32_t defId = def.getId();
+  return defId < m_ssaDefsToId.size() && m_ssaDefsToId[defId] != 0u;
 }
 
 
