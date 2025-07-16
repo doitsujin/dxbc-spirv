@@ -280,6 +280,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eMemoryLoad:
       return emitMemoryLoad(op);
 
+    case ir::OpCode::eMemoryStore:
+      return emitMemoryStore(op);
+
     case ir::OpCode::eCounterAtomic:
       return emitCounterAtomic(op);
 
@@ -488,7 +491,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::ePointer:
       return emitPointer(op);
 
-    case ir::OpCode::eMemoryStore:
     case ir::OpCode::eMemoryAtomic:
       /* TODO implement */
       std::cerr << "Unimplemented opcode " << op.getOpCode() << std::endl;
@@ -1557,6 +1559,36 @@ void SpirvBuilder::emitMemoryLoad(const ir::Op& op) {
   memoryOperands.pushTo(m_code);
 
   emitDebugName(op.getDef(), id);
+}
+
+
+void SpirvBuilder::emitMemoryStore(const ir::Op& op) {
+  const auto& ptrOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+
+  auto addressDef = ir::SsaDef(op.getOperand(1u));
+  auto valueDef = ir::SsaDef(op.getOperand(2u));
+
+  /* Set up memory operands based on pointer properties */
+  auto ptrFlags = ir::UavFlags(ptrOp.getOperand(1u));
+
+  SpirvMemoryOperands memoryOperands = { };
+  memoryOperands.flags |= spv::MemoryAccessAlignedMask;
+  memoryOperands.alignment = uint32_t(op.getOperand(op.getFirstLiteralOperandIndex()));
+
+  if (getUavCoherentScope(ptrFlags) != spv::ScopeInvocation)
+    memoryOperands.flags |= spv::MemoryAccessNonPrivatePointerMask;
+
+  /* Emit access chain */
+  bool hasWrapperStruct = !ptrOp.getType().isStructType();
+
+  auto accessChainId = emitAccessChain(spv::StorageClassPhysicalStorageBuffer,
+    ptrOp.getType(), getIdForDef(ptrOp.getDef()), addressDef, 0u, hasWrapperStruct);
+
+  /* Emit store op */
+  m_code.push_back(makeOpcodeToken(spv::OpStore, 3u + memoryOperands.computeDwordCount()));
+  m_code.push_back(accessChainId);
+  m_code.push_back(getIdForDef(valueDef));
+  memoryOperands.pushTo(m_code);
 }
 
 
