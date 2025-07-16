@@ -418,7 +418,6 @@ std::ostream& operator << (std::ostream& os, const TessPartitioning& partitionin
     case TessPartitioning::eInteger:    return os << "Integer";
     case TessPartitioning::eFractOdd:   return os << "FractOdd";
     case TessPartitioning::eFractEven:  return os << "FractEven";
-    case TessPartitioning::ePow2:       return os << "Pow2";
   }
 
   return os << "TessPartitioning(" << uint32_t(partitioning) << ")";
