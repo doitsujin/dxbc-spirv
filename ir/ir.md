@@ -361,13 +361,15 @@ For `ImageSample`, if the `%depth_compare` parameter is not `null`, the instruct
 ### Pointer instructions
 Raw pointers can be used to access memory via the `MemoryLoad`, `MemoryStore` and `MemoryAtomic` instructions.
 
-| `ir::OpCode`         | Return type      | Arguments          |
-|----------------------|------------------|--------------------|
-| `Pointer`            | any              | `%address` (`u64`) |
-| `PointerAddress`     | `u64`            | `%Pointer`         |
+| `ir::OpCode`         | Return type      | Arguments          |                |
+|----------------------|------------------|--------------------|----------------|
+| `Pointer`            | any              | `%address` (`u64`) | `ir::UavFlags` |
+| `PointerAddress`     | `u64`            | `%Pointer`         |                |
 
 The return type of the `Pointer` instruction is the pointee type, and may be any scalar, vector, struct or
 array type.
+
+The UAV flags on the `Pointer` instruction may define read-only, write-only and coherence flags.
 
 ### Function declarations
 

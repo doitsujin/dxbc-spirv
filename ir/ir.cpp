@@ -250,6 +250,7 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
     case OpCode::eDerivX:
     case OpCode::eDerivY:
     case OpCode::eFRound:
+    case OpCode::ePointer:
       return 1u;
 
     case OpCode::eBufferLoad:
