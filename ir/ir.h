@@ -2048,9 +2048,10 @@ public:
       .addOperand(coord);
   }
 
-  static Op Pointer(Type type, SsaDef address) {
+  static Op Pointer(Type type, SsaDef address, UavFlags flags) {
     return Op(OpCode::ePointer, type)
-      .addOperand(address);
+      .addOperand(address)
+      .addOperand(flags);
   }
 
   static Op PointerAddress(SsaDef pointer) {
