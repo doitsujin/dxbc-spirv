@@ -151,7 +151,7 @@ with a scalar type of `ir::Type::Unknown`. In the final shader binary, no `Consu
 | `DclScratch`         | any              | `%EntryPoint`    |                  |           |                |                     |                 |
 | `DclTmp`             | any              | `%EntryPoint`    |                  |           |                |                     |                 |
 | `DclXfb`             | `void`           | `%DclOutput*`    | xfb buffer       | stride    | offset         |                     |                 |
-| `DclParam`           | any              |                  |                  |           |                |                     |                 |
+| `DclParam`           | scalar           |                  |                  |           |                |                     |                 |
 
 The `count` parameter for `DclSampler`, `DclSrv`, `DclCbv` and `DclUav` instructions is a literal constant declareing the size of the
 descriptor array, If the size is `0`, the array is unbounded. If `1`, the declaration consists of only a single descriptor, and the
