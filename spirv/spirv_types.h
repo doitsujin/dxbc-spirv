@@ -118,6 +118,21 @@ struct SpirvConstant {
 };
 
 
+/** BDA pointer type */
+struct SpirvBdaTypeKey {
+  ir::Type type = { };
+  ir::UavFlags flags = 0u;
+
+  bool operator == (const SpirvBdaTypeKey& other) const {
+    return type == other.type && flags == other.flags;
+  }
+
+  bool operator != (const SpirvBdaTypeKey& other) const {
+    return !(operator == (other));
+  }
+};
+
+
 /** Memory operands */
 struct SpirvMemoryOperands {
   uint32_t flags         = 0;
@@ -327,6 +342,13 @@ struct hash<dxbc_spv::spirv::SpirvConstant> {
       hash = dxbc_spv::util::hash_combine(hash, c.constituents[i]);
 
     return hash;
+  }
+};
+
+template<>
+struct hash<dxbc_spv::spirv::SpirvBdaTypeKey> {
+  size_t operator () (const dxbc_spv::spirv::SpirvBdaTypeKey& k) const {
+    return dxbc_spv::util::hash_combine(std::hash<dxbc_spv::ir::Type>()(k.type), uint32_t(k.flags));
   }
 };
 
