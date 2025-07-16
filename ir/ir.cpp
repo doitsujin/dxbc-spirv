@@ -222,6 +222,8 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
     case OpCode::eBarrier:
     case OpCode::eEmitVertex:
     case OpCode::eEmitPrimitive:
+    case OpCode::eRovScopedLockBegin:
+    case OpCode::eRovScopedLockEnd:
       return 0u;
 
     case OpCode::eDebugName:
@@ -558,6 +560,18 @@ std::ostream& operator << (std::ostream& os, const DerivativeMode& mode) {
   }
 
   return os << "DerivativeMode(" << std::dec << uint32_t(mode) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, const RovScope& scope) {
+  switch (scope) {
+    case RovScope::eSample:   return os << "Sample";
+    case RovScope::ePixel:    return os << "Pixel";
+    case RovScope::eVrsBlock: return os << "VrsBlock";
+    case RovScope::eFlagEnum: break;
+  }
+
+  return os << "RovScope(" << std::dec << uint32_t(scope) << ")";
 }
 
 

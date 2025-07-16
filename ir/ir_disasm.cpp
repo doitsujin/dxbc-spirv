@@ -280,6 +280,15 @@ void Disassembler::disassembleOperandLiteral(std::ostream& stream, const Op& op,
         if (index == 1u) { stream << RoundMode(operand); return; }
         return;
 
+      case OpCode::eRovScopedLockBegin:
+        if (index == 0u) { stream << MemoryTypeFlags(operand); return; }
+        if (index == 1u) { stream << RovScope(operand); return; }
+        return;
+
+      case OpCode::eRovScopedLockEnd:
+        if (index == 0u) { stream << MemoryTypeFlags(operand); return; }
+        return;
+
       default:;
     }
   }

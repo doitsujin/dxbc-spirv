@@ -772,6 +772,18 @@ enum class DerivativeMode : uint32_t {
 };
 
 
+/** ROV lock scope */
+enum class RovScope : uint32_t {
+  eSample           = (1u << 0),
+  ePixel            = (1u << 1),
+  eVrsBlock         = (1u << 2),
+
+  eFlagEnum         = 0u
+};
+
+using RovScopes = util::Flags<RovScope>;
+
+
 /** SSA definition. Stores a unique ID that refers to an operation. */
 class SsaDef {
 
@@ -2089,12 +2101,15 @@ public:
       .addOperand(mode);
   }
 
-  static Op RovScopedLockBegin() {
-    return Op(OpCode::eRovScopedLockBegin, Type());
+  static Op RovScopedLockBegin(MemoryTypeFlags memoryTypes, RovScope scope) {
+    return Op(OpCode::eRovScopedLockBegin, Type())
+      .addOperand(memoryTypes)
+      .addOperand(scope);
   }
 
-  static Op RovScopedLockEnd() {
-    return Op(OpCode::eRovScopedLockEnd, Type());
+  static Op RovScopedLockEnd(MemoryTypeFlags memoryTypes) {
+    return Op(OpCode::eRovScopedLockEnd, Type())
+      .addOperand(memoryTypes);
   }
 
   static Op FEq(SsaDef a, SsaDef b) {
@@ -2580,6 +2595,7 @@ std::ostream& operator << (std::ostream& os, const ShaderStage& stage);
 std::ostream& operator << (std::ostream& os, const Scope& stage);
 std::ostream& operator << (std::ostream& os, const MemoryType& stage);
 std::ostream& operator << (std::ostream& os, const DerivativeMode& stage);
+std::ostream& operator << (std::ostream& os, const RovScope& scope);
 std::ostream& operator << (std::ostream& os, const RoundMode& stage);
 std::ostream& operator << (std::ostream& os, const SsaDef& def);
 std::ostream& operator << (std::ostream& os, const OpFlag& flag);
