@@ -49,6 +49,8 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_io_gs_multi_stream_xfb_raster_0);
   ADD_TEST(test_io_gs_multi_stream_xfb_raster_1);
 
+  ADD_TEST(test_io_hs);
+
   ADD_TEST(test_resources_cbv);
   ADD_TEST(test_resources_cbv_dynamic);
   ADD_TEST(test_resources_cbv_indexed);

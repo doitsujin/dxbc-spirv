@@ -31,4 +31,6 @@ Builder test_io_gs_xfb();
 Builder test_io_gs_multi_stream_xfb_raster_0();
 Builder test_io_gs_multi_stream_xfb_raster_1();
 
+Builder test_io_hs();
+
 }
