@@ -66,6 +66,7 @@ private:
   std::unordered_map<uint32_t, uint32_t> m_sampledImageTypeIds;
   std::unordered_map<ir::SsaDef, uint32_t> m_descriptorTypes;
   std::unordered_map<ir::SsaDef, uint32_t> m_constantVars;
+  std::unordered_map<SpirvBdaTypeKey, uint32_t> m_bdaTypeIds;
 
   std::vector<uint32_t> m_ssaDefsToId;
 
@@ -333,6 +334,8 @@ private:
   uint32_t getIdForSamplerType();
 
   uint32_t getIdForSampledImageType(uint32_t imageTypeId);
+
+  uint32_t getIdForBdaType(const ir::Type& type, ir::UavFlags flags);
 
   uint32_t getIdForConstant(const SpirvConstant& constant, uint32_t memberCount);
 

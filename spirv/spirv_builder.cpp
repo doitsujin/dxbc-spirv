@@ -3699,6 +3699,54 @@ uint32_t SpirvBuilder::getIdForSampledImageType(uint32_t imageTypeId) {
 }
 
 
+uint32_t SpirvBuilder::getIdForBdaType(const ir::Type& type, ir::UavFlags flags) {
+  SpirvBdaTypeKey key;
+  key.type = type;
+  key.flags = flags & (ir::UavFlag::eReadOnly | ir::UavFlag::eWriteOnly);
+
+  auto entry = m_bdaTypeIds.find(key);
+
+  if (entry != m_bdaTypeIds.end())
+    return entry->second;
+
+  /* Work out read-only or write-only state */
+  spv::Decoration decoration = spv::Decoration();
+
+  if (flags & ir::UavFlag::eReadOnly)
+    decoration = spv::DecorationNonWritable;
+  else if (flags & ir::UavFlag::eWriteOnly)
+    decoration = spv::DecorationNonReadable;
+
+  /* Declare type */
+  uint32_t typeId = 0u;
+
+  if (type.isBasicType())
+    typeId = getIdForType(type);
+  else
+    typeId = defType(type, true);
+
+  if (type.isStructType()) {
+    if (key.flags) {
+      for (uint32_t i = 0u; i < type.getStructMemberCount(); i++)
+        pushOp(m_decorations, spv::OpMemberDecorate, typeId, i, decoration);
+    }
+  } else {
+    typeId = defStructWrapper(typeId);
+
+    if (key.flags)
+      pushOp(m_decorations, spv::OpMemberDecorate, typeId, 0u, decoration);
+  }
+
+  pushOp(m_decorations, spv::OpDecorate, typeId, spv::DecorationBlock);
+
+  /* Declare pointer type */
+  uint32_t ptrTypeId = getIdForPtrType(typeId, spv::StorageClassPhysicalStorageBuffer);
+
+  m_bdaTypeIds.insert({ key, ptrTypeId });
+  return ptrTypeId;
+}
+
+
 uint32_t SpirvBuilder::getIdForConstant(const SpirvConstant& constant, uint32_t memberCount) {
   auto entry = m_constants.find(constant);
 
