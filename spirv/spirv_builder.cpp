@@ -482,11 +482,12 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eRovScopedLockEnd:
       return emitRovLockEnd(op);
 
+    case ir::OpCode::ePointer:
+      return emitPointer(op);
+
     case ir::OpCode::eMemoryLoad:
     case ir::OpCode::eMemoryStore:
     case ir::OpCode::eMemoryAtomic:
-    case ir::OpCode::ePointer:
-    case ir::OpCode::ePointerAddress:
       /* TODO implement */
       std::cerr << "Unimplemented opcode " << op.getOpCode() << std::endl;
       break;
@@ -2439,6 +2440,19 @@ void SpirvBuilder::emitRovLockEnd(const ir::Op& op) {
 
   /* End locked scope */
   pushOp(m_code, spv::OpEndInvocationInterlockEXT);
+}
+
+
+void SpirvBuilder::emitPointer(const ir::Op& op) {
+  auto addressDef = ir::SsaDef(op.getOperand(0u));
+  auto flags = ir::UavFlags(op.getOperand(1u));
+
+  auto id = getIdForDef(op.getDef());
+  auto typeId = getIdForBdaType(op.getType(), flags);
+
+  pushOp(m_code, spv::OpBitcast, typeId, id, getIdForDef(addressDef));
+
+  emitDebugName(op.getDef(), id);
 }
 
 
