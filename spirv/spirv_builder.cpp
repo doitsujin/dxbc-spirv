@@ -1143,11 +1143,8 @@ void SpirvBuilder::emitBufferLoad(const ir::Op& op) {
     if (isUav) {
       auto uavFlags = getUavFlags(dclOp);
 
-      if (!(uavFlags & ir::UavFlag::eReadOnly) && getUavCoherentScope(uavFlags) != spv::ScopeInvocation) {
-        memoryOperands.flags |= spv::MemoryAccessNonPrivatePointerMask
-                             |  spv::MemoryAccessMakePointerVisibleMask;
-        memoryOperands.makeVisible = makeConstU32(getUavCoherentScope(uavFlags));
-      }
+      if (!(uavFlags & ir::UavFlag::eReadOnly) && getUavCoherentScope(uavFlags) != spv::ScopeInvocation)
+        memoryOperands.flags |= spv::MemoryAccessNonPrivatePointerMask;
     }
 
     /* Emit access chains for loading the requested data. */
@@ -1249,11 +1246,8 @@ void SpirvBuilder::emitBufferStore(const ir::Op& op) {
     /* Set up memory operands depending on resource usage */
     SpirvMemoryOperands memoryOperands = { };
 
-    if (!(uavFlags & ir::UavFlag::eWriteOnly) && getUavCoherentScope(uavFlags) != spv::ScopeInvocation) {
-      memoryOperands.flags |= spv::MemoryAccessNonPrivatePointerMask
-                           |  spv::MemoryAccessMakePointerAvailableMask;
-      memoryOperands.makeAvailable = makeConstU32(getUavCoherentScope(uavFlags));
-    }
+    if (!(uavFlags & ir::UavFlag::eWriteOnly) && getUavCoherentScope(uavFlags) != spv::ScopeInvocation)
+      memoryOperands.flags |= spv::MemoryAccessNonPrivatePointerMask;
 
     /* Pairs of scalarized access chains and values to store */
     util::small_vector<std::pair<uint32_t, uint32_t>, 4u> storeIds;
@@ -2031,10 +2025,13 @@ void SpirvBuilder::emitAtomic(const ir::Op& op, const ir::Type& type, ir::SsaDef
   /* Set up memory semantics */
   auto semantics = spv::MemorySemanticsAcquireReleaseMask;
 
-  if (atomicOp == ir::AtomicOp::eLoad)
-    semantics = spv::MemorySemanticsAcquireMask;
-  else if (atomicOp == ir::AtomicOp::eStore)
-    semantics = spv::MemorySemanticsReleaseMask;
+  if (atomicOp == ir::AtomicOp::eLoad) {
+    semantics = spv::MemorySemanticsAcquireMask |
+                spv::MemorySemanticsMakeVisibleMask;
+  } else if (atomicOp == ir::AtomicOp::eStore) {
+    semantics = spv::MemorySemanticsReleaseMask |
+                spv::MemorySemanticsMakeAvailableMask;
+  }
 
   /* Decompose composite arg */
   std::array<uint32_t, 2u> argIds = { };
@@ -2575,11 +2572,8 @@ void SpirvBuilder::emitLoadVariable(const ir::Op& op) {
 
   SpirvMemoryOperands memoryOperands = { };
 
-  if (op.getOpCode() == ir::OpCode::eLdsLoad) {
-    memoryOperands.flags |= spv::MemoryAccessNonPrivatePointerMask
-                         |  spv::MemoryAccessMakePointerVisibleMask;
-    memoryOperands.makeVisible = makeConstU32(spv::ScopeWorkgroup);
-  }
+  if (op.getOpCode() == ir::OpCode::eLdsLoad)
+    memoryOperands.flags |= spv::MemoryAccessNonPrivatePointerMask;
 
   m_code.push_back(makeOpcodeToken(spv::OpLoad, 4u + memoryOperands.computeDwordCount()));
   m_code.push_back(typeId);
@@ -2608,11 +2602,8 @@ void SpirvBuilder::emitStoreVariable(const ir::Op& op) {
 
   SpirvMemoryOperands memoryOperands = { };
 
-  if (op.getOpCode() == ir::OpCode::eLdsStore) {
-    memoryOperands.flags |= spv::MemoryAccessNonPrivatePointerMask
-                         |  spv::MemoryAccessMakePointerAvailableMask;
-    memoryOperands.makeAvailable = makeConstU32(spv::ScopeWorkgroup);
-  }
+  if (op.getOpCode() == ir::OpCode::eLdsStore)
+    memoryOperands.flags |= spv::MemoryAccessNonPrivatePointerMask;
 
   m_code.push_back(makeOpcodeToken(spv::OpStore, 3u + memoryOperands.computeDwordCount()));
   m_code.push_back(accessChainId);
@@ -3756,11 +3747,8 @@ void SpirvBuilder::setUavImageReadOperands(SpirvImageOperands& operands, const i
 
   auto uavFlags = getUavFlags(uavOp);
 
-  if (!(uavFlags & ir::UavFlag::eReadOnly) && getUavCoherentScope(uavFlags) != spv::ScopeInvocation) {
-    operands.flags |= spv::ImageOperandsNonPrivateTexelMask
-                   |  spv::ImageOperandsMakeTexelVisibleMask;
-    operands.makeVisible = makeConstU32(getUavCoherentScope(uavFlags));
-  }
+  if (!(uavFlags & ir::UavFlag::eReadOnly) && getUavCoherentScope(uavFlags) != spv::ScopeInvocation)
+    operands.flags |= spv::ImageOperandsNonPrivateTexelMask;
 }
 
 
@@ -3769,11 +3757,8 @@ void SpirvBuilder::setUavImageWriteOperands(SpirvImageOperands& operands, const 
 
   auto uavFlags = getUavFlags(uavOp);
 
-  if (!(uavFlags & ir::UavFlag::eWriteOnly) && getUavCoherentScope(uavFlags) != spv::ScopeInvocation) {
-    operands.flags |= spv::ImageOperandsNonPrivateTexelMask
-                   |  spv::ImageOperandsMakeTexelAvailableMask;
-    operands.makeAvailable = makeConstU32(getUavCoherentScope(uavFlags));
-  }
+  if (!(uavFlags & ir::UavFlag::eWriteOnly) && getUavCoherentScope(uavFlags) != spv::ScopeInvocation)
+    operands.flags |= spv::ImageOperandsNonPrivateTexelMask;
 }
 
 
