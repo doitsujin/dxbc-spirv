@@ -326,7 +326,6 @@ bool Validator::validateLoadStoreOps(std::ostream& str) const {
                   code == OpCode::eScratchLoad ||
                   code == OpCode::eLdsLoad ||
                   code == OpCode::ePushDataLoad ||
-                  code == OpCode::eSpecConstantLoad ||
                   code == OpCode::eInputLoad ||
                   code == OpCode::eOutputLoad ||
                   code == OpCode::eDescriptorLoad ||
@@ -348,7 +347,6 @@ bool Validator::validateLoadStoreOps(std::ostream& str) const {
                       code == OpCode::eLdsLoad ||
                       code == OpCode::eLdsStore ||
                       code == OpCode::ePushDataLoad ||
-                      code == OpCode::eSpecConstantLoad ||
                       code == OpCode::eInputLoad ||
                       code == OpCode::eOutputLoad ||
                       code == OpCode::eOutputStore ||

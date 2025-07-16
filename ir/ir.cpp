@@ -690,7 +690,6 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eLdsLoad: return os << "LdsLoad";
     case OpCode::eLdsStore: return os << "LdsStore";
     case OpCode::ePushDataLoad: return os << "PushDataLoad";
-    case OpCode::eSpecConstantLoad: return os << "SpecConstantLoad";
     case OpCode::eInputLoad: return os << "InputLoad";
     case OpCode::eOutputLoad: return os << "OutputLoad";
     case OpCode::eOutputStore: return os << "OutputStore";
