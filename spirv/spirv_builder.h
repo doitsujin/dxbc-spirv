@@ -345,6 +345,8 @@ private:
 
   bool isMultiStreamGs() const;
 
+  bool isPatchConstant(const ir::Op& op) const;
+
   static ir::UavFlags getUavFlags(const ir::Op& op);
 
   static ir::ResourceKind getResourceKind(const ir::Op& op);

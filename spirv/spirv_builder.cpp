@@ -588,6 +588,9 @@ void SpirvBuilder::emitDclIoVar(const ir::Op& op) {
       spv::DecorationStream, uint32_t(op.getOperand(3u)));
   }
 
+  if (isPatchConstant(op))
+    pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationPatch);
+
   addEntryPointId(varId);
 }
 
@@ -746,6 +749,10 @@ void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
     auto interpolationModes = ir::InterpolationModes(op.getOperand(2u));
     emitInterpolationModes(varId, interpolationModes);
   }
+
+  /* Need to declare tess factors as patch constants */
+  if (isPatchConstant(op))
+    pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationPatch);
 
   /* Set up stream decoration for GS */
   if (isMultiStreamGs() && !isInput) {
@@ -3671,6 +3678,35 @@ ir::Type SpirvBuilder::traverseType(ir::Type type, ir::SsaDef address) const {
 
 bool SpirvBuilder::isMultiStreamGs() const {
   return m_geometry.streamMask > 1u;
+}
+
+
+bool SpirvBuilder::isPatchConstant(const ir::Op& op) const {
+  bool consider = false;
+
+  if (m_stage == ir::ShaderStage::eHull) {
+    consider = op.getOpCode() == ir::OpCode::eDclOutput ||
+               op.getOpCode() == ir::OpCode::eDclOutputBuiltIn;
+  } else if (m_stage == ir::ShaderStage::eDomain) {
+    consider = op.getOpCode() == ir::OpCode::eDclInput ||
+               op.getOpCode() == ir::OpCode::eDclInputBuiltIn;
+  }
+
+  if (!consider)
+    return false;
+
+  bool isBuiltIn = op.getOpCode() == ir::OpCode::eDclInputBuiltIn ||
+                   op.getOpCode() == ir::OpCode::eDclOutputBuiltIn;
+
+  if (isBuiltIn) {
+    auto builtIn = ir::BuiltIn(op.getOperand(1u));
+
+    return builtIn == ir::BuiltIn::eTessFactorInner ||
+           builtIn == ir::BuiltIn::eTessFactorOuter;
+  } else {
+    /* Control point I/O must use array types, patch constant I/O must not */
+    return !op.getType().isArrayType();
+  }
 }
 
 
