@@ -134,6 +134,15 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eSetGsOutputPrimitive:
       return emitSetGsOutputPrimitive(op);
 
+    case ir::OpCode::eSetTessPrimitive:
+      return emitSetTessPrimitive(op);
+
+    case ir::OpCode::eSetTessDomain:
+      return emitSetTessDomain(op);
+
+    case ir::OpCode::eSetTessControlPoints:
+      return emitSetTessControlPoints(op);
+
     case ir::OpCode::eSetPsDepthGreaterEqual:
     case ir::OpCode::eSetPsDepthLessEqual:
       return emitSetPsDepthMode(op);
@@ -387,8 +396,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eDemote:
       return emitDemote();
 
-    case ir::OpCode::eSetTessPrimitive:
-    case ir::OpCode::eSetTessDomain:
     case ir::OpCode::eDclSpecConstant:
     case ir::OpCode::eDclPushData:
     case ir::OpCode::eFunctionCall:
@@ -2955,6 +2962,70 @@ void SpirvBuilder::emitSetPsEarlyFragmentTest() {
   dxbc_spv_assert(m_stage == ir::ShaderStage::ePixel);
 
   pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId, spv::ExecutionModeEarlyFragmentTests);
+}
+
+
+void SpirvBuilder::emitSetTessPrimitive(const ir::Op& op) {
+  dxbc_spv_assert(m_stage == ir::ShaderStage::eHull);
+
+  /* Mapping to SPIR-V execution modes is non-trivial */
+  auto primType = ir::PrimitiveType(op.getOperand(1u));
+  auto winding = ir::TessWindingOrder(op.getOperand(2u));
+  auto partitioning = ir::TessPartitioning(op.getOperand(3u));
+
+  if (primType == ir::PrimitiveType::ePoints)
+    pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId, spv::ExecutionModePointMode);
+
+  if (primType == ir::PrimitiveType::eTriangles) {
+    auto windingMode = winding == ir::TessWindingOrder::eCw
+      ? spv::ExecutionModeVertexOrderCw
+      : spv::ExecutionModeVertexOrderCcw;
+
+    pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId, windingMode);
+  }
+
+  auto partitionMode = [&] {
+    switch (partitioning) {
+      case ir::TessPartitioning::eInteger:    return spv::ExecutionModeSpacingEqual;
+      case ir::TessPartitioning::eFractOdd:   return spv::ExecutionModeSpacingFractionalOdd;
+      case ir::TessPartitioning::eFractEven:  return spv::ExecutionModeSpacingFractionalEven;
+    }
+
+    dxbc_spv_unreachable();
+    return spv::ExecutionMode();
+  } ();
+
+  pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId, partitionMode);
+}
+
+
+void SpirvBuilder::emitSetTessDomain(const ir::Op& op) {
+  dxbc_spv_assert(m_stage == ir::ShaderStage::eDomain);
+
+  auto domain = ir::PrimitiveType(op.getOperand(1u));
+
+  auto mode = [&] {
+    switch (domain) {
+      case ir::PrimitiveType::eLines:     return spv::ExecutionModeIsolines;
+      case ir::PrimitiveType::eTriangles: return spv::ExecutionModeTriangles;
+      case ir::PrimitiveType::eQuads:     return spv::ExecutionModeQuads;
+      default: dxbc_spv_unreachable();
+    }
+
+    return spv::ExecutionMode();
+  } ();
+
+  pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId, mode);
+}
+
+
+void SpirvBuilder::emitSetTessControlPoints(const ir::Op& op) {
+  dxbc_spv_assert(m_stage == ir::ShaderStage::eHull);
+
+  auto vertexCount = uint32_t(op.getOperand(1u));
+
+  pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId,
+    spv::ExecutionModeOutputVertices, vertexCount);
 }
 
 
