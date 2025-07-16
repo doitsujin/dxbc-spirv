@@ -14,6 +14,9 @@ int main(int argc, char** argv) {
 
   auto tests = dxbc_spv::test_api::enumerateTests(filter);
 
+  for (auto& t : dxbc_spv::test_api::enumerateSpirvTests(filter))
+    tests.push_back(std::move(t));
+
   for (const auto& test : tests) {
     std::cout << test.name << ":" << std::endl;
 
