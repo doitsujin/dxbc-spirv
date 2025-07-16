@@ -99,7 +99,72 @@ void SpirvBuilder::processDebugNames() {
 
 
 void SpirvBuilder::finalize() {
+  if (m_stage == ir::ShaderStage::eHull)
+    emitHsEntryPoint();
+}
 
+
+void SpirvBuilder::emitHsEntryPoint() {
+  /* Declare invocation ID built-in as necessary */
+  auto uintTypeId = getIdForType(ir::ScalarType::eU32);
+  auto boolTypeId = getIdForType(ir::ScalarType::eBool);
+
+  if (!m_tessControl.invocationId) {
+    m_tessControl.invocationId = allocId();
+
+    auto varTypeId = getIdForPtrType(uintTypeId, spv::StorageClassInput);
+
+    pushOp(m_declarations, spv::OpVariable, varTypeId,
+      m_tessControl.invocationId, spv::StorageClassInput);
+
+    pushOp(m_decorations, spv::OpDecorate, m_tessControl.invocationId,
+      spv::DecorationBuiltIn, spv::BuiltInInvocationId);
+
+    addEntryPointId(m_tessControl.invocationId);
+  }
+
+  /* Emit actual shader entry point */
+  SpirvFunctionTypeKey funcType = { };
+  auto voidTypeId = getIdForType(ir::Type());
+
+  pushOp(m_code, spv::OpFunction, voidTypeId, m_entryPointId,
+    spv::FunctionControlMaskNone, getIdForFuncType(funcType));
+  pushOp(m_code, spv::OpLabel, allocId());
+
+  /* Call control point function */
+  pushOp(m_code, spv::OpFunctionCall, voidTypeId, allocId(), m_tessControl.controlPointFuncId);
+
+  /* Emit I/O barrier if control point outputs are read back */
+  if (m_tessControl.needsIoBarrier) {
+    pushOp(m_code, spv::OpControlBarrier,
+      makeConstU32(spv::ScopeWorkgroup),
+      makeConstU32(spv::ScopeWorkgroup),
+      makeConstU32(spv::MemorySemanticsOutputMemoryMask |
+                   spv::MemorySemanticsAcquireReleaseMask |
+                   spv::MemorySemanticsMakeAvailableMask |
+                   spv::MemorySemanticsMakeVisibleMask));
+  }
+
+  /* Call patch constant function on one thread */
+  auto invocationId = allocId();
+  pushOp(m_code, spv::OpLoad, uintTypeId, invocationId, m_tessControl.invocationId);
+
+  auto condId = allocId();
+  pushOp(m_code, spv::OpIEqual, boolTypeId, condId, invocationId, makeConstU32(0u));
+
+  auto ifBlock = allocId();
+  auto mergeBlock = allocId();
+
+  pushOp(m_code, spv::OpSelectionMerge, mergeBlock, spv::SelectionControlMaskNone);
+  pushOp(m_code, spv::OpBranchConditional, condId, ifBlock, mergeBlock);
+
+  pushOp(m_code, spv::OpLabel, ifBlock);
+  pushOp(m_code, spv::OpFunctionCall, voidTypeId, allocId(), m_tessControl.patchConstantFuncId);
+  pushOp(m_code, spv::OpBranch, mergeBlock);
+
+  pushOp(m_code, spv::OpLabel, mergeBlock);
+  pushOp(m_code, spv::OpReturn);
+  pushOp(m_code, spv::OpFunctionEnd);
 }
 
 
@@ -690,8 +755,9 @@ void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
       }
 
       case ir::BuiltIn::eGsInstanceId:
-      case ir::BuiltIn::eTessControlPointId:
-        return spv::BuiltInInvocationId;
+      case ir::BuiltIn::eTessControlPointId: {
+        m_tessControl.invocationId = varId;
+      } return spv::BuiltInInvocationId;
 
       case ir::BuiltIn::eTessCoord:
         return spv::BuiltInTessCoord;
@@ -2518,6 +2584,13 @@ void SpirvBuilder::emitLoadVariable(const ir::Op& op) {
   m_code.push_back(id);
   m_code.push_back(accessChainId);
   memoryOperands.pushTo(m_code);
+
+  /* When loading a control point output in a hull shader, we
+   * need to ensure that a barrier is properly inserted. */
+  if (m_stage == ir::ShaderStage::eHull && op.getOpCode() == ir::OpCode::eOutputLoad) {
+    const auto& outputDcl = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+    m_tessControl.needsIoBarrier |= !isPatchConstant(outputDcl);
+  }
 
   emitDebugName(op.getDef(), id);
 }
