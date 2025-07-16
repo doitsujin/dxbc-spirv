@@ -386,7 +386,8 @@ rather than the name of the function itself.
 
 For hull shaders, `EntryPoint` takes two functions arguments: A control point function, which is only allowed to write
 control point outputs, and a patch constant function, which may read control point outputs and may write or read patch
-constant outputs. The patch constant function will include barriers as necessary.
+constant outputs. The patch constant function **does not** include any barriers, these will have to be inserted when
+lowering as necessary.
 
 The `FunctionEnd` instruction must only occur outside of a block, see below.
 
