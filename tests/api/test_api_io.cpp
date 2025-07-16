@@ -654,4 +654,102 @@ Builder test_io_gs_multi_stream_xfb_raster_1() {
   return builder;
 }
 
+Builder test_io_hs() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::eHull);
+
+  builder.add(Op::SetTessPrimitive(entryPoint, PrimitiveType::eTriangles,
+    TessWindingOrder::eCcw, TessPartitioning::eFractEven));
+  builder.add(Op::SetTessControlPoints(entryPoint, 4u, 4u));
+
+  auto cpDef = ir::SsaDef(builder.getOp(entryPoint).getOperand(0u));
+  auto pcDef = ir::SsaDef(builder.getOp(entryPoint).getOperand(1u));
+
+  /* Input defs */
+  auto positionInDef = builder.add(Op::DclInputBuiltIn(Type(ScalarType::eF32, 4u).addArrayDimension(32u),
+    entryPoint, BuiltIn::ePosition));
+  builder.add(Op::Semantic(positionInDef, 0u, "SV_POSITION"));
+
+  auto normalInDef = builder.add(Op::DclInput(Type(ScalarType::eF32, 3u).addArrayDimension(32u),
+    entryPoint, 1u, 0u));
+  builder.add(Op::Semantic(normalInDef, 0u, "NORMAL"));
+
+  auto factorInDef = builder.add(Op::DclInput(Type(ScalarType::eF32).addArrayDimension(32u),
+    entryPoint, 1u, 3u));
+  builder.add(Op::Semantic(factorInDef, 0u, "FACTOR"));
+
+  auto controlPointDef = builder.add(Op::DclInputBuiltIn(ScalarType::eU32, entryPoint, BuiltIn::eTessControlPointId));
+  builder.add(Op::Semantic(factorInDef, 0u, "SV_OUTPUTCONTROLPOINTID"));
+
+  auto primitiveIdDef = builder.add(Op::DclInputBuiltIn(Type(ScalarType::eU32).addArrayDimension(32u), entryPoint, BuiltIn::ePrimitiveId));
+  builder.add(Op::Semantic(primitiveIdDef, 0u, "PRIMITIVE_ID"));
+
+  /* Output defs */
+  auto positionOutDef = builder.add(Op::DclOutput(Type(ScalarType::eF32, 4u).addArrayDimension(4u), entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(positionOutDef, 0u, "SV_POSITION"));
+
+  auto normalOutDef = builder.add(Op::DclOutput(Type(ScalarType::eF32, 3u).addArrayDimension(4u), entryPoint, 1u, 0u));
+  builder.add(Op::Semantic(normalOutDef, 0u, "NORMAL"));
+
+  /* Patch constant output defs */
+  auto instanceOutDef = builder.add(Op::DclOutput(Type(ScalarType::eU32), entryPoint, 2u, 0u));
+  builder.add(Op::Semantic(instanceOutDef, 0u, "INSTANCE_ID"));
+
+  auto tangentAOutDef = builder.add(Op::DclOutput(Type(ScalarType::eF32, 3u), entryPoint, 3u, 0u));
+  builder.add(Op::Semantic(tangentAOutDef, 0u, "TANGENT"));
+
+  auto tangentBOutDef = builder.add(Op::DclOutput(Type(ScalarType::eF32, 3u), entryPoint, 4u, 0u));
+  builder.add(Op::Semantic(tangentBOutDef, 1u, "TANGENT"));
+
+  /* Tess factors */
+  auto tessFactorOuterDef = builder.add(Op::DclOutputBuiltIn(Type(ScalarType::eF32).addArrayDimension(4u), entryPoint, BuiltIn::eTessFactorOuter));
+  builder.add(Op::Semantic(tessFactorOuterDef, 0u, "SV_TESSFACTOR"));
+
+  auto tessFactorInnerDef = builder.add(Op::DclOutputBuiltIn(Type(ScalarType::eF32).addArrayDimension(2u), entryPoint, BuiltIn::eTessFactorInner));
+  builder.add(Op::Semantic(tessFactorInnerDef, 0u, "SV_INSIDETESSFACTOR"));
+
+  /* Control point function */
+  builder.setCursor(cpDef);
+  builder.add(Op::Label());
+
+  auto controlPointId = builder.add(Op::InputLoad(ScalarType::eU32, controlPointDef, SsaDef()));
+
+  builder.add(Op::OutputStore(positionOutDef, controlPointId,
+    builder.add(Op::InputLoad(Type(ScalarType::eF32, 4u), positionInDef, controlPointId))));
+  builder.add(Op::OutputStore(normalOutDef, controlPointId,
+    builder.add(Op::InputLoad(Type(ScalarType::eF32, 3u), normalInDef, controlPointId))));
+
+  builder.add(Op::Return());
+
+  /* Patch constant function */
+  builder.setCursor(pcDef);
+  builder.add(Op::Label());
+
+  builder.add(Op::OutputStore(instanceOutDef, SsaDef(),
+    builder.add(Op::InputLoad(ScalarType::eU32, primitiveIdDef, builder.makeConstant(0u)))));
+
+  auto factor = builder.add(Op::FMin(ScalarType::eF32,
+    builder.add(Op::InputLoad(ScalarType::eF32, factorInDef, builder.makeConstant(0u))),
+    builder.makeConstant(64.0f)));
+
+  for (uint32_t i = 0u; i < 4u; i++)
+    builder.add(Op::OutputStore(tessFactorOuterDef, builder.makeConstant(i), factor));
+
+  for (uint32_t i = 0u; i < 2u; i++)
+    builder.add(Op::OutputStore(tessFactorInnerDef, builder.makeConstant(i), factor));
+
+  for (uint32_t i = 0u; i < 3u; i++) {
+    auto pos0 = builder.add(Op::OutputLoad(ScalarType::eF32, positionOutDef, builder.makeConstant(0u, i)));
+    auto pos1 = builder.add(Op::OutputLoad(ScalarType::eF32, positionOutDef, builder.makeConstant(1u, i)));
+    auto pos2 = builder.add(Op::OutputLoad(ScalarType::eF32, positionOutDef, builder.makeConstant(2u, i)));
+
+    builder.add(Op::OutputStore(tangentAOutDef, builder.makeConstant(i), builder.add(Op::FSub(ScalarType::eF32, pos1, pos0))));
+    builder.add(Op::OutputStore(tangentBOutDef, builder.makeConstant(i), builder.add(Op::FSub(ScalarType::eF32, pos2, pos0))));
+  }
+
+  builder.add(Op::Return());
+
+  return builder;
+}
+
 }
