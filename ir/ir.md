@@ -140,7 +140,7 @@ with a scalar type of `ir::Type::Unknown`. In the final shader binary, no `Consu
 | `DclInputBuiltIn`    | any              | `%EntryPoint`    | `ir::BuiltIn`    | `ir::InterpolationModes` | |                     |                 |
 | `DclOutput`          | see below        | `%EntryPoint`    | location         | component | stream (GS)    |                     |                 |
 | `DclOutputBuiltIn`   | any              | `%EntryPoint`    | `ir::BuiltIn`    | stream (GS) |              |                     |                 |
-| `DclSpecConstant`    | any              | `%EntryPoint`    | spec id          | default   |                |                     |                 |
+| `DclSpecConstant`    | scalar           | `%EntryPoint`    | spec id          | default   |                |                     |                 |
 | `DclPushData`        | any              | `%EntryPoint`    | push data offset | `ir::ShaderStageMask` |    |                     |                 |
 | `DclSampler`         | `void`           | `%EntryPoint`    | space            | register  | count          |                     |                 |
 | `DclCbv`             | any              | `%EntryPoint`    | space            | register  | count          |                     |                 |
@@ -257,7 +257,6 @@ value around and feed it back into a shader later, or potentially use it in exte
 | `LdsLoad`            | any          | `%DclLds` variable | `%address` into LDS            |          |         |
 | `LdsStore`           | `void`       | `%DclLds` variable | `%address` into LDS            | `%value` |         |
 | `PushDataLoad`       | any          | `%DclPushData`     | `%address` into push data      |          |         |
-| `SpecConstantLoad`   | any          | `%DclSpecConstant` | `%address` into spec constant  |          |         |
 | `InputLoad`          | any          | `%DclInput*`       | `%address` into input type     |          |         |
 | `OutputLoad`         | any          | `%DclOutput*`      | `%address` into output type    |          |         |
 | `OutputStore`        | any          | `%DclOutput*`      | `%address` into output type    | `%value` |         |

@@ -908,7 +908,7 @@ enum class OpCode : uint16_t {
   eLdsLoad                      = 293u,
   eLdsStore                     = 294u,
   ePushDataLoad                 = 295u,
-  eSpecConstantLoad             = 296u,
+  /* unused opcode 296 */
   eInputLoad                    = 297u,
   eOutputLoad                   = 298u,
   eOutputStore                  = 299u,
@@ -1465,7 +1465,8 @@ public:
       .addOperand(gsStream);
   }
 
-  static Op DclSpecConstant(Type type, SsaDef entryPoint, uint32_t specId, Operand defaultValue) {
+  template<typename T>
+  static Op DclSpecConstant(Type type, SsaDef entryPoint, uint32_t specId, T defaultValue) {
     return Op(OpCode::eDclSpecConstant, type)
       .addOperand(entryPoint)
       .addOperand(specId)
@@ -1863,12 +1864,6 @@ public:
 
   static Op PushDataLoad(Type type, SsaDef decl, SsaDef address) {
     return Op(OpCode::ePushDataLoad, type)
-      .addOperand(decl)
-      .addOperand(address);
-  }
-
-  static Op SpecConstantLoad(Type type, SsaDef decl, SsaDef address) {
-    return Op(OpCode::eSpecConstantLoad, type)
       .addOperand(decl)
       .addOperand(address);
   }
