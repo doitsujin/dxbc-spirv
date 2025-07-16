@@ -16,6 +16,10 @@ Builder test_io_vs_viewport();
 Builder test_io_ps_interpolate_centroid();
 Builder test_io_ps_interpolate_sample();
 Builder test_io_ps_interpolate_offset();
+Builder test_io_ps_export_depth();
+Builder test_io_ps_export_depth_less();
+Builder test_io_ps_export_depth_greater();
+Builder test_io_ps_export_stencil();
 
 Builder test_io_gs_basic_point();
 Builder test_io_gs_basic_line();

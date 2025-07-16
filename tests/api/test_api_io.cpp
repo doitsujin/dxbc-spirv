@@ -319,6 +319,64 @@ Builder test_io_ps_interpolate_offset() {
   return builder;
 }
 
+Builder make_test_io_ps_export_depth(OpCode constraint) {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+
+  if (constraint != OpCode::eUnknown)
+    builder.add(Op(constraint, Type()).addOperand(entryPoint));
+
+  builder.add(Op::Label());
+
+  auto posDef = builder.add(Op::DclInputBuiltIn(Type(ScalarType::eF32, 4u), entryPoint, BuiltIn::ePosition, InterpolationModes()));
+  builder.add(Op::Semantic(posDef, 0u, "SV_POSITION"));
+
+  auto inputDef = builder.add(Op::DclInput(ScalarType::eF32, entryPoint, 1u, 0u, InterpolationModes()));
+  builder.add(Op::Semantic(inputDef, 0u, "DELTA"));
+
+  auto depthDef = builder.add(Op::DclOutputBuiltIn(ScalarType::eF32, entryPoint, BuiltIn::eDepth));
+  builder.add(Op::Semantic(depthDef, 0u, "SV_DEPTH"));
+
+  builder.add(Op::OutputStore(depthDef, SsaDef(),
+    builder.add(Op::FAdd(ScalarType::eF32,
+      builder.add(Op::InputLoad(ScalarType::eF32, inputDef, SsaDef())),
+      builder.add(Op::InputLoad(ScalarType::eF32, posDef, builder.makeConstant(2u)))))));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+Builder test_io_ps_export_depth() {
+  return make_test_io_ps_export_depth(OpCode::eUnknown);
+}
+
+Builder test_io_ps_export_depth_less() {
+  return make_test_io_ps_export_depth(OpCode::eSetPsDepthLessEqual);
+}
+
+Builder test_io_ps_export_depth_greater() {
+  return make_test_io_ps_export_depth(OpCode::eSetPsDepthGreaterEqual);
+}
+
+Builder test_io_ps_export_stencil() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+
+  builder.add(Op::Label());
+
+  auto inputDef = builder.add(Op::DclInput(ScalarType::eU32, entryPoint, 0u, 0u, InterpolationMode::eFlat));
+  builder.add(Op::Semantic(inputDef, 0u, "STENCIL_REF"));
+
+  auto stencilDef = builder.add(Op::DclOutputBuiltIn(ScalarType::eU32, entryPoint, BuiltIn::eStencilRef));
+  builder.add(Op::Semantic(stencilDef, 0u, "SV_STENCILREF"));
+
+  builder.add(Op::OutputStore(stencilDef, SsaDef(),
+    builder.add(Op::InputLoad(ScalarType::eU32, inputDef, SsaDef()))));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
 Builder make_test_io_gs_basic(ir::PrimitiveType inType, ir::PrimitiveType outType) {
   Builder builder;
   auto entryPoint = setupTestFunction(builder, ShaderStage::eGeometry);
