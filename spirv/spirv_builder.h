@@ -267,6 +267,8 @@ private:
 
   void emitDebugMemberNames(ir::SsaDef def, uint32_t structId);
 
+  void emitDebugPushDataName(const PushDataInfo& pushData, uint32_t structId, uint32_t memberIdx);
+
   uint32_t emitAddressOffset(ir::SsaDef def, uint32_t offset);
 
   uint32_t emitAccessChain(spv::StorageClass storageClass, const ir::Type& baseType,
