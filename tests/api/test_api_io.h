@@ -36,4 +36,8 @@ Builder test_io_hs_line();
 Builder test_io_hs_triangle_cw();
 Builder test_io_hs_triangle_ccw();
 
+Builder test_io_ds_isoline();
+Builder test_io_ds_triangle();
+Builder test_io_ds_quad();
+
 }

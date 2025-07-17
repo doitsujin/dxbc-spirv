@@ -767,4 +767,182 @@ Builder test_io_hs_triangle_ccw() {
   return make_test_io_hs(PrimitiveType::eTriangles, TessWindingOrder::eCcw, TessPartitioning::eFractOdd);
 }
 
+
+Builder make_test_io_ds(PrimitiveType domain) {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::eDomain);
+
+  builder.add(Op::SetTessDomain(entryPoint, domain));
+  builder.add(Op::Label());
+
+  /* Inputs */
+  auto tessCoordInDef = builder.add(Op::DclInputBuiltIn(Type(ScalarType::eF32, 3u), entryPoint, BuiltIn::eTessCoord));
+  builder.add(Op::Semantic(tessCoordInDef, 0u, "SV_DOMAINLOCATION"));
+
+  auto tessLevelInnerInDef = builder.add(Op::DclInputBuiltIn(Type(ScalarType::eF32).addArrayDimension(2u), entryPoint, BuiltIn::eTessFactorInner));
+  builder.add(Op::Semantic(tessLevelInnerInDef, 0u, "SV_INSIDETESSFACTOR"));
+
+  auto tessLevelOuterInDef = builder.add(Op::DclInputBuiltIn(Type(ScalarType::eF32).addArrayDimension(4u), entryPoint, BuiltIn::eTessFactorOuter));
+  builder.add(Op::Semantic(tessLevelOuterInDef, 0u, "SV_TESSFACTOR"));
+
+  auto primIdInDef = builder.add(Op::DclInputBuiltIn(ScalarType::eU32, entryPoint, BuiltIn::ePrimitiveId));
+  builder.add(Op::Semantic(primIdInDef, 0u, "SV_PRIMITIVEID"));
+
+  auto posInDef = builder.add(Op::DclInput(Type(ScalarType::eF32, 4u).addArrayDimension(4u), entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(posInDef, 0u, "SV_POSITION"));
+
+  auto rColorInDef = builder.add(Op::DclInput(Type(ScalarType::eF32).addArrayDimension(4u), entryPoint, 1u, 0u));
+  auto gColorInDef = builder.add(Op::DclInput(Type(ScalarType::eF32).addArrayDimension(4u), entryPoint, 1u, 1u));
+  auto bColorInDef = builder.add(Op::DclInput(Type(ScalarType::eF32).addArrayDimension(4u), entryPoint, 1u, 2u));
+
+  builder.add(Op::Semantic(rColorInDef, 0u, "R_COLOR"));
+  builder.add(Op::Semantic(gColorInDef, 0u, "G_COLOR"));
+  builder.add(Op::Semantic(bColorInDef, 0u, "B_COLOR"));
+
+  auto coordInDef = builder.add(Op::DclInput(Type(ScalarType::eF32, 2u).addArrayDimension(4u), entryPoint, 2u, 0u));
+  builder.add(Op::Semantic(coordInDef, 0u, "TEXCOORD"));
+
+  auto layerInDef = builder.add(Op::DclInput(ScalarType::eU32, entryPoint, 3u, 0u));
+  builder.add(Op::Semantic(layerInDef, 0u, "LAYER"));
+
+  auto viewportInDef = builder.add(Op::DclInput(ScalarType::eU32, entryPoint, 3u, 1u));
+  builder.add(Op::Semantic(viewportInDef, 0u, "VIEWPORT"));
+
+  auto indexInDef = builder.add(Op::DclInput(ScalarType::eU32, entryPoint, 3u, 2u));
+  builder.add(Op::Semantic(indexInDef, 0u, "INDEX"));
+
+  /* Outputs */
+  auto posOutDef = builder.add(Op::DclOutputBuiltIn(Type(ScalarType::eF32, 4u), entryPoint, BuiltIn::ePosition));
+  builder.add(Op::Semantic(posOutDef, 0u, "SV_POSITION"));
+
+  auto clipOutDef = builder.add(Op::DclOutputBuiltIn(Type(ScalarType::eF32).addArrayDimension(8u), entryPoint, BuiltIn::eClipDistance));
+  builder.add(Op::Semantic(clipOutDef, 0u, "SV_CLIPDISTANCE"));
+
+  auto layerIdOutDef = builder.add(Op::DclOutputBuiltIn(ScalarType::eU32, entryPoint, BuiltIn::eLayerIndex));
+  builder.add(Op::Semantic(layerIdOutDef, 0u, "SV_RENDERTARGETARRAYINDEX"));
+
+  auto viewportIdOutDef = builder.add(Op::DclOutputBuiltIn(ScalarType::eU32, entryPoint, BuiltIn::eViewportIndex));
+  builder.add(Op::Semantic(viewportIdOutDef, 0u, "SV_VIEWPORTARRAYINDEX"));
+
+  auto colorOutDef = builder.add(Op::DclOutput(Type(ScalarType::eF32, 3u), entryPoint, 6u, 0u));
+  builder.add(Op::Semantic(colorOutDef, 0u, "COLOR"));
+
+  auto primIdOutDef = builder.add(Op::DclOutput(ScalarType::eU32, entryPoint, 6u, 3u));
+  builder.add(Op::Semantic(primIdOutDef, 0u, "PRIMID"));
+
+  auto coordOutDef = builder.add(Op::DclOutput(Type(ScalarType::eF32, 2u), entryPoint, 7u, 0u));
+  builder.add(Op::Semantic(coordOutDef, 0u, "TEXCOORD"));
+
+  auto tessLevelInnerOutDef = builder.add(Op::DclOutput(Type(ScalarType::eF32, 2u), entryPoint, 7u, 2u));
+  builder.add(Op::Semantic(tessLevelInnerOutDef, 0u, "TESS_INNER"));
+
+  auto tessLevelOuterOutDef = builder.add(Op::DclOutput(Type(ScalarType::eF32, 4u), entryPoint, 8u, 0u));
+  builder.add(Op::Semantic(tessLevelOuterOutDef, 0u, "TESS_OUTER"));
+
+  /* Export tess factors */
+  for (uint32_t i = 0u; i < 2u; i++) {
+    builder.add(Op::OutputStore(tessLevelInnerOutDef, builder.makeConstant(i),
+      builder.add(Op::InputLoad(ScalarType::eF32, tessLevelInnerInDef, builder.makeConstant(i)))));
+  }
+
+  for (uint32_t i = 0u; i < 4u; i++) {
+    builder.add(Op::OutputStore(tessLevelOuterOutDef, builder.makeConstant(i),
+      builder.add(Op::InputLoad(ScalarType::eF32, tessLevelOuterInDef, builder.makeConstant(i)))));
+  }
+
+  /* Export built-ins */
+  builder.add(Op::OutputStore(layerIdOutDef, SsaDef(),
+    builder.add(Op::InputLoad(ScalarType::eU32, layerInDef, SsaDef()))));
+
+  builder.add(Op::OutputStore(viewportIdOutDef, SsaDef(),
+    builder.add(Op::InputLoad(ScalarType::eU32, viewportInDef, SsaDef()))));
+
+  builder.add(Op::OutputStore(primIdOutDef, SsaDef(),
+    builder.add(Op::InputLoad(ScalarType::eU32, primIdInDef, SsaDef()))));
+
+  /* Compute and export vertex attributes */
+  auto indexDef = builder.add(Op::InputLoad(ScalarType::eU32, indexInDef, SsaDef()));
+
+  std::array<SsaDef, 3u> tessCoordDef = { };
+  std::array<SsaDef, 4u> posDef = { };
+
+  if (domain == PrimitiveType::eTriangles) {
+    for (uint32_t i = 0u; i < 3u; i++) {
+      tessCoordDef[i] = builder.add(Op::InputLoad(ScalarType::eF32,
+        tessCoordInDef, builder.makeConstant(i)));
+    }
+
+    for (uint32_t i = 0u; i < 4u; i++) {
+      auto posCoord = builder.add(Op::InputLoad(ScalarType::eF32, posInDef,
+        builder.add(Op::CompositeConstruct(Type(ScalarType::eU32, 2u), indexDef, builder.makeConstant(i)))));
+      posDef[i] = builder.add(Op::FMul(ScalarType::eF32, posCoord, tessCoordDef[0u]));
+    }
+
+    for (uint32_t j = 1u; j < 3u; j++) {
+      auto indexShiftDef = builder.add(Op::IXor(ScalarType::eU32, indexDef, builder.makeConstant(j)));
+
+      for (uint32_t i = 0u; i < 4u; i++) {
+        auto posCoord = builder.add(Op::InputLoad(ScalarType::eF32, posInDef,
+          builder.add(Op::CompositeConstruct(Type(ScalarType::eU32, 2u), indexShiftDef, builder.makeConstant(i)))));
+        posDef[i] = builder.add(Op::FMad(ScalarType::eF32, posCoord, tessCoordDef[j], posDef[i]));
+      }
+    }
+  } else {
+    for (uint32_t i = 0u; i < 2u; i++) {
+      tessCoordDef[i] = builder.add(Op::InputLoad(ScalarType::eF32,
+        tessCoordInDef, builder.makeConstant(i)));
+    }
+
+    for (uint32_t i = 0u; i < 4u; i++) {
+      auto a = builder.add(Op::InputLoad(ScalarType::eF32, posInDef, builder.add(Op::CompositeConstruct(Type(ScalarType::eU32, 2u),
+        indexDef, builder.makeConstant(i)))));
+      auto b = builder.add(Op::InputLoad(ScalarType::eF32, posInDef, builder.add(Op::CompositeConstruct(Type(ScalarType::eU32, 2u),
+        builder.add(Op::IXor(ScalarType::eU32, indexDef, builder.makeConstant(1u))), builder.makeConstant(i)))));
+      auto c = builder.add(Op::InputLoad(ScalarType::eF32, posInDef, builder.add(Op::CompositeConstruct(Type(ScalarType::eU32, 2u),
+        builder.add(Op::IXor(ScalarType::eU32, indexDef, builder.makeConstant(2u))), builder.makeConstant(i)))));
+      auto d = builder.add(Op::InputLoad(ScalarType::eF32, posInDef, builder.add(Op::CompositeConstruct(Type(ScalarType::eU32, 2u),
+        builder.add(Op::IXor(ScalarType::eU32, indexDef, builder.makeConstant(3u))), builder.makeConstant(i)))));
+
+      b = builder.add(Op::FSub(ScalarType::eF32, b, a));
+      d = builder.add(Op::FSub(ScalarType::eF32, d, c));
+
+      a = builder.add(Op::FMad(ScalarType::eF32, tessCoordDef[0u], b, a));
+      c = builder.add(Op::FMad(ScalarType::eF32, tessCoordDef[0u], d, c));
+
+      c = builder.add(Op::FSub(ScalarType::eF32, c, a));
+      a = builder.add(Op::FMad(ScalarType::eF32, tessCoordDef[1u], c, a));
+
+      posDef[i] = a;
+    }
+  }
+
+  for (uint32_t i = 0u; i < 4u; i++)
+    builder.add(Op::OutputStore(posOutDef, builder.makeConstant(i), posDef[i]));
+
+  builder.add(Op::OutputStore(colorOutDef, builder.makeConstant(0u),
+    builder.add(Op::InputLoad(ScalarType::eF32, rColorInDef, builder.makeConstant(0u)))));
+  builder.add(Op::OutputStore(colorOutDef, builder.makeConstant(1u),
+    builder.add(Op::InputLoad(ScalarType::eF32, gColorInDef, builder.makeConstant(1u)))));
+  builder.add(Op::OutputStore(colorOutDef, builder.makeConstant(2u),
+    builder.add(Op::InputLoad(ScalarType::eF32, bColorInDef, builder.makeConstant(2u)))));
+
+  builder.add(Op::OutputStore(coordOutDef, SsaDef(),
+    builder.add(Op::InputLoad(Type(ScalarType::eF32, 2u), coordInDef, indexDef))));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+Builder test_io_ds_isoline() {
+  return make_test_io_ds(PrimitiveType::eLines);
+}
+
+Builder test_io_ds_triangle() {
+  return make_test_io_ds(PrimitiveType::eTriangles);
+}
+
+Builder test_io_ds_quad() {
+  return make_test_io_ds(PrimitiveType::eQuads);
+}
+
 }
