@@ -330,7 +330,7 @@ std::ostream& operator << (std::ostream& os, const BasicType& ty) {
 
 
 std::ostream& operator << (std::ostream& os, const Type& ty) {
-  if (ty.isStructType()) {
+  if (ty.getStructMemberCount() > 1u) {
     os << '{' << ty.getBaseType(0u);
 
     for (uint32_t i = 1u; i < ty.getStructMemberCount(); i++)
