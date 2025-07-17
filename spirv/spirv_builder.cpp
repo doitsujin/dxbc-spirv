@@ -809,6 +809,10 @@ void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
   if (builtIn == ir::BuiltIn::eVertexId || builtIn == ir::BuiltIn::eInstanceId)
     type = ir::ScalarType::eI32;
 
+  /* Coverage mask is an array in SPIR-V */
+  if (builtIn == ir::BuiltIn::eSampleMask)
+    type = type.addArrayDimension(1u);
+
   uint32_t typeId = getIdForType(type);
   uint32_t varId = getIdForDef(op.getDef());
 
@@ -2874,10 +2878,10 @@ uint32_t SpirvBuilder::emitRawAccessChainNv(spv::StorageClass storageClass, cons
 }
 
 
-uint32_t SpirvBuilder::emitAccessChain(spv::StorageClass storageClass, ir::SsaDef base, ir::SsaDef address) {
+uint32_t SpirvBuilder::emitAccessChain(spv::StorageClass storageClass, ir::SsaDef base, ir::SsaDef address, bool wrapped) {
   const auto& baseOp = m_builder.getOp(base);
 
-  return emitAccessChain(storageClass, baseOp.getType(), getIdForDef(baseOp.getDef()), address, 0u, false);
+  return emitAccessChain(storageClass, baseOp.getType(), getIdForDef(baseOp.getDef()), address, 0u, wrapped);
 }
 
 
@@ -2917,12 +2921,16 @@ void SpirvBuilder::emitLoadDrawParameterBuiltIn(const ir::Op& op, ir::BuiltIn bu
 void SpirvBuilder::emitLoadVariable(const ir::Op& op) {
   auto typeId = getIdForType(op.getType());
 
+  /* Whether to index into a wrapper array */
+  bool hasWrapperArray = false;
+
   /* Loading draw parameter built-ins requires special care */
   if (op.getOpCode() == ir::OpCode::eInputLoad) {
     const auto& inputDcl = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
 
     if (inputDcl.getOpCode() == ir::OpCode::eDclInputBuiltIn) {
       auto builtIn = ir::BuiltIn(inputDcl.getOperand(1u));
+      hasWrapperArray = builtIn == ir::BuiltIn::eSampleMask;
 
       if (builtIn == ir::BuiltIn::eVertexId || builtIn == ir::BuiltIn::eInstanceId) {
         emitLoadDrawParameterBuiltIn(op, builtIn);
@@ -2935,7 +2943,8 @@ void SpirvBuilder::emitLoadVariable(const ir::Op& op) {
   auto accessChainId = emitAccessChain(
     getVariableStorageClass(op),
     ir::SsaDef(op.getOperand(0u)),
-    ir::SsaDef(op.getOperand(1u)));
+    ir::SsaDef(op.getOperand(1u)),
+    hasWrapperArray);
 
   auto id = getIdForDef(op.getDef());
 
@@ -2962,10 +2971,23 @@ void SpirvBuilder::emitLoadVariable(const ir::Op& op) {
 
 
 void SpirvBuilder::emitStoreVariable(const ir::Op& op) {
+  /* Whether to index into a wrapper array */
+  bool hasWrapperArray = false;
+
+  if (op.getOpCode() == ir::OpCode::eOutputStore) {
+    const auto& outputDcl = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+
+    if (outputDcl.getOpCode() == ir::OpCode::eDclOutputBuiltIn) {
+      auto builtIn = ir::BuiltIn(outputDcl.getOperand(1u));
+      hasWrapperArray = builtIn == ir::BuiltIn::eSampleMask;
+    }
+  }
+
   auto accessChainId = emitAccessChain(
     getVariableStorageClass(op),
     ir::SsaDef(op.getOperand(0u)),
-    ir::SsaDef(op.getOperand(1u)));
+    ir::SsaDef(op.getOperand(1u)),
+    hasWrapperArray);
 
   auto valueId = getIdForDef(ir::SsaDef(op.getOperand(2u)));
 
