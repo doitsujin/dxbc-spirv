@@ -27,6 +27,9 @@ public:
     /** Whether to use NV raw access chains for raw
      *  and structured buffer access. */
     bool nvRawAccessChains = false;
+    /** Whether dual-source blending is enabled. This affects
+     *  output location mapping in fragment shaders only. */
+    bool dualSourceBlending = false;
   };
 
   explicit SpirvBuilder(const ir::Builder& builder, const Options& options);
