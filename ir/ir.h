@@ -2501,6 +2501,18 @@ public:
       .addOperand(b);
   }
 
+  static Op SMulExtended(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eSMulExtended, type)
+      .addOperand(a)
+      .addOperand(b);
+  }
+
+  static Op UMulExtended(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eUMulExtended, type)
+      .addOperand(a)
+      .addOperand(b);
+  }
+
   static Op UDiv(Type type, SsaDef a, SsaDef b) {
     return Op(OpCode::eUDiv, type)
       .addOperand(a)
