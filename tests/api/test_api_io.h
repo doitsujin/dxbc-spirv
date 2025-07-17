@@ -20,6 +20,8 @@ Builder test_io_ps_export_depth();
 Builder test_io_ps_export_depth_less();
 Builder test_io_ps_export_depth_greater();
 Builder test_io_ps_export_stencil();
+Builder test_io_ps_builtins();
+Builder test_io_ps_fully_covered();
 
 Builder test_io_gs_basic_point();
 Builder test_io_gs_basic_line();

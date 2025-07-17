@@ -40,6 +40,8 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_io_ps_export_depth_less);
   ADD_TEST(test_io_ps_export_depth_greater);
   ADD_TEST(test_io_ps_export_stencil);
+  ADD_TEST(test_io_ps_builtins);
+  ADD_TEST(test_io_ps_fully_covered);
 
   ADD_TEST(test_io_gs_basic_point);
   ADD_TEST(test_io_gs_basic_line);
