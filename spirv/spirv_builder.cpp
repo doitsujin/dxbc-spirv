@@ -7,8 +7,8 @@
 
 namespace dxbc_spv::spirv {
 
-SpirvBuilder::SpirvBuilder(const ir::Builder& builder, const Options& options)
-: m_builder(builder), m_options(options) {
+SpirvBuilder::SpirvBuilder(const ir::Builder& builder, ResourceMapping& mapping, const Options& options)
+: m_builder(builder), m_mapping(mapping), m_options(options) {
   emitMemoryModel();
 }
 
@@ -678,8 +678,9 @@ void SpirvBuilder::emitDclPushData(const ir::Op& op) {
   auto type = op.getType();
   dxbc_spv_assert(!type.isArrayType());
 
-  /* TODO map stage to base offset */
-  auto byteOffset = uint32_t(op.getOperand(1u));
+  /* Map push data block to real offset based on shader stage mask */
+  auto baseOffset = m_mapping.mapPushData(ir::ShaderStageMask(op.getOperand(2u)));
+  auto byteOffset = uint32_t(op.getOperand(1u)) + baseOffset;
 
   /* Work out where to insert new entries */
   auto iter = std::find_if(m_pushData.members.begin(), m_pushData.members.end(),
@@ -3701,16 +3702,15 @@ uint32_t SpirvBuilder::defDescriptor(const ir::Op& op, uint32_t typeId, spv::Sto
 
   pushOp(m_declarations, spv::OpVariable, ptrTypeId, varId, storageClass);
 
-  /* TODO map binding / set */
+  /* Map binding and set */
   const auto& bindingOp = op.getOpCode() == ir::OpCode::eDclUavCounter
     ? m_builder.getOp(ir::SsaDef(op.getOperand(1u)))
     : op;
 
-  auto spaceId = uint32_t(bindingOp.getOperand(1u));
-  auto regId = uint32_t(bindingOp.getOperand(2u));
+  auto resource = mapDescriptor(op, bindingOp);
 
-  pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationDescriptorSet, spaceId);
-  pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationBinding, regId);
+  pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationDescriptorSet, resource.set);
+  pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationBinding, resource.binding);
 
   /* Declare resource as read-only or write-only as necessary */
   if (op.getOpCode() == ir::OpCode::eDclSrv && declaresPlainBufferResource(op))
@@ -4331,6 +4331,30 @@ bool SpirvBuilder::isPatchConstant(const ir::Op& op) const {
     /* Control point I/O must use array types, patch constant I/O must not */
     return !op.getType().isArrayType();
   }
+}
+
+
+DescriptorBinding SpirvBuilder::mapDescriptor(const ir::Op& op, const ir::Op& bindingOp) const {
+  /* Get descriptor type from actual op */
+  auto type = [&] {
+    switch (op.getOpCode()) {
+      case ir::OpCode::eDclSampler:     return ir::ScalarType::eSampler;
+      case ir::OpCode::eDclCbv:         return ir::ScalarType::eCbv;
+      case ir::OpCode::eDclSrv:         return ir::ScalarType::eSrv;
+      case ir::OpCode::eDclUav:         return ir::ScalarType::eUav;
+      case ir::OpCode::eDclUavCounter:  return ir::ScalarType::eUavCounter;
+      default: break;
+    }
+
+    dxbc_spv_unreachable();
+    return ir::ScalarType::eUnknown;
+  } ();
+
+  /* Get register info from the parent op, if any */
+  auto regSpace = uint32_t(bindingOp.getOperand(1u));
+  auto regIndex = uint32_t(bindingOp.getOperand(2u));
+
+  return m_mapping.mapDescriptor(type, regSpace, regIndex);
 }
 
 
