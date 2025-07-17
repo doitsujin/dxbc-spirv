@@ -636,7 +636,7 @@ enum class BuiltIn : uint32_t {
   /** Tessellation control point ID. Must be declared as an unsigned integer. */
   eTessControlPointId = 9u,
   /** Tessellation coordinates in domain shaders. Must be declared
-   *  as a two-component float vector. */
+   *  as a three-component float vector. */
   eTessCoord          = 10u,
   /** Inner tesellation factors. Must be declared as a sized float array. */
   eTessFactorInner    = 11u,
