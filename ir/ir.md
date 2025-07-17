@@ -35,6 +35,17 @@ type info, translate scoped control flow to SPIR-V-like structured control flow 
 Translation to other IRs, such as SPIR-V, is intended to be simple, while retaining sufficient high-level information to write custom passes e.g. to map
 resource bindings.
 
+### Instruction flags
+Every instruction has an opcode, a return type (which can be `void`), and optional `ir::OpFlags`. These flags are defined as follows:
+- `Precise`: Defines that any transforms altering the result of the instruction are invalid.
+  Only used on instructions returning floating point data. Similar to the `NoContraction` decoration in SPIR-V.
+- `NonUniform`: Used on a descriptor load instruction to indicate that the descriptor itself may be non-uniform in the relevant scope.
+- `SparseFeedback`: Used on instructions reading from an SRV or UAV descriptor to indicate that the return value includes an opaque
+  sparse feedback value in addition to the value actually read from the resource.
+- `NoNan`: Indicates that the result of an instruction cannot be NaN.
+- `NoInf`: Indicates that the result of an instruction cannot be infinite.
+- `NoSz`: Indicates that signed zero does not need to be preserved.
+
 ### Instruction layout
 Declarative instructions occur before any actual code:
 - `EntryPoint`
@@ -101,8 +112,23 @@ These instructions provide additional information that may affect the execution 
 | `SetTessPrimitive`       | `void`      | `%EntryPoint` | `ir::PrimitiveType`  | `ir::TessWindingOrder` | `ir::TessPartitioning`  |
 | `SetTessDomain`          | `void`      | `%EntryPoint` | `ir::PrimitiveType`  |                        |                         |
 | `SetTessControlPoints`   | `void`      | `%EntryPoint` | `n_in`               | `n_out`                |                         |
+| `SetFpMode`              | `f*`        | `%EntryPoint` | `ir::RoundMode`      | `ir::DenormMode`       |                         |
 
 All operands bar the `%EntryPoint` operand are literal constants.
+
+The `SetFpMode` applies default optmization properties and denorm behaviour for all instructions that produce floating point results
+of the type declared via the instruction's return type. Optimization flags are declared via `OpFlags`.
+
+Per-instruction `OpFlags` that affect floating point instructions are additive to the default mode, i.e. if the default mode specifies
+`Precise` then any instructions returning the given type will also be assumed to be `Precise`, regardless of whether the flag is
+enabled for that particular instruction.
+
+As for the rounding mode, only round-to-zero and round-to-nearest-even are allowed.
+
+If no `SetFpMode` instruction is present for any given float type, its default optimization flags can be assumed to be `0`, and
+the rounding and denorm modes remain undefined.
+
+Environments that cannot easily support this should try to apply the FP32 defaults, or ignore the instruction.
 
 ### Type conversion instructions
 | `ir::OpCode`            | Return type      | Argument         |
@@ -612,7 +638,7 @@ if the most significant bit of the encoded token is 1, the token must be sign-ex
 Each instruction is encoded as follows:
 - The opcode token, laid out as follows:
   - The opcode itself (10 bits)
-  - The instruction flags (3 bits)
+  - The instruction flags (6 bits)
   - The number of argument tokens that follow, excluding the type tokens (remaining bits).
 - A list of tokens declaring the return type. Types are encoded as follows:
   - A single header token declaring array dimensionality (2 bits) and struct member count (remaining bits).

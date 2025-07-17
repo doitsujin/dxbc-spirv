@@ -225,6 +225,11 @@ void Disassembler::disassembleOperandLiteral(std::ostream& stream, const Op& op,
         if (index == 3u) { stream << TessPartitioning(operand); return; }
         break;
 
+      case OpCode::eSetFpMode:
+        if (index == 1u) { stream << RoundMode(operand); return; }
+        if (index == 2u) { stream << DenormMode(operand); return; }
+        break;
+
       case OpCode::eDclInput:
         if (index == 3u) { stream << InterpolationModes(operand); return; }
         break;

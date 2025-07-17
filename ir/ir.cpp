@@ -237,6 +237,7 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
     case OpCode::eSetTessPrimitive:
     case OpCode::eSetTessDomain:
     case OpCode::eSetTessControlPoints:
+    case OpCode::eSetFpMode:
     case OpCode::eDclInput:
     case OpCode::eDclInputBuiltIn:
     case OpCode::eDclOutput:
@@ -584,9 +585,23 @@ std::ostream& operator << (std::ostream& os, const RoundMode& mode) {
     case RoundMode::eNearestEven: return os << "NearestEven";
     case RoundMode::eNegativeInf: return os << "NegativeInf";
     case RoundMode::ePositiveInf: return os << "PositiveInf";
+
+    case RoundMode::eFlagEnum: break;
   }
 
   return os << "RoundMode(" << std::dec << uint32_t(mode) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, const DenormMode& mode) {
+  switch (mode) {
+    case DenormMode::eFlush:    return os << "Flush";
+    case DenormMode::ePreserve: return os << "Preserve";
+
+    case DenormMode::eFlagEnum: break;
+  }
+
+  return os << "DenormMode(" << std::dec << uint32_t(mode) << ")";
 }
 
 
@@ -603,6 +618,9 @@ std::ostream& operator << (std::ostream& os, const OpFlag& flag) {
     case OpFlag::ePrecise:        return os << "precise";
     case OpFlag::eNonUniform:     return os << "nonuniform";
     case OpFlag::eSparseFeedback: return os << "sparsefeedback";
+    case OpFlag::eNoNan:          return os << "nonan";
+    case OpFlag::eNoInf:          return os << "noinf";
+    case OpFlag::eNoSz:           return os << "nosz";
 
     case OpFlag::eFlagEnum: break;
   }
@@ -635,6 +653,7 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eSetTessPrimitive: return os << "SetTessPrimitive";
     case OpCode::eSetTessDomain: return os << "SetTessDomain";
     case OpCode::eSetTessControlPoints: return os << "SetTessControlPoints";
+    case OpCode::eSetFpMode: return os << "SetFpMode";
     case OpCode::eDclInput: return os << "DclInput";
     case OpCode::eDclInputBuiltIn: return os << "DclInputBuiltIn";
     case OpCode::eDclOutput: return os << "DclOutput";
