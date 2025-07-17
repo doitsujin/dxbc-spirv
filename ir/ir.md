@@ -56,13 +56,17 @@ In the instruction listings below, references to other instructions are prefixed
 whereas literals do not use a prefix.
 
 ### Debug instructions
-| `ir::OpCode`         | Return type | Arguments...   |         |
-|----------------------|-------------|----------------|---------|
-| `DebugName`          | `void`      | `%instruction` | Literal |
+| `ir::OpCode`         | Return type | Arguments...   |          |        |
+|----------------------|-------------|----------------|----------|--------|
+| `DebugName`          | `void`      | `%instruction` | String   |        |
+| `DebugMemberName`    | `void`      | `%instruction` | `member` | String |
 
 It is not meaningful to set debug names for mode setting instructions (see below).
 Otherwise, any instruction can be a valid target. The debug name may require multiple
 operands depending on its size. Literal strings are null-terminated.
+
+The `DebugMemberName` instruction can be applied to `Dcl*` instructions that declare a
+struct type, in order to assign debug names to individual struct members.
 
 ### Constant declarations
 | `ir::OpCode`         | Return type | Arguments...                    |

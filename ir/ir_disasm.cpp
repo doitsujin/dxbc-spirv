@@ -158,10 +158,13 @@ void Disassembler::disassembleOperandDef(std::ostream& stream, const Op& op, uin
 void Disassembler::disassembleOperandLiteral(std::ostream& stream, const Op& op, uint32_t index) const {
   auto operand = op.getOperand(index);
 
-  if (op.getOpCode() == OpCode::eDebugName || op.getOpCode() == OpCode::eSemantic) {
+  if (op.getOpCode() == OpCode::eSemantic ||
+      op.getOpCode() == OpCode::eDebugName ||
+      op.getOpCode() == OpCode::eDebugMemberName) {
     uint32_t stringIndex = op.getFirstLiteralOperandIndex();
 
-    if (op.getOpCode() == OpCode::eSemantic)
+    if (op.getOpCode() == OpCode::eSemantic ||
+        op.getOpCode() == OpCode::eDebugMemberName)
       stringIndex += 1u;
 
     if (index > stringIndex)

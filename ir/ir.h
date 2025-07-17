@@ -829,10 +829,12 @@ enum class OpCode : uint16_t {
   eUnknown                      = 0u,
 
   eEntryPoint                   = 1u,
-  eDebugName                    = 2u,
-  eConstant                     = 3u,
-  eUndef                        = 4u,
-  eSemantic                     = 5u,
+  eSemantic                     = 2u,
+  eDebugName                    = 3u,
+  eDebugMemberName              = 4u,
+
+  eConstant                     = 8u,
+  eUndef                        = 9u,
 
   eSetCsWorkgroupSize           = 16u,
   eSetGsInstances               = 17u,
@@ -1405,6 +1407,13 @@ public:
   static Op DebugName(SsaDef def, const char* name) {
     return Op(OpCode::eDebugName, Type())
       .addOperand(def)
+      .addLiteralString(name);
+  }
+
+  static Op DebugMemberName(SsaDef def, uint32_t member, const char* name) {
+    return Op(OpCode::eDebugMemberName, Type())
+      .addOperand(def)
+      .addOperand(member)
       .addLiteralString(name);
   }
 

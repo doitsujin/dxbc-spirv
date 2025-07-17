@@ -226,8 +226,9 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
     case OpCode::eRovScopedLockEnd:
       return 0u;
 
-    case OpCode::eDebugName:
     case OpCode::eSemantic:
+    case OpCode::eDebugName:
+    case OpCode::eDebugMemberName:
     case OpCode::eSetCsWorkgroupSize:
     case OpCode::eSetGsInstances:
     case OpCode::eSetGsInputPrimitive:
@@ -618,10 +619,11 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
       break;
 
     case OpCode::eEntryPoint: return os << "EntryPoint";
+    case OpCode::eSemantic: return os << "Semantic";
     case OpCode::eDebugName: return os << "DebugName";
+    case OpCode::eDebugMemberName: return os << "DebugMemberName";
     case OpCode::eConstant: return os << "Constant";
     case OpCode::eUndef: return os << "Undef";
-    case OpCode::eSemantic: return os << "Semantic";
     case OpCode::eSetCsWorkgroupSize: return os << "SetCsWorkgroupSize";
     case OpCode::eSetGsInstances: return os << "SetGsInstances";
     case OpCode::eSetGsInputPrimitive: return os << "SetGsInputPrimitive";
