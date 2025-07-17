@@ -202,13 +202,13 @@ Builder test_arithmetic_fp32_special() {
   auto srv = builder.add(Op::DclSrv(bufType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured));
   auto uav = builder.add(Op::DclUav(bufType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured, UavFlag::eWriteOnly));
 
-  static const std::vector<ir::OpCode> tests = {
-    ir::OpCode::eFLog2,
-    ir::OpCode::eFSin,
-    ir::OpCode::eFSqrt,
-    ir::OpCode::eFExp2,
-    ir::OpCode::eFRsq,
-    ir::OpCode::eFCos,
+  static const std::vector<std::pair<ir::OpCode, ir::OpFlags>> tests = {
+    { ir::OpCode::eFLog2, ir::OpFlag::eNoSz   },
+    { ir::OpCode::eFSin,  ir::OpFlag::eNoInf  },
+    { ir::OpCode::eFSqrt, ir::OpFlags()       },
+    { ir::OpCode::eFExp2, ir::OpFlag::eNoSz   },
+    { ir::OpCode::eFRsq,  ir::OpFlag::eNoSz   },
+    { ir::OpCode::eFCos,  ir::OpFlag::eNoInf  },
   };
 
   auto srvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eSrv, srv, builder.makeConstant(0u)));
@@ -217,8 +217,10 @@ Builder test_arithmetic_fp32_special() {
   auto indexDef = builder.makeConstant(0u, 0u);
   auto component = builder.add(Op::BufferLoad(ScalarType::eF32, srvDescriptor, indexDef, 4u));
 
-  for (auto opCode : tests)
-    component = builder.add(Op(opCode, ScalarType::eF32).addOperand(Operand(component)));
+  for (auto e : tests) {
+    component = builder.add(Op(e.first, ScalarType::eF32)
+      .setFlags(e.second).addOperand(Operand(component)));
+  }
 
   builder.add(Op::BufferStore(uavDescriptor, indexDef, component, 4u));
   builder.add(Op::Return());
