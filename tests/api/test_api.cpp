@@ -56,6 +56,10 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_io_hs_triangle_cw);
   ADD_TEST(test_io_hs_triangle_ccw);
 
+  ADD_TEST(test_io_ds_isoline);
+  ADD_TEST(test_io_ds_triangle);
+  ADD_TEST(test_io_ds_quad);
+
   ADD_TEST(test_resources_cbv);
   ADD_TEST(test_resources_cbv_dynamic);
   ADD_TEST(test_resources_cbv_indexed);
