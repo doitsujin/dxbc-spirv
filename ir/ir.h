@@ -98,6 +98,11 @@ inline uint32_t byteSize(ScalarType type) {
   }
 }
 
+/** Computes bit width of a scalar type */
+inline uint32_t bitWidth(ScalarType type) {
+  return byteSize(type) * 8u;
+}
+
 
 /** Basic vector type. Represents either a scalar
  *  or a vector with two to four components. */
@@ -769,7 +774,21 @@ enum class RoundMode : uint32_t {
   eNearestEven      = (1u << 1),
   eNegativeInf      = (1u << 2),
   ePositiveInf      = (1u << 3),
+
+  eFlagEnum         = 0u
 };
+
+using RoundModes = util::Flags<RoundMode>;
+
+/** Floating point denorm mode */
+enum class DenormMode : uint32_t {
+  eFlush            = (1u << 0),
+  ePreserve         = (1u << 1),
+
+  eFlagEnum         = 0u
+};
+
+using DenormModes = util::Flags<DenormMode>;
 
 
 /** Derivative mode */
@@ -847,6 +866,7 @@ enum class OpCode : uint16_t {
   eSetTessPrimitive             = 24u,
   eSetTessDomain                = 25u,
   eSetTessControlPoints         = 26u,
+  eSetFpMode                    = 27u,
 
   eDclInput                     = 32u,
   eDclInputBuiltIn              = 33u,
@@ -1065,11 +1085,20 @@ enum class OpFlag : uint8_t {
   /** Flag to indicate that the operation returns
    *  sparse feedback rather than raw data. */
   eSparseFeedback = (1u << 2),
+  /** Flag to indicate that a floating point operation
+   *  will never have a NaN result. */
+  eNoNan = (1u << 3),
+  /** Flag to indicate that a floating point operation
+   *  will never return a positive or negative infinity. */
+  eNoInf = (1u << 4),
+  /** Flag to indicate that the sign of a zero result
+   *  does not need to be preserved. */
+  eNoSz = (1u << 5),
 
   eFlagEnum = 0
 };
 
-constexpr uint32_t OpFlagBits = 3;
+constexpr uint32_t OpFlagBits = 6;
 using OpFlags = util::Flags<OpFlag>;
 
 
@@ -1629,6 +1658,13 @@ public:
       .addOperand(def)
       .addOperand(inCount)
       .addOperand(outCount);
+  }
+
+  static Op SetFpMode(SsaDef entryPoint, ScalarType type, OpFlags flags, RoundMode roundMode, DenormMode denormMode) {
+    return Op(OpCode::eSetFpMode, type).setFlags(flags)
+      .addOperand(entryPoint)
+      .addOperand(roundMode)
+      .addOperand(denormMode);
   }
 
   /* Helpers for function-related instructions */
@@ -2616,6 +2652,7 @@ std::ostream& operator << (std::ostream& os, const MemoryType& stage);
 std::ostream& operator << (std::ostream& os, const DerivativeMode& stage);
 std::ostream& operator << (std::ostream& os, const RovScope& scope);
 std::ostream& operator << (std::ostream& os, const RoundMode& stage);
+std::ostream& operator << (std::ostream& os, const DenormMode& stage);
 std::ostream& operator << (std::ostream& os, const SsaDef& def);
 std::ostream& operator << (std::ostream& os, const OpFlag& flag);
 std::ostream& operator << (std::ostream& os, const OpCode& opCode);
