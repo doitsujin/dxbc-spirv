@@ -263,7 +263,9 @@ private:
 
   void emitDebugName(ir::SsaDef def, uint32_t id);
 
-  void emitDebugTypeName(ir::SsaDef def, uint32_t id);
+  void emitDebugTypeName(ir::SsaDef def, uint32_t id, const char* suffix);
+
+  void emitDebugMemberNames(ir::SsaDef def, uint32_t structId);
 
   uint32_t emitAddressOffset(ir::SsaDef def, uint32_t offset);
 
@@ -334,7 +336,7 @@ private:
 
   uint32_t getIdForType(const ir::Type& type);
 
-  uint32_t defType(const ir::Type& type, bool explicitLayout);
+  uint32_t defType(const ir::Type& type, bool explicitLayout, ir::SsaDef dclOp = ir::SsaDef());
 
   uint32_t defStructWrapper(uint32_t typeId);
 

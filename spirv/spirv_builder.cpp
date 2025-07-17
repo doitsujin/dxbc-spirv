@@ -174,8 +174,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eEntryPoint:
       return emitEntryPoint(op);
 
-    case ir::OpCode::eDebugName:
     case ir::OpCode::eSemantic:
+    case ir::OpCode::eDebugName:
+    case ir::OpCode::eDebugMemberName:
       /* No-op here, we resolve debug names early */
       return;
 
@@ -993,16 +994,17 @@ void SpirvBuilder::emitDclSampler(const ir::Op& op) {
 
 void SpirvBuilder::emitDclCbv(const ir::Op& op) {
   /* Create a wrapper struct that we can decorate as a block */
-  auto structTypeId = defType(op.getType(), true);
+  auto structTypeId = defType(op.getType(), true, op.getDef());
 
   if (!op.getType().isStructType()) {
     structTypeId = defStructWrapper(structTypeId);
 
-    if (m_options.includeDebugNames) {
+    if (m_options.includeDebugNames)
       setDebugMemberName(structTypeId, 0u, "m");
-      emitDebugTypeName(op.getDef(), structTypeId);
-    }
   }
+
+  if (m_options.includeDebugNames)
+    emitDebugTypeName(op.getDef(), structTypeId, "_buf");
 
   pushOp(m_decorations, spv::OpDecorate, structTypeId, spv::DecorationBlock);
 
@@ -1016,16 +1018,17 @@ void SpirvBuilder::emitDclSrvUav(const ir::Op& op) {
 
   if (kind == ir::ResourceKind::eBufferRaw || kind == ir::ResourceKind::eBufferStructured) {
     /* Create wrapper struct, much like this works for CBV */
-    auto structTypeId = defType(op.getType(), true);
+    auto structTypeId = defType(op.getType(), true, op.getDef());
 
     if (!op.getType().isStructType()) {
       structTypeId = defStructWrapper(structTypeId);
 
-      if (m_options.includeDebugNames) {
+      if (m_options.includeDebugNames)
         setDebugMemberName(structTypeId, 0u, "m");
-        emitDebugTypeName(op.getDef(), structTypeId);
-      }
     }
+
+    if (m_options.includeDebugNames)
+      emitDebugTypeName(op.getDef(), structTypeId, "_buf");
 
     pushOp(m_decorations, spv::OpDecorate, structTypeId, spv::DecorationBlock);
 
@@ -1134,7 +1137,7 @@ void SpirvBuilder::emitDclUavCounter(const ir::Op& op) {
   auto structTypeId = defStructWrapper(getIdForType(op.getType()));
   pushOp(m_decorations, spv::OpDecorate, structTypeId, spv::DecorationBlock);
 
-  emitDebugTypeName(op.getDef(), structTypeId);
+  emitDebugTypeName(op.getDef(), structTypeId, "_t");
 
   defDescriptor(op, structTypeId, spv::StorageClassStorageBuffer);
   m_descriptorTypes.insert({ op.getDef(), structTypeId });
@@ -2607,7 +2610,7 @@ void SpirvBuilder::emitDebugName(ir::SsaDef def, uint32_t id) {
 }
 
 
-void SpirvBuilder::emitDebugTypeName(ir::SsaDef def, uint32_t id) {
+void SpirvBuilder::emitDebugTypeName(ir::SsaDef def, uint32_t id, const char* suffix) {
   if (!m_options.includeDebugNames)
     return;
 
@@ -2623,9 +2626,25 @@ void SpirvBuilder::emitDebugTypeName(ir::SsaDef def, uint32_t id) {
 
   std::stringstream str;
   str << debugOp.getLiteralString(1u);
-  str << "_t";
+  str << suffix;
 
   setDebugName(id, str.str().c_str());
+}
+
+
+void SpirvBuilder::emitDebugMemberNames(ir::SsaDef def, uint32_t structId) {
+  auto [a, b] = m_builder.getUses(def);
+
+  for (auto i = a; i != b; i++) {
+    const auto& op = m_builder.getOp(*i);
+
+    if (op.getOpCode() == ir::OpCode::eDebugMemberName) {
+      dxbc_spv_assert(ir::SsaDef(op.getOperand(0u)) == def);
+
+      auto member = uint32_t(op.getOperand(1u));
+      setDebugMemberName(structId, member, op.getLiteralString(2u).c_str());
+    }
+  }
 }
 
 
@@ -3607,7 +3626,7 @@ uint32_t SpirvBuilder::getIdForType(const ir::Type& type) {
 }
 
 
-uint32_t SpirvBuilder::defType(const ir::Type& type, bool explicitLayout) {
+uint32_t SpirvBuilder::defType(const ir::Type& type, bool explicitLayout, ir::SsaDef dclOp) {
   auto id = allocId();
 
   if (type.isVoidType()) {
@@ -3693,13 +3712,16 @@ uint32_t SpirvBuilder::defType(const ir::Type& type, bool explicitLayout) {
       }
     }
 
+    if (m_options.includeDebugNames && dclOp)
+      emitDebugMemberNames(dclOp, id);
+
     return id;
   }
 
   if (type.isArrayType()) {
     auto baseType = type.getSubType(0u);
     auto baseTypeId = explicitLayout && !baseType.isBasicType()
-      ? defType(baseType, explicitLayout)
+      ? defType(baseType, explicitLayout, dclOp)
       : getIdForType(baseType);
 
     if (type.isSizedArray()) {
