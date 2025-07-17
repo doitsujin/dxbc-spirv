@@ -31,6 +31,21 @@ public:
     /** Whether dual-source blending is enabled. This affects
      *  output location mapping in fragment shaders only. */
     bool dualSourceBlending = false;
+    /** Whether FloatControls2 is fully supported */
+    bool floatControls2 = false;
+    /** Supported rounding modes for the given float types */
+    ir::RoundModes supportedRoundModesF16 = 0u;
+    ir::RoundModes supportedRoundModesF32 = 0u;
+    ir::RoundModes supportedRoundModesF64 = 0u;
+    /** Supported denorm modes for the given float tyoes */
+    ir::DenormModes supportedDenormModesF16 = 0u;
+    ir::DenormModes supportedDenormModesF32 = 0u;
+    ir::DenormModes supportedDenormModesF64 = 0u;
+    /** Supported signed zero / inf / nan preserve modes for
+     *  legacy float control extensions. */
+    bool supportsZeroInfNanPreserveF16 = false;
+    bool supportsZeroInfNanPreserveF32 = false;
+    bool supportsZeroInfNanPreserveF64 = false;
   };
 
   explicit SpirvBuilder(const ir::Builder& builder, ResourceMapping& mapping, const Options& options);
@@ -92,6 +107,12 @@ private:
   uint32_t m_glslExtId = 0u;
 
   uint32_t m_samplerTypeId = 0u;
+
+  struct {
+    ir::OpFlags f16 = 0u;
+    ir::OpFlags f32 = 0u;
+    ir::OpFlags f64 = 0u;
+  } m_fpMode;
 
   struct {
     ir::Op blockLabel = { };
@@ -261,6 +282,8 @@ private:
 
   void emitMemoryModel();
 
+  void emitFpMode(const ir::Op& op, uint32_t id, uint32_t mask = 0u);
+
   void emitDebugName(ir::SsaDef def, uint32_t id);
 
   void emitDebugTypeName(ir::SsaDef def, uint32_t id, const char* suffix);
@@ -303,6 +326,8 @@ private:
   void emitFRound(const ir::Op& op);
 
   void emitInterpolation(const ir::Op& op);
+
+  void emitSetFpMode(const ir::Op& op);
 
   void emitSetCsWorkgroupSize(const ir::Op& op);
 
@@ -409,6 +434,8 @@ private:
   bool isPatchConstant(const ir::Op& op) const;
 
   DescriptorBinding mapDescriptor(const ir::Op& op, const ir::Op& bindingOp) const;
+
+  static uint32_t getFpModeFlags(ir::OpFlags flags);
 
   static ir::UavFlags getUavFlags(const ir::Op& op);
 
