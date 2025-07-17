@@ -7,6 +7,7 @@
 
 #include "../util/util_small_vector.h"
 
+#include "spirv_mapping.h"
 #include "spirv_types.h"
 
 namespace dxbc_spv::spirv {
@@ -32,7 +33,7 @@ public:
     bool dualSourceBlending = false;
   };
 
-  explicit SpirvBuilder(const ir::Builder& builder, const Options& options);
+  explicit SpirvBuilder(const ir::Builder& builder, ResourceMapping& mapping, const Options& options);
 
   ~SpirvBuilder();
 
@@ -52,6 +53,7 @@ public:
 private:
 
   const ir::Builder& m_builder;
+  ResourceMapping& m_mapping;
 
   ir::ShaderStage m_stage = ir::ShaderStage();
 
@@ -399,6 +401,8 @@ private:
   bool isMultiStreamGs() const;
 
   bool isPatchConstant(const ir::Op& op) const;
+
+  DescriptorBinding mapDescriptor(const ir::Op& op, const ir::Op& bindingOp) const;
 
   static ir::UavFlags getUavFlags(const ir::Op& op);
 

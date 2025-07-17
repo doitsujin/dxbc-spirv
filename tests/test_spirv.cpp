@@ -19,7 +19,9 @@ struct Options {
 };
 
 std::vector<char> generateSpirv(const ir::Builder& builder, const SpirvBuilder::Options& options) {
-  SpirvBuilder spvBuilder(builder, options);
+  BasicResourceMapping mapping;
+
+  SpirvBuilder spvBuilder(builder, mapping, options);
   spvBuilder.buildSpirvBinary();
 
   size_t size = 0u;
