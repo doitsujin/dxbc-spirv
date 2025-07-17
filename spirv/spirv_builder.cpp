@@ -2654,10 +2654,16 @@ void SpirvBuilder::emitDebugName(ir::SsaDef def, uint32_t id) {
   if (debugOp.getOpCode() == ir::OpCode::eDebugName) {
     setDebugName(id, debugOp.getLiteralString(1u).c_str());
   } else if (debugOp.getOpCode() == ir::OpCode::eSemantic) {
-    std::stringstream str;
-    str << debugOp.getLiteralString(2u);
-    str << uint32_t(debugOp.getOperand(1u));
-    setDebugName(id, str.str().c_str());
+    auto index = uint32_t(debugOp.getOperand(1u));
+
+    if (index) {
+      std::stringstream str;
+      str << debugOp.getLiteralString(2u);
+      str << index;
+      setDebugName(id, str.str().c_str());
+    } else {
+      setDebugName(id, debugOp.getLiteralString(2u).c_str());
+    }
   } else {
     dxbc_spv_unreachable();
   }
