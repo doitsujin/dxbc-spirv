@@ -742,7 +742,9 @@ void SpirvBuilder::emitDclScratch(const ir::Op& op) {
 
 
 void SpirvBuilder::emitDclIoVar(const ir::Op& op) {
-  auto storageClass = op.getOpCode() == ir::OpCode::eDclInput
+  bool isInput = op.getOpCode() == ir::OpCode::eDclInput;
+
+  auto storageClass = isInput
     ? spv::StorageClassInput
     : spv::StorageClassOutput;
 
@@ -755,10 +757,13 @@ void SpirvBuilder::emitDclIoVar(const ir::Op& op) {
 
   pushOp(m_declarations, spv::OpVariable, ptrTypeId, varId, storageClass);
 
-  pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationLocation, uint32_t(op.getOperand(1u)));
-  pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationComponent, uint32_t(op.getOperand(2u)));
+  uint32_t location = uint32_t(op.getOperand(1u));
 
-  bool isInput = op.getOpCode() == ir::OpCode::eDclInput;
+  if (m_options.dualSourceBlending && !isInput && m_stage == ir::ShaderStage::ePixel)
+    pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationIndex, std::exchange(location, 0u));
+
+  pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationLocation, location);
+  pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationComponent, uint32_t(op.getOperand(2u)));
 
   if (isInput && m_stage == ir::ShaderStage::ePixel) {
     auto interpolationModes = ir::InterpolationModes(op.getOperand(3u));
