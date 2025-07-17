@@ -13,6 +13,7 @@ dxbc_spv_files = files([
   'util/util_float16.cpp',
 
   'spirv/spirv_builder.cpp',
+  'spirv/spirv_mapping.cpp',
 ])
 
 lib_dxbc_spv = static_library('dxbc_spv', dxbc_spv_files,
