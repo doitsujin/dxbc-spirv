@@ -377,6 +377,59 @@ Builder test_io_ps_export_stencil() {
   return builder;
 }
 
+
+Builder test_io_ps_builtins() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+
+  builder.add(Op::Label());
+
+  auto frontFaceDef = builder.add(Op::DclInputBuiltIn(ScalarType::eBool, entryPoint, BuiltIn::eIsFrontFace, InterpolationMode::eFlat));
+  builder.add(Op::Semantic(frontFaceDef, 0u, "SV_ISFRONTFACE"));
+
+  auto sampleMaskInDef = builder.add(Op::DclInputBuiltIn(ScalarType::eU32, entryPoint, BuiltIn::eSampleMask, InterpolationMode::eFlat));
+  builder.add(Op::Semantic(sampleMaskInDef, 0u, "SV_COVERAGE"));
+
+  auto sampleIdInDef = builder.add(Op::DclInputBuiltIn(ScalarType::eU32, entryPoint, BuiltIn::eSampleId, InterpolationMode::eFlat));
+  builder.add(Op::Semantic(sampleIdInDef, 0u, "SV_SAMPLEINDEX"));
+
+  auto sampleMaskOutDef = builder.add(Op::DclOutputBuiltIn(ScalarType::eU32, entryPoint, BuiltIn::eSampleMask));
+  builder.add(Op::Semantic(sampleMaskOutDef, 0u, "SV_COVERAGE"));
+
+  auto sampleMask = builder.add(Op::InputLoad(ScalarType::eU32, sampleMaskInDef, SsaDef()));
+  auto sampleId = builder.add(Op::InputLoad(ScalarType::eU32, sampleIdInDef, SsaDef()));
+  sampleMask = builder.add(Op::UBitExtract(ScalarType::eU32, sampleMask, builder.makeConstant(0u), sampleId));
+
+  auto cond = builder.add(Op::InputLoad(ScalarType::eBool, frontFaceDef, SsaDef()));
+  sampleMask = builder.add(Op::Select(ScalarType::eU32, cond, sampleMask, builder.makeConstant(0u)));
+
+  builder.add(Op::OutputStore(sampleMaskOutDef, SsaDef(), sampleMask));
+  builder.add(Op::Return());
+  return builder;
+}
+
+
+Builder test_io_ps_fully_covered() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+
+  builder.add(Op::Label());
+
+  auto fullyCoveredDef = builder.add(Op::DclInputBuiltIn(ScalarType::eBool, entryPoint, BuiltIn::eIsFullyCovered, InterpolationMode::eFlat));
+  builder.add(Op::Semantic(fullyCoveredDef, 0u, "SV_INNERCOVERAGE"));
+
+  auto outputDef = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(outputDef, 0u, "SV_TARGET"));
+
+  builder.add(Op::OutputStore(outputDef, SsaDef(), builder.add(Op::Select(ScalarType::eF32,
+    builder.add(Op::InputLoad(ScalarType::eBool, fullyCoveredDef, SsaDef())),
+    builder.makeConstant(1.0f), builder.makeConstant(0.0f)))));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+
 Builder make_test_io_gs_basic(ir::PrimitiveType inType, ir::PrimitiveType outType) {
   Builder builder;
   auto entryPoint = setupTestFunction(builder, ShaderStage::eGeometry);
