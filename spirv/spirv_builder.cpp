@@ -186,6 +186,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eUndef:
       return emitUndef(op);
 
+    case ir::OpCode::eSetFpMode:
+      return emitSetFpMode(op);
+
     case ir::OpCode::eSetCsWorkgroupSize:
       return emitSetCsWorkgroupSize(op);
 
@@ -1219,6 +1222,7 @@ void SpirvBuilder::emitPushDataLoad(const ir::Op& op) {
   auto id = getIdForDef(op.getDef());
   pushOp(m_code, spv::OpLoad, typeId, id, ptrId);
 
+  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -1411,6 +1415,7 @@ void SpirvBuilder::emitBufferLoad(const ir::Op& op) {
     imageOperands.pushTo(m_code);
   }
 
+  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -1590,6 +1595,7 @@ void SpirvBuilder::emitMemoryLoad(const ir::Op& op) {
   m_code.push_back(accessChainId);
   memoryOperands.pushTo(m_code);
 
+  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -1775,6 +1781,7 @@ void SpirvBuilder::emitImageLoad(const ir::Op& op) {
   m_code.push_back(coordId);
   imageOperands.pushTo(m_code);
 
+  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -1929,6 +1936,7 @@ void SpirvBuilder::emitImageSample(const ir::Op& op) {
 
   imageOperands.pushTo(m_code);
 
+  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -1997,6 +2005,7 @@ void SpirvBuilder::emitImageGather(const ir::Op& op) {
 
   imageOperands.pushTo(m_code);
 
+  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -2016,6 +2025,7 @@ void SpirvBuilder::emitImageComputeLod(const ir::Op& op) {
     getIdForType(op.getType()), id, sampledImageId,
     getIdForDef(coordDef));
 
+  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -2218,6 +2228,9 @@ void SpirvBuilder::emitConvert(const ir::Op& op) {
   auto dstId = getIdForDef(op.getDef());
 
   pushOp(m_code, spvOp, dstTypeId, dstId, srcId);
+
+  emitFpMode(op, dstId);
+  emitDebugName(op.getDef(), dstId);
 }
 
 
@@ -2252,6 +2265,7 @@ void SpirvBuilder::emitDerivative(const ir::Op& op) {
   pushOp(m_code, opCode, getIdForType(op.getType()), id,
     getIdForDef(ir::SsaDef(op.getOperand(0u))));
 
+  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -2586,6 +2600,46 @@ void SpirvBuilder::emitMemoryModel() {
 }
 
 
+void SpirvBuilder::emitFpMode(const ir::Op& op, uint32_t id, uint32_t mask) {
+  const auto& type = op.getType();
+
+  if (!type.isBasicType() || !type.getBaseType(0u).isFloatType())
+    return;
+
+  /* Find correct default mode for type */
+  auto scalarType = type.getBaseType(0u).getBaseType();
+
+  auto desiredMode = op.getFlags();
+  auto defaultMode = [&] {
+    switch (scalarType) {
+      case ir::ScalarType::eF16: return m_fpMode.f16;
+      case ir::ScalarType::eF32: return m_fpMode.f32;
+      case ir::ScalarType::eF64: return m_fpMode.f64;
+      default: break;
+    }
+
+    dxbc_spv_unreachable();
+    return ir::OpFlags();
+  } ();
+
+  if (m_options.floatControls2) {
+    /* Fp mode flags in our IR are additive, only emit a decoration if
+     * the instruction sets any flags not included in the default. */
+    auto defaultFlags = getFpModeFlags(defaultMode);
+    auto desiredFlags = getFpModeFlags(defaultMode | desiredMode) | mask;
+
+    if (desiredFlags != defaultFlags) {
+      enableCapability(spv::CapabilityFloatControls2);
+      pushOp(m_decorations, spv::OpDecorate, id, spv::DecorationFPFastMathMode, desiredFlags);
+    }
+  } else {
+    /* Enable no-contraction mode for the instruction if necessary */
+    if ((defaultMode | desiredMode) & ir::OpFlag::ePrecise)
+      pushOp(m_decorations, spv::OpDecorate, id, spv::DecorationNoContraction);
+  }
+}
+
+
 void SpirvBuilder::emitDebugName(ir::SsaDef def, uint32_t id) {
   if (!m_options.includeDebugNames)
     return;
@@ -2748,6 +2802,7 @@ void SpirvBuilder::emitParamLoad(const ir::Op& op) {
     setIdForDef(op.getDef(), paramId);
   }
 
+  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -3037,6 +3092,7 @@ void SpirvBuilder::emitLoadVariable(const ir::Op& op) {
     m_tessControl.needsIoBarrier |= !isPatchConstant(outputDcl);
   }
 
+  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -3100,6 +3156,9 @@ void SpirvBuilder::emitCompositeOp(const ir::Op& op) {
   /* Indexing literals */
   for (uint32_t i = 0u; i < addressOp.getOperandCount(); i++)
     m_code.push_back(uint32_t(addressOp.getOperand(i)));
+
+  emitFpMode(op, spvId);
+  emitDebugName(op.getDef(), spvId);
 }
 
 
@@ -3117,6 +3176,9 @@ void SpirvBuilder::emitCompositeConstruct(const ir::Op& op) {
 
   for (uint32_t i = 0u; i < op.getOperandCount(); i++)
     m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(i))));
+
+  emitFpMode(op, spvId);
+  emitDebugName(op.getDef(), spvId);
 }
 
 
@@ -3187,9 +3249,7 @@ void SpirvBuilder::emitSimpleArithmetic(const ir::Op& op) {
   for (uint32_t i = 0u; i < op.getOperandCount(); i++)
     m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(i))));
 
-  if (op.getFlags() & ir::OpFlag::ePrecise)
-    pushOp(m_decorations, spv::OpDecorate, id, spv::DecorationNoContraction);
-
+  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -3239,9 +3299,7 @@ void SpirvBuilder::emitExtendedGlslArithmetic(const ir::Op& op) {
   for (uint32_t i = 0u; i < op.getOperandCount(); i++)
     m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(i))));
 
-  if (op.getFlags() & ir::OpFlag::ePrecise)
-    pushOp(m_decorations, spv::OpDecorate, id, spv::DecorationNoContraction);
-
+  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -3325,9 +3383,7 @@ void SpirvBuilder::emitFRcp(const ir::Op& op) {
   pushOp(m_code, spv::OpFDiv, getIdForType(type), id, constantOneId,
     getIdForDef(ir::SsaDef(op.getOperand(0u))));
 
-  if (op.getFlags() & ir::OpFlag::ePrecise)
-    pushOp(m_decorations, spv::OpDecorate, id, spv::DecorationNoContraction);
-
+  emitFpMode(op, id, spv::FPFastMathModeAllowRecipMask);
   emitDebugName(op.getDef(), id);
 }
 
@@ -3344,6 +3400,7 @@ void SpirvBuilder::emitFRound(const ir::Op& op) {
       case ir::RoundMode::eNearestEven: return GLSLstd450RoundEven;
       case ir::RoundMode::eNegativeInf: return GLSLstd450Floor;
       case ir::RoundMode::ePositiveInf: return GLSLstd450Ceil;
+      case ir::RoundMode::eFlagEnum: break;
     }
 
     dxbc_spv_unreachable();
@@ -3353,9 +3410,7 @@ void SpirvBuilder::emitFRound(const ir::Op& op) {
   pushOp(m_code, spv::OpExtInst, getIdForType(op.getType()), id,
     importGlslExt(), opCode, getIdForDef(valueDef));
 
-  if (op.getFlags() & ir::OpFlag::ePrecise)
-    pushOp(m_decorations, spv::OpDecorate, id, spv::DecorationNoContraction);
-
+  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -3392,12 +3447,130 @@ void SpirvBuilder::emitInterpolation(const ir::Op& op) {
   for (uint32_t i = 0u; i < op.getOperandCount(); i++)
     m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(i))));
 
-  if (op.getFlags() & ir::OpFlag::ePrecise)
-    pushOp(m_decorations, spv::OpDecorate, id, spv::DecorationNoContraction);
-
+  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
+
+void SpirvBuilder::emitSetFpMode(const ir::Op& op) {
+  dxbc_spv_assert(op.getType().isScalarType() && op.getType().getBaseType(0u).isFloatType());
+
+  /* Write back default op flags and get supported modes */
+  auto scalarType = op.getType().getBaseType(0u).getBaseType();
+
+  auto [supportedRoundModes, supportedDenormModes] = [&] {
+    switch (scalarType) {
+      case ir::ScalarType::eF16: {
+        m_fpMode.f16 = op.getFlags();
+
+        return std::make_pair(
+          m_options.supportedRoundModesF16,
+          m_options.supportedDenormModesF16);
+      }
+
+      case ir::ScalarType::eF32: {
+        m_fpMode.f32 = op.getFlags();
+
+        return std::make_pair(
+          m_options.supportedRoundModesF32,
+          m_options.supportedDenormModesF32);
+      }
+
+      case ir::ScalarType::eF64: {
+        m_fpMode.f64 = op.getFlags();
+
+        return std::make_pair(
+          m_options.supportedRoundModesF64,
+          m_options.supportedDenormModesF64);
+      }
+
+      default: break;
+    }
+
+    dxbc_spv_unreachable();
+    return std::make_pair(ir::RoundModes(), ir::DenormModes());
+  } ();
+
+  /* Set up rounding mode */
+  auto roundMode = ir::RoundMode(op.getOperand(1u));
+
+  if (supportedRoundModes & roundMode) {
+    auto mode = [&] {
+      switch (roundMode) {
+        case ir::RoundMode::eZero: {
+          enableCapability(spv::CapabilityRoundingModeRTZ);
+        } return spv::ExecutionModeRoundingModeRTZ;
+
+        case ir::RoundMode::eNearestEven: {
+          enableCapability(spv::CapabilityRoundingModeRTE);
+        } return spv::ExecutionModeRoundingModeRTE;
+
+        default:
+          break;
+      }
+
+      dxbc_spv_unreachable();
+      return spv::ExecutionMode();
+    } ();
+
+    pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId,
+      mode, ir::bitWidth(scalarType));
+  }
+
+  /* Set up denorm mode */
+  auto denormMode = ir::DenormMode(op.getOperand(2u));
+
+  if (supportedDenormModes & denormMode) {
+    auto mode = [&] {
+      switch (denormMode) {
+        case ir::DenormMode::eFlush: {
+          enableCapability(spv::CapabilityDenormFlushToZero);
+        } return spv::ExecutionModeDenormFlushToZero;
+
+        case ir::DenormMode::ePreserve: {
+          enableCapability(spv::CapabilityDenormPreserve);
+        } return spv::ExecutionModeDenormPreserve;
+
+        case ir::DenormMode::eFlagEnum:
+          break;
+      }
+
+      dxbc_spv_unreachable();
+      return spv::ExecutionMode();
+    } ();
+
+    pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId,
+      mode, ir::bitWidth(scalarType));
+  }
+
+  if (m_options.floatControls2) {
+    /* Set up default float control mode for the given type */
+    enableCapability(spv::CapabilityFloatControls2);
+
+    uint32_t flags = getFpModeFlags(op.getFlags());
+
+    pushOp(m_executionModes, spv::OpExecutionModeId, m_entryPointId,
+      spv::ExecutionModeFPFastMathDefault, getIdForType(scalarType), makeConstU32(flags));
+  } else {
+    /* If float controls 2 is not supported, check if we need to care about signed
+     * zero, inf or nan values for the given type, and enable the mode if possible. */
+    auto lenientFlags = ir::OpFlag::eNoNan | ir::OpFlag::eNoInf | ir::OpFlag::eNoSz;
+
+    if ((op.getFlags() & lenientFlags) != lenientFlags) {
+      bool supportsZeroInfNanPreserve =
+        (scalarType == ir::ScalarType::eF16 && m_options.supportsZeroInfNanPreserveF16) ||
+        (scalarType == ir::ScalarType::eF32 && m_options.supportsZeroInfNanPreserveF32) ||
+        (scalarType == ir::ScalarType::eF64 && m_options.supportsZeroInfNanPreserveF64);
+
+      if (supportsZeroInfNanPreserve)  {
+        enableCapability(spv::CapabilitySignedZeroInfNanPreserve);
+
+        pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId,
+          spv::ExecutionModeSignedZeroInfNanPreserve, ir::bitWidth(scalarType));
+      }
+    }
+  }
+}
 
 
 void SpirvBuilder::emitSetCsWorkgroupSize(const ir::Op& op) {
@@ -4261,6 +4434,10 @@ void SpirvBuilder::enableCapability(spv::Capability cap) {
   m_enabledCaps.insert(cap);
 
   switch (cap) {
+    case spv::CapabilityFloatControls2:
+      enableExtension("SPV_KHR_float_controls2");
+      break;
+
     case spv::CapabilityFragmentShaderSampleInterlockEXT:
     case spv::CapabilityFragmentShaderPixelInterlockEXT:
     case spv::CapabilityFragmentShaderShadingRateInterlockEXT:
@@ -4454,6 +4631,29 @@ DescriptorBinding SpirvBuilder::mapDescriptor(const ir::Op& op, const ir::Op& bi
   auto regIndex = uint32_t(bindingOp.getOperand(2u));
 
   return m_mapping.mapDescriptor(type, regSpace, regIndex);
+}
+
+
+uint32_t SpirvBuilder::getFpModeFlags(ir::OpFlags flags) {
+  uint32_t result = 0u;
+
+  if (!(flags & ir::OpFlag::ePrecise)) {
+    result |= spv::FPFastMathModeAllowRecipMask
+           |  spv::FPFastMathModeAllowContractMask
+           |  spv::FPFastMathModeAllowReassocMask
+           |  spv::FPFastMathModeAllowTransformMask;
+  }
+
+  if (flags & ir::OpFlag::eNoNan)
+    result |= spv::FPFastMathModeNotNaNMask;
+
+  if (flags & ir::OpFlag::eNoInf)
+    result |= spv::FPFastMathModeNotInfMask;
+
+  if (flags & ir::OpFlag::eNoSz)
+    result |= spv::FPFastMathModeNSZMask;
+
+  return result;
 }
 
 
