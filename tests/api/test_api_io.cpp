@@ -654,12 +654,11 @@ Builder test_io_gs_multi_stream_xfb_raster_1() {
   return builder;
 }
 
-Builder test_io_hs() {
+Builder make_test_io_hs(PrimitiveType primType, TessWindingOrder winding, TessPartitioning partitioning) {
   Builder builder;
   auto entryPoint = setupTestFunction(builder, ShaderStage::eHull);
 
-  builder.add(Op::SetTessPrimitive(entryPoint, PrimitiveType::eTriangles,
-    TessWindingOrder::eCcw, TessPartitioning::eFractEven));
+  builder.add(Op::SetTessPrimitive(entryPoint, primType, winding, partitioning));
   builder.add(Op::SetTessControlPoints(entryPoint, 4u, 4u));
 
   auto cpDef = ir::SsaDef(builder.getOp(entryPoint).getOperand(0u));
@@ -750,6 +749,22 @@ Builder test_io_hs() {
   builder.add(Op::Return());
 
   return builder;
+}
+
+Builder test_io_hs_point() {
+  return make_test_io_hs(PrimitiveType::ePoints, TessWindingOrder::eCw, TessPartitioning::eInteger);
+}
+
+Builder test_io_hs_line() {
+  return make_test_io_hs(PrimitiveType::eLines, TessWindingOrder::eCw, TessPartitioning::eInteger);
+}
+
+Builder test_io_hs_triangle_cw() {
+  return make_test_io_hs(PrimitiveType::eTriangles, TessWindingOrder::eCw, TessPartitioning::eFractEven);
+}
+
+Builder test_io_hs_triangle_ccw() {
+  return make_test_io_hs(PrimitiveType::eTriangles, TessWindingOrder::eCcw, TessPartitioning::eFractOdd);
 }
 
 }

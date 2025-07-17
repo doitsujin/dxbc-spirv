@@ -51,7 +51,10 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_io_gs_multi_stream_xfb_raster_0);
   ADD_TEST(test_io_gs_multi_stream_xfb_raster_1);
 
-  ADD_TEST(test_io_hs);
+  ADD_TEST(test_io_hs_point);
+  ADD_TEST(test_io_hs_line);
+  ADD_TEST(test_io_hs_triangle_cw);
+  ADD_TEST(test_io_hs_triangle_ccw);
 
   ADD_TEST(test_resources_cbv);
   ADD_TEST(test_resources_cbv_dynamic);
