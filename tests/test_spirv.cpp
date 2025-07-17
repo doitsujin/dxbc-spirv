@@ -145,6 +145,17 @@ int main(int argc, char** argv) {
   dxbc_spv::tests::Options options;
   options.basePath = argv[1u];
   options.spirv.includeDebugNames = true;
+  /* Enable all float control options by default */
+  options.spirv.floatControls2 = true;
+  options.spirv.supportedRoundModesF16 = dxbc_spv::ir::RoundMode::eZero | dxbc_spv::ir::RoundMode::eNearestEven;
+  options.spirv.supportedRoundModesF32 = dxbc_spv::ir::RoundMode::eZero | dxbc_spv::ir::RoundMode::eNearestEven;
+  options.spirv.supportedRoundModesF64 = dxbc_spv::ir::RoundMode::eZero | dxbc_spv::ir::RoundMode::eNearestEven;
+  options.spirv.supportedDenormModesF16 = dxbc_spv::ir::DenormMode::eFlush | dxbc_spv::ir::DenormMode::ePreserve;
+  options.spirv.supportedDenormModesF32 = dxbc_spv::ir::DenormMode::eFlush | dxbc_spv::ir::DenormMode::ePreserve;
+  options.spirv.supportedDenormModesF64 = dxbc_spv::ir::DenormMode::eFlush | dxbc_spv::ir::DenormMode::ePreserve;
+  options.spirv.supportsZeroInfNanPreserveF16 = true;
+  options.spirv.supportsZeroInfNanPreserveF32 = true;
+  options.spirv.supportsZeroInfNanPreserveF64 = true;
 
   for (int i = 2u; i < argc; i++) {
     std::string arg = argv[i];
@@ -155,6 +166,10 @@ int main(int argc, char** argv) {
       options.generateNew = true;
     } else if (arg == "--enable-nv-raw-access-chains") {
       options.spirv.nvRawAccessChains = true;
+    } else if (arg == "--no-float-controls2") {
+      options.spirv.floatControls2 = false;
+    } else if (arg == "--no-debug-names") {
+      options.spirv.includeDebugNames = false;
     } else if (arg == "--filter" && i + 1 < argc) {
       options.testFilter = argv[++i];
     } else {

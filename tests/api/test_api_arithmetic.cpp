@@ -14,6 +14,16 @@ Builder make_test_float_arithmetic(BasicType type, bool precise) {
   builder.add(Op::SetCsWorkgroupSize(entryPoint, 1u, 1u, 1u));
   builder.add(Op::Label());
 
+  auto floatFlags = precise ? OpFlags(OpFlag::ePrecise) : OpFlags();
+
+  builder.add(Op::SetFpMode(entryPoint, ScalarType::eF32, floatFlags,
+    RoundMode::eNearestEven, DenormMode::eFlush));
+
+  if (type != ScalarType::eF32) {
+    builder.add(Op::SetFpMode(entryPoint, type.getBaseType(), floatFlags,
+      RoundMode::eNearestEven, DenormMode::ePreserve));
+  }
+
   auto bufType = Type(ScalarType::eF32).addArrayDimension(type.getVectorSize()).addArrayDimension(0u);
   auto srv = builder.add(Op::DclSrv(bufType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured));
   auto uav = builder.add(Op::DclUav(bufType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured, UavFlag::eWriteOnly));
@@ -93,9 +103,6 @@ Builder make_test_float_arithmetic(BasicType type, bool precise) {
 
     if (e.opCode == ir::OpCode::eFRound)
       op.addOperand(Operand(e.roundMode));
-
-    if (precise)
-      op.setFlags(OpFlag::ePrecise);
 
     resultDef = builder.add(std::move(op));
   }
