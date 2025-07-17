@@ -263,6 +263,8 @@ private:
 
   void emitDebugName(ir::SsaDef def, uint32_t id);
 
+  void emitDebugTypeName(ir::SsaDef def, uint32_t id);
+
   uint32_t emitAddressOffset(ir::SsaDef def, uint32_t offset);
 
   uint32_t emitAccessChain(spv::StorageClass storageClass, const ir::Type& baseType,

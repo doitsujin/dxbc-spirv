@@ -998,8 +998,10 @@ void SpirvBuilder::emitDclCbv(const ir::Op& op) {
   if (!op.getType().isStructType()) {
     structTypeId = defStructWrapper(structTypeId);
 
-    if (m_options.includeDebugNames)
+    if (m_options.includeDebugNames) {
       setDebugMemberName(structTypeId, 0u, "m");
+      emitDebugTypeName(op.getDef(), structTypeId);
+    }
   }
 
   pushOp(m_decorations, spv::OpDecorate, structTypeId, spv::DecorationBlock);
@@ -1019,8 +1021,10 @@ void SpirvBuilder::emitDclSrvUav(const ir::Op& op) {
     if (!op.getType().isStructType()) {
       structTypeId = defStructWrapper(structTypeId);
 
-      if (m_options.includeDebugNames)
+      if (m_options.includeDebugNames) {
         setDebugMemberName(structTypeId, 0u, "m");
+        emitDebugTypeName(op.getDef(), structTypeId);
+      }
     }
 
     pushOp(m_decorations, spv::OpDecorate, structTypeId, spv::DecorationBlock);
@@ -1129,6 +1133,8 @@ void SpirvBuilder::emitDclSrvUav(const ir::Op& op) {
 void SpirvBuilder::emitDclUavCounter(const ir::Op& op) {
   auto structTypeId = defStructWrapper(getIdForType(op.getType()));
   pushOp(m_decorations, spv::OpDecorate, structTypeId, spv::DecorationBlock);
+
+  emitDebugTypeName(op.getDef(), structTypeId);
 
   defDescriptor(op, structTypeId, spv::StorageClassStorageBuffer);
   m_descriptorTypes.insert({ op.getDef(), structTypeId });
@@ -2598,6 +2604,28 @@ void SpirvBuilder::emitDebugName(ir::SsaDef def, uint32_t id) {
   } else {
     dxbc_spv_unreachable();
   }
+}
+
+
+void SpirvBuilder::emitDebugTypeName(ir::SsaDef def, uint32_t id) {
+  if (!m_options.includeDebugNames)
+    return;
+
+  auto e = m_debugNames.find(def);
+
+  if (e == m_debugNames.end())
+    return;
+
+  const auto& debugOp = m_builder.getOp(e->second);
+
+  if (debugOp.getOpCode() != ir::OpCode::eDebugName)
+    return;
+
+  std::stringstream str;
+  str << debugOp.getLiteralString(1u);
+  str << "_t";
+
+  setDebugName(id, str.str().c_str());
 }
 
 
