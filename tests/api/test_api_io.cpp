@@ -998,4 +998,44 @@ Builder test_io_ds_quad() {
   return make_test_io_ds(PrimitiveType::eQuads);
 }
 
+Builder test_io_cs_builtins() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::eCompute);
+
+  builder.add(Op::SetCsWorkgroupSize(entryPoint, 4u, 4u, 4u));
+  builder.add(Op::Label());
+
+  auto gidDef = builder.add(Op::DclInputBuiltIn(Type(ScalarType::eU32, 3u), entryPoint, BuiltIn::eGlobalThreadId));
+  auto widDef = builder.add(Op::DclInputBuiltIn(Type(ScalarType::eU32, 3u), entryPoint, BuiltIn::eWorkgroupId));
+  auto lidDef = builder.add(Op::DclInputBuiltIn(Type(ScalarType::eU32, 3u), entryPoint, BuiltIn::eLocalThreadId));
+  auto tidDef = builder.add(Op::DclInputBuiltIn(ScalarType::eU32, entryPoint, BuiltIn::eLocalThreadIndex));
+
+  builder.add(Op::Semantic(gidDef, 0u, "SV_DispatchThreadId"));
+  builder.add(Op::Semantic(widDef, 0u, "SV_GroupId"));
+  builder.add(Op::Semantic(lidDef, 0u, "SV_GroupThreadId"));
+  builder.add(Op::Semantic(tidDef, 0u, "SV_GroupIndex"));
+
+  auto aUav = builder.add(Op::DclUav(ScalarType::eU32, entryPoint, 0u, 0u, 1u, ResourceKind::eImage3D, UavFlag::eWriteOnly));
+  auto bUav = builder.add(Op::DclUav(ScalarType::eU32, entryPoint, 0u, 1u, 1u, ResourceKind::eImage3D, UavFlag::eWriteOnly));
+  auto cUav = builder.add(Op::DclUav(ScalarType::eU32, entryPoint, 0u, 2u, 1u, ResourceKind::eImage3D, UavFlag::eWriteOnly));
+
+  auto aDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eUav, aUav, builder.makeConstant(0u)));
+  auto bDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eUav, bUav, builder.makeConstant(0u)));
+  auto cDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eUav, cUav, builder.makeConstant(0u)));
+
+  auto tid = builder.add(Op::InputLoad(ScalarType::eU32, tidDef, SsaDef()));
+  auto value = builder.add(Op::CompositeConstruct(Type(ScalarType::eU32, 4u), tid, tid, tid, tid));
+
+  auto aCoord = builder.add(Op::InputLoad(Type(ScalarType::eU32, 3u), gidDef, SsaDef()));
+  auto bCoord = builder.add(Op::InputLoad(Type(ScalarType::eU32, 3u), widDef, SsaDef()));
+  auto cCoord = builder.add(Op::InputLoad(Type(ScalarType::eU32, 3u), lidDef, SsaDef()));
+
+  builder.add(Op::ImageStore(aDescriptor, SsaDef(), aCoord, value));
+  builder.add(Op::ImageStore(bDescriptor, SsaDef(), bCoord, value));
+  builder.add(Op::ImageStore(cDescriptor, SsaDef(), cCoord, value));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
 }

@@ -42,4 +42,6 @@ Builder test_io_ds_isoline();
 Builder test_io_ds_triangle();
 Builder test_io_ds_quad();
 
+Builder test_io_cs_builtins();
+
 }
