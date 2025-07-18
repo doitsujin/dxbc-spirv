@@ -269,6 +269,11 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
 
   ADD_TEST(test_arithmetic_bool);
 
+  ADD_TEST(test_convert_f_to_f);
+  ADD_TEST(test_convert_f_to_i);
+  ADD_TEST(test_convert_i_to_f);
+  ADD_TEST(test_convert_i_to_i);
+
   ADD_TEST(test_misc_scratch);
   ADD_TEST(test_misc_lds);
   ADD_TEST(test_misc_lds_atomic);
@@ -289,6 +294,7 @@ std::vector<NamedTest> enumerateSpirvTests(const char* filter) {
   ADD_TEST(test_spirv_spec_constant);
   ADD_TEST(test_spirv_push_data);
   ADD_TEST(test_spirv_raw_pointer);
+  ADD_TEST(test_spirv_cbv_srv_uav_structs);
 
   return result;
 }

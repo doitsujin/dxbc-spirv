@@ -14,6 +14,16 @@ Builder make_test_float_arithmetic(BasicType type, bool precise) {
   builder.add(Op::SetCsWorkgroupSize(entryPoint, 1u, 1u, 1u));
   builder.add(Op::Label());
 
+  auto floatFlags = precise ? OpFlags(OpFlag::ePrecise) : OpFlags();
+
+  builder.add(Op::SetFpMode(entryPoint, ScalarType::eF32, floatFlags,
+    RoundMode::eNearestEven, DenormMode::eFlush));
+
+  if (type != ScalarType::eF32) {
+    builder.add(Op::SetFpMode(entryPoint, type.getBaseType(), floatFlags,
+      RoundMode::eNearestEven, DenormMode::ePreserve));
+  }
+
   auto bufType = Type(ScalarType::eF32).addArrayDimension(type.getVectorSize()).addArrayDimension(0u);
   auto srv = builder.add(Op::DclSrv(bufType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured));
   auto uav = builder.add(Op::DclUav(bufType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured, UavFlag::eWriteOnly));
@@ -93,9 +103,6 @@ Builder make_test_float_arithmetic(BasicType type, bool precise) {
 
     if (e.opCode == ir::OpCode::eFRound)
       op.addOperand(Operand(e.roundMode));
-
-    if (precise)
-      op.setFlags(OpFlag::ePrecise);
 
     resultDef = builder.add(std::move(op));
   }
@@ -195,13 +202,13 @@ Builder test_arithmetic_fp32_special() {
   auto srv = builder.add(Op::DclSrv(bufType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured));
   auto uav = builder.add(Op::DclUav(bufType, entryPoint, 0u, 0u, 1u, ResourceKind::eBufferStructured, UavFlag::eWriteOnly));
 
-  static const std::vector<ir::OpCode> tests = {
-    ir::OpCode::eFLog2,
-    ir::OpCode::eFSin,
-    ir::OpCode::eFSqrt,
-    ir::OpCode::eFExp2,
-    ir::OpCode::eFRsq,
-    ir::OpCode::eFCos,
+  static const std::vector<std::pair<ir::OpCode, ir::OpFlags>> tests = {
+    { ir::OpCode::eFLog2, ir::OpFlag::eNoSz   },
+    { ir::OpCode::eFSin,  ir::OpFlag::eNoInf  },
+    { ir::OpCode::eFSqrt, ir::OpFlags()       },
+    { ir::OpCode::eFExp2, ir::OpFlag::eNoSz   },
+    { ir::OpCode::eFRsq,  ir::OpFlag::eNoSz   },
+    { ir::OpCode::eFCos,  ir::OpFlag::eNoInf  },
   };
 
   auto srvDescriptor = builder.add(Op::DescriptorLoad(ScalarType::eSrv, srv, builder.makeConstant(0u)));
@@ -210,8 +217,10 @@ Builder test_arithmetic_fp32_special() {
   auto indexDef = builder.makeConstant(0u, 0u);
   auto component = builder.add(Op::BufferLoad(ScalarType::eF32, srvDescriptor, indexDef, 4u));
 
-  for (auto opCode : tests)
-    component = builder.add(Op(opCode, ScalarType::eF32).addOperand(Operand(component)));
+  for (auto e : tests) {
+    component = builder.add(Op(e.first, ScalarType::eF32)
+      .setFlags(e.second).addOperand(Operand(component)));
+  }
 
   builder.add(Op::BufferStore(uavDescriptor, indexDef, component, 4u));
   builder.add(Op::Return());
@@ -666,6 +675,130 @@ Builder test_arithmetic_bool() {
     auto indexDef = builder.makeConstant(uavIndex++, 0u);
     builder.add(Op::BufferStore(uavDescriptor, indexDef, resultDef, 4u));
   }
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+Builder test_convert_f_to_f() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+  builder.add(Op::Label());
+
+  auto inputDef = builder.add(Op::DclInput(ScalarType::eF32, entryPoint, 0u, 0u, InterpolationModes()));
+  builder.add(Op::Semantic(inputDef, 0u, "INPUT"));
+
+  auto outputDef = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(outputDef, 0u, "SV_TARGET"));
+
+  auto value = builder.add(Op::InputLoad(ScalarType::eF32, inputDef, SsaDef()));
+  value = builder.add(Op::ConvertFtoF(ScalarType::eF16, value));
+  value = builder.add(Op::ConvertFtoF(ScalarType::eF64, value));
+  value = builder.add(Op::ConvertFtoF(ScalarType::eF32, value));
+  value = builder.add(Op::ConvertFtoF(ScalarType::eF64, value));
+  value = builder.add(Op::ConvertFtoF(ScalarType::eF16, value));
+  value = builder.add(Op::ConvertFtoF(ScalarType::eF32, value));
+  builder.add(Op::OutputStore(outputDef, SsaDef(), value));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+Builder test_convert_f_to_i() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+  builder.add(Op::Label());
+
+  auto inputDef = builder.add(Op::DclInput(ScalarType::eF32, entryPoint, 0u, 0u, InterpolationModes()));
+  builder.add(Op::Semantic(inputDef, 0u, "INPUT"));
+
+  auto outA = builder.add(Op::DclOutput(ScalarType::eU32, entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(outA, 0u, "SV_TARGET"));
+  auto outB = builder.add(Op::DclOutput(ScalarType::eI32, entryPoint, 1u, 0u));
+  builder.add(Op::Semantic(outB, 1u, "SV_TARGET"));
+
+  auto input = builder.add(Op::InputLoad(ScalarType::eF32, inputDef, SsaDef()));
+
+  auto a = builder.add(Op::ConvertFtoI(ScalarType::eU32, input));
+  auto b = builder.add(Op::ConvertFtoI(ScalarType::eI32, input));
+  a = builder.add(Op::IAdd(ScalarType::eU32, a, builder.add(Op::ConvertFtoI(ScalarType::eU32, builder.add(Op::ConvertFtoF(ScalarType::eF64, input))))));
+  b = builder.add(Op::IAdd(ScalarType::eI32, b, builder.add(Op::ConvertFtoI(ScalarType::eI32, builder.add(Op::ConvertFtoF(ScalarType::eF64, input))))));
+  a = builder.add(Op::IAdd(ScalarType::eU32, a, builder.add(Op::ConvertFtoI(ScalarType::eU32, builder.add(Op::ConvertFtoF(ScalarType::eF16, input))))));
+  b = builder.add(Op::IAdd(ScalarType::eI32, b, builder.add(Op::ConvertFtoI(ScalarType::eI32, builder.add(Op::ConvertFtoF(ScalarType::eF16, input))))));
+  builder.add(Op::OutputStore(outA, SsaDef(), a));
+  builder.add(Op::OutputStore(outB, SsaDef(), b));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+Builder test_convert_i_to_f() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+  builder.add(Op::Label());
+
+  auto inUintDef = builder.add(Op::DclInput(ScalarType::eU32, entryPoint, 0u, 0u, InterpolationMode::eFlat));
+  builder.add(Op::Semantic(inUintDef, 0u, "UINPUT"));
+  auto inSintDef = builder.add(Op::DclInput(ScalarType::eI32, entryPoint, 0u, 1u, InterpolationMode::eFlat));
+  builder.add(Op::Semantic(inSintDef, 0u, "SINPUT"));
+
+  auto outA = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(outA, 0u, "SV_TARGET"));
+  auto outB = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 1u, 0u));
+  builder.add(Op::Semantic(outB, 1u, "SV_TARGET"));
+
+  auto uintValue = builder.add(Op::InputLoad(ScalarType::eU32, inUintDef, SsaDef()));
+  auto sintValue = builder.add(Op::InputLoad(ScalarType::eI32, inSintDef, SsaDef()));
+
+  auto a = builder.add(Op::ConvertItoF(ScalarType::eF32, uintValue));
+  auto b = builder.add(Op::ConvertItoF(ScalarType::eF32, sintValue));
+  a = builder.add(Op::FAdd(ScalarType::eF32, a, builder.add(Op::ConvertFtoF(ScalarType::eF32, builder.add(Op::ConvertItoF(ScalarType::eF16, uintValue))))));
+  b = builder.add(Op::FAdd(ScalarType::eF32, b, builder.add(Op::ConvertFtoF(ScalarType::eF32, builder.add(Op::ConvertItoF(ScalarType::eF16, sintValue))))));
+  a = builder.add(Op::FAdd(ScalarType::eF32, a, builder.add(Op::ConvertFtoF(ScalarType::eF32, builder.add(Op::ConvertItoF(ScalarType::eF64, uintValue))))));
+  b = builder.add(Op::FAdd(ScalarType::eF32, b, builder.add(Op::ConvertFtoF(ScalarType::eF32, builder.add(Op::ConvertItoF(ScalarType::eF64, sintValue))))));
+  builder.add(Op::OutputStore(outA, SsaDef(), a));
+  builder.add(Op::OutputStore(outB, SsaDef(), b));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+Builder test_convert_i_to_i() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+  builder.add(Op::Label());
+
+  auto inUintDef = builder.add(Op::DclInput(ScalarType::eU32, entryPoint, 0u, 0u, InterpolationMode::eFlat));
+  builder.add(Op::Semantic(inUintDef, 0u, "INPUT"));
+
+  auto outUintDef = builder.add(Op::DclOutput(ScalarType::eU32, entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(outUintDef, 0u, "SV_TARGET"));
+
+  auto value = builder.add(Op::InputLoad(ScalarType::eU32, inUintDef, SsaDef()));
+  value = builder.add(Op::ConvertItoI(ScalarType::eU16, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eU64, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eU32, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eU64, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eU16, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eU32, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eI32, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eI64, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eI16, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eI64, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eI32, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eI16, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eI32, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eU64, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eI64, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eU32, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eI16, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eU16, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eI32, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eU16, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eI64, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eU16, value));
+  value = builder.add(Op::ConvertItoI(ScalarType::eU32, value));
+  builder.add(Op::OutputStore(outUintDef, SsaDef(), value));
 
   builder.add(Op::Return());
   return builder;
