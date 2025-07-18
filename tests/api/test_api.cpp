@@ -269,6 +269,11 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
 
   ADD_TEST(test_arithmetic_bool);
 
+  ADD_TEST(test_convert_f_to_f);
+  ADD_TEST(test_convert_f_to_i);
+  ADD_TEST(test_convert_i_to_f);
+  ADD_TEST(test_convert_i_to_i);
+
   ADD_TEST(test_misc_scratch);
   ADD_TEST(test_misc_lds);
   ADD_TEST(test_misc_lds_atomic);

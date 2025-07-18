@@ -35,4 +35,9 @@ Builder test_arithmetic_int_extended();
 
 Builder test_arithmetic_bool();
 
+Builder test_convert_f_to_f();
+Builder test_convert_f_to_i();
+Builder test_convert_i_to_f();
+Builder test_convert_i_to_i();
+
 }
