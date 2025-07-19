@@ -23,6 +23,29 @@ T popcnt(T n) {
 }
 
 
+/** Trailing zero count (8-bit) */
+inline uint32_t tzcnt(uint8_t n) {
+  uint32_t r = 7;
+  n &= -n;
+  r -= (n & 0x0fu) ? 4 : 0;
+  r -= (n & 0x33u) ? 2 : 0;
+  r -= (n & 0x55u) ? 1 : 0;
+  return n != 0 ? r : 8;
+}
+
+
+/** Trailing zero count (16-bit) */
+inline uint32_t tzcnt(uint16_t n) {
+  uint32_t r = 15;
+  n &= -n;
+  r -= (n & 0x00ffu) ? 8 : 0;
+  r -= (n & 0x0f0fu) ? 4 : 0;
+  r -= (n & 0x3333u) ? 2 : 0;
+  r -= (n & 0x5555u) ? 1 : 0;
+  return n != 0 ? r : 16;
+}
+
+
 /** Trailing zero count (32-bit) */
 inline uint32_t tzcnt(uint32_t n) {
   uint32_t r = 31;
