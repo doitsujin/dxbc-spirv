@@ -304,6 +304,7 @@ std::ostream& operator << (std::ostream& os, const ScalarType& ty) {
     case ScalarType::eMinI16:     return os << "mini16";
     case ScalarType::eMinU16:     return os << "minu16";
     case ScalarType::eMinF16:     return os << "minf16";
+    case ScalarType::eMinF10:     return os << "minf10";
 
     case ScalarType::eSampler:    return os << "sampler";
     case ScalarType::eCbv:        return os << "cbv";
