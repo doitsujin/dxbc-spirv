@@ -56,12 +56,14 @@ enum class ScalarType : uint8_t {
   eMinU16       = 15,
   eMinF16       = 16,
 
+  eMinF10       = 17,
+
   /** Opaque descriptor types. Used for resource access. */
-  eSampler      = 17,
-  eCbv          = 18,
-  eSrv          = 19,
-  eUav          = 20,
-  eUavCounter   = 21,
+  eSampler      = 18,
+  eCbv          = 19,
+  eSrv          = 20,
+  eUav          = 21,
+  eUavCounter   = 22,
 
   eCount
 };
@@ -193,7 +195,8 @@ public:
     return type == ScalarType::eF16
         || type == ScalarType::eF32
         || type == ScalarType::eF64
-        || type == ScalarType::eMinF16;
+        || type == ScalarType::eMinF16
+        || type == ScalarType::eMinF10;
   }
 
   /** Checks whether base type is a numeric type */
@@ -207,7 +210,8 @@ public:
 
     return type == ScalarType::eMinI16
         || type == ScalarType::eMinU16
-        || type == ScalarType::eMinF16;
+        || type == ScalarType::eMinF16
+        || type == ScalarType::eMinF10;
   }
 
   /** Checks whether base type is a descriptor type */
