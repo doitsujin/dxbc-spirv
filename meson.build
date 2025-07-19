@@ -4,6 +4,10 @@ project('dxbc-spirv', ['cpp'],
   default_options : [ 'cpp_std=c++17', 'warning_level=2', 'cpp_eh=none' ])
 
 dxbc_spv_files = files([
+  'dxbc/dxbc_container.cpp',
+  'dxbc/dxbc_signature.cpp',
+  'dxbc/dxbc_types.cpp',
+
   'ir/ir.cpp',
   'ir/ir_builder.cpp',
   'ir/ir_disasm.cpp',
