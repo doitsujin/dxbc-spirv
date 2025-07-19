@@ -3,6 +3,8 @@ subdir('api')
 test_files = files([
   'test_main.cpp',
 
+  'dxbc/test_dxbc_common.cpp',
+
   'ir/test_ir_builder.cpp',
   'ir/test_ir_op.cpp',
   'ir/test_ir_serialize.cpp',
