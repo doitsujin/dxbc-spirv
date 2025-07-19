@@ -1,5 +1,7 @@
 #include <iostream>
 
+#include "./dxbc/test_dxbc.h"
+
 #include "./ir/test_ir.h"
 
 #include "./util/test_util.h"
@@ -11,6 +13,7 @@ TestState g_testState;
 void runTests() {
   util::runTests();
   ir::runTests();
+  dxbc::runTests();
 
   std::cerr << "Tests run: " << g_testState.testsRun
     << ", failed: " << g_testState.testsFailed << std::endl;
