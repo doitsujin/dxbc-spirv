@@ -711,8 +711,13 @@ Builder make_test_io_hs(PrimitiveType primType, TessWindingOrder winding, TessPa
   Builder builder;
   auto entryPoint = setupTestFunction(builder, ShaderStage::eHull);
 
+  auto domain = primType == PrimitiveType::eLines
+    ? PrimitiveType::eLines
+    : PrimitiveType::eTriangles;
+
   builder.add(Op::SetTessPrimitive(entryPoint, primType, winding, partitioning));
   builder.add(Op::SetTessControlPoints(entryPoint, 4u, 4u));
+  builder.add(Op::SetTessDomain(entryPoint, domain));
 
   auto cpDef = ir::SsaDef(builder.getOp(entryPoint).getOperand(0u));
   auto pcDef = ir::SsaDef(builder.getOp(entryPoint).getOperand(1u));
