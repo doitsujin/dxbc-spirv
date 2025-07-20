@@ -582,6 +582,14 @@ enum class PrimitiveType : uint32_t {
 };
 
 
+/** Makes patch primitive type for given vertex count */
+inline PrimitiveType makePatchPrimitive(uint32_t vertexCount) {
+  dxbc_spv_assert(vertexCount >= 1u && vertexCount <= 32u);
+
+  return PrimitiveType(uint32_t(PrimitiveType::ePatch) + vertexCount);
+}
+
+
 /** Computes vertex count for primitive type. */
 inline uint32_t primitiveVertexCount(PrimitiveType type) {
   switch (type) {
