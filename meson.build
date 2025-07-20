@@ -30,3 +30,7 @@ lib_dxbc_spv = static_library('dxbc_spv', dxbc_spv_files,
 if get_option('enable_tests')
   subdir('tests')
 endif
+
+if get_option('enable_tools')
+  subdir('tools')
+endif
