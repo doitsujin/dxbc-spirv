@@ -11,6 +11,7 @@ dxbc_spv_files = files([
   'ir/ir_validation.cpp',
 
   'util/util_float16.cpp',
+  'util/util_md5.cpp',
 
   'spirv/spirv_builder.cpp',
   'spirv/spirv_mapping.cpp',
