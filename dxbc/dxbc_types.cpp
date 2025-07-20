@@ -37,39 +37,282 @@ ir::ScalarType resolveType(ComponentType type, MinPrecision precision) {
 
 std::pair<ComponentType, MinPrecision> determineComponentType(ir::ScalarType type) {
   switch (type) {
-    case ir::ScalarType::eVoid:
-      return std::make_pair(ComponentType::eVoid, MinPrecision::eNone);
-
-    case ir::ScalarType::eBool:
-      return std::make_pair(ComponentType::eBool, MinPrecision::eNone);
-
-    case ir::ScalarType::eMinU16:
-      return std::make_pair(ComponentType::eUint, MinPrecision::eMin16Uint);
-
-    case ir::ScalarType::eMinI16:
-      return std::make_pair(ComponentType::eSint, MinPrecision::eMin16Sint);
-
-    case ir::ScalarType::eMinF16:
-      return std::make_pair(ComponentType::eFloat, MinPrecision::eMin16Float);
-
-    case ir::ScalarType::eMinF10:
-      return std::make_pair(ComponentType::eFloat, MinPrecision::eMin10Float);
-
-    case ir::ScalarType::eU32:
-      return std::make_pair(ComponentType::eUint, MinPrecision::eNone);
-
-    case ir::ScalarType::eI32:
-      return std::make_pair(ComponentType::eSint, MinPrecision::eNone);
-
-    case ir::ScalarType::eF32:
-      return std::make_pair(ComponentType::eFloat, MinPrecision::eNone);
-
-    case ir::ScalarType::eF64:
-      return std::make_pair(ComponentType::eDouble, MinPrecision::eNone);
+    case ir::ScalarType::eVoid:   return std::make_pair(ComponentType::eVoid,   MinPrecision::eNone);
+    case ir::ScalarType::eBool:   return std::make_pair(ComponentType::eBool,   MinPrecision::eNone);
+    case ir::ScalarType::eMinU16: return std::make_pair(ComponentType::eUint,   MinPrecision::eMin16Uint);
+    case ir::ScalarType::eMinI16: return std::make_pair(ComponentType::eSint,   MinPrecision::eMin16Sint);
+    case ir::ScalarType::eMinF16: return std::make_pair(ComponentType::eFloat,  MinPrecision::eMin16Float);
+    case ir::ScalarType::eMinF10: return std::make_pair(ComponentType::eFloat,  MinPrecision::eMin10Float);
+    case ir::ScalarType::eU32:    return std::make_pair(ComponentType::eUint,   MinPrecision::eNone);
+    case ir::ScalarType::eI32:    return std::make_pair(ComponentType::eSint,   MinPrecision::eNone);
+    case ir::ScalarType::eF32:    return std::make_pair(ComponentType::eFloat,  MinPrecision::eNone);
+    case ir::ScalarType::eF64:    return std::make_pair(ComponentType::eDouble, MinPrecision::eNone);
 
     default:
       dxbc_spv_unreachable();
       return std::make_pair(ComponentType::eVoid, MinPrecision::eNone);
+  }
+}
+
+
+ir::ScalarType resolveSampledType(SampledType type) {
+  switch (type) {
+    case SampledType::eUnorm:
+    case SampledType::eSnorm:
+    case SampledType::eFloat:
+    case SampledType::eMixed:
+      return ir::ScalarType::eF32;
+
+    case SampledType::eSint:
+      return ir::ScalarType::eI32;
+
+    case SampledType::eUint:
+      return ir::ScalarType::eU32;
+
+    case SampledType::eDouble:
+      return ir::ScalarType::eF64;
+  }
+
+  return ir::ScalarType::eUnknown;
+}
+
+
+SampledType determineSampledType(ir::ScalarType type) {
+  switch (type) {
+    case ir::ScalarType::eI32:  return SampledType::eSint;
+    case ir::ScalarType::eU32:  return SampledType::eUint;
+    case ir::ScalarType::eF32:  return SampledType::eFloat;
+    case ir::ScalarType::eF64:  return SampledType::eDouble;
+
+    default:
+      dxbc_spv_unreachable();
+      return SampledType::eMixed;
+  }
+}
+
+
+std::optional<ir::ResourceKind> resolveResourceDim(ResourceDim dim) {
+  switch (dim) {
+    case ResourceDim::eUnknown:           return std::nullopt;
+    case ResourceDim::eBuffer:            return ir::ResourceKind::eBufferTyped;
+    case ResourceDim::eRawBuffer:         return ir::ResourceKind::eBufferRaw;
+    case ResourceDim::eStructuredBuffer:  return ir::ResourceKind::eBufferStructured;
+    case ResourceDim::eTexture1D:         return ir::ResourceKind::eImage1D;
+    case ResourceDim::eTexture1DArray:    return ir::ResourceKind::eImage1DArray;
+    case ResourceDim::eTexture2D:         return ir::ResourceKind::eImage2D;
+    case ResourceDim::eTexture2DArray:    return ir::ResourceKind::eImage2DArray;
+    case ResourceDim::eTexture2DMS:       return ir::ResourceKind::eImage2DMS;
+    case ResourceDim::eTexture2DMSArray:  return ir::ResourceKind::eImage2DMSArray;
+    case ResourceDim::eTextureCube:       return ir::ResourceKind::eImageCube;
+    case ResourceDim::eTextureCubeArray:  return ir::ResourceKind::eImageCubeArray;
+    case ResourceDim::eTexture3D:         return ir::ResourceKind::eImage3D;
+  }
+
+  return std::nullopt;
+}
+
+
+ResourceDim determineResourceDim(ir::ResourceKind kind) {
+  switch (kind) {
+    case ir::ResourceKind::eBufferTyped:      return ResourceDim::eBuffer;
+    case ir::ResourceKind::eBufferRaw:        return ResourceDim::eRawBuffer;
+    case ir::ResourceKind::eBufferStructured: return ResourceDim::eStructuredBuffer;
+    case ir::ResourceKind::eImage1D:          return ResourceDim::eTexture1D;
+    case ir::ResourceKind::eImage1DArray:     return ResourceDim::eTexture1DArray;
+    case ir::ResourceKind::eImage2D:          return ResourceDim::eTexture2D;
+    case ir::ResourceKind::eImage2DArray:     return ResourceDim::eTexture2DArray;
+    case ir::ResourceKind::eImage2DMS:        return ResourceDim::eTexture2DMS;
+    case ir::ResourceKind::eImage2DMSArray:   return ResourceDim::eTexture2DMSArray;
+    case ir::ResourceKind::eImageCube:        return ResourceDim::eTextureCube;
+    case ir::ResourceKind::eImageCubeArray:   return ResourceDim::eTextureCubeArray;
+    case ir::ResourceKind::eImage3D:          return ResourceDim::eTexture3D;
+  }
+
+  dxbc_spv_unreachable();
+  return ResourceDim::eUnknown;
+}
+
+
+std::optional<ir::PrimitiveType> resolvePrimitiveTopology(PrimitiveTopology type) {
+  switch (type) {
+    case PrimitiveTopology::eUndefined:
+      return std::nullopt;
+
+    case PrimitiveTopology::ePointList:
+      return ir::PrimitiveType::ePoints;
+
+    case PrimitiveTopology::eLineList:
+    case PrimitiveTopology::eLineStrip:
+      return ir::PrimitiveType::eLines;
+
+    case PrimitiveTopology::eTriangleList:
+    case PrimitiveTopology::eTriangleStrip:
+      return ir::PrimitiveType::eTriangles;
+
+    case PrimitiveTopology::eLineListAdj:
+    case PrimitiveTopology::eLineStripAdj:
+      return ir::PrimitiveType::eLinesAdj;
+
+    case PrimitiveTopology::eTriangleListAdj:
+    case PrimitiveTopology::eTriangleStripAdj:
+      return ir::PrimitiveType::eTrianglesAdj;
+  }
+
+  return std::nullopt;
+}
+
+
+PrimitiveTopology determinePrimitiveTopology(ir::PrimitiveType type, bool strip) {
+  switch (type) {
+    case ir::PrimitiveType::ePoints:
+      return PrimitiveTopology::ePointList;
+
+    case ir::PrimitiveType::eLines:
+      return strip
+        ? PrimitiveTopology::eLineStrip
+        : PrimitiveTopology::eLineList;
+
+    case ir::PrimitiveType::eLinesAdj:
+      return strip
+        ? PrimitiveTopology::eLineStripAdj
+        : PrimitiveTopology::eLineListAdj;
+
+    case ir::PrimitiveType::eTriangles:
+      return strip
+        ? PrimitiveTopology::eTriangleStrip
+        : PrimitiveTopology::eTriangleList;
+
+    case ir::PrimitiveType::eTrianglesAdj:
+      return strip
+        ? PrimitiveTopology::eTriangleStripAdj
+        : PrimitiveTopology::eTriangleListAdj;
+
+    default:
+      dxbc_spv_unreachable();
+      return PrimitiveTopology::eUndefined;
+  }
+}
+
+
+std::optional<ir::PrimitiveType> resolvePrimitiveType(PrimitiveType type) {
+  switch (type) {
+    case PrimitiveType::eUndefined:   return std::nullopt;
+    case PrimitiveType::ePoint:       return ir::PrimitiveType::ePoints;
+    case PrimitiveType::eLine:        return ir::PrimitiveType::eLines;
+    case PrimitiveType::eTriangle:    return ir::PrimitiveType::eTriangles;
+    case PrimitiveType::eLineAdj:     return ir::PrimitiveType::eLinesAdj;
+    case PrimitiveType::eTriangleAdj: return ir::PrimitiveType::eTrianglesAdj;
+
+    default:
+      if (type >= PrimitiveType::ePatch1 && type <= PrimitiveType::ePatch32) {
+        uint32_t vertexCount = uint32_t(type) - uint32_t(PrimitiveType::ePatch1) + 1u;
+        return ir::makePatchPrimitive(vertexCount);
+      }
+  }
+
+  return std::nullopt;
+}
+
+
+PrimitiveType determinePrimitiveType(ir::PrimitiveType type) {
+  switch (type) {
+    case ir::PrimitiveType::ePoints:        return PrimitiveType::ePoint;
+    case ir::PrimitiveType::eLines:         return PrimitiveType::eLine;
+    case ir::PrimitiveType::eTriangles:     return PrimitiveType::eTriangle;
+    case ir::PrimitiveType::eLinesAdj:      return PrimitiveType::eLineAdj;
+    case ir::PrimitiveType::eTrianglesAdj:  return PrimitiveType::eTriangleAdj;
+
+    case ir::PrimitiveType::eQuads:
+      dxbc_spv_unreachable();
+      return PrimitiveType::eUndefined;
+
+    default: {
+      uint32_t vertexCount = ir::primitiveVertexCount(type);
+      return PrimitiveType(uint32_t(PrimitiveType::ePatch1) + vertexCount - 1u);
+    }
+  }
+}
+
+
+std::optional<ir::PrimitiveType> resolveTessellatorDomain(TessDomain domain) {
+  switch (domain) {
+    case TessDomain::eUndefined:  return std::nullopt;
+    case TessDomain::eIsoline:    return ir::PrimitiveType::eLines;
+    case TessDomain::eTriangle:   return ir::PrimitiveType::eTriangles;
+    case TessDomain::eQuad:       return ir::PrimitiveType::eQuads;
+  }
+
+  return std::nullopt;
+}
+
+
+TessDomain determineTessellatorDomain(ir::PrimitiveType domain) {
+  switch (domain) {
+    case ir::PrimitiveType::eLines:     return TessDomain::eIsoline;
+    case ir::PrimitiveType::eTriangles: return TessDomain::eTriangle;
+    case ir::PrimitiveType::eQuads:     return TessDomain::eQuad;
+
+    default:
+      dxbc_spv_unreachable();
+      return TessDomain::eUndefined;
+  }
+}
+
+
+std::optional<ir::TessPartitioning> resolveTessParitioning(TessPartitioning partitioning) {
+  switch (partitioning) {
+    case TessPartitioning::eUndefined:      return std::nullopt;
+    case TessPartitioning::eInteger:        return ir::TessPartitioning::eInteger;
+    case TessPartitioning::ePow2:           return ir::TessPartitioning::eInteger;
+    case TessPartitioning::eFractionalOdd:  return ir::TessPartitioning::eFractOdd;
+    case TessPartitioning::eFractionalEven: return ir::TessPartitioning::eFractEven;
+  }
+
+  return std::nullopt;
+}
+
+
+TessPartitioning determineTessPartitioning(ir::TessPartitioning partitioning) {
+  switch (partitioning) {
+    case ir::TessPartitioning::eInteger:    return TessPartitioning::eInteger;
+    case ir::TessPartitioning::eFractOdd:   return TessPartitioning::eFractionalOdd;
+    case ir::TessPartitioning::eFractEven:  return TessPartitioning::eFractionalEven;
+  }
+
+  dxbc_spv_unreachable();
+  return TessPartitioning::eUndefined;
+}
+
+
+std::optional<std::pair<ir::PrimitiveType, ir::TessWindingOrder>> resolveTessOutput(TessOutput output) {
+  switch (output) {
+    case TessOutput::eUndefined:      return std::nullopt;
+    case TessOutput::ePoint:          return std::make_pair(ir::PrimitiveType::ePoints,    ir::TessWindingOrder::eCcw);
+    case TessOutput::eLine:           return std::make_pair(ir::PrimitiveType::eLines,     ir::TessWindingOrder::eCcw);
+    case TessOutput::eTriangleCw:     return std::make_pair(ir::PrimitiveType::eTriangles, ir::TessWindingOrder::eCw);
+    case TessOutput::eTriangleCcw:    return std::make_pair(ir::PrimitiveType::eTriangles, ir::TessWindingOrder::eCcw);
+  }
+
+  return std::nullopt;
+}
+
+
+TessOutput determineTessOutput(ir::PrimitiveType type, ir::TessWindingOrder winding) {
+  switch (type) {
+    case ir::PrimitiveType::ePoints:
+      return TessOutput::ePoint;
+
+    case ir::PrimitiveType::eLines:
+      return TessOutput::eLine;
+
+    case ir::PrimitiveType::eTriangles:
+      return winding == ir::TessWindingOrder::eCcw
+        ? TessOutput::eTriangleCcw
+        : TessOutput::eTriangleCw;
+
+    default:
+      dxbc_spv_unreachable();
+      return TessOutput::eUndefined;
   }
 }
 
@@ -127,7 +370,7 @@ std::ostream& operator << (std::ostream& os, OpCode op) {
     case OpCode::eDp4:                                  return os << "dp4";
     case OpCode::eElse:                                 return os << "else";
     case OpCode::eEmit:                                 return os << "emit";
-    case OpCode::eEmitThenCut:                          return os << "emitThenCut";
+    case OpCode::eEmitThenCut:                          return os << "emit_then_cut";
     case OpCode::eEndIf:                                return os << "endif";
     case OpCode::eEndLoop:                              return os << "endloop";
     case OpCode::eEndSwitch:                            return os << "endswitch";
@@ -160,7 +403,7 @@ std::ostream& operator << (std::ostream& os, OpCode op) {
     case OpCode::eMad:                                  return os << "mad";
     case OpCode::eMin:                                  return os << "min";
     case OpCode::eMax:                                  return os << "max";
-    case OpCode::eCustomData:                           return os << "custom_data";
+    case OpCode::eCustomData:                           return os << "customdata";
     case OpCode::eMov:                                  return os << "mov";
     case OpCode::eMovc:                                 return os << "movc";
     case OpCode::eMul:                                  return os << "mul";
@@ -196,24 +439,24 @@ std::ostream& operator << (std::ostream& os, OpCode op) {
     case OpCode::eUtoF:                                 return os << "utof";
     case OpCode::eXor:                                  return os << "xor";
     case OpCode::eDclResource:                          return os << "dcl_resource";
-    case OpCode::eDclConstantBuffer:                    return os << "dcl_constantBuffer";
+    case OpCode::eDclConstantBuffer:                    return os << "dcl_constant_buffer";
     case OpCode::eDclSampler:                           return os << "dcl_sampler";
-    case OpCode::eDclIndexRange:                        return os << "dcl_indexRange";
-    case OpCode::eDclGsOutputPrimitiveTopology:         return os << "dcl_outputTopology";
-    case OpCode::eDclGsInputPrimitive:                  return os << "dcl_inputPrimitive";
-    case OpCode::eDclMaxOutputVertexCount:              return os << "dcl_maxOutputVertexCount";
+    case OpCode::eDclIndexRange:                        return os << "dcl_index_range";
+    case OpCode::eDclGsOutputPrimitiveTopology:         return os << "dcl_output_topology";
+    case OpCode::eDclGsInputPrimitive:                  return os << "dcl_input_primitive";
+    case OpCode::eDclMaxOutputVertexCount:              return os << "dcl_maxout";
     case OpCode::eDclInput:                             return os << "dcl_input";
-    case OpCode::eDclInputSgv:                          return os << "dcl_input_sgv";
-    case OpCode::eDclInputSiv:                          return os << "dcl_input_siv";
-    case OpCode::eDclInputPs:                           return os << "dcl_input_ps";
-    case OpCode::eDclInputPsSgv:                        return os << "dcl_input_ps_sgv";
-    case OpCode::eDclInputPsSiv:                        return os << "dcl_input_ps_siv";
+    case OpCode::eDclInputSgv:                          return os << "dcl_input_sv";
+    case OpCode::eDclInputSiv:                          return os << "dcl_input_sv";
+    case OpCode::eDclInputPs:                           return os << "dcl_input";
+    case OpCode::eDclInputPsSgv:                        return os << "dcl_input_sv";
+    case OpCode::eDclInputPsSiv:                        return os << "dcl_input_sv";
     case OpCode::eDclOutput:                            return os << "dcl_output";
     case OpCode::eDclOutputSgv:                         return os << "dcl_output_sgv";
     case OpCode::eDclOutputSiv:                         return os << "dcl_output_siv";
     case OpCode::eDclTemps:                             return os << "dcl_temps";
-    case OpCode::eDclIndexableTemp:                     return os << "dcl_indexableTemp";
-    case OpCode::eDclGlobalFlags:                       return os << "dcl_globalFlags";
+    case OpCode::eDclIndexableTemp:                     return os << "dcl_indexable_temp";
+    case OpCode::eDclGlobalFlags:                       return os << "dcl_global_flags";
     case OpCode::eLod:                                  return os << "lod";
     case OpCode::eGather4:                              return os << "gather4";
     case OpCode::eSamplePos:                            return os << "samplepos";
@@ -224,7 +467,7 @@ std::ostream& operator << (std::ostream& os, OpCode op) {
     case OpCode::eHsJoinPhase:                          return os << "hs_join_phase";
     case OpCode::eEmitStream:                           return os << "emit_stream";
     case OpCode::eCutStream:                            return os << "cut_stream";
-    case OpCode::eEmitThenCutStream:                    return os << "emitThenCut_stream";
+    case OpCode::eEmitThenCutStream:                    return os << "emit_then_cut_stream";
     case OpCode::eInterfaceCall:                        return os << "interface_call";
     case OpCode::eBufInfo:                              return os << "bufinfo";
     case OpCode::eDerivRtxCoarse:                       return os << "deriv_rtx_coarse";
@@ -260,7 +503,7 @@ std::ostream& operator << (std::ostream& os, OpCode op) {
     case OpCode::eDclHsMaxTessFactor:                   return os << "dcl_hs_max_tessfactor";
     case OpCode::eDclHsForkPhaseInstanceCount:          return os << "dcl_hs_fork_phase_instance_count";
     case OpCode::eDclHsJoinPhaseInstanceCount:          return os << "dcl_hs_join_phase_instance_count";
-    case OpCode::eDclThreadGroup:                       return os << "dcl_thread:group";
+    case OpCode::eDclThreadGroup:                       return os << "dcl_thread_group";
     case OpCode::eDclUavTyped:                          return os << "dcl_uav_typed";
     case OpCode::eDclUavRaw:                            return os << "dcl_uav_raw";
     case OpCode::eDclUavStructured:                     return os << "dcl_uav_structured";
@@ -350,7 +593,7 @@ std::ostream& operator << (std::ostream& os, Sysval sv) {
     case Sysval::ePosition:               return os << "position";
     case Sysval::eClipDistance:           return os << "clip_distance";
     case Sysval::eCullDistance:           return os << "cull_distance";
-    case Sysval::eRenderTargetId:         return os << "rt_array_index";
+    case Sysval::eRenderTargetId:         return os << "rendertarget_array_index";
     case Sysval::eViewportId:             return os << "viewport_array_index";
     case Sysval::eVertexId:               return os << "vertex_id";
     case Sysval::ePrimitiveId:            return os << "instance_id";
@@ -372,6 +615,211 @@ std::ostream& operator << (std::ostream& os, Sysval sv) {
   }
 
   return os << "SystemValue(" << uint32_t(sv) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, TestBoolean mode) {
+  return os << (mode == TestBoolean::eZero ? "z" : "nz");
+}
+
+
+std::ostream& operator << (std::ostream& os, ReturnType type) {
+  switch (type) {
+    case ReturnType::eFloat:  return os << "float";
+    case ReturnType::eUint:   return os << "uint";
+  }
+
+  return os << "ReturnType(" << uint32_t(type) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, ResInfoType type) {
+  switch (type) {
+    case ResInfoType::eFloat:     return os << "float";
+    case ResInfoType::eRcpFloat:  return os << "rcpfloat";
+    case ResInfoType::eUint:      return os << "uint";
+  }
+
+  return os << "ResInfoType(" << uint32_t(type) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, UavFlag flag) {
+  switch (flag) {
+    case UavFlag::eGloballyCoherent:  return os << "glc";
+    case UavFlag::eRasterizerOrdered: return os << "rov";
+    case UavFlag::eFlagEnum:          break;
+  }
+
+  return os << "UavFlag(" << uint32_t(flag) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, SyncFlag flag) {
+  switch (flag) {
+    case SyncFlag::eWorkgroupThreads: return os << "t";
+    case SyncFlag::eWorkgroupMemory:  return os << "g";
+    case SyncFlag::eUavMemoryGlobal:  return os << "uglobal";
+    case SyncFlag::eUavMemoryLocal:   return os << "ugroup";
+    case SyncFlag::eFlagEnum:         break;
+  }
+
+  return os << "SyncFlag(" << uint32_t(flag) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, GlobalFlag flag) {
+  switch (flag) {
+    case GlobalFlag::eRefactoringAllowed:       return os << "refactoringAllowed";
+    case GlobalFlag::eEnableFp64:               return os << "enableDoublePrecisionFloatOps";
+    case GlobalFlag::eEarlyZ:                   return os << "forceEarlyDepthStencil";
+    case GlobalFlag::eEnableRawStructuredCs4x:  return os << "enableRawAndStructuredBuffers";
+    case GlobalFlag::eSkipOptimization:         return os << "skipOptimization";
+    case GlobalFlag::eEnableMinPrecision:       return os << "enableMinimumPrecision";
+    case GlobalFlag::eEnableExtFp64:            return os << "enable11_1DoubleExtensions";
+    case GlobalFlag::eEnableExtNonFp64:         return os << "enable11_1Extensions";
+    case GlobalFlag::eFlagEnum:                 break;
+  }
+
+  return os << "GlobalFlag(" << uint32_t(flag) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, SampledType type) {
+  switch (type) {
+    case SampledType::eUnorm:   return os << "unorm";
+    case SampledType::eSnorm:   return os << "snorm";
+    case SampledType::eSint:    return os << "int";
+    case SampledType::eUint:    return os << "uint";
+    case SampledType::eFloat:   return os << "float";
+    case SampledType::eMixed:   return os << "mixed";
+    case SampledType::eDouble:  return os << "double";
+  }
+
+  return os << "SampledType(" << uint32_t(type) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, ResourceDim dim) {
+  switch (dim) {
+    case ResourceDim::eUnknown:           break;
+    case ResourceDim::eBuffer:            return os << "buffer";
+    case ResourceDim::eTexture1D:         return os << "texture1d";
+    case ResourceDim::eTexture2D:         return os << "texture2d";
+    case ResourceDim::eTexture2DMS:       return os << "texture2dms";
+    case ResourceDim::eTexture3D:         return os << "texture3d";
+    case ResourceDim::eTextureCube:       return os << "texturecube";
+    case ResourceDim::eTexture1DArray:    return os << "texture1darray";
+    case ResourceDim::eTexture2DArray:    return os << "texture2darray";
+    case ResourceDim::eTexture2DMSArray:  return os << "texture2dmsarray";
+    case ResourceDim::eTextureCubeArray:  return os << "texturecubearray";
+    case ResourceDim::eRawBuffer:         return os << "raw_buffer";
+    case ResourceDim::eStructuredBuffer:  return os << "structured_buffer";
+  }
+
+  return os << "ResourceDim(" << uint32_t(dim) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, InterpolationMode mode) {
+  switch (mode) {
+    case InterpolationMode::eUndefined:                   break;
+    case InterpolationMode::eConstant:                    return os << "constant";
+    case InterpolationMode::eLinear:                      return os << "linear";
+    case InterpolationMode::eLinearCentroid:              return os << "linear centroid";
+    case InterpolationMode::eLinearNoPerspective:         return os << "linear noperspective";
+    case InterpolationMode::eLinearNoPerspectiveCentroid: return os << "linear noperspective centroid";
+    case InterpolationMode::eLinearSample:                return os << "linear sample";
+    case InterpolationMode::eLinearNoPerspectiveSample:   return os << "linear noperspective sample";
+  }
+
+  return os << "InterpolationMode(" << uint32_t(mode) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, PrimitiveTopology prim) {
+  switch (prim) {
+    case PrimitiveTopology::eUndefined:         break;
+    case PrimitiveTopology::ePointList:         return os << "pointlist";
+    case PrimitiveTopology::eLineList:          return os << "linelist";
+    case PrimitiveTopology::eLineStrip:         return os << "linestrip";
+    case PrimitiveTopology::eTriangleList:      return os << "trianglelist";
+    case PrimitiveTopology::eTriangleStrip:     return os << "trianglestrip";
+    case PrimitiveTopology::eLineListAdj:       return os << "linelistadj";
+    case PrimitiveTopology::eLineStripAdj:      return os << "linestripadj";
+    case PrimitiveTopology::eTriangleListAdj:   return os << "trianglelistadj";
+    case PrimitiveTopology::eTriangleStripAdj:  return os << "trianglestripadj";
+  }
+
+  return os << "PrimitiveTopology(" << uint32_t(prim) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, PrimitiveType prim) {
+  switch (prim) {
+    case PrimitiveType::eUndefined:             break;
+    case PrimitiveType::ePoint:                 return os << "point";
+    case PrimitiveType::eLine:                  return os << "line";
+    case PrimitiveType::eTriangle:              return os << "triangle";
+    case PrimitiveType::eLineAdj:               return os << "lineadj";
+    case PrimitiveType::eTriangleAdj:           return os << "triangleadj";
+
+    default: {
+      if (prim >= PrimitiveType::ePatch1 && prim <= PrimitiveType::ePatch32)
+        return os << "patch" << (uint32_t(prim) - uint32_t(PrimitiveType::ePatch1) + 1u);
+    }
+  }
+
+  return os << "PrimitiveType(" << uint32_t(prim) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, TessDomain domain) {
+  switch (domain) {
+    case TessDomain::eUndefined:    break;
+    case TessDomain::eIsoline:      return os << "domain_isoline";
+    case TessDomain::eTriangle:     return os << "domain_tri";
+    case TessDomain::eQuad:         return os << "domain_quad";
+  }
+
+  return os << "TessDomain(" << uint32_t(domain) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, TessPartitioning partitioning) {
+  switch (partitioning) {
+    case TessPartitioning::eUndefined:      break;
+    case TessPartitioning::eInteger:        return os << "partitioning_integer";
+    case TessPartitioning::ePow2:           return os << "partitioning_pow2";
+    case TessPartitioning::eFractionalOdd:  return os << "partitioning_fractional_odd";
+    case TessPartitioning::eFractionalEven: return os << "partitioning_fractional_even";
+  }
+
+  return os << "TessPartitioning(" << uint32_t(partitioning) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, TessOutput output) {
+  switch (output) {
+    case TessOutput::eUndefined:    break;
+    case TessOutput::ePoint:        return os << "output_point";
+    case TessOutput::eLine:         return os << "output_line";
+    case TessOutput::eTriangleCw:   return os << "output_triangle_cw";
+    case TessOutput::eTriangleCcw:  return os << "output_triangle_ccw";
+  }
+
+  return os << "TessOutput(" << uint32_t(output) << ")";
+}
+
+
+std::ostream& operator << (std::ostream& os, SamplerMode mode) {
+  switch (mode) {
+    case SamplerMode::eDefault:     return os << "default";
+    case SamplerMode::eComparison:  return os << "comparison";
+    case SamplerMode::eMono:        return os << "mono";
+  }
+
+  return os << "SamplerMode(" << uint32_t(mode) << ")";
 }
 
 

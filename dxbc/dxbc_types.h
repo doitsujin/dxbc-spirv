@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <optional>
 
 #include "../ir/ir.h"
 
@@ -361,6 +362,210 @@ ir::ScalarType resolveType(ComponentType type, MinPrecision precision);
 std::pair<ComponentType, MinPrecision> determineComponentType(ir::ScalarType type);
 
 
+/** Boolean test */
+enum class TestBoolean : uint32_t {
+  eZero                   = 0u,
+  eNonZero                = 1u,
+};
+
+
+/** Instruction return type */
+enum class ReturnType : uint32_t {
+  eFloat                  = 0u,
+  eUint                   = 1u,
+};
+
+
+/** Resinfo return type */
+enum class ResInfoType : uint32_t {
+  eFloat                  = 0u,
+  eRcpFloat               = 1u,
+  eUint                   = 2u,
+};
+
+
+/** UAV declaration flags */
+enum class UavFlag : uint32_t {
+  eGloballyCoherent       = (1u << 0),
+  eRasterizerOrdered      = (1u << 1),
+
+  eFlagEnum = 0u
+};
+
+using UavFlags = util::Flags<UavFlag>;
+
+
+/** Barrier sync flags */
+enum class SyncFlag : uint32_t {
+  eWorkgroupThreads       = (1u << 0),
+  eWorkgroupMemory        = (1u << 1),
+  eUavMemoryGlobal        = (1u << 2),
+  eUavMemoryLocal         = (1u << 3),
+
+  eFlagEnum = 0u
+};
+
+using SyncFlags = util::Flags<SyncFlag>;
+
+
+/** Global flags */
+enum class GlobalFlag : uint32_t {
+  eRefactoringAllowed       = (1u << 0),
+  eEnableFp64               = (1u << 1),
+  eEarlyZ                   = (1u << 2),
+  eEnableRawStructuredCs4x  = (1u << 3),
+  eSkipOptimization         = (1u << 4),
+  eEnableMinPrecision       = (1u << 5),
+  eEnableExtFp64            = (1u << 6),
+  eEnableExtNonFp64         = (1u << 7),
+
+  eFlagEnum = 0u
+};
+
+using GlobalFlags = util::Flags<GlobalFlag>;
+
+
+/** Resource return type */
+enum class SampledType : uint32_t {
+  eUnorm  = 1u,
+  eSnorm  = 2u,
+  eSint   = 3u,
+  eUint   = 4u,
+  eFloat  = 5u,
+  eMixed  = 6u,
+  eDouble = 7u,
+};
+
+/** Determines scalar type for a resource declaration */
+ir::ScalarType resolveSampledType(SampledType type);
+
+/** Retrieves resource type from scalar type */
+SampledType determineResourceType(ir::ScalarType type);
+
+
+/** Resource dimension */
+enum class ResourceDim : uint32_t {
+  eUnknown           =  0u,
+  eBuffer            =  1u,
+  eTexture1D         =  2u,
+  eTexture2D         =  3u,
+  eTexture2DMS       =  4u,
+  eTexture3D         =  5u,
+  eTextureCube       =  6u,
+  eTexture1DArray    =  7u,
+  eTexture2DArray    =  8u,
+  eTexture2DMSArray  =  9u,
+  eTextureCubeArray  = 10u,
+  eRawBuffer         = 11u,
+  eStructuredBuffer  = 12u,
+};
+
+std::optional<ir::ResourceKind> resolveResourceDim(ResourceDim dim);
+
+ResourceDim determineResourceDim(ir::ResourceKind kind);
+
+
+/** Pixel shader input interpolation mode */
+enum class InterpolationMode : uint32_t {
+  eUndefined                    = 0u,
+  eConstant                     = 1u,
+  eLinear                       = 2u,
+  eLinearCentroid               = 3u,
+  eLinearNoPerspective          = 4u,
+  eLinearNoPerspectiveCentroid  = 5u,
+  eLinearSample                 = 6u,
+  eLinearNoPerspectiveSample    = 7u,
+};
+
+std::optional<ir::InterpolationModes> resolveInterpolationMode(InterpolationMode mode);
+
+InterpolationMode determineInterpolationMode(ir::InterpolationModes mode);
+
+
+/** Primitive topology */
+enum class PrimitiveTopology : uint32_t {
+  eUndefined                    = 0u,
+  ePointList                    = 1u,
+  eLineList                     = 2u,
+  eLineStrip                    = 3u,
+  eTriangleList                 = 4u,
+  eTriangleStrip                = 5u,
+  eLineListAdj                  = 10u,
+  eLineStripAdj                 = 11u,
+  eTriangleListAdj              = 12u,
+  eTriangleStripAdj             = 13u,
+};
+
+std::optional<ir::PrimitiveType> resolvePrimitiveTopology(PrimitiveTopology type);
+
+PrimitiveTopology determinePrimitiveTopology(ir::PrimitiveType type, bool strip);
+
+/** Primitive type */
+enum class PrimitiveType : uint32_t {
+  eUndefined                    = 0u,
+  ePoint                        = 1u,
+  eLine                         = 2u,
+  eTriangle                     = 3u,
+  eLineAdj                      = 6u,
+  eTriangleAdj                  = 7u,
+  ePatch1                       = 8u,
+  ePatch32                      = 39u,
+};
+
+std::optional<ir::PrimitiveType> resolvePrimitiveType(PrimitiveType type);
+
+PrimitiveType determinePrimitiveType(ir::PrimitiveType type);
+
+
+/** Tessellator domain */
+enum class TessDomain : uint32_t {
+  eUndefined                    = 0u,
+  eIsoline                      = 1u,
+  eTriangle                     = 2u,
+  eQuad                         = 3u,
+};
+
+std::optional<ir::PrimitiveType> resolveTessellatorDomain(TessDomain domain);
+
+TessDomain determineTessellatorDomain(ir::PrimitiveType domain);
+
+
+/** Tessellator partitioning */
+enum class TessPartitioning : uint32_t {
+  eUndefined                    = 0u,
+  eInteger                      = 1u,
+  ePow2                         = 2u,
+  eFractionalOdd                = 3u,
+  eFractionalEven               = 4u,
+};
+
+std::optional<ir::TessPartitioning> resolveTessParitioning(TessPartitioning partitioning);
+
+TessPartitioning determineTessPartitioning(ir::TessPartitioning partitioning);
+
+
+/** Tessellator output */
+enum class TessOutput : uint32_t {
+  eUndefined                    = 0u,
+  ePoint                        = 1u,
+  eLine                         = 2u,
+  eTriangleCw                   = 3u,
+  eTriangleCcw                  = 4u,
+};
+
+std::optional<std::pair<ir::PrimitiveType, ir::TessWindingOrder>> resolveTessOutput(TessOutput output);
+
+TessOutput determineTessOutput(ir::PrimitiveType type, ir::TessWindingOrder winding);
+
+
+/** Sampler mode */
+enum class SamplerMode : uint32_t {
+  eDefault                      = 0u,
+  eComparison                   = 1u,
+  eMono                         = 2u,
+};
+
+
 /** Vector component bit used in write masks */
 enum class ComponentBit : uint8_t {
   eX = (1u << 0),
@@ -466,6 +671,21 @@ private:
 
 std::ostream& operator << (std::ostream& os, OpCode op);
 std::ostream& operator << (std::ostream& os, Sysval sv);
+std::ostream& operator << (std::ostream& os, TestBoolean mode);
+std::ostream& operator << (std::ostream& os, ReturnType type);
+std::ostream& operator << (std::ostream& os, ResInfoType type);
+std::ostream& operator << (std::ostream& os, UavFlag flag);
+std::ostream& operator << (std::ostream& os, SyncFlag flag);
+std::ostream& operator << (std::ostream& os, GlobalFlag flag);
+std::ostream& operator << (std::ostream& os, SampledType type);
+std::ostream& operator << (std::ostream& os, ResourceDim dim);
+std::ostream& operator << (std::ostream& os, InterpolationMode mode);
+std::ostream& operator << (std::ostream& os, PrimitiveTopology prim);
+std::ostream& operator << (std::ostream& os, PrimitiveType prim);
+std::ostream& operator << (std::ostream& os, TessDomain domain);
+std::ostream& operator << (std::ostream& os, TessPartitioning partitioning);
+std::ostream& operator << (std::ostream& os, TessOutput output);
+std::ostream& operator << (std::ostream& os, SamplerMode mode);
 std::ostream& operator << (std::ostream& os, ComponentType type);
 std::ostream& operator << (std::ostream& os, MinPrecision precision);
 std::ostream& operator << (std::ostream& os, Component component);
