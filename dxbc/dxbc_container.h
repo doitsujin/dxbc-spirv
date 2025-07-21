@@ -9,6 +9,7 @@
 
 namespace dxbc_spv::dxbc {
 
+class Builder;
 class Signature;
 
 /** Header of the contrainer file */
@@ -112,6 +113,8 @@ struct ContainerInfo {
   const Signature* patchSignature = nullptr;
   /** Output signature, not optional */
   const Signature* outputSignature = nullptr;
+  /** Code chunk, not optional */
+  const Builder* code = nullptr;
 };
 
 
