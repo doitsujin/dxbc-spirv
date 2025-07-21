@@ -73,6 +73,14 @@ public:
     return m_lengthToken;
   }
 
+  /** Updates dword count. Useful when building shader binaries. */
+  void setDwordCount(uint32_t n) {
+    m_lengthToken = n;
+  }
+
+  /** Writes code header to binary blob. */
+  bool write(util::ByteWriter& writer) const;
+
   /** Checks whether shader info is valid */
   explicit operator bool () const {
     return m_lengthToken >= DwordCount;
@@ -130,6 +138,11 @@ public:
   int32_t v() const { return signExtend(util::bextract(m_token,  7u, 4u)); }
   int32_t w() const { return signExtend(util::bextract(m_token, 11u, 4u)); }
 
+  /** Retrieves raw token value. */
+  explicit operator uint32_t() const {
+    return m_token;
+  }
+
   /** Checks whether any sample offsets are non-zero */
   explicit operator bool () const {
     return util::bextract(m_token, 3u, 12u) != 0u;
@@ -175,6 +188,11 @@ public:
     return util::bextract(m_token, 5u, 12u);
   }
 
+  /** Retrieves raw token value. */
+  explicit operator uint32_t() const {
+    return m_token;
+  }
+
   /** Checks whether extended token declares anything. */
   explicit operator bool() const {
     return m_token != 0u;
@@ -212,6 +230,11 @@ public:
   SampledType y() const { return SampledType(util::bextract(m_token,  4u, 4u)); }
   SampledType z() const { return SampledType(util::bextract(m_token,  8u, 4u)); }
   SampledType w() const { return SampledType(util::bextract(m_token, 12u, 4u)); }
+
+  /** Retrieves raw token value. */
+  explicit operator uint32_t() const {
+    return m_token;
+  }
 
   /** Checks whether extended token declares anything. */
   explicit operator bool() const {
@@ -543,6 +566,11 @@ public:
   }
 
 
+  /** Writes opcode token, including all useful extended
+   *  tokens, to a binary blob. */
+  bool write(util::ByteWriter& writer) const;
+
+
   /** Checks whether opcode token is valid */
   explicit operator bool () const {
     return m_token != 0u;
@@ -571,6 +599,10 @@ enum class IndexType : uint32_t {
   eImm32PlusRelative  = 3u,
   eImm64PlusRelative  = 4u,
 };
+
+inline bool hasAbsoluteIndexing(IndexType type) {
+  return type != IndexType::eRelative;
+}
 
 inline bool hasRelativeIndexing(IndexType type) {
   return type >= IndexType::eRelative;
@@ -616,7 +648,7 @@ public:
   : m_token(uint32_t(ExtendedOperandType::eModifiers) |
             uint32_t(neg ? (1u << 6u) : 0u) |
             uint32_t(abs ? (1u << 7u) : 0u) |
-            (uint32_t(precision) << 14) |
+            (uint32_t(precision) << 14u) |
             uint32_t(nonuniform ? (1u << 17u) : 0u)) { }
 
   /** Queries negation flag of operand */
@@ -637,6 +669,11 @@ public:
   /** Queries non-uniform status of the operand */
   bool isNonUniform() const {
     return util::bextract(m_token, 17u, 1u) != 0u;
+  }
+
+  /** Retrieves raw token value */
+  explicit operator uint32_t () const {
+    return m_token;
   }
 
   /** Checks whether extended token defines any semantics.
@@ -851,6 +888,11 @@ public:
   }
 
 
+  /** Recursively writes operand as well as any index operands to a
+   *  binary blob. Immediate values are handled accordingly. */
+  bool write(util::ByteWriter& writer, const Instruction& op) const;
+
+
   /** Checks operand info is valid. A default token of 0 is
    *  nonsensical since it refers to a 0-component temp. */
   explicit operator bool () const {
@@ -963,6 +1005,10 @@ public:
   InstructionLayout getLayout(const ShaderInfo& info) const;
 
 
+  /** Writes instruction and all its operands to a binary blob. */
+  bool write(util::ByteWriter& writer, const ShaderInfo& info) const;
+
+
   /** Checks whether instruction is valid */
   explicit operator bool () const {
     return bool(m_token);
@@ -1016,6 +1062,32 @@ private:
   util::ByteReader m_reader;
 
   ShaderInfo m_info = { };
+
+};
+
+
+/** Builder. Provides a simple way to create an instruction sequence
+ *  and generate a valid SHEX or SHDR chunk out of it. */
+class Builder {
+
+public:
+
+  /** Initializes builder with shader type info */
+  Builder(ShaderType type, uint32_t major, uint32_t minor);
+
+  ~Builder();
+
+  /** Appends an instruction to the list */
+  void add(Instruction ins);
+
+  /** Generates the SHEX or SHDR chunk. */
+  bool write(util::ByteWriter& writer) const;
+
+private:
+
+  ShaderInfo m_info;
+
+  std::vector<Instruction> m_instructions;
 
 };
 

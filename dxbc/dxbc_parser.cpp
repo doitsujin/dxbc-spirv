@@ -1284,6 +1284,12 @@ ShaderInfo::ShaderInfo(util::ByteReader& reader) {
 }
 
 
+bool ShaderInfo::write(util::ByteWriter& writer) const {
+  return writer.write(m_versionToken) &&
+         writer.write(m_lengthToken);
+}
+
+
 void ShaderInfo::resetOnError() {
   *this = ShaderInfo();
 }
@@ -1320,7 +1326,7 @@ OpToken::OpToken(util::ByteReader& reader) {
 
       switch (kind) {
         case ExtendedOpcodeType::eSampleControls:
-          m_sampleControls = SampleControlToken(dword);
+          m_sampleControls = SampleControlToken(dword >> 6u);
           break;
 
         case ExtendedOpcodeType::eResourceDim:
@@ -1337,6 +1343,35 @@ OpToken::OpToken(util::ByteReader& reader) {
       }
     }
   }
+}
+
+
+bool OpToken::write(util::ByteWriter& writer) const {
+  util::small_vector<uint32_t, 4u> tokens = { };
+  tokens.push_back(m_token);
+
+  /* Table of extended tokens */
+  std::array<std::pair<ExtendedOpcodeType, uint32_t>, 3u> extTokens = {{
+    { ExtendedOpcodeType::eSampleControls,      uint32_t(m_sampleControls)  },
+    { ExtendedOpcodeType::eResourceDim,         uint32_t(m_resourceDim)     },
+    { ExtendedOpcodeType::eResourceReturnType,  uint32_t(m_resourceType)    },
+  }};
+
+  /* Emit extended tokens */
+  for (const auto& e : extTokens) {
+    if (e.second) {
+      tokens.back() |= ExtendedTokenBit;
+      tokens.push_back(uint32_t(e.first) | (e.second << 6u));
+    }
+  }
+
+  /* Emit raw dword tokens */
+  for (const auto& dw : tokens) {
+    if (!writer.write(dw))
+      return false;
+  }
+
+  return true;
 }
 
 
@@ -1589,6 +1624,49 @@ Operand& Operand::addIndex(uint32_t absolute, uint32_t relative) {
 }
 
 
+bool Operand::write(util::ByteWriter& writer, const Instruction& op) const {
+  if (m_info.kind == OperandKind::eImm32) {
+    /* Write a single dword */
+    dxbc_spv_assert(getRegisterType() == RegisterType::eImm32);
+
+    return writer.write(getImmediate<uint32_t>(0u));
+  } else {
+    /* Emit token, including modifiers */
+    util::small_vector<uint32_t, 2u> tokens;
+    tokens.push_back(m_token);
+
+    if (m_modifiers) {
+      tokens.back() |= ExtendedTokenBit;
+      tokens.push_back(uint32_t(m_modifiers));
+    }
+
+    for (const auto& e : tokens) {
+      if (!writer.write(e))
+        return false;
+    }
+
+    /* Emit index operands */
+    for (uint32_t i = 0u; i < getIndexDimensions(); i++) {
+      auto type = getIndexType(i);
+
+      if (hasAbsoluteIndexing(type)) {
+        if (!writer.write(getIndex(i)))
+          return false;
+      }
+
+      if (hasRelativeIndexing(type)) {
+        const auto& operand = op.getRawOperand(getIndexOperand(i));
+
+        if (!operand.write(writer, op))
+          return false;
+      }
+    }
+
+    return true;
+  }
+}
+
+
 Operand& Operand::setSelectionMode(SelectionMode mode) {
   dxbc_spv_assert(getComponentCount() == ComponentCount::e4Component);
 
@@ -1711,6 +1789,58 @@ InstructionLayout Instruction::getLayout(const ShaderInfo& info) const {
 }
 
 
+bool Instruction::write(util::ByteWriter& writer, const ShaderInfo& info) const {
+  auto offset = writer.moveToEnd();
+
+  /* Extract token so we can write the correct size later */
+  auto token = m_token;
+
+  if (!token.write(writer))
+    return false;
+
+  /* Emit operands */
+  auto layout = getLayout(info);
+
+  uint32_t nDst = 0u;
+  uint32_t nSrc = 0u;
+  uint32_t nImm = 0u;
+
+  for (uint32_t i = 0u; i < layout.operandCount; i++) {
+    const auto* operand = [&] () -> const Operand* {
+      switch (layout.operands[i].kind) {
+        case OperandKind::eNone:
+        case OperandKind::eIndex:  break;
+        case OperandKind::eDstReg: return nDst < getDstCount() ? &getDst(nDst++) : nullptr;
+        case OperandKind::eSrcReg: return nSrc < getSrcCount() ? &getSrc(nSrc++) : nullptr;
+        case OperandKind::eImm32:  return nImm < getImmCount() ? &getImm(nImm++) : nullptr;
+      }
+
+      return nullptr;
+    } ();
+
+    if (!operand) {
+      Logger::err("Missing operands for instruction ", token.getOpCode());
+      return false;
+    }
+
+    if (!operand->write(writer, *this))
+      return false;
+  }
+
+  /* Set final length and re-emit opcode token */
+  auto byteCount = writer.moveToEnd() - offset;
+  token.setLength(byteCount / sizeof(uint32_t));
+
+  writer.moveTo(offset);
+
+  if (!token.write(writer))
+    return false;
+
+  writer.moveToEnd();
+  return true;
+}
+
+
 void Instruction::resetOnError() {
   m_token = OpToken();
 }
@@ -1738,6 +1868,71 @@ Parser::Parser(util::ByteReader reader) {
 Instruction Parser::parseInstruction() {
   return Instruction(m_reader, m_info);
 }
+
+
+
+
+Builder::Builder(ShaderType type, uint32_t major, uint32_t minor)
+: m_info(type, major, minor, 0u) {
+
+}
+
+
+Builder::~Builder() {
+
+}
+
+
+void Builder::add(Instruction ins) {
+  m_instructions.push_back(std::move(ins));
+}
+
+
+bool Builder::write(util::ByteWriter& writer) const {
+  /* Chunk header. The tag depends on the shader model used. */
+  auto chunkOffset = writer.moveToEnd();
+
+  ChunkHeader chunkHeader = { };
+  chunkHeader.tag = m_info.getVersion().first >= 5
+    ? util::FourCC("SHEX")
+    : util::FourCC("SHDR");
+
+  if (!chunkHeader.write(writer))
+    return false;
+
+  /* Shader bytecode header */
+  auto dataOffset = writer.moveToEnd();
+
+  if (!m_info.write(writer))
+    return false;
+
+  /* Emit instructions */
+  for (const auto& e : m_instructions) {
+    if (!e.write(writer, m_info))
+      return false;
+  }
+
+  /* Compute byte and dword sizes and re-emit chunk header */
+  auto finalOffset = writer.moveToEnd();
+
+  writer.moveTo(chunkOffset);
+  chunkHeader.size = finalOffset - dataOffset;
+
+  if (!chunkHeader.write(writer))
+    return false;
+
+  /* Re-emit code header */
+  writer.moveTo(dataOffset);
+
+  auto info = m_info;
+  info.setDwordCount(chunkHeader.size / sizeof(uint32_t));
+
+  if (!info.write(writer))
+    return false;
+
+  return true;
+}
+
 
 
 

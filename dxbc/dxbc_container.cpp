@@ -1,4 +1,5 @@
 #include "dxbc_container.h"
+#include "dxbc_parser.h"
 #include "dxbc_signature.h"
 
 #include "../util/util_log.h"
@@ -255,6 +256,8 @@ bool buildContainer(util::ByteWriter& writer, const ContainerInfo& info) {
     header.chunkCount += 1u;
   if (info.outputSignature)
     header.chunkCount += 1u;
+  if (info.code)
+    header.chunkCount += 1u;
 
   /* Emit dummy header */
   if (!emitHeader(writer, header, nullptr))
@@ -276,6 +279,11 @@ bool buildContainer(util::ByteWriter& writer, const ContainerInfo& info) {
   if (info.outputSignature) {
     chunkOffsets.push_back(writer.moveToEnd() - headerOffset);
     result = result && info.outputSignature->write(writer);
+  }
+
+  if (info.code) {
+    chunkOffsets.push_back(writer.moveToEnd() - headerOffset);
+    result = result && info.code->write(writer);
   }
 
   if (!result)
