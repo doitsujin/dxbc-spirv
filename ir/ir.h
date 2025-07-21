@@ -58,12 +58,19 @@ enum class ScalarType : uint8_t {
 
   eMinF10       = 17,
 
+  /** Sign-agnostic integer types. These must be lowered to
+   *  signed or unsigned integers depending on actual usage. */
+  eAnyI8        = 18,
+  eAnyI16       = 19,
+  eAnyI32       = 20,
+  eAnyI64       = 21,
+
   /** Opaque descriptor types. Used for resource access. */
-  eSampler      = 18,
-  eCbv          = 19,
-  eSrv          = 20,
-  eUav          = 21,
-  eUavCounter   = 22,
+  eSampler      = 22,
+  eCbv          = 23,
+  eSrv          = 24,
+  eUav          = 25,
+  eUavCounter   = 26,
 
   eCount
 };
@@ -183,9 +190,19 @@ public:
         || type == ScalarType::eMinU16;
   }
 
+  /** Checks whether base type is a sign-agnostic integer type */
+  bool isAnyIntType() const {
+    auto type = getBaseType();
+
+    return type == ScalarType::eAnyI8
+        || type == ScalarType::eAnyI16
+        || type == ScalarType::eAnyI32
+        || type == ScalarType::eAnyI64;
+  }
+
   /** Checks whether base type is an integer type */
   bool isIntType() const {
-    return isSignedIntType() || isUnsignedIntType();
+    return isSignedIntType() || isUnsignedIntType() || isAnyIntType();
   }
 
   /** Checks whether base type is a float type */
