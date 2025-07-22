@@ -646,7 +646,7 @@ public:
 
   /** Checks whether a given component is included in the swizzle */
   bool contains(Component which, WriteMask accessMask) const {
-    return getReadMask(accessMask) & componentBit(which);
+    return bool(getReadMask(accessMask) & componentBit(which));
   }
 
   /** Retrieves raw byte encoding */

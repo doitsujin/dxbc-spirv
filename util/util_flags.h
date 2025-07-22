@@ -90,7 +90,7 @@ public:
   bool operator == (Flags f) const { return m_raw == f.m_raw; }
   bool operator != (Flags f) const { return m_raw != f.m_raw; }
 
-  operator bool () const {
+  explicit operator bool () const {
     return m_raw != 0;
   }
 
