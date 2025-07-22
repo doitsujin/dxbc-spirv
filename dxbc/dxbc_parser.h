@@ -104,6 +104,19 @@ enum class ExtendedOpcodeType : uint32_t {
   eResourceReturnType = 3u,
 };
 
+inline uint32_t makeExtendedOpcode(ExtendedOpcodeType type, uint32_t payload) {
+  return uint32_t(type) | (payload << 6u);
+}
+
+inline ExtendedOpcodeType extractExtendedOpcodeType(uint32_t token) {
+  return ExtendedOpcodeType(util::bextract(token, 0u, 6u));
+}
+
+inline uint32_t extractExtendedOpcodePayload(uint32_t token) {
+  /* Skip the extended bit */
+  return util::bextract(token, 6u, 25u);
+}
+
 
 /** Custom data type */
 enum class CustomDataType : uint32_t {
@@ -123,7 +136,7 @@ public:
 
   SampleControlToken() = default;
 
-  /** Initializes sample control token from raw dword value */
+  /** Initializes sample control token from raw payload. */
   explicit SampleControlToken(uint32_t token)
   : m_token(token) { }
 
@@ -138,10 +151,14 @@ public:
   int32_t v() const { return signExtend(util::bextract(m_token,  7u, 4u)); }
   int32_t w() const { return signExtend(util::bextract(m_token, 11u, 4u)); }
 
-  /** Retrieves raw token value. */
-  explicit operator uint32_t() const {
-    return m_token;
+  /** Retrieves token value as an extended token. */
+  uint32_t asToken() const {
+    return makeExtendedOpcode(ExtendedOpcodeType::eSampleControls, m_token);
   }
+
+  /** Compares two sample control tokens */
+  bool operator == (const SampleControlToken& other) const { return m_token == other.m_token; }
+  bool operator != (const SampleControlToken& other) const { return m_token != other.m_token; }
 
   /** Checks whether any sample offsets are non-zero */
   explicit operator bool () const {
@@ -150,7 +167,7 @@ public:
 
 private:
 
-  uint32_t m_token;
+  uint32_t m_token = 0u;
 
   static int32_t signExtend(uint32_t bits) {
     return int32_t(bits | -(bits & 0x8u));
@@ -168,9 +185,11 @@ public:
 
   ResourceDimToken() = default;
 
+  /** Initializes resource dimension token from raw payload. */
   explicit ResourceDimToken(uint32_t token)
   : m_token(token) { }
 
+  /** Initializes resource dimension token with the given properties. */
   ResourceDimToken(ResourceDim dim, uint32_t structureStride)
   : m_token(uint32_t(dim)) {
     if (dim == ResourceDim::eStructuredBuffer)
@@ -188,10 +207,14 @@ public:
     return util::bextract(m_token, 5u, 12u);
   }
 
-  /** Retrieves raw token value. */
-  explicit operator uint32_t() const {
-    return m_token;
+  /** Retrieves token value as an extended token. */
+  uint32_t asToken() const {
+    return makeExtendedOpcode(ExtendedOpcodeType::eResourceDim, m_token);
   }
+
+  /** Compares two resource dimension tokens */
+  bool operator == (const ResourceDimToken& other) const { return m_token == other.m_token; }
+  bool operator != (const ResourceDimToken& other) const { return m_token != other.m_token; }
 
   /** Checks whether extended token declares anything. */
   explicit operator bool() const {
@@ -210,18 +233,18 @@ private:
  * This is an immediate operand following resource declarations,
  * which encodes per-component resource return types. Also used
  * as an extended opcode token for some resource access ops. */
-class ResourceReturnToken {
+class ResourceTypeToken {
 
 public:
 
-  ResourceReturnToken() = default;
+  ResourceTypeToken() = default;
 
-  /** Creates token from raw dword value */
-  explicit ResourceReturnToken(uint32_t token)
+  /** Initializes resource type token from raw payload. */
+  explicit ResourceTypeToken(uint32_t token)
   : m_token(token) { }
 
-  /** Creates token from per-component return value */
-  ResourceReturnToken(SampledType x, SampledType y, SampledType z, SampledType w)
+  /** Initializes token with per-component return values. */
+  ResourceTypeToken(SampledType x, SampledType y, SampledType z, SampledType w)
   : m_token((uint32_t(x) << 0u) | (uint32_t(y) <<  4u) |
             (uint32_t(z) << 8u) | (uint32_t(w) << 12u)) { }
 
@@ -231,10 +254,19 @@ public:
   SampledType z() const { return SampledType(util::bextract(m_token,  8u, 4u)); }
   SampledType w() const { return SampledType(util::bextract(m_token, 12u, 4u)); }
 
-  /** Retrieves raw token value. */
-  explicit operator uint32_t() const {
+  /** Retrieves token value as an extended token. */
+  uint32_t asToken() const {
+    return makeExtendedOpcode(ExtendedOpcodeType::eResourceReturnType, m_token);
+  }
+
+  /** Retrieves raw token value for immmediate encoding. */
+  uint32_t asImmediate() const {
     return m_token;
   }
+
+  /** Compares two resource type tokens */
+  bool operator == (const ResourceTypeToken& other) const { return m_token == other.m_token; }
+  bool operator != (const ResourceTypeToken& other) const { return m_token != other.m_token; }
 
   /** Checks whether extended token declares anything. */
   explicit operator bool() const {
@@ -353,7 +385,7 @@ public:
   }
 
   OpToken& setPreciseMask(WriteMask mask) {
-    m_token = util::binsert(m_token, uint32_t(mask), 19u, 4u);
+    m_token = util::binsert(m_token, uint32_t(uint8_t(mask)), 19u, 4u);
     return *this;
   }
 
@@ -556,11 +588,11 @@ public:
    *  that access resource data of any kind, and will usually
    *  not contain useful info that the resource delaration does
    *  not already provide. */
-  ResourceReturnToken getResourceReturnToken() const {
+  ResourceTypeToken getResourceTypeToken() const {
     return m_resourceType;
   }
 
-  OpToken& setResourceDimToken(ResourceReturnToken token) {
+  OpToken& setResourceTypeToken(ResourceTypeToken token) {
     m_resourceType = token;
     return *this;
   }
@@ -583,11 +615,9 @@ private:
 
   SampleControlToken    m_sampleControls = { };
   ResourceDimToken      m_resourceDim = { };
-  ResourceReturnToken   m_resourceType = { };
+  ResourceTypeToken     m_resourceType = { };
 
   void resetOnError();
-
-  static ExtendedOpcodeType extractExtendedOpcodeType(uint32_t token);
 
 };
 
@@ -670,6 +700,10 @@ public:
   bool isNonUniform() const {
     return util::bextract(m_token, 17u, 1u) != 0u;
   }
+
+  /** Compares two operand modifier tokens */
+  bool operator == (const OperandModifiers& other) const { return m_token == other.m_token; }
+  bool operator != (const OperandModifiers& other) const { return m_token != other.m_token; }
 
   /** Retrieves raw token value */
   explicit operator uint32_t () const {
