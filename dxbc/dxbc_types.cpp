@@ -596,8 +596,8 @@ std::ostream& operator << (std::ostream& os, Sysval sv) {
     case Sysval::eRenderTargetId:         return os << "rendertarget_array_index";
     case Sysval::eViewportId:             return os << "viewport_array_index";
     case Sysval::eVertexId:               return os << "vertex_id";
-    case Sysval::ePrimitiveId:            return os << "instance_id";
-    case Sysval::eInstanceId:             return os << "primitive_id";
+    case Sysval::ePrimitiveId:            return os << "primitive_id";
+    case Sysval::eInstanceId:             return os << "instance_id";
     case Sysval::eIsFrontFace:            return os << "is_front_face";
     case Sysval::eSampleIndex:            return os << "sampleIndex";
     case Sysval::eQuadU0EdgeTessFactor:   return os << "finalQuadUeq0EdgeTessFactor";
