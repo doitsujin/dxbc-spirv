@@ -1323,18 +1323,19 @@ OpToken::OpToken(util::ByteReader& reader) {
 
       /* Parse actual extended token */
       auto kind = extractExtendedOpcodeType(dword);
+      auto data = extractExtendedOpcodePayload(dword);
 
       switch (kind) {
         case ExtendedOpcodeType::eSampleControls:
-          m_sampleControls = SampleControlToken(dword >> 6u);
+          m_sampleControls = SampleControlToken(data);
           break;
 
         case ExtendedOpcodeType::eResourceDim:
-          m_resourceDim = ResourceDimToken(dword >> 6u);
+          m_resourceDim = ResourceDimToken(data);
           break;
 
         case ExtendedOpcodeType::eResourceReturnType:
-          m_resourceType = ResourceReturnToken(dword >> 6u);
+          m_resourceType = ResourceTypeToken(data);
           break;
 
         default:
@@ -1350,20 +1351,19 @@ bool OpToken::write(util::ByteWriter& writer) const {
   util::small_vector<uint32_t, 4u> tokens = { };
   tokens.push_back(m_token);
 
-  /* Table of extended tokens */
-  std::array<std::pair<ExtendedOpcodeType, uint32_t>, 3u> extTokens = {{
-    { ExtendedOpcodeType::eSampleControls,      uint32_t(m_sampleControls)  },
-    { ExtendedOpcodeType::eResourceDim,         uint32_t(m_resourceDim)     },
-    { ExtendedOpcodeType::eResourceReturnType,  uint32_t(m_resourceType)    },
-  }};
+  /* Set extended tokens */
+  if (m_sampleControls)
+    tokens.push_back(m_sampleControls.asToken());
 
-  /* Emit extended tokens */
-  for (const auto& e : extTokens) {
-    if (e.second) {
-      tokens.back() |= ExtendedTokenBit;
-      tokens.push_back(uint32_t(e.first) | (e.second << 6u));
-    }
-  }
+  if (m_resourceDim)
+    tokens.push_back(m_resourceDim.asToken());
+
+  if (m_resourceType)
+    tokens.push_back(m_resourceType.asToken());
+
+  /* Set extended bit for tokens */
+  for (size_t i = 0u; i + 1u < tokens.size(); i++)
+    tokens[i] |= ExtendedTokenBit;
 
   /* Emit raw dword tokens */
   for (const auto& dw : tokens) {
@@ -1377,11 +1377,6 @@ bool OpToken::write(util::ByteWriter& writer) const {
 
 void OpToken::resetOnError() {
   m_token = 0u;
-}
-
-
-ExtendedOpcodeType OpToken::extractExtendedOpcodeType(uint32_t token) {
-  return ExtendedOpcodeType(util::bextract(token, 0u, 6u));
 }
 
 
