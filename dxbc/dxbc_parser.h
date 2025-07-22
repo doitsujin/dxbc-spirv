@@ -1073,6 +1073,8 @@ class Parser {
 
 public:
 
+  Parser() = default;
+
   explicit Parser(util::ByteReader reader);
 
   /** Queries shader info, including the shader type and version. This
