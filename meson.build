@@ -5,6 +5,7 @@ project('dxbc-spirv', ['cpp'],
 
 dxbc_spv_files = files([
   'dxbc/dxbc_container.cpp',
+  'dxbc/dxbc_converter.cpp',
   'dxbc/dxbc_disasm.cpp',
   'dxbc/dxbc_parser.cpp',
   'dxbc/dxbc_signature.cpp',
