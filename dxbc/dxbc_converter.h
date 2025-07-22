@@ -1,12 +1,15 @@
 #pragma once
 
 #include "dxbc_container.h"
+#include "dxbc_io_map.h"
 #include "dxbc_parser.h"
 #include "dxbc_signature.h"
 #include "dxbc_types.h"
 
 #include "../ir/ir.h"
 #include "../ir/ir_builder.h"
+
+#include "../util/util_log.h"
 
 namespace dxbc_spv::dxbc {
 
@@ -17,7 +20,7 @@ namespace dxbc_spv::dxbc {
  * unknown types, and instructions that cannot be lowered directly. As
  * such, the IR will require further processing. */
 class Converter {
-
+  friend IoMap;
 public:
 
   struct Options {
@@ -28,6 +31,13 @@ public:
      *  includes resources, scratch and shared variables, as well as
      *  semantic names for I/O variables. */
     bool includeDebugNames = false;
+    /** Whether to ensure that locations for patch constants and geometry
+     *  streams are unique and do not conflict with control point locations
+     *  or other streams, respectively. Required for SPIR-V lowering. */
+    bool uniqueIoLocations = true;
+    /** Maximum tessellation factor override. Shaders may specify a
+     *  different value, but any higher values will be ignored. */
+    float maxTessFactor = 0.0f;
   };
 
   Converter(Container container, const Options& options);
@@ -43,20 +53,118 @@ public:
 
 private:
 
-  Container m_dxbc;
-  Options   m_options;
+  Container   m_dxbc;
+  Options     m_options;
 
-  Signature m_isgn = { };
-  Signature m_osgn = { };
-  Signature m_psgn = { };
+  IoMap       m_ioMap;
+  Parser      m_parser;
 
-  Parser m_parser;
+  uint32_t    m_instructionCount = 0u;
+
+  /* Entry point definition and function definitions. The main function
+   * will point to the control point function for hull shaders. */
+  struct {
+    ir::SsaDef def;
+
+    ir::SsaDef mainFunc;
+    ir::SsaDef patchConstantFunc;
+  } m_entryPoint;
+
+
+  /* Default float control mode, can be overwritten by dcl_global_flags.
+   * The presence of fp16 and fp64 types is also initially determined by
+   * global flags, subsequent passes may remove any unused mode setting
+   * instructions again. */
+  struct {
+    ir::OpFlags defaultFlags = ir::OpFlag::ePrecise;
+
+    bool hasFp16 = false;
+    bool hasFp64 = false;
+  } m_fpMode;
+
+
+  /* Hull shader state */
+  struct {
+    HullShaderPhase phase = HullShaderPhase::eNone;
+    uint32_t phaseIndex = 0u;
+
+    float maxTessFactor = 64.0f;
+
+    uint32_t controlPointsIn = 0u;
+    uint32_t controlPointsOut = 0u;
+
+    TessDomain       domain        = TessDomain::eUndefined;
+    TessOutput       primitiveType = TessOutput::eUndefined;
+    TessPartitioning partitioning  = TessPartitioning::eUndefined;
+
+    ir::SsaDef phaseInstanceId = { };
+    ir::SsaDef phaseFunction = { };
+
+    bool hasControlPointPhase = false;
+
+    ir::SsaDef patchConstantCursor = { };
+
+    util::small_vector<std::pair<ir::SsaDef, uint32_t>, 8u> phaseInstanceCounts;
+  } m_hs;
+
 
   bool convertInstruction(ir::Builder& builder, const Instruction& op);
 
-  bool initSignature(Signature& sig, util::ByteReader reader);
+  bool initialize(ir::Builder& builder);
+
+  bool finalize(ir::Builder& builder);
+
+  void emitFloatModes(ir::Builder& builder);
+
+  bool emitHsStateSetup(ir::Builder& builder);
+
+  void emitHsPatchConstantFunction(ir::Builder& builder);
+
+  bool handleDclGlobalFlags(ir::Builder& builder, const Instruction& op);
+
+  bool handleHsPhase(ir::Builder& builder, const Instruction& op);
+
+  bool handleHsPhaseInstanceCount(const Instruction& op);
+
+  bool handleHsControlPointCount(const Instruction& op);
+
+  bool handleHsMaxTessFactor(const Instruction& op);
+
+  bool handleTessDomain(const Instruction& op);
+
+  bool handleTessPartitioning(const Instruction& op);
+
+  bool handleTessOutput(const Instruction& op);
+
+  bool handleRet(ir::Builder& builder);
+
+  std::string makeRegisterDebugName(RegisterType type, uint32_t index, WriteMask mask) const;
+
+  bool isSm51() const;
 
   bool initParser(Parser& parser, util::ByteReader reader);
+
+  ir::SsaDef getEntryPoint() const {
+    return m_entryPoint.def;
+  }
+
+  void logOp(LogLevel severity, const Instruction& op) const;
+
+  template<typename... Args>
+  bool logOpMessage(LogLevel severity, const Instruction& op, const Args&... args) const {
+    logOp(severity, op);
+    Logger::log(severity, args...);
+    return false;
+  }
+
+  template<typename... Args>
+  bool logOpError(const Instruction& op, const Args&... args) const {
+    return logOpMessage(LogLevel::eError, op, args...);
+  }
+
+  static bool isValidControlPointCount(uint32_t n);
+
+  static bool isValidTessFactor(float f);
 
 };
 
