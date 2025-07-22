@@ -1313,7 +1313,7 @@ void SpirvBuilder::emitBufferLoad(const ir::Op& op) {
   const auto& dclOp = m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u)));
 
   bool isUav = descriptorOp.getType() == ir::ScalarType::eUav;
-  bool isSparse = op.getFlags() & ir::OpFlag::eSparseFeedback;
+  bool isSparse = bool(op.getFlags() & ir::OpFlag::eSparseFeedback);
 
   if (isSparse)
     enableCapability(spv::CapabilitySparseResidency);
@@ -1731,7 +1731,7 @@ void SpirvBuilder::emitImageLoad(const ir::Op& op) {
   auto id = getIdForDef(op.getDef());
 
   bool isUav = descriptorOp.getType() == ir::ScalarType::eUav;
-  bool isSparse = op.getFlags() & ir::OpFlag::eSparseFeedback;
+  bool isSparse = bool(op.getFlags() & ir::OpFlag::eSparseFeedback);
 
   if (isSparse)
     enableCapability(spv::CapabilitySparseResidency);
@@ -1905,7 +1905,7 @@ void SpirvBuilder::emitImageSample(const ir::Op& op) {
   auto depthCompareDef = ir::SsaDef(op.getOperand(10u));
 
   /* Select opcode based on op properties */
-  bool isSparse = op.getFlags() & ir::OpFlag::eSparseFeedback;
+  bool isSparse = bool(op.getFlags() & ir::OpFlag::eSparseFeedback);
 
   if (isSparse)
     enableCapability(spv::CapabilitySparseResidency);
@@ -1978,7 +1978,7 @@ void SpirvBuilder::emitImageGather(const ir::Op& op) {
   auto component = uint32_t(op.getOperand(6u));
 
   /* Select opcode */
-  bool isSparse = op.getFlags() & ir::OpFlag::eSparseFeedback;
+  bool isSparse = bool(op.getFlags() & ir::OpFlag::eSparseFeedback);
 
   if (isSparse)
     enableCapability(spv::CapabilitySparseResidency);
