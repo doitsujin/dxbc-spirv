@@ -1,3 +1,5 @@
+#pragma once
+
 #include "../ir/ir.h"
 
 namespace dxbc_spv::spirv {
