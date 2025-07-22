@@ -1,3 +1,4 @@
+#include "../../dxbc/dxbc_parser.h"
 #include "../../dxbc/dxbc_types.h"
 
 #include "../test_common.h"
@@ -148,6 +149,182 @@ void testDxbcSwizzle() {
   sw = Swizzle(Component::eW, Component::eY, Component::eX, Component::eZ).compact(ComponentBit::eZ | ComponentBit::eW);
   ok(sw.map(Component::eX) == Component::eX);
   ok(sw.map(Component::eY) == Component::eZ);
+}
+
+
+void testDxbcSampleControlToken() {
+  SampleControlToken token;
+  ok(!token);
+  ok(!token.u());
+  ok(!token.v());
+  ok(!token.w());
+
+  /* Test parsing the actual extended token */
+  auto dword = uint32_t(1u) |
+               uint32_t(0xeu <<  9u) | /* -2 */
+               uint32_t(0x7u << 13u) | /*  7 */
+               uint32_t(0x8u << 17u);  /* -8 */
+
+  ok(extractExtendedOpcodeType(dword) == ExtendedOpcodeType::eSampleControls);
+
+  token = SampleControlToken(extractExtendedOpcodePayload(dword));
+  ok(token);
+  ok(token.u() == -2);
+  ok(token.v() ==  7);
+  ok(token.w() == -8);
+
+  /* Test encoding token */
+  ok(token.asToken() == dword);
+
+  /* Test initializing token */
+  ok(token == SampleControlToken(-2, 7, -8));
+}
+
+
+void testDxbcResourceDimToken() {
+  ResourceDimToken token;
+  ok(!token);
+  ok(token.getDim() == ResourceDim::eUnknown);
+  ok(!token.getStructureStride());
+
+  /* Test parsing the extended token */
+  auto dword = uint32_t(2u) |
+               uint32_t(12u << 6u) | /* structured buffer */
+               uint32_t(2048u << 11u);
+
+  ok(extractExtendedOpcodeType(dword) == ExtendedOpcodeType::eResourceDim);
+
+  token = ResourceDimToken(extractExtendedOpcodePayload(dword));
+  ok(token);
+  ok(token.getDim() == ResourceDim::eStructuredBuffer);
+  ok(token.getStructureStride() == 2048u);
+
+  /* Test encoding token */
+  ok(token.asToken() == dword);
+
+  /* Test initializing token */
+  ok(token == ResourceDimToken(ResourceDim::eStructuredBuffer, 2048u));
+}
+
+
+void testDxbcResourceTypeToken() {
+  ResourceTypeToken token;
+  ok(!token);
+
+  /* Test parsing the extended token */
+  auto dword = uint32_t(3u) |
+               uint32_t(1u <<  6u) | /* unorm */
+               uint32_t(5u << 10u) | /* float */
+               uint32_t(4u << 14u) | /* uint */
+               uint32_t(7u << 18u);  /* double */
+
+  ok(extractExtendedOpcodeType(dword) == ExtendedOpcodeType::eResourceReturnType);
+
+  token = ResourceTypeToken(extractExtendedOpcodePayload(dword));
+  ok(token);
+  ok(token.x() == SampledType::eUnorm);
+  ok(token.y() == SampledType::eFloat);
+  ok(token.z() == SampledType::eUint);
+  ok(token.w() == SampledType::eDouble);
+
+  /* Test encoding token */
+  ok(token.asToken() == dword);
+  ok(token.asImmediate() == dword >> 6u);
+
+  /* Test initializing token */
+  ok(token == ResourceTypeToken(SampledType::eUnorm, SampledType::eFloat,
+                                SampledType::eUint,  SampledType::eDouble));
+}
+
+
+void testDxbcOpCodeToken() {
+  /* Test extended tokens */
+  auto sampleControls = SampleControlToken(-1, 0, 1);
+  auto resourceType = ResourceTypeToken(SampledType::eMixed, SampledType::eMixed, SampledType::eMixed, SampledType::eMixed);
+  auto resourceDim = ResourceDimToken(ResourceDim::eTexture2D, 0u);
+
+  auto op = OpToken(OpCode::eLd).setLength(15u)
+    .setSampleControlToken(sampleControls)
+    .setResourceDimToken(resourceDim)
+    .setResourceTypeToken(resourceType);
+
+  ok(op && !op.isCustomData());
+  ok(op.getLength() == 15u);
+  ok(op.getOpCode() == OpCode::eLd);
+  ok(op.getSampleControlToken() && op.getSampleControlToken() == sampleControls);
+  ok(op.getResourceDimToken() && op.getResourceDimToken() == resourceDim);
+  ok(op.getResourceTypeToken() && op.getResourceTypeToken() == resourceType);
+
+  /* Test custom data token */
+  op = OpToken(OpCode::eCustomData).setLength(65536u);
+  ok(op && op.isCustomData());
+  ok(op.getLength() == 65536u);
+  ok(op.getOpCode() == OpCode::eCustomData);
+
+  /* Test some basic instruction flags */
+  op = OpToken(OpCode::eAdd).setLength(3u);
+
+  ok(op && !op.isCustomData());
+  ok(op.getLength() == 3u);
+  ok(op.getOpCode() == OpCode::eAdd);
+  ok(!op.isSaturated());
+  ok(!op.getPreciseMask());
+
+  op.setSaturated(true);
+
+  ok(op.isSaturated());
+  ok(!op.getPreciseMask());
+
+  op.setPreciseMask(WriteMask(ComponentBit::eX | ComponentBit::eW));
+
+  ok(op.isSaturated());
+  ok(op.getPreciseMask());
+  ok(op.getPreciseMask() == WriteMask(ComponentBit::eX | ComponentBit::eW));
+}
+
+
+void testDxbcOperandToken() {
+  Operand operand;
+  ok(!operand);
+
+  /* Test immediates */
+  operand = Operand({ OperandKind::eImm32, ir::ScalarType::eU32 }, RegisterType::eImm32, ComponentCount::e1Component).setImmediate(0u, 42u);
+
+  ok(operand);
+  ok(operand.getRegisterType() == RegisterType::eImm32);
+  ok(!operand.getIndexDimensions());
+  ok(operand.getImmediate<uint32_t>(0u) == 42u);
+  ok(!operand.getModifiers());
+
+  /* Test constant buffer array with 3D indexing */
+  auto absNonUniformMod = OperandModifiers(false, true, MinPrecision::eNone, true);
+  ok(!absNonUniformMod.isNegated());
+  ok(absNonUniformMod.isAbsolute());
+  ok(absNonUniformMod.isNonUniform());
+
+  auto swizzle = Swizzle(Component::eY, Component::eW, Component::eX, Component::eZ);
+
+  operand = Operand({ OperandKind::eSrcReg, ir::ScalarType::eF32 }, RegisterType::eCbv, ComponentCount::e4Component)
+    .setSwizzle(swizzle)
+    .addIndex(16u, 1u)
+    .addIndex(46u, -1u)
+    .addIndex(0u, 2u)
+    .setModifiers(absNonUniformMod);
+
+  ok(operand);
+  ok(operand.getRegisterType() == RegisterType::eCbv);
+  ok(operand.getIndexDimensions() == 3u);
+  ok(operand.getIndexType(0u) == IndexType::eImm32PlusRelative);
+  ok(operand.getIndexType(1u) == IndexType::eImm32);
+  ok(operand.getIndexType(2u) == IndexType::eRelative);
+  ok(operand.getIndex(0u) == 16u);
+  ok(operand.getIndex(1u) == 46u);
+  ok(operand.getIndex(2u) == 0u);
+  ok(operand.getIndexOperand(0u) == 1u);
+  ok(operand.getIndexOperand(1u) == -1u);
+  ok(operand.getIndexOperand(2u) == 2u);
+  ok(operand.getSwizzle() == swizzle);
+  ok(operand.getModifiers() == absNonUniformMod);
 }
 
 }
