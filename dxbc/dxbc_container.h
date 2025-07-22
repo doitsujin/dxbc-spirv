@@ -84,6 +84,11 @@ public:
   /** Checks whether the binary hash is valid */
   bool validateHash() const;
 
+  /** Retrieves MD5 hash of the shader. */
+  util::md5::Digest getHash() const {
+    return m_header.hash;
+  }
+
   /** Checks whether parser successfully parsed header and
    *  chunk metadata */
   explicit operator bool () const {
