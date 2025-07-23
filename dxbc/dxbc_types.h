@@ -640,6 +640,10 @@ public:
   Swizzle(Component x, Component y, Component z, Component w)
   : m_raw(uint8_t(x) | (uint8_t(y) << 2u) | (uint8_t(z) << 4u) | (uint8_t(w) << 6u)) { }
 
+  /** Swizzle that replicates a single component */
+  explicit Swizzle(Component c)
+  : Swizzle(c, c, c, c) { }
+
   /** Retrieves named components. */
   Component x() const { return Component(util::bextract(m_raw, 0u, 2u)); }
   Component y() const { return Component(util::bextract(m_raw, 2u, 2u)); }
@@ -654,6 +658,11 @@ public:
   /** Retieves swizzled component for a source component. */
   Component map(Component which) const {
     return get(uint8_t(which));
+  }
+
+  /** Retieves swizzled component for a component bit. */
+  Component map(ComponentBit which) const {
+    return map(componentFromBit(which));
   }
 
   /** Computes mask of read components, given a write mask of the instruction

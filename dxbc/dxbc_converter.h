@@ -138,6 +138,11 @@ private:
 
   bool handleRet(ir::Builder& builder);
 
+  ir::SsaDef composite(ir::Builder& builder, ir::BasicType type,
+    const ir::SsaDef* components, Swizzle swizzle, WriteMask mask);
+
+  ir::SsaDef buildVector(ir::Builder& builder, ir::ScalarType scalarType, size_t count, const ir::SsaDef* scalars);
+
   std::string makeRegisterDebugName(RegisterType type, uint32_t index, WriteMask mask) const;
 
   bool isSm51() const;
@@ -160,6 +165,10 @@ private:
   template<typename... Args>
   bool logOpError(const Instruction& op, const Args&... args) const {
     return logOpMessage(LogLevel::eError, op, args...);
+  }
+
+  static ir::BasicType makeVectorType(ir::ScalarType type, WriteMask mask) {
+    return ir::BasicType(type, util::popcnt(uint8_t(mask)));
   }
 
   static bool isValidControlPointCount(uint32_t n);

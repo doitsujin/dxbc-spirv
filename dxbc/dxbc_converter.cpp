@@ -358,10 +358,11 @@ bool Converter::finalize(ir::Builder& builder) {
     if (!emitHsStateSetup(builder))
       return false;
 
-    /* TODO implement pass-through control point function */
-    if (!m_hs.hasControlPointPhase) {
-      dxbc_spv_unreachable();
-      return false;
+    if (!m_hs.hasControlPointPhase && m_hs.controlPointsOut) {
+      builder.setCursor(m_entryPoint.mainFunc);
+
+      if (!m_ioMap.emitHsControlPointPhasePassthrough(builder))
+        return false;
     }
   }
 
@@ -509,7 +510,8 @@ bool Converter::handleHsPhase(ir::Builder& builder, const Instruction& op) {
   }
 
   m_hs.phase = phase;
-  return true;
+
+  return m_ioMap.handleHsPhase();
 }
 
 
@@ -581,6 +583,55 @@ bool Converter::handleRet(ir::Builder& builder) {
 }
 
 
+ir::SsaDef Converter::composite(ir::Builder& builder, ir::BasicType type,
+  const ir::SsaDef* components, Swizzle swizzle, WriteMask mask) {
+  /* Apply swizzle and mask and get components in the right order. */
+  std::array<ir::SsaDef, 4u> scalars = { };
+
+  uint32_t index = 0u;
+
+  for (auto c : mask) {
+    auto scalar = components[uint8_t(swizzle.map(c))];
+    scalars[index++] = scalar;
+
+    dxbc_spv_assert(scalar);
+  }
+
+  /* Component count must match, or be exactly 1 so that
+   * we can broadcast a single component. */
+  dxbc_spv_assert(index == type.getVectorSize() || index == 1u);
+
+  if (type.isScalar())
+    return scalars.at(0u);
+
+  /* Build actual composite op */
+  ir::Op op(ir::OpCode::eCompositeConstruct, type);
+
+  for (uint32_t i = 0u; i < type.getVectorSize(); i++)
+    op.addOperand(scalars.at(std::min(i, index - 1u)));
+
+  return builder.add(std::move(op));
+}
+
+
+ir::SsaDef Converter::buildVector(ir::Builder& builder, ir::ScalarType scalarType, size_t count, const ir::SsaDef* scalars) {
+  if (!count)
+    return ir::SsaDef();
+
+  if (count == 1u)
+    return scalars[0u];
+
+  ir::BasicType type(scalarType, count);
+
+  ir::Op op(ir::OpCode::eCompositeConstruct, type);
+
+  for (uint32_t i = 0u; i < type.getVectorSize(); i++)
+    op.addOperand(scalars[i]);
+
+  return builder.add(std::move(op));
+}
+
+
 std::string Converter::makeRegisterDebugName(RegisterType type, uint32_t index, WriteMask mask) const {
   auto stage = m_parser.getShaderInfo().getType();
 
@@ -627,11 +678,7 @@ std::string Converter::makeRegisterDebugName(RegisterType type, uint32_t index, 
     case RegisterType::eStencilRef:         name << "oStencilRef"; break;
     case RegisterType::eInnerCoverage:      name << "vInnerCoverage"; break;
 
-    case RegisterType::eNull:
-    case RegisterType::eStream:
-    case RegisterType::eImm32:
-    case RegisterType::eImm64:
-      break;
+    default: name << "reg_" << uint32_t(type) << "_" << index << (mask ? "_" : "") << mask;
   }
 
   return name.str();

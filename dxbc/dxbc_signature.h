@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <optional>
 #include <type_traits>
 #include <utility>
 
@@ -47,6 +48,8 @@ enum class SignatureSysval : uint32_t {
   eStencilRef                 = 69u,
   eInnerCoverage              = 70u,
 };
+
+std::optional<Sysval> resolveSignatureSysval(SignatureSysval sv, uint32_t semanticIndex);
 
 
 /* I/O signature entry */

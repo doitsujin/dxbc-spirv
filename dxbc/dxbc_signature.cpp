@@ -22,6 +22,77 @@ static bool signatureHasMinPrecision(util::FourCC tag) {
 }
 
 
+std::optional<Sysval> resolveSignatureSysval(SignatureSysval sv, uint32_t semanticIndex) {
+  switch (sv) {
+    case SignatureSysval::eNone:
+      return Sysval::eNone;
+
+    case SignatureSysval::ePosition:
+      return Sysval::ePosition;
+
+    case SignatureSysval::eClipDistance:
+      return Sysval::eClipDistance;
+
+    case SignatureSysval::eCullDistance:
+      return Sysval::eCullDistance;
+
+    case SignatureSysval::eRenderTargetArrayIndex:
+      return Sysval::eRenderTargetId;
+
+    case SignatureSysval::eViewportIndex:
+      return Sysval::eViewportId;
+
+    case SignatureSysval::eVertexId:
+      return Sysval::eVertexId;
+
+    case SignatureSysval::ePrimitiveId:
+      return Sysval::ePrimitiveId;
+
+    case SignatureSysval::eInstanceId:
+      return Sysval::eInstanceId;
+
+    case SignatureSysval::eIsFrontFace:
+      return Sysval::eIsFrontFace;
+
+    case SignatureSysval::eSampleIndex:
+      return Sysval::eSampleIndex;
+
+    case SignatureSysval::eQuadEdgeTessFactor:
+      return Sysval(uint32_t(Sysval::eQuadU0EdgeTessFactor) + semanticIndex);
+
+    case SignatureSysval::eQuadInsideTessFactor:
+      return Sysval(uint32_t(Sysval::eQuadUInsideTessFactor) + semanticIndex);
+
+    case SignatureSysval::eTriEdgeTessFactor:
+      return Sysval(uint32_t(Sysval::eTriUEdgeTessFactor) + semanticIndex);
+
+    case SignatureSysval::eTriInsideTessFactor:
+      return Sysval::eTriInsideTessFactor;
+
+    case SignatureSysval::eLineDetailTessFactor:
+      return Sysval::eLineDetailTessFactor;
+
+    case SignatureSysval::eLineDensityTessFactor:
+      return Sysval::eLineDensityTessFactor;
+
+    case SignatureSysval::eBarycentrics:
+    case SignatureSysval::eShadingRate:
+    case SignatureSysval::eCullPrimitive:
+    case SignatureSysval::eTarget:
+    case SignatureSysval::eDepth:
+    case SignatureSysval::eCoverage:
+    case SignatureSysval::eDepthGreaterEqual:
+    case SignatureSysval::eDepthLessEqual:
+    case SignatureSysval::eStencilRef:
+    case SignatureSysval::eInnerCoverage:
+      break;
+  }
+
+  return std::nullopt;
+}
+
+
+
 SignatureEntry::SignatureEntry() {
   m_semanticName.push_back('\0');
 }
