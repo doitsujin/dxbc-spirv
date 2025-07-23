@@ -18,13 +18,13 @@ class Converter;
  *  regular I/O variable, or if an input is part of an index range. */
 struct IoVarInfo {
   /* Normalized register type to match. Must be one of Input, Output,
-   * PatchConstant, or a built-in register. */
-  RegisterType registerType = RegisterType::eNull;
+   * ControlPoint*, PatchConstant, or a built-in register. */
+  RegisterType regType = RegisterType::eNull;
 
-  /* Register range to match, with End being exclusive. If this range
-   * is empty, the entry can only matche a built-in register. */
-  uint8_t rangeStart = 0u;
-  uint8_t rangeEnd = 0u;
+  /* Base register index and count in the declared range. For any
+   * non-indexable indexed register, the register count must be 1. */
+  uint32_t regIndex = 0u;
+  uint32_t regCount = 0u;
 
   /* System value represented by this variable. There may be two entries
    * with overlapping register components where one has a system value
@@ -34,21 +34,24 @@ struct IoVarInfo {
   /* Component write mask to match, if applicable. */
   WriteMask componentMask = { };
 
+  /* Type of the underlying variable. Will generally match the declared
+   * type of the base definition, unless that is a function. */
+  ir::Type baseType = { };
+
   /* Variable definition. May be an input, output, control point input,
    * control point output, scratch, or temporary variable, depending on
    * various factors. For the fork / join instance ID, this is a function
    * parameter. */
   ir::SsaDef baseDef = { };
 
-  /* Index into the base definition that corresponds to the first component
-   * included in the write mask. If negative, the base definition is scalar
-   * and cannot be indexed into. If the base definition is a vector, this
-   * will point to the first vector component, and will usually be 0. */
+  /* Index into the base definition that corresponds to this variable.
+   * If negative, the base definition cannot be dynamically indexed. */
   int32_t baseIndex = -1;
 
-  /** Checks whether the variable matches the given conditions */
+  /* Checks whether the variable matches the given conditions */
   bool matches(RegisterType type, uint32_t index, WriteMask mask) const {
-    return type == registerType && index >= rangeStart && index < rangeEnd && (mask & componentMask);
+    return type == regType && (mask & componentMask) &&
+      (index >= regIndex && index < regIndex + regCount);
   }
 };
 
@@ -60,6 +63,8 @@ struct IoVarInfo {
  * of I/O signatures. */
 class IoMap {
   constexpr static uint32_t MaxIoArraySize = 32u;
+
+  using IoVarList = util::small_vector<IoVarInfo, 32u>;
 public:
 
   explicit IoMap(Converter& converter);
@@ -74,6 +79,9 @@ public:
    *  I/O variable declarations, but not the way load/store ops work. */
   bool handleDclStream(const Operand& operand);
 
+  /** Handles hull shader phases. Notably, this resets I/O indexing info. */
+  bool handleHsPhase();
+
   /** Handles an input or output declaration of any kind. If possible, this uses
    *  the signature to determine the correct layout for the declaration. */
   bool handleDclIoVar(ir::Builder& builder, const Instruction& op);
@@ -82,8 +90,8 @@ public:
   bool handleDclIndexRange(ir::Builder& builder, const Instruction& op);
 
   /** Loads an input or output value and returns a scalar or vector containing
-   *  one element for each component in the component mask. Applies swizzles
-   *  and operand modifiers as necessary.
+   *  one element for each component in the component mask. Applies swizzles,
+   *  but does not support modifiers in any capacity.
    *
    *  Uses the converter's functionality to process relative indices as necessary.
    *  The register index in particular must be immediate only, unless an index
@@ -102,6 +110,13 @@ public:
    *  Returns \c false on error. */
   bool emitStore(ir::Builder& builder, const Operand& operand, ir::SsaDef value);
 
+  /** Emits hull shader control phase pass-through.
+   *
+   *  Declares all relevant I/O variables that haven't been emitted via fork and
+   *  join phases yet, and emits loads and stores to forward inputs to the domain
+   *  shader unmodified. Requires that the signatures match. */
+  bool emitHsControlPointPhasePassthrough(ir::Builder& builder);
+
 private:
 
   Converter&      m_converter;
@@ -111,7 +126,7 @@ private:
   Signature       m_osgn = { };
   Signature       m_psgn = { };
 
-  uint32_t        m_gsStream    = 0u;
+  uint32_t        m_gsStream = 0u;
 
   ir::SsaDef      m_clipDistance = { };
   ir::SsaDef      m_cullDistance = { };
@@ -119,10 +134,12 @@ private:
   ir::SsaDef      m_tessFactorInner = { };
   ir::SsaDef      m_tessFactorOuter = { };
 
-  ir::SsaDef      m_forkInstanceId = { };
-  ir::SsaDef      m_joinInstanceId = { };
+  ir::SsaDef      m_vertexCountIn = { };
 
-  util::small_vector<IoVarInfo, 64u> m_ioVarMappings;
+  IoVarList       m_variables;
+  IoVarList       m_indexRanges;
+
+  ir::SsaDef determineIncomingVertexCount(ir::Builder& builder, uint32_t arraySize);
 
   bool declareIoBuiltIn(ir::Builder& builder, RegisterType regType);
 
@@ -182,6 +199,52 @@ private:
           uint32_t                regIndex,
           WriteMask               componentMask,
           Sysval                  sv);
+
+  ir::SsaDef loadTessControlPointId(ir::Builder& builder);
+
+  ir::SsaDef loadIoRegister(
+          ir::Builder&            builder,
+          ir::ScalarType          scalarType,
+          RegisterType            regType,
+          ir::SsaDef              vertexIndex,
+          ir::SsaDef              regIndexRelative,
+          uint32_t                regIndexAbsolute,
+          Swizzle                 swizzle,
+          WriteMask               writeMask);
+
+  bool storeIoRegister(
+          ir::Builder&            builder,
+          RegisterType            regType,
+          ir::SsaDef              vertexIndex,
+          ir::SsaDef              regIndexRelative,
+          uint32_t                regIndexAbsolute,
+          WriteMask               writeMask,
+          ir::SsaDef              value);
+
+  ir::SsaDef computeRegisterAddress(
+          ir::Builder&            builder,
+    const IoVarInfo&              var,
+          ir::SsaDef              vertexIndex,
+          ir::SsaDef              regIndexRelative,
+          uint32_t                regIndexAbsolute,
+          WriteMask               component);
+
+  std::pair<ir::Type, ir::SsaDef> emitDynamicLoadFunction(
+          ir::Builder&            builder,
+    const IoVarInfo&              var,
+          uint32_t                arraySize);
+
+  std::pair<ir::Type, ir::SsaDef> emitDynamicStoreFunction(
+          ir::Builder&            builder,
+    const IoVarInfo&              var,
+          uint32_t                arraySize);
+
+  ir::SsaDef getCurrentFunction() const;
+
+  ir::ScalarType getIndexedBaseType(
+    const IoVarInfo&              var) const;
+
+  const IoVarInfo* findIoVar(const IoVarList& list, RegisterType regType, uint32_t regIndex, WriteMask mask) const;
 
   void emitSemanticName(ir::Builder& builder, ir::SsaDef def, const SignatureEntry& entry) const;
 
