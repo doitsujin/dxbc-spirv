@@ -294,7 +294,7 @@ PrimitiveType determinePrimitiveType(ir::PrimitiveType type) {
 }
 
 
-std::optional<ir::PrimitiveType> resolveTessellatorDomain(TessDomain domain) {
+std::optional<ir::PrimitiveType> resolveTessDomain(TessDomain domain) {
   switch (domain) {
     case TessDomain::eUndefined:  return std::nullopt;
     case TessDomain::eIsoline:    return ir::PrimitiveType::eLines;
@@ -306,7 +306,7 @@ std::optional<ir::PrimitiveType> resolveTessellatorDomain(TessDomain domain) {
 }
 
 
-TessDomain determineTessellatorDomain(ir::PrimitiveType domain) {
+TessDomain determineTessDomain(ir::PrimitiveType domain) {
   switch (domain) {
     case ir::PrimitiveType::eLines:     return TessDomain::eIsoline;
     case ir::PrimitiveType::eTriangles: return TessDomain::eTriangle;
@@ -319,7 +319,7 @@ TessDomain determineTessellatorDomain(ir::PrimitiveType domain) {
 }
 
 
-std::optional<ir::TessPartitioning> resolveTessParitioning(TessPartitioning partitioning) {
+std::optional<ir::TessPartitioning> resolveTessPartitioning(TessPartitioning partitioning) {
   switch (partitioning) {
     case TessPartitioning::eUndefined:      return std::nullopt;
     case TessPartitioning::eInteger:        return ir::TessPartitioning::eInteger;
@@ -375,6 +375,33 @@ TessOutput determineTessOutput(ir::PrimitiveType type, ir::TessWindingOrder wind
       return TessOutput::eUndefined;
   }
 }
+
+
+
+
+WriteMask extractConsecutiveComponents(WriteMask mask) {
+  if (!mask)
+    return WriteMask();
+
+  auto raw = uint8_t(mask);
+
+  /* Isolate lowest set bit in the mask */
+  auto first = raw & -raw;
+
+  /* Add lowest set bit to the raw mask, the resulting number will have
+   * the first 1 bit past the end of the first consecutive block */
+  auto block = (raw + first);
+
+  /* Isolate that new end-of-block bit and subtract 1 to create
+   * a mask of bits ending at the desired block */
+  block &= -block;
+  block -= 1u;
+
+  /* Mask out the lowest bits not set in the original mask */
+  return WriteMask(block & raw);
+}
+
+
 
 
 WriteMask Swizzle::getReadMask(WriteMask accessMask) const {

@@ -525,9 +525,9 @@ enum class TessDomain : uint32_t {
   eQuad                         = 3u,
 };
 
-std::optional<ir::PrimitiveType> resolveTessellatorDomain(TessDomain domain);
+std::optional<ir::PrimitiveType> resolveTessDomain(TessDomain domain);
 
-TessDomain determineTessellatorDomain(ir::PrimitiveType domain);
+TessDomain determineTessDomain(ir::PrimitiveType domain);
 
 
 /** Tessellator partitioning */
@@ -539,7 +539,7 @@ enum class TessPartitioning : uint32_t {
   eFractionalEven               = 4u,
 };
 
-std::optional<ir::TessPartitioning> resolveTessParitioning(TessPartitioning partitioning);
+std::optional<ir::TessPartitioning> resolveTessPartitioning(TessPartitioning partitioning);
 
 TessPartitioning determineTessPartitioning(ir::TessPartitioning partitioning);
 
@@ -556,6 +556,16 @@ enum class TessOutput : uint32_t {
 std::optional<std::pair<ir::PrimitiveType, ir::TessWindingOrder>> resolveTessOutput(TessOutput output);
 
 TessOutput determineTessOutput(ir::PrimitiveType type, ir::TessWindingOrder winding);
+
+
+/** Hull shader phase for internal use */
+enum class HullShaderPhase : uint32_t {
+  eNone                         = 0u,
+  eDcl                          = 1u,
+  eControlPoint                 = 2u,
+  eFork                         = 3u,
+  eJoin                         = 4u,
+};
 
 
 /** Sampler mode */
@@ -579,6 +589,19 @@ enum class ComponentBit : uint8_t {
 };
 
 using WriteMask = util::Flags<ComponentBit>;
+
+
+/** Helper function that extracts the first consecutive block of
+ *  components from the write mask. All set bits in the returned
+ *  mask will occur back to back with no gaps in between. */
+WriteMask extractConsecutiveComponents(WriteMask mask);
+
+
+/** Creates write mask with the lowest n components set. */
+inline WriteMask makeWriteMaskForComponents(uint32_t n) {
+  dxbc_spv_assert(n <= 4u);
+  return WriteMask(uint8_t((1u << n) - 1u));
+}
 
 
 /** Vector component indices used in swizzles */
