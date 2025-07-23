@@ -228,7 +228,7 @@ public:
   }
 
   /** Removes an element at a given index. */
-  void erase(size_t idx) {
+  iterator erase(size_t idx) {
     std::launder(ptr(idx))->~T();
 
     for (size_t i = idx; i < size() - 1; i++) {
@@ -239,11 +239,12 @@ public:
     }
 
     m_state.size--;
+    return begin() + idx;
   }
 
   /** Removes an element at a given iterator. */
-  void erase(const T* iter) {
-    erase(std::distance(cbegin(), iter));
+  iterator erase(const T* iter) {
+    return erase(std::distance(cbegin(), iter));
   }
 
   /** Inserts element at given iterator */
