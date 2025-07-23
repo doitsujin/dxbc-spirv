@@ -184,11 +184,6 @@ void Builder::reorderAfter(SsaDef ref, SsaDef first, SsaDef last) {
 }
 
 
-void Builder::setCursor(SsaDef def) {
-  m_cursor = def;
-}
-
-
 void Builder::resetCursor() {
   m_cursor = SsaDef();
 }

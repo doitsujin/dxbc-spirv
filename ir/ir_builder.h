@@ -227,8 +227,12 @@ public:
   /** Reorders a block of instructions after another instruction. */
   void reorderAfter(SsaDef ref, SsaDef first, SsaDef last);
 
-  /** Sets insertion cursor for subsequent calls to \c add. */
-  void setCursor(SsaDef def);
+  /** Sets insertion cursor for subsequent calls to \c add. Returns
+   *  the current cursor location so it can be changed back after
+   *  modifying code at a different location. */
+  SsaDef setCursor(SsaDef def) {
+    return std::exchange(m_cursor, def);
+  }
 
   /** Resets insertion cursor to end of module. */
   void resetCursor();
