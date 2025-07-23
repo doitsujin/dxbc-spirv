@@ -133,6 +133,66 @@ ResourceDim determineResourceDim(ir::ResourceKind kind) {
 }
 
 
+std::optional<ir::InterpolationModes> resolveInterpolationMode(InterpolationMode mode) {
+  switch (mode) {
+    case InterpolationMode::eUndefined:
+      return std::nullopt;
+
+    case InterpolationMode::eConstant:
+      return ir::InterpolationModes(ir::InterpolationMode::eFlat);
+
+    case InterpolationMode::eLinear:
+      return ir::InterpolationModes();
+
+    case InterpolationMode::eLinearCentroid:
+      return ir::InterpolationModes(ir::InterpolationMode::eCentroid);
+
+    case InterpolationMode::eLinearNoPerspective:
+      return ir::InterpolationModes(ir::InterpolationMode::eNoPerspective);
+
+    case InterpolationMode::eLinearNoPerspectiveCentroid:
+      return ir::InterpolationModes(ir::InterpolationMode::eCentroid |
+                                    ir::InterpolationMode::eNoPerspective);
+
+    case InterpolationMode::eLinearSample:
+      return ir::InterpolationModes(ir::InterpolationMode::eSample);
+
+    case InterpolationMode::eLinearNoPerspectiveSample:
+      return ir::InterpolationModes(ir::InterpolationMode::eSample |
+                                    ir::InterpolationMode::eNoPerspective);
+  }
+
+  return std::nullopt;
+}
+
+
+InterpolationMode determineInterpolationMode(ir::InterpolationModes mode) {
+  if (!mode)
+    return InterpolationMode::eLinear;
+
+  if (mode == ir::InterpolationMode::eFlat)
+    return InterpolationMode::eConstant;
+
+  if (mode == ir::InterpolationMode::eCentroid)
+    return InterpolationMode::eLinearCentroid;
+
+  if (mode == ir::InterpolationMode::eNoPerspective)
+    return InterpolationMode::eLinearCentroid;
+
+  if (mode == (ir::InterpolationMode::eCentroid | ir::InterpolationMode::eNoPerspective))
+    return InterpolationMode::eLinearNoPerspectiveCentroid;
+
+  if (mode == ir::InterpolationMode::eSample)
+    return InterpolationMode::eLinearSample;
+
+  if (mode == (ir::InterpolationMode::eSample | ir::InterpolationMode::eNoPerspective))
+    return InterpolationMode::eLinearNoPerspectiveSample;
+
+  dxbc_spv_unreachable();
+  return InterpolationMode::eUndefined;
+}
+
+
 std::optional<ir::PrimitiveType> resolvePrimitiveTopology(PrimitiveTopology type) {
   switch (type) {
     case PrimitiveTopology::eUndefined:
