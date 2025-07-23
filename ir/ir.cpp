@@ -445,7 +445,9 @@ std::ostream& operator << (std::ostream& os, const BuiltIn& builtIn) {
     case BuiltIn::ePrimitiveId:         return os << "PrimitiveId";
     case BuiltIn::eLayerIndex:          return os << "LayerIndex";
     case BuiltIn::eViewportIndex:       return os << "ViewportIndex";
+    case BuiltIn::eGsVertexCountIn:     return os << "eGsVertexCountIn";
     case BuiltIn::eGsInstanceId:        return os << "GsInstanceId";
+    case BuiltIn::eTessControlPointCountIn: return os << "TessControlPointCountIn";
     case BuiltIn::eTessControlPointId:  return os << "TessControlPointId";
     case BuiltIn::eTessCoord:           return os << "TessCoord";
     case BuiltIn::eTessFactorInner:     return os << "TessFactorInner";

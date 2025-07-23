@@ -665,51 +665,56 @@ enum class BuiltIn : uint32_t {
   eLayerIndex         = 6u,
   /** Viewport index. Must be declared as an unsigned integer. */
   eViewportIndex      = 7u,
+  /** Incoming geometry shader vertex count. */
+  eGsVertexCountIn    = 8u,
   /** Geometry shader instance ID. Must be declared as an unsigned integer. */
-  eGsInstanceId       = 8u,
+  eGsInstanceId       = 9u,
+  /** Incoming tessellation control point count. Must be declared as an
+   *  unsigned integer. */
+  eTessControlPointCountIn = 10u,
   /** Tessellation control point ID. Must be declared as an unsigned integer. */
-  eTessControlPointId = 9u,
+  eTessControlPointId = 11u,
   /** Tessellation coordinates in domain shaders. Must be declared
    *  as a three-component float vector. */
-  eTessCoord          = 10u,
+  eTessCoord          = 12u,
   /** Inner tesellation factors. Must be declared as a sized float array. */
-  eTessFactorInner    = 11u,
+  eTessFactorInner    = 13u,
   /** Outer tesellation factors. Must be declared as a sized float array. */
-  eTessFactorOuter    = 12u,
+  eTessFactorOuter    = 14u,
   /** Rasterizer sample count. Must be declared as an unsigned integer. */
-  eSampleCount        = 13u,
+  eSampleCount        = 15u,
   /** Sample ID in fragment shader. Must be declared as a scalar
    *  unsigned integer. Its use will trigger sample rate shading. */
-  eSampleId           = 14u,
+  eSampleId           = 16u,
   /** Sample position in fragment shader. Must be declared as a scalar
    *  unsigned integer. Its use will trigger sample rate shading. */
-  eSamplePosition     = 15u,
+  eSamplePosition     = 17u,
   /** Sample mask in fragment shader. Must be declared as a scalar unsigned
    *  integer to follow D3D semantics. Can be used as input and output. */
-  eSampleMask         = 16u,
+  eSampleMask         = 18u,
   /** Front-face flag in fragment shader. Must be declared as a boolean. */
-  eIsFrontFace        = 17u,
+  eIsFrontFace        = 19u,
   /** Fragment depth in fragment shader. Output only. Must be declared as
    *  a scalar float. */
-  eDepth              = 18u,
+  eDepth              = 20u,
   /** Stencil reference in fragment shader. Output only. Must be declared
    *  as a scalar unsigned integer. */
-  eStencilRef         = 19u,
+  eStencilRef         = 21u,
   /** Whether the current fragment is fully covered. Only valid in fragment
    *  shaders. Must be a boolean. */
-  eIsFullyCovered     = 20u,
+  eIsFullyCovered     = 22u,
   /** Workgroup ID in compute shader. Must be declared as a three-component
    *  unsigned integer vector. */
-  eWorkgroupId        = 21u,
+  eWorkgroupId        = 23u,
   /** Global thread ID in compute shader. Must be declared as a
    *  three-component unsigned integer vector. */
-  eGlobalThreadId     = 22u,
+  eGlobalThreadId     = 24u,
   /** Local thread ID in compute shader. Must be declared as a
    *  three-component unsigned integer vector. */
-  eLocalThreadId      = 23u,
+  eLocalThreadId      = 25u,
   /** Flattened local thread ID in compute shader. Must be declared
    *  as a scalar unsigned integer. */
-  eLocalThreadIndex   = 24u,
+  eLocalThreadIndex   = 26u,
 };
 
 
