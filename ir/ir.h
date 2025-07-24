@@ -1278,6 +1278,9 @@ public:
   Op(OpCode opCode, Type resultType)
   : Op(opCode, OpFlags(), resultType, 0u, nullptr) { }
 
+  explicit Op(OpCode opCode)
+  : Op(opCode, Type()) { }
+
   Op             (const Op&) = default;
   Op& operator = (const Op&) = default;
 
@@ -1330,6 +1333,12 @@ public:
   /** Queries result type. */
   const Type& getType() const {
     return m_resultType;
+  }
+
+  /** Changes result type */
+  Op& setType(Type type) {
+    m_resultType = std::move(type);
+    return *this;
   }
 
   /** Sets flags */
