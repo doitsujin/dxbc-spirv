@@ -757,6 +757,16 @@ ir::SsaDef Converter::applyDstModifiers(ir::Builder& builder, ir::SsaDef def, co
 }
 
 
+ir::SsaDef Converter::loadPhaseInstanceId(ir::Builder& builder, WriteMask mask, ir::ScalarType type) {
+  auto def = builder.add(ir::Op::ParamLoad(ir::ScalarType::eU32, m_hs.phaseFunction, m_hs.phaseInstanceId));
+
+  if (type != ir::ScalarType::eU32)
+    def = builder.add(ir::Op::ConsumeAs(type, def));
+
+  return broadcastScalar(builder, def, mask);
+}
+
+
 ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, ir::ScalarType type) {
   switch (operand.getRegisterType()) {
     case RegisterType::eNull:
@@ -766,12 +776,14 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
     case RegisterType::eIndexableTemp:
       return m_regFile.emitLoad(builder, op, operand, mask, type);
 
+    case RegisterType::eForkInstanceId:
+    case RegisterType::eJoinInstanceId:
+      return loadPhaseInstanceId(builder, mask, type);
+
     case RegisterType::eImm32:
     case RegisterType::eImm64:
     case RegisterType::eCbv:
     case RegisterType::eIcb:
-    case RegisterType::eForkInstanceId:
-    case RegisterType::eJoinInstanceId:
       /* TODO implement */
       dxbc_spv_unreachable();
       return ir::SsaDef();
@@ -866,6 +878,26 @@ bool Converter::storeDst(ir::Builder& builder, const Instruction& op, const Oper
 bool Converter::storeDstModified(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value) {
   value = applyDstModifiers(builder, value, op, operand);
   return storeDst(builder, op, operand, value);
+}
+
+
+ir::SsaDef Converter::broadcastScalar(ir::Builder& builder, ir::SsaDef def, WriteMask mask) {
+  if (mask == mask.first())
+    return def;
+
+  /* Determine vector type */
+  auto type = builder.getOp(def).getType().getBaseType(0u);
+  dxbc_spv_assert(type.isScalar());
+
+  type = makeVectorType(type.getBaseType(), mask);
+
+  /* Create vector */
+  ir::Op op(ir::OpCode::eCompositeConstruct, type);
+
+  for (uint32_t i = 0u; i < type.getVectorSize(); i++)
+    op.addOperand(def);
+
+  return builder.add(std::move(op));
 }
 
 

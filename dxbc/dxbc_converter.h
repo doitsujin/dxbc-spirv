@@ -155,6 +155,8 @@ private:
 
   ir::SsaDef applyDstModifiers(ir::Builder& builder, ir::SsaDef def, const Instruction& instruction, const Operand& operand);
 
+  ir::SsaDef loadPhaseInstanceId(ir::Builder& builder, WriteMask mask, ir::ScalarType type);
+
   ir::SsaDef loadSrc(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, ir::ScalarType type);
 
   ir::SsaDef loadSrcModified(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, ir::ScalarType type);
@@ -164,6 +166,8 @@ private:
   bool storeDst(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value);
 
   bool storeDstModified(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value);
+
+  ir::SsaDef broadcastScalar(ir::Builder& builder, ir::SsaDef def, WriteMask mask);
 
   ir::BasicType determineDstOperandType(
     const Operand&                operand,
