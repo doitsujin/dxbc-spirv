@@ -981,30 +981,21 @@ ir::ScalarType Converter::determineOperandType(const Operand& operand, ir::Scala
     case MinPrecision::eNone:
       break;
 
-    case MinPrecision::eMin10Float: {
-      if (type == ir::ScalarType::eF32 ||
-          type == ir::ScalarType::eUnknown)
-        type = resolveMinPrecisionType(ir::ScalarType::eMinF10, allowMinPrecision);
-    } break;
-
+    /* Lower MinF10 to MinF16 directly since we don't really support Min10. */
+    case MinPrecision::eMin10Float:
     case MinPrecision::eMin16Float: {
-      if (type == ir::ScalarType::eF32 ||
-          type == ir::ScalarType::eUnknown)
-        type = resolveMinPrecisionType(ir::ScalarType::eMinF16, allowMinPrecision);
+      if (type == ir::ScalarType::eF32 || type == ir::ScalarType::eUnknown)
+        return allowMinPrecision ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
     } break;
 
     case MinPrecision::eMin16Uint: {
-      if (type == ir::ScalarType::eU32 ||
-          type == ir::ScalarType::eAnyI32 ||
-          type == ir::ScalarType::eUnknown)
-        type = resolveMinPrecisionType(ir::ScalarType::eMinU16, allowMinPrecision);
+      if (type == ir::ScalarType::eU32 || type == ir::ScalarType::eAnyI32 || type == ir::ScalarType::eUnknown)
+        return allowMinPrecision ? ir::ScalarType::eMinU16 : ir::ScalarType::eU32;
     } break;
 
     case MinPrecision::eMin16Sint: {
-      if (type == ir::ScalarType::eI32 ||
-          type == ir::ScalarType::eAnyI32 ||
-          type == ir::ScalarType::eUnknown)
-        type = resolveMinPrecisionType(ir::ScalarType::eMinI16, allowMinPrecision);
+      if (type == ir::ScalarType::eI32 || type == ir::ScalarType::eAnyI32 || type == ir::ScalarType::eUnknown)
+        return allowMinPrecision ? ir::ScalarType::eMinI16 : ir::ScalarType::eI32;
     } break;
   }
 
@@ -1013,30 +1004,6 @@ ir::ScalarType Converter::determineOperandType(const Operand& operand, ir::Scala
     type = fallback;
 
   return type;
-}
-
-
-ir::ScalarType Converter::resolveMinPrecisionType(ir::ScalarType type, bool allow) const {
-  switch (type) {
-    case ir::ScalarType::eMinF10:
-    case ir::ScalarType::eMinF16:
-      return m_options.enableFp16 && allow
-        ? ir::ScalarType::eF16
-        : ir::ScalarType::eF32;
-
-    case ir::ScalarType::eMinI16:
-      return m_options.enableInt16 && allow
-        ? ir::ScalarType::eI16
-        : ir::ScalarType::eI32;
-
-    case ir::ScalarType::eMinU16:
-      return m_options.enableInt16 && allow
-        ? ir::ScalarType::eU16
-        : ir::ScalarType::eU32;
-
-    default:
-      return type;
-  }
 }
 
 
