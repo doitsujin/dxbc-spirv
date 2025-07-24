@@ -120,6 +120,7 @@ private:
 
   struct {
     uint32_t streamMask = 0u;
+    uint32_t inputVertices = 0u;
   } m_geometry;
 
   struct {
@@ -306,6 +307,8 @@ private:
   void emitCheckSparseAccess(const ir::Op& op);
 
   void emitLoadDrawParameterBuiltIn(const ir::Op& op, ir::BuiltIn builtIn);
+
+  void emitLoadGsVertexCountBuiltIn(const ir::Op& op);
 
   void emitLoadVariable(const ir::Op& op);
 
