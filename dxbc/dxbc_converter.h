@@ -141,6 +141,8 @@ private:
 
   bool handleMov(ir::Builder& builder, const Instruction& op);
 
+  bool handleMovc(ir::Builder& builder, const Instruction& op);
+
   bool handleFp32Arithmetic(ir::Builder& builder, const Instruction& op);
 
   bool handleFp32Compare(ir::Builder& builder, const Instruction& op);
@@ -172,6 +174,8 @@ private:
   bool storeDstModified(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value);
 
   ir::SsaDef boolToInt(ir::Builder& builder, ir::SsaDef def);
+
+  ir::SsaDef intToBool(ir::Builder& builder, ir::SsaDef def);
 
   ir::SsaDef broadcastScalar(ir::Builder& builder, ir::SsaDef def, WriteMask mask);
 
