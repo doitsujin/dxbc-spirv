@@ -143,6 +143,8 @@ private:
 
   bool handleFp32Arithmetic(ir::Builder& builder, const Instruction& op);
 
+  bool handleFp32Compare(ir::Builder& builder, const Instruction& op);
+
   bool handleIntArithmetic(ir::Builder& builder, const Instruction& op);
 
   bool handleRet(ir::Builder& builder);
@@ -166,6 +168,8 @@ private:
   bool storeDst(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value);
 
   bool storeDstModified(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value);
+
+  ir::SsaDef boolToInt(ir::Builder& builder, ir::SsaDef def);
 
   ir::SsaDef broadcastScalar(ir::Builder& builder, ir::SsaDef def, WriteMask mask);
 
