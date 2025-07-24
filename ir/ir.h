@@ -2570,6 +2570,11 @@ public:
       .addOperand(b);
   }
 
+  static Op IAbs(Type type, SsaDef a) {
+    return Op(OpCode::eIAbs, type)
+      .addOperand(a);
+  }
+
   static Op INeg(Type type, SsaDef a) {
     return Op(OpCode::eINeg, type)
       .addOperand(a);
