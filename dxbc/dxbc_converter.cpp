@@ -4,7 +4,10 @@
 namespace dxbc_spv::dxbc {
 
 Converter::Converter(Container container, const Options& options)
-: m_dxbc(std::move(container)), m_options(options), m_ioMap(*this) {
+: m_dxbc    (std::move(container))
+, m_options (options)
+, m_regFile (*this)
+, m_ioMap   (*this) {
   if (options.maxTessFactor != 0.0f) {
     if (isValidTessFactor(options.maxTessFactor))
       m_hs.maxTessFactor = options.maxTessFactor;
@@ -50,6 +53,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       /* Some applications with custom DXBC code do not honor the declared
        * temp limit, so ignore it and declare them on the fly. */
       return true;
+
+    case OpCode::eDclIndexableTemp:
+      return m_regFile.handleDclIndexableTemp(builder, op);
 
     case OpCode::eDclGlobalFlags:
       return handleDclGlobalFlags(builder, op);
@@ -194,7 +200,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclGsOutputPrimitiveTopology:
     case OpCode::eDclGsInputPrimitive:
     case OpCode::eDclMaxOutputVertexCount:
-    case OpCode::eDclIndexableTemp:
     case OpCode::eLod:
     case OpCode::eGather4:
     case OpCode::eSamplePos:
@@ -757,10 +762,12 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
     case RegisterType::eNull:
       return ir::SsaDef();
 
-    case RegisterType::eImm32:
-    case RegisterType::eImm64:
     case RegisterType::eTemp:
     case RegisterType::eIndexableTemp:
+      return m_regFile.emitLoad(builder, op, operand, mask, type);
+
+    case RegisterType::eImm32:
+    case RegisterType::eImm64:
     case RegisterType::eCbv:
     case RegisterType::eIcb:
     case RegisterType::eForkInstanceId:
@@ -838,9 +845,7 @@ bool Converter::storeDst(ir::Builder& builder, const Instruction& op, const Oper
 
     case RegisterType::eTemp:
     case RegisterType::eIndexableTemp:
-      /* TODO implement */
-      dxbc_spv_unreachable();
-      return false;
+      return m_regFile.emitStore(builder, op, operand, value);
 
     case RegisterType::eOutput:
     case RegisterType::eDepth:
@@ -984,6 +989,19 @@ ir::SsaDef Converter::buildVector(ir::Builder& builder, ir::ScalarType scalarTyp
 }
 
 
+ir::SsaDef Converter::extractFromVector(ir::Builder& builder, ir::SsaDef def, uint32_t component) {
+  const auto& op = builder.getOp(def);
+
+  if (op.getType().isScalarType())
+    return def;
+
+  if (op.getOpCode() == ir::OpCode::eCompositeConstruct)
+    return ir::SsaDef(op.getOperand(component));
+
+  return builder.add(ir::Op::CompositeExtract(op.getType().getSubType(0u), def, builder.makeConstant(component)));
+}
+
+
 template<typename T>
 ir::SsaDef Converter::makeTypedConstant(ir::Builder& builder, ir::BasicType type, T value) {
   ir::Op op(ir::OpCode::eConstant, type);
@@ -1026,12 +1044,12 @@ std::string Converter::makeRegisterDebugName(RegisterType type, uint32_t index, 
   std::stringstream name;
 
   switch (type) {
-    case RegisterType::eTemp:               name << "r" << index << "_" << mask; break;
+    case RegisterType::eTemp:               name << "r" << index << (mask ? "_" : "") << mask; break;
     case RegisterType::eInput:
-    case RegisterType::eControlPointIn:     name << "v" << index << "_" << mask; break;
+    case RegisterType::eControlPointIn:     name << "v" << index << (mask ? "_" : "") << mask; break;
     case RegisterType::eOutput:
-    case RegisterType::eControlPointOut:    name << "o" << index << "_" << mask; break;
-    case RegisterType::eIndexableTemp:      name << "x" << index << "_" << mask; break;
+    case RegisterType::eControlPointOut:    name << "o" << index << (mask ? "_" : "") << mask; break;
+    case RegisterType::eIndexableTemp:      name << "x" << index << (mask ? "_" : "") << mask; break;
     case RegisterType::eSampler:            name << (isSm51() ? "S" : "s") << index; break;
     case RegisterType::eResource:           name << (isSm51() ? "T" : "t") << index; break;
     case RegisterType::eCbv:                name << (isSm51() ? "CB" : "cb") << index; break;
@@ -1049,7 +1067,7 @@ std::string Converter::makeRegisterDebugName(RegisterType type, uint32_t index, 
     case RegisterType::eControlPointId:     name << "vControlPoint"; break;
     case RegisterType::eForkInstanceId:     name << "vForkInstanceId"; break;
     case RegisterType::eJoinInstanceId:     name << "vJoinInstanceId"; break;
-    case RegisterType::ePatchConstant:      name << (stage == ShaderType::eHull ? "opc" : "vpc") << index << "_" << mask; break;
+    case RegisterType::ePatchConstant:      name << (stage == ShaderType::eHull ? "opc" : "vpc") << index << (mask ? "_" : "") << mask; break;
     case RegisterType::eTessCoord:          name << "vDomain"; break;
     case RegisterType::eThis:               name << "this"; break;
     case RegisterType::eUav:                name << (isSm51() ? "U" : "u") << index; break;

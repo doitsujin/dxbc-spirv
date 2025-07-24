@@ -9,6 +9,7 @@ dxbc_spv_files = files([
   'dxbc/dxbc_disasm.cpp',
   'dxbc/dxbc_io_map.cpp',
   'dxbc/dxbc_parser.cpp',
+  'dxbc/dxbc_registers.cpp',
   'dxbc/dxbc_signature.cpp',
   'dxbc/dxbc_types.cpp',
 

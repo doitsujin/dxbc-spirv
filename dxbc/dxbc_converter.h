@@ -3,6 +3,7 @@
 #include "dxbc_container.h"
 #include "dxbc_io_map.h"
 #include "dxbc_parser.h"
+#include "dxbc_registers.h"
 #include "dxbc_signature.h"
 #include "dxbc_types.h"
 
@@ -21,6 +22,7 @@ namespace dxbc_spv::dxbc {
  * such, the IR will require further processing. */
 class Converter {
   friend IoMap;
+  friend RegisterFile;
 public:
 
   struct Options {
@@ -57,13 +59,14 @@ public:
 
 private:
 
-  Container   m_dxbc;
-  Options     m_options;
+  Container     m_dxbc;
+  Options       m_options;
 
-  IoMap       m_ioMap;
-  Parser      m_parser;
+  RegisterFile  m_regFile;
+  IoMap         m_ioMap;
+  Parser        m_parser;
 
-  uint32_t    m_instructionCount = 0u;
+  uint32_t      m_instructionCount = 0u;
 
   /* Entry point definition and function definitions. The main function
    * will point to the control point function for hull shaders. */
@@ -173,6 +176,8 @@ private:
     const ir::SsaDef* components, Swizzle swizzle, WriteMask mask);
 
   ir::SsaDef buildVector(ir::Builder& builder, ir::ScalarType scalarType, size_t count, const ir::SsaDef* scalars);
+
+  ir::SsaDef extractFromVector(ir::Builder& builder, ir::SsaDef def, uint32_t component);
 
   template<typename T>
   ir::SsaDef makeTypedConstant(ir::Builder& builder, ir::BasicType type, T value);
