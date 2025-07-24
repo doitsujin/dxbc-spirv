@@ -583,6 +583,97 @@ bool Converter::handleRet(ir::Builder& builder) {
 }
 
 
+void Converter::applyNonUniform(ir::Builder& builder, ir::SsaDef def) {
+  /* Not sure which operands FXC may decorate with nonuniform. On resource
+   * operands we handle it appropriately, but in case it appears on a regular
+   * operand, decorate its instruction as nonuniform and propagate later. */
+  if (!(builder.getOp(def).getFlags() & ir::OpFlag::eNonUniform)) {
+    auto op = builder.getOp(def);
+    op.setFlags(op.getFlags() | ir::OpFlag::eNonUniform);
+    builder.rewriteOp(def, std::move(op));
+  }
+}
+
+
+ir::SsaDef Converter::applySrcModifiers(ir::Builder& builder, ir::SsaDef def, const Instruction& instruction, const Operand& operand) {
+  auto mod = operand.getModifiers();
+
+  if (mod.isNonUniform())
+    applyNonUniform(builder, def);
+
+  if (mod.isAbsolute() || mod.isNegated()) {
+    /* Ensure the operand has a type we can work with, and assume float32
+     * if it is typeless, which is common on move instructions. */
+    const auto& op = builder.getOp(def);
+    auto type = op.getType().getBaseType(0u);
+
+    bool isUnknown = type.isUnknownType();
+
+    if (type.isNumericType()) {
+      ir::OpFlags flags = 0u;
+
+      if (instruction.getOpToken().getPreciseMask())
+        flags |= ir::OpFlag::ePrecise;
+
+      if (isUnknown) {
+        type = ir::BasicType(ir::ScalarType::eF32, type.getVectorSize());
+        def = builder.add(ir::Op::ConsumeAs(type, def));
+      }
+
+      if (mod.isAbsolute()) {
+        def = builder.add(type.isFloatType()
+          ? ir::Op::FAbs(type, def).setFlags(flags)
+          : ir::Op::IAbs(type, def));
+      }
+
+      if (mod.isNegated()) {
+        def = builder.add(type.isFloatType()
+          ? ir::Op::FNeg(type, def).setFlags(flags)
+          : ir::Op::INeg(type, def));
+      }
+
+      if (isUnknown) {
+        type = ir::BasicType(ir::ScalarType::eUnknown, type.getVectorSize());
+        def = builder.add(ir::Op::ConsumeAs(type, def));
+      }
+    }
+  }
+
+  return def;
+}
+
+
+ir::SsaDef Converter::applyDstModifiers(ir::Builder& builder, ir::SsaDef def, const Instruction& instruction, const Operand& operand) {
+  auto mod = operand.getModifiers();
+
+  if (mod.isNonUniform())
+    applyNonUniform(builder, def);
+
+  /* We should only ever call this on arithmetic instructions,
+   * so this flag shouldn't conflict with anything else */
+  auto opToken = instruction.getOpToken();
+
+  if (opToken.isSaturated()) {
+    auto type = builder.getOp(def).getType().getBaseType(0u);
+
+    if (type.isUnknownType()) {
+      auto scalarType = determineOperandType(operand, ir::ScalarType::eF32);
+      type = ir::BasicType(scalarType, type.getVectorSize());
+    }
+
+    if (type.isFloatType()) {
+      def = builder.add(ir::Op::FClamp(type, def,
+        makeTypedConstant(builder, type, 0.0f),
+        makeTypedConstant(builder, type, 1.0f)));
+    } else {
+      logOpMessage(LogLevel::eWarn, instruction, "Saturation applied to a non-float result.");
+    }
+  }
+
+  return def;
+}
+
+
 ir::ScalarType Converter::determineOperandType(const Operand& operand, ir::ScalarType fallback) const {
   /* Use base type from the instruction layout */
   auto type = operand.getInfo().type;
@@ -698,6 +789,42 @@ ir::SsaDef Converter::buildVector(ir::Builder& builder, ir::ScalarType scalarTyp
 
   for (uint32_t i = 0u; i < type.getVectorSize(); i++)
     op.addOperand(scalars[i]);
+
+  return builder.add(std::move(op));
+}
+
+
+template<typename T>
+ir::SsaDef Converter::makeTypedConstant(ir::Builder& builder, ir::BasicType type, T value) {
+  ir::Op op(ir::OpCode::eConstant, type);
+
+  ir::Operand scalar = [type, value] {
+    switch (type.getBaseType()) {
+      case ir::ScalarType::eBool: return ir::Operand(bool(value));
+      case ir::ScalarType::eU8:   return ir::Operand(uint8_t(value));
+      case ir::ScalarType::eU16:  return ir::Operand(uint16_t(value));
+      case ir::ScalarType::eU32:  return ir::Operand(uint32_t(value));
+      case ir::ScalarType::eU64:  return ir::Operand(uint64_t(value));
+      case ir::ScalarType::eAnyI8:
+      case ir::ScalarType::eI8:   return ir::Operand(int8_t(value));
+      case ir::ScalarType::eAnyI16:
+      case ir::ScalarType::eI16:  return ir::Operand(int16_t(value));
+      case ir::ScalarType::eAnyI32:
+      case ir::ScalarType::eI32:  return ir::Operand(int32_t(value));
+      case ir::ScalarType::eAnyI64:
+      case ir::ScalarType::eI64:  return ir::Operand(int64_t(value));
+      case ir::ScalarType::eF16:  return ir::Operand(util::float16_t(value));
+      case ir::ScalarType::eF32:  return ir::Operand(float(value));
+      case ir::ScalarType::eF64:  return ir::Operand(double(value));
+      default: break;
+    }
+
+    dxbc_spv_unreachable();
+    return ir::Operand();
+  } ();
+
+  for (uint32_t i = 0u; i < type.getVectorSize(); i++)
+    op.addOperand(scalar);
 
   return builder.add(std::move(op));
 }
