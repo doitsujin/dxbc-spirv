@@ -810,6 +810,19 @@ ir::SsaDef Converter::applyDstModifiers(ir::Builder& builder, ir::SsaDef def, co
 }
 
 
+ir::SsaDef Converter::loadImm32(ir::Builder& builder, const Operand& operand, WriteMask mask, ir::ScalarType type) {
+  ir::Op result(ir::OpCode::eConstant, makeVectorType(type, mask));
+
+  for (auto c : mask) {
+    auto index = uint8_t(operand.getSwizzle().map(c));
+    /* Preserve bit pattern */
+    result.addOperand(ir::Operand(operand.getImmediate<uint32_t>(index)));
+  }
+
+  return builder.add(std::move(result));
+}
+
+
 ir::SsaDef Converter::loadPhaseInstanceId(ir::Builder& builder, WriteMask mask, ir::ScalarType type) {
   auto def = builder.add(ir::Op::ParamLoad(ir::ScalarType::eU32, m_hs.phaseFunction, m_hs.phaseInstanceId));
 
@@ -825,6 +838,9 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
     case RegisterType::eNull:
       return ir::SsaDef();
 
+    case RegisterType::eImm32:
+      return loadImm32(builder, operand, mask, type);
+
     case RegisterType::eTemp:
     case RegisterType::eIndexableTemp:
       return m_regFile.emitLoad(builder, op, operand, mask, type);
@@ -833,7 +849,6 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
     case RegisterType::eJoinInstanceId:
       return loadPhaseInstanceId(builder, mask, type);
 
-    case RegisterType::eImm32:
     case RegisterType::eImm64:
     case RegisterType::eCbv:
     case RegisterType::eIcb:
