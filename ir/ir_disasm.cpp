@@ -23,7 +23,8 @@ void Disassembler::disassemble(std::ostream& stream) const {
 void Disassembler::disassembleOp(std::ostream& stream, const Op& op) const {
   std::string prefix;
 
-  if (!m_options.showConstants && op.isConstant())
+  if (!m_options.showConstants && (op.isUndef() ||
+      (op.isConstant() && !op.getType().isArrayType())))
     return;
 
   if (!m_options.showDebugNames && op.getOpCode() == OpCode::eDebugName)
@@ -132,7 +133,7 @@ void Disassembler::disassembleOperandDef(std::ostream& stream, const Op& op, uin
   if (m_options.resolveConstants) {
     const auto& def = m_builder.getOp(operand);
 
-    if (def.isConstant()) {
+    if (def.isUndef() || (def.isConstant() && !def.getType().isArrayType())) {
       stream << "%[";
 
       { auto state = scopedColor(stream, util::ConsoleState::FgCyan);
@@ -141,9 +142,15 @@ void Disassembler::disassembleOperandDef(std::ostream& stream, const Op& op, uin
 
       stream << "(";
 
-      for (uint32_t i = 0u; i < def.getOperandCount(); i++) {
-        stream << (i ? "," : "");
-        disassembleOperandLiteral(stream, def, i);
+      if (def.isConstant()) {
+        for (uint32_t i = 0u; i < def.getOperandCount(); i++) {
+          stream << (i ? "," : "");
+          disassembleOperandLiteral(stream, def, i);
+        }
+
+      } else {
+        auto state = scopedColor(stream, util::ConsoleState::FgRed);
+        stream << "?";
       }
 
       stream << ")]";
