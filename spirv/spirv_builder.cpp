@@ -878,6 +878,9 @@ void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
         return spv::BuiltInViewportIndex;
       }
 
+      case ir::BuiltIn::eTessControlPointCountIn:
+        return spv::BuiltInPatchVertices;
+
       case ir::BuiltIn::eGsInstanceId:
       case ir::BuiltIn::eTessControlPointId: {
         m_tessControl.invocationId = varId;
@@ -937,6 +940,10 @@ void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
 
       case ir::BuiltIn::eLocalThreadIndex:
         return spv::BuiltInLocalInvocationIndex;
+
+      case ir::BuiltIn::eGsVertexCountIn:
+        /* Handled elsewhere */
+        break;
     }
 
     dxbc_spv_unreachable();
@@ -3050,6 +3057,20 @@ void SpirvBuilder::emitLoadDrawParameterBuiltIn(const ir::Op& op, ir::BuiltIn bu
 }
 
 
+void SpirvBuilder::emitLoadGsVertexCountBuiltIn(const ir::Op& op) {
+  auto constantId = makeConstU32(m_geometry.inputVertices);
+
+  if (hasIdForDef(op.getDef())) {
+    auto id = getIdForDef(op.getDef());
+
+    auto uintTypeId = getIdForType(ir::ScalarType::eU32);
+    pushOp(m_code, spv::OpCopyObject, uintTypeId, id, constantId);
+  } else {
+    setIdForDef(op.getDef(), constantId);
+  }
+}
+
+
 void SpirvBuilder::emitLoadVariable(const ir::Op& op) {
   auto typeId = getIdForType(op.getType());
 
@@ -3066,6 +3087,11 @@ void SpirvBuilder::emitLoadVariable(const ir::Op& op) {
 
       if (builtIn == ir::BuiltIn::eVertexId || builtIn == ir::BuiltIn::eInstanceId) {
         emitLoadDrawParameterBuiltIn(op, builtIn);
+        return;
+      }
+
+      if (builtIn == ir::BuiltIn::eGsVertexCountIn) {
+        emitLoadGsVertexCountBuiltIn(op);
         return;
       }
     }
@@ -3600,6 +3626,7 @@ void SpirvBuilder::emitSetGsInstances(const ir::Op& op) {
 
 void SpirvBuilder::emitSetGsInputPrimitive(const ir::Op& op) {
   auto primitiveType = ir::PrimitiveType(op.getOperand(1u));
+  m_geometry.inputVertices = ir::primitiveVertexCount(primitiveType);
 
   auto execMode = [&] {
     switch (primitiveType) {
