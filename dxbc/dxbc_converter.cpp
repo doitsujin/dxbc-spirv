@@ -103,6 +103,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eMov:
       return handleMov(builder, op);
 
+    case OpCode::eMovc:
+      return handleMovc(builder, op);
+
     case OpCode::eAdd:
     case OpCode::eDiv:
     case OpCode::eExp:
@@ -185,7 +188,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eLoop:
     case OpCode::eMad:
     case OpCode::eCustomData:
-    case OpCode::eMovc:
     case OpCode::eResInfo:
     case OpCode::eRetc:
     case OpCode::eSample:
@@ -607,6 +609,36 @@ bool Converter::handleMov(ir::Builder& builder, const Instruction& op) {
     auto value = loadSrc(builder, op, src, dst.getWriteMask(), type);
     return storeDst(builder, op, dst, value);
   }
+}
+
+
+bool Converter::handleMovc(ir::Builder& builder, const Instruction& op) {
+  /* movc takes the following operands:
+   * (dst0) Destination to move to
+   * (src0) Condition, considered true if any bit is set per component
+   * (src1) Operand to use if condition is true
+   * (src2) Operand to use if condition is false
+   */
+  const auto& dst = op.getDst(0u);
+
+  const auto& srcTrue = op.getSrc(1u);
+  const auto& srcFalse = op.getSrc(2u);
+
+  /* Determine register types based on modifier presence */
+  bool hasModifiers = op.getOpToken().isSaturated() || srcTrue.getModifiers() || srcFalse.getModifiers();
+  ir::ScalarType fallbackType = hasModifiers ? ir::ScalarType::eF32 : ir::ScalarType::eUnknown;
+
+  auto scalarType = determineOperandType(dst, fallbackType);
+  auto vectorType = makeVectorType(scalarType, dst.getWriteMask());
+
+  auto cond = intToBool(builder, loadSrc(builder, op,
+    op.getSrc(0u), dst.getWriteMask(), ir::ScalarType::eAnyI32));
+
+  auto valueTrue = loadSrcModified(builder, op, srcTrue, dst.getWriteMask(), scalarType);
+  auto valueFalse = loadSrcModified(builder, op, srcFalse, dst.getWriteMask(), scalarType);
+
+  auto value = builder.add(ir::Op::Select(vectorType, cond, valueTrue, valueFalse));
+  return storeDstModified(builder, op, dst, value);
 }
 
 
@@ -1056,6 +1088,19 @@ ir::SsaDef Converter::boolToInt(ir::Builder& builder, ir::SsaDef def) {
   return builder.add(ir::Op::Select(dstType, def,
     makeTypedConstant(builder, dstType, -1),
     makeTypedConstant(builder, dstType,  0)));
+}
+
+
+ir::SsaDef Converter::intToBool(ir::Builder& builder, ir::SsaDef def) {
+  auto srcType = builder.getOp(def).getType().getBaseType(0u);
+
+  if (!srcType.isIntType()) {
+    srcType = ir::BasicType(ir::ScalarType::eAnyI32, srcType.getVectorSize());
+    def = builder.add(ir::Op::ConsumeAs(srcType, def));
+  }
+
+  auto dstType = ir::BasicType(ir::ScalarType::eBool, srcType.getVectorSize());
+  return builder.add(ir::Op::INe(dstType, def, makeTypedConstant(builder, srcType, 0u)));
 }
 
 
