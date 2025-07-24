@@ -142,6 +142,12 @@ private:
 
   bool handleRet(ir::Builder& builder);
 
+  void applyNonUniform(ir::Builder& builder, ir::SsaDef def);
+
+  ir::SsaDef applySrcModifiers(ir::Builder& builder, ir::SsaDef def, const Instruction& instruction, const Operand& operand);
+
+  ir::SsaDef applyDstModifiers(ir::Builder& builder, ir::SsaDef def, const Instruction& instruction, const Operand& operand);
+
   ir::ScalarType determineOperandType(const Operand& operand, ir::ScalarType fallback = ir::ScalarType::eUnknown) const;
 
   ir::ScalarType resolveMinPrecisionType(ir::ScalarType type) const;
@@ -150,6 +156,9 @@ private:
     const ir::SsaDef* components, Swizzle swizzle, WriteMask mask);
 
   ir::SsaDef buildVector(ir::Builder& builder, ir::ScalarType scalarType, size_t count, const ir::SsaDef* scalars);
+
+  template<typename T>
+  ir::SsaDef makeTypedConstant(ir::Builder& builder, ir::BasicType type, T value);
 
   std::string makeRegisterDebugName(RegisterType type, uint32_t index, WriteMask mask) const;
 
