@@ -147,6 +147,8 @@ private:
 
   bool handleFp32Arithmetic(ir::Builder& builder, const Instruction& op);
 
+  bool handleIntArithmetic(ir::Builder& builder, const Instruction& op);
+
   bool handleRet(ir::Builder& builder);
 
   void applyNonUniform(ir::Builder& builder, ir::SsaDef def);
@@ -169,7 +171,7 @@ private:
 
   ir::SsaDef broadcastScalar(ir::Builder& builder, ir::SsaDef def, WriteMask mask);
 
-  ir::BasicType determineDstOperandType(
+  ir::ScalarType determineOperandType(
     const Operand&                operand,
           ir::ScalarType          fallback          = ir::ScalarType::eUnknown,
           bool                    allowMinPrecision = true) const;
