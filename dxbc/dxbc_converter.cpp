@@ -143,6 +143,14 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eXor:
       return handleIntArithmetic(builder, op);
 
+    case OpCode::eIEq:
+    case OpCode::eIGe:
+    case OpCode::eILt:
+    case OpCode::eINe:
+    case OpCode::eULt:
+    case OpCode::eUGe:
+      return handleIntCompare(builder, op);
+
     case OpCode::eBreak:
     case OpCode::eBreakc:
     case OpCode::eCall:
@@ -167,11 +175,7 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eFtoI:
     case OpCode::eFtoU:
     case OpCode::eIf:
-    case OpCode::eIEq:
-    case OpCode::eIGe:
     case OpCode::eIMul:
-    case OpCode::eILt:
-    case OpCode::eINe:
     case OpCode::eIShl:
     case OpCode::eIShr:
     case OpCode::eItoF:
@@ -193,8 +197,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eSwitch:
     case OpCode::eSinCos:
     case OpCode::eUDiv:
-    case OpCode::eULt:
-    case OpCode::eUGe:
     case OpCode::eUMul:
     case OpCode::eUShr:
     case OpCode::eUtoF:
@@ -753,6 +755,54 @@ bool Converter::handleIntArithmetic(ir::Builder& builder, const Instruction& op)
   } ();
 
   return storeDst(builder, op, dst, resultDef);
+}
+
+
+bool Converter::handleIntCompare(ir::Builder& builder, const Instruction& op) {
+  /* All instructions support two operands with modifiers and return a boolean. */
+  auto opCode = op.getOpToken().getOpCode();
+
+  dxbc_spv_assert(op.getDstCount() == 1u);
+  dxbc_spv_assert(op.getSrcCount() == 2u);
+
+  const auto& dst = op.getDst(0u);
+
+  const auto& srcA = op.getSrc(0u);
+  const auto& srcB = op.getSrc(1u);
+
+  /* Operand types may differ in signedness, but need to have the same
+   * bit width. Get rid of min precision if necessary. */
+  auto srcAType = determineOperandType(srcA, ir::ScalarType::eAnyI32);
+  auto srcBType = determineOperandType(srcB, ir::ScalarType::eAnyI32);
+
+  if (ir::BasicType(srcAType).isMinPrecisionType() != ir::BasicType(srcBType).isMinPrecisionType()) {
+    srcAType = determineOperandType(srcA, ir::ScalarType::eAnyI32, false);
+    srcBType = determineOperandType(srcB, ir::ScalarType::eAnyI32, false);
+  }
+
+  /* Load operands */
+  auto a = loadSrcModified(builder, op, srcA, dst.getWriteMask(), srcAType);
+  auto b = loadSrcModified(builder, op, srcB, dst.getWriteMask(), srcBType);
+
+  auto boolType = makeVectorType(ir::ScalarType::eBool, dst.getWriteMask());
+
+  ir::Op result = [opCode, boolType, a, b, &builder] {
+    switch (opCode) {
+      case OpCode::eIEq: return ir::Op::IEq(boolType, a, b);
+      case OpCode::eINe: return ir::Op::INe(boolType, a, b);
+      case OpCode::eIGe: return ir::Op::SGe(boolType, a, b);
+      case OpCode::eILt: return ir::Op::SLt(boolType, a, b);
+      case OpCode::eUGe: return ir::Op::UGe(boolType, a, b);
+      case OpCode::eULt: return ir::Op::ULt(boolType, a, b);
+      default: break;
+    }
+
+    dxbc_spv_unreachable();
+    return ir::Op();
+  } ();
+
+  auto resultDef = boolToInt(builder, builder.add(std::move(result)));
+  return storeDstModified(builder, op, dst, resultDef);
 }
 
 
