@@ -206,7 +206,7 @@ std::pair<SsaDef, bool> Builder::writeOp(Op&& op) {
   for (uint32_t i = 0u; i < dstOp.getFirstLiteralOperandIndex(); i++)
     addUse(SsaDef(dstOp.getOperand(i)), def);
 
-  if (dstOp.isConstant())
+  if (dstOp.isConstant() || dstOp.isUndef())
     m_constants.insert(dstOp);
 
   return std::make_pair(def, false);
