@@ -90,15 +90,39 @@ bool IoMap::handleDclIndexRange(ir::Builder& builder, const Instruction& op) {
   if (operand.getIndexDimensions() > 1u)
     vertexCount = operand.getIndex(0u);
 
-  if (isOutput) {
-    if (vertexCount)
-      return m_converter.logOpError(op, "Output range declared as per-vertex array.");
+  if (vertexCount && isOutput)
+    return m_converter.logOpError(op, "Output range declared as per-vertex array.");
 
-    std::tie(mapping.baseType, mapping.baseDef) =
-      emitDynamicStoreFunction(builder, mapping, vertexCount);
-  } else {
-    std::tie(mapping.baseType, mapping.baseDef) =
-      emitDynamicLoadFunction(builder, mapping, vertexCount);
+  /* As a special case, if the underlying declaration already is an
+    * array and the declared range maps perfectly to it, we can address
+    * it directly. Common for tessellation factors. */
+  auto first = findIoVar(m_variables, mapping.regType, mapping.regIndex, mapping.componentMask);
+
+  if (first && first->baseType.isArrayType() && first->componentMask == mapping.componentMask && !vertexCount) {
+    bool match = true;
+
+    for (uint32_t i = 0u; i < mapping.regCount && match; i++) {
+      auto var = findIoVar(m_variables, mapping.regType, mapping.regIndex + i, mapping.componentMask);
+      match = var && var->baseDef == first->baseDef && var->baseIndex == first->baseIndex + int32_t(i);
+    }
+
+    if (match) {
+      mapping.baseType = first->baseType;
+      mapping.baseDef = first->baseDef;
+      mapping.baseIndex = first->baseIndex;
+    }
+  }
+
+  if (!mapping.baseDef) {
+    if (isOutput) {
+      /* Emit function that performs per-component stores */
+      std::tie(mapping.baseType, mapping.baseDef) =
+        emitDynamicStoreFunction(builder, mapping, vertexCount);
+    } else {
+      /* Copy inputs to scratch array */
+      std::tie(mapping.baseType, mapping.baseDef) =
+        emitDynamicLoadFunction(builder, mapping, vertexCount);
+    }
   }
 
   return bool(mapping.baseDef);
