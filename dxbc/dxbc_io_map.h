@@ -156,12 +156,18 @@ private:
   IoVarList       m_variables;
   IoVarList       m_indexRanges;
 
+
+  /* Declares and loads built-in for the incoming vertex count.
+   * Used in geometry and tessellation shaders. */
   ir::SsaDef determineIncomingVertexCount(ir::Builder& builder, uint32_t arraySize);
 
   bool declareIoBuiltIn(ir::Builder& builder, RegisterType regType);
 
   bool declareIoRegisters(ir::Builder& builder, const Instruction& op, RegisterType regType);
 
+
+  /* Declares non-builtin I/O variables based on the signature
+   * that match the given register and component index. */
   bool declareIoSignatureVars(
           ir::Builder&            builder,
     const Signature*              signature,
@@ -171,6 +177,9 @@ private:
           WriteMask               componentMask,
           ir::InterpolationModes  interpolation);
 
+
+  /* Declares built-in I/O variable for a system value that is
+   * mapped to a regular register. */
   bool declareIoSysval(
           ir::Builder&            builder,
     const Signature*              signature,
@@ -181,6 +190,8 @@ private:
           Sysval                  sv,
           ir::InterpolationModes  interpolation);
 
+
+  /* Helper to declare a signature-backed built-in I/O variable. */
   bool declareSimpleBuiltIn(
           ir::Builder&            builder,
     const SignatureEntry*         signatureEntry,
@@ -192,6 +203,9 @@ private:
           ir::BuiltIn             builtIn,
           ir::InterpolationModes  interpolation);
 
+
+  /* Helper to declare a built-in I/O variable that uses a special
+   * register in DXBC and generally does not have a signature entry. */
   bool declareDedicatedBuiltIn(
           ir::Builder&            builder,
           RegisterType            regType,
@@ -199,6 +213,9 @@ private:
           ir::BuiltIn             builtIn,
     const char*                   semanticName);
 
+
+  /* Declares clip and cull distances as indexable arrays,
+   * taking the respective signature into account. */
   bool declareClipCullDistance(
           ir::Builder&            builder,
     const Signature*              signature,
@@ -209,6 +226,9 @@ private:
           Sysval                  sv,
           ir::InterpolationModes  interpolation);
 
+
+  /* Declares tess factor output as an indexable scalar array.
+   * Index ranges for tess factors can map directly to this. */
   bool declareTessFactor(
           ir::Builder&            builder,
     const SignatureEntry*         signatureEntry,
@@ -217,8 +237,14 @@ private:
           WriteMask               componentMask,
           Sysval                  sv);
 
+
+  /* Declares and loads tess control point ID built-in. Relevant
+   * for storing control point outputs. */
   ir::SsaDef loadTessControlPointId(ir::Builder& builder);
 
+
+  /* Main function to load an I/O register. Returns a vector whose
+   * component count matches that of the write mask exactly. */
   ir::SsaDef loadIoRegister(
           ir::Builder&            builder,
           ir::ScalarType          scalarType,
@@ -229,6 +255,10 @@ private:
           Swizzle                 swizzle,
           WriteMask               writeMask);
 
+
+  /* Main function to store an I/O register. The value must be a
+   * vector type whose component count matches that of the write
+   * mask exactly. */
   bool storeIoRegister(
           ir::Builder&            builder,
           RegisterType            regType,
@@ -238,6 +268,9 @@ private:
           WriteMask               writeMask,
           ir::SsaDef              value);
 
+
+  /* Computes address vector into the given I/O register variable.
+   * Takes scalar, vector and array types into account. */
   ir::SsaDef computeRegisterAddress(
           ir::Builder&            builder,
     const IoVarInfo&              var,
@@ -246,26 +279,40 @@ private:
           uint32_t                regIndexAbsolute,
           WriteMask               component);
 
+
+  /* Helper function to load dynamically indexed inputs. */
   std::pair<ir::Type, ir::SsaDef> emitDynamicLoadFunction(
           ir::Builder&            builder,
     const IoVarInfo&              var,
           uint32_t                arraySize);
 
+
+  /* Helper function to store dynamically indexed outputs. */
   std::pair<ir::Type, ir::SsaDef> emitDynamicStoreFunction(
           ir::Builder&            builder,
     const IoVarInfo&              var,
           uint32_t                arraySize);
 
+
+  /* Retrieves the instruction that starts the shader's main function, or
+   * the current hull shader phase. Used when emitting additional functions. */
   ir::SsaDef getCurrentFunction() const;
 
+
+  /* Determines scalar type for a dynamically indexed array */
   ir::ScalarType getIndexedBaseType(
     const IoVarInfo&              var) const;
 
+
+  /* Helper to process I/O register indexing. This will decompose the
+   * register index into its absolute and immediate part. */
   IoRegisterIndex loadRegisterIndices(
           ir::Builder&            builder,
     const Instruction&            op,
     const Operand&                operand);
 
+
+  /* Looks up matching I/O variable in the given list. */
   const IoVarInfo* findIoVar(const IoVarList& list, RegisterType regType, uint32_t regIndex, WriteMask mask) const;
 
   void emitSemanticName(ir::Builder& builder, ir::SsaDef def, const SignatureEntry& entry) const;
