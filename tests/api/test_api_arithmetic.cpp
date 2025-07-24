@@ -664,7 +664,7 @@ Builder test_arithmetic_bool() {
 
     for (uint32_t i = 0u; i < e.second; i++) {
       auto indexDef = builder.makeConstant(srvIndex++, 0u);
-      op.addOperand(Operand(builder.add(Op::INe(builder.makeConstant(0u),
+      op.addOperand(Operand(builder.add(Op::INe(ScalarType::eBool, builder.makeConstant(0u),
         builder.add(Op::BufferLoad(ScalarType::eU32, srvDescriptor, indexDef, 4u))))));
     }
 

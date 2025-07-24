@@ -2205,133 +2205,133 @@ public:
       .addOperand(memoryTypes);
   }
 
-  static Op FEq(SsaDef a, SsaDef b) {
-    return Op(OpCode::eFEq, ScalarType::eBool)
+  static Op FEq(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eFEq, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op FNe(SsaDef a, SsaDef b) {
-    return Op(OpCode::eFNe, ScalarType::eBool)
+  static Op FNe(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eFNe, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op FLt(SsaDef a, SsaDef b) {
-    return Op(OpCode::eFLt, ScalarType::eBool)
+  static Op FLt(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eFLt, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op FLe(SsaDef a, SsaDef b) {
-    return Op(OpCode::eFLe, ScalarType::eBool)
+  static Op FLe(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eFLe, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op FGt(SsaDef a, SsaDef b) {
-    return Op(OpCode::eFGt, ScalarType::eBool)
+  static Op FGt(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eFGt, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op FGe(SsaDef a, SsaDef b) {
-    return Op(OpCode::eFGe, ScalarType::eBool)
+  static Op FGe(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eFGe, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op FIsNan(SsaDef a) {
-    return Op(OpCode::eFIsNan, ScalarType::eBool)
+  static Op FIsNan(Type type, SsaDef a) {
+    return Op(OpCode::eFIsNan, type)
       .addOperand(a);
   }
 
-  static Op IEq(SsaDef a, SsaDef b) {
-    return Op(OpCode::eIEq, ScalarType::eBool)
+  static Op IEq(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eIEq, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op INe(SsaDef a, SsaDef b) {
-    return Op(OpCode::eINe, ScalarType::eBool)
+  static Op INe(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eINe, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op SLt(SsaDef a, SsaDef b) {
-    return Op(OpCode::eSLt, ScalarType::eBool)
+  static Op SLt(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eSLt, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op SLe(SsaDef a, SsaDef b) {
-    return Op(OpCode::eSLe, ScalarType::eBool)
+  static Op SLe(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eSLe, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op SGt(SsaDef a, SsaDef b) {
-    return Op(OpCode::eSGt, ScalarType::eBool)
+  static Op SGt(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eSGt, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op SGe(SsaDef a, SsaDef b) {
-    return Op(OpCode::eSGe, ScalarType::eBool)
+  static Op SGe(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eSGe, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op ULt(SsaDef a, SsaDef b) {
-    return Op(OpCode::eULt, ScalarType::eBool)
+  static Op ULt(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eULt, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op ULe(SsaDef a, SsaDef b) {
-    return Op(OpCode::eULe, ScalarType::eBool)
+  static Op ULe(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eULe, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op UGt(SsaDef a, SsaDef b) {
-    return Op(OpCode::eUGt, ScalarType::eBool)
+  static Op UGt(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eUGt, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op UGe(SsaDef a, SsaDef b) {
-    return Op(OpCode::eUGe, ScalarType::eBool)
+  static Op UGe(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eUGe, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op BAnd(SsaDef a, SsaDef b) {
-    return Op(OpCode::eBAnd, ScalarType::eBool)
+  static Op BAnd(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eBAnd, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op BOr(SsaDef a, SsaDef b) {
-    return Op(OpCode::eBOr, ScalarType::eBool)
+  static Op BOr(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eBOr, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op BEq(SsaDef a, SsaDef b) {
-    return Op(OpCode::eBEq, ScalarType::eBool)
+  static Op BEq(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eBEq, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op BNe(SsaDef a, SsaDef b) {
-    return Op(OpCode::eBNe, ScalarType::eBool)
+  static Op BNe(Type type, SsaDef a, SsaDef b) {
+    return Op(OpCode::eBNe, type)
       .addOperand(a)
       .addOperand(b);
   }
 
-  static Op BNot(SsaDef a) {
-    return Op(OpCode::eBNot, ScalarType::eBool)
+  static Op BNot(Type type, SsaDef a) {
+    return Op(OpCode::eBNot, type)
       .addOperand(a);
   }
 

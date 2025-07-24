@@ -1210,7 +1210,7 @@ std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicLoadFunction(
     vertexIndex = builder.add(ir::Op::IAdd(ir::ScalarType::eU32, vertexIndex, builder.makeConstant(1u)));
     builder.add(ir::Op::TmpStore(vertexIndexDef, vertexIndex));
 
-    builder.add(ir::Op::ScopedIf(builder.add(ir::Op::UGe(vertexIndex, vertexCountDef))));
+    builder.add(ir::Op::ScopedIf(builder.add(ir::Op::UGe(ir::ScalarType::eBool, vertexIndex, vertexCountDef))));
     builder.add(ir::Op::ScopedLoopBreak());
     builder.add(ir::Op::ScopedEndIf());
     builder.add(ir::Op::ScopedEndLoop());

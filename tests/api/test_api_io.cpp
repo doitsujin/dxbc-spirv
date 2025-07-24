@@ -535,7 +535,7 @@ Builder make_test_io_gs_basic(ir::PrimitiveType inType, ir::PrimitiveType outTyp
   builder.addBefore(loopContinueLabel, Op::Branch(loopContinueLabel));
 
   auto loopCounterValue = builder.add(Op::IAdd(ScalarType::eU32, loopCounterPhi, builder.makeConstant(1u)));
-  auto loopCond = builder.add(Op::ULt(loopCounterValue, builder.makeConstant(vertexCount)));
+  auto loopCond = builder.add(Op::ULt(ScalarType::eBool, loopCounterValue, builder.makeConstant(vertexCount)));
 
   auto loopEndLabel = builder.add(Op::Label());
   builder.addBefore(loopEndLabel, Op::BranchConditional(loopCond, loopHeaderLabel, loopEndLabel));

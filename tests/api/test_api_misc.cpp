@@ -151,7 +151,7 @@ Builder test_misc_lds() {
 
   builder.add(Op::Barrier(Scope::eWorkgroup, Scope::eWorkgroup, MemoryType::eLds));
 
-  auto tidCond = builder.add(Op::ULt(tid, loopCounterPhiDef));
+  auto tidCond = builder.add(Op::ULt(ir::ScalarType::eBool, tid, loopCounterPhiDef));
   builder.add(Op::BranchConditional(tidCond, labelReductionRead, labelReductionMerge));
 
   builder.setCursor(labelReductionRead);
@@ -190,7 +190,7 @@ Builder test_misc_lds() {
   builder.rewriteOp(loopCounterPhiDef, std::move(loopCounterPhi));
 
   /* Check loop counter value and branch */
-  auto cond = builder.add(Op::INe(loopCounterIterDef, builder.makeConstant(0u)));
+  auto cond = builder.add(Op::INe(ScalarType::eBool, loopCounterIterDef, builder.makeConstant(0u)));
   builder.add(Op::BranchConditional(cond, labelLoopHeader, labelLoopMerge));
 
   builder.setCursor(labelLoopMerge);
@@ -297,7 +297,7 @@ Builder test_misc_ps_demote() {
     textureDescriptor, samplerDescriptor, SsaDef(), coord, SsaDef(), SsaDef(), SsaDef(), SsaDef(), SsaDef(), SsaDef(), SsaDef()));
 
   auto alpha = builder.add(Op::CompositeExtract(ScalarType::eF32, color, builder.makeConstant(3u)));
-  auto alphaTest = builder.add(Op::FLt(alpha, builder.makeConstant(0.005f)));
+  auto alphaTest = builder.add(Op::FLt(ScalarType::eBool, alpha, builder.makeConstant(0.005f)));
 
   auto labelDiscard = builder.add(Op::Label());
   builder.add(Op::Demote());
@@ -491,7 +491,7 @@ Builder test_cfg_if() {
   auto z = builder.add(Op::InputLoad(ScalarType::eF32, posDef, builder.makeConstant(2u)));
   auto w = builder.add(Op::InputLoad(ScalarType::eF32, posDef, builder.makeConstant(3u)));
 
-  auto cond = builder.add(Op::FNe(w, builder.makeConstant(0.0f)));
+  auto cond = builder.add(Op::FNe(ScalarType::eBool, w, builder.makeConstant(0.0f)));
 
   auto lTrue = builder.add(Op::Label());
   auto zDiv = builder.add(Op::FDiv(ScalarType::eF32, z, w));
@@ -525,7 +525,7 @@ Builder test_cfg_if_else() {
   auto z = builder.add(Op::InputLoad(ScalarType::eF32, posDef, builder.makeConstant(2u)));
   auto w = builder.add(Op::InputLoad(ScalarType::eF32, posDef, builder.makeConstant(3u)));
 
-  auto cond = builder.add(Op::FGt(z, w));
+  auto cond = builder.add(Op::FGt(ScalarType::eBool, z, w));
 
   auto lTrue = builder.add(Op::Label());
   auto zDivT = builder.add(Op::FDiv(ScalarType::eF32, z, w));
@@ -605,7 +605,7 @@ Builder test_cfg_loop_infinite() {
   builder.addBefore(loopBody, Op::Branch(loopBody));
 
   auto xAdd = builder.add(Op::FAdd(ScalarType::eF32, xPhi, builder.makeConstant(1.0f)));
-  auto xCond = builder.add(Op::FGe(xAdd, builder.makeConstant(10000.0f)));
+  auto xCond = builder.add(Op::FGe(ScalarType::eBool, xAdd, builder.makeConstant(10000.0f)));
 
   auto returnBlock = builder.add(Op::Label());
   builder.add(Op::OutputStore(outDef, SsaDef(), xAdd));

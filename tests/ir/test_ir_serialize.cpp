@@ -97,12 +97,12 @@ void testIrSerialize() {
 
   auto vidDef = builder.add(Op::InputLoad(ScalarType::eU32, SsaDef(), vertexIdDef));
   auto xDef = builder.add(Op::Select(ScalarType::eF32,
-    builder.add(Op::INe(builder.makeConstant(0u),
+    builder.add(Op::INe(ScalarType::eBool, builder.makeConstant(0u),
       builder.add(Op::IAnd(ScalarType::eU32, vidDef, builder.makeConstant(1u))))),
     builder.makeConstant(3.0f),
     builder.makeConstant(-1.0f)));
   auto yDef = builder.add(Op::Select(ScalarType::eF32,
-    builder.add(Op::INe(builder.makeConstant(0u),
+    builder.add(Op::INe(ScalarType::eBool, builder.makeConstant(0u),
       builder.add(Op::IAnd(ScalarType::eU32, vidDef, builder.makeConstant(2u)).setFlags(OpFlag::ePrecise)))),
     builder.makeConstant(3.0f),
     builder.makeConstant(-1.0f)));
