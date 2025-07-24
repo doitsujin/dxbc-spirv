@@ -105,23 +105,37 @@ bool IoMap::handleDclIndexRange(ir::Builder& builder, const Instruction& op) {
 }
 
 
-ir::SsaDef IoMap::emitLoad(ir::Builder& builder, const Operand& operand, WriteMask componentMask) {
-  (void)builder;
-  (void)operand;
-  (void)componentMask;
+ir::SsaDef IoMap::emitLoad(
+        ir::Builder&            builder,
+  const Instruction&            op,
+  const Operand&                operand,
+        WriteMask               componentMask,
+        ir::ScalarType          type) {
+  auto index = loadRegisterIndices(builder, op, operand);
 
-  dxbc_spv_unreachable();
-  return ir::SsaDef();
+  auto result = loadIoRegister(builder, type, index.regType,
+    index.vertexIndex, index.regIndexRelative, index.regIndexAbsolute,
+    operand.getSwizzle(), componentMask);
+
+  if (!result)
+    m_converter.logOpError(op, "Failed to process I/O load.");
+
+  return result;
 }
 
 
-bool IoMap::emitStore(ir::Builder& builder, const Operand& operand, ir::SsaDef value) {
-  (void)builder;
-  (void)operand;
-  (void)value;
+bool IoMap::emitStore(
+        ir::Builder&            builder,
+  const Instruction&            op,
+  const Operand&                operand,
+        ir::SsaDef              value) {
+  auto index = loadRegisterIndices(builder, op, operand);
 
-  dxbc_spv_unreachable();
-  return false;
+  if (!storeIoRegister(builder, index.regType, index.vertexIndex,
+      index.regIndexRelative, index.regIndexAbsolute, operand.getWriteMask(), value))
+    return m_converter.logOpError(op, "Failed to process I/O store.");
+
+  return true;
 }
 
 
@@ -975,6 +989,8 @@ bool IoMap::storeIoRegister(
   uint32_t componentIndex = 0u;
 
   for (auto c : writeMask) {
+    bool foundVar = false;
+
     /* Extract scalar to store */
     ir::SsaDef baseScalar = m_converter.extractFromVector(builder, value, componentIndex++);
 
@@ -1016,6 +1032,13 @@ bool IoMap::storeIoRegister(
 
         builder.add(std::move(callOp));
       }
+
+      foundVar = true;
+    }
+
+    if (!foundVar) {
+      auto name = m_converter.makeRegisterDebugName(regType, regIndexAbsolute, c);
+      Logger::warn("No match found for output variable ", name);
     }
   }
 
@@ -1314,6 +1337,34 @@ ir::ScalarType IoMap::getIndexedBaseType(
     return ir::ScalarType::eU32;
 
   return baseVar->baseType.getBaseType(0u).getBaseType();
+}
+
+
+IoRegisterIndex IoMap::loadRegisterIndices(
+        ir::Builder&            builder,
+  const Instruction&            op,
+  const Operand&                operand) {
+  IoRegisterIndex result = { };
+  result.regType = normalizeRegisterType(operand.getRegisterType());
+
+  uint32_t dim = operand.getIndexDimensions();
+
+  if (!dim)
+    return result;
+
+  if (dim > 1u)
+    result.vertexIndex = m_converter.loadOperandIndex(builder, op, operand, 0u);
+
+  if (hasAbsoluteIndexing(operand.getIndexType(dim - 1u)))
+    result.regIndexAbsolute = operand.getIndex(dim - 1u);
+
+  if (hasRelativeIndexing(operand.getIndexType(dim - 1u))) {
+    result.regIndexRelative = m_converter.loadSrcModified(builder, op,
+      op.getRawOperand(operand.getIndexOperand(dim - 1u)),
+      ComponentBit::eX, ir::ScalarType::eU32);
+  }
+
+  return result;
 }
 
 

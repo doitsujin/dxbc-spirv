@@ -40,8 +40,7 @@ struct IoVarInfo {
 
   /* Variable definition. May be an input, output, control point input,
    * control point output, scratch, or temporary variable, depending on
-   * various factors. For the fork / join instance ID, this is a function
-   * parameter. */
+   * various factors. For indexable outputs, this may be a function. */
   ir::SsaDef baseDef = { };
 
   /* Index into the base definition that corresponds to this variable.
@@ -53,6 +52,15 @@ struct IoVarInfo {
     return type == regType && (mask & componentMask) &&
       (index >= regIndex && index < regIndex + regCount);
   }
+};
+
+
+/** Decomposed I/O register index */
+struct IoRegisterIndex {
+  RegisterType regType = RegisterType::eNull;
+  ir::SsaDef vertexIndex = { };
+  ir::SsaDef regIndexRelative = { };
+  uint32_t regIndexAbsolute = 0u;
 };
 
 
@@ -98,7 +106,12 @@ public:
    *  range is declared for the register in question.
    *
    *  Returns a \c null def on error. */
-  ir::SsaDef emitLoad(ir::Builder& builder, const Operand& operand, WriteMask componentMask);
+  ir::SsaDef emitLoad(
+          ir::Builder&            builder,
+    const Instruction&            op,
+    const Operand&                operand,
+          WriteMask               componentMask,
+          ir::ScalarType          type);
 
   /** Stores a scalar or vector value to an output variable. The component
    *  type is ignored, but the component count must match that of the
@@ -108,7 +121,11 @@ public:
    *  Indexing rules are identical to those for inputs.
    *
    *  Returns \c false on error. */
-  bool emitStore(ir::Builder& builder, const Operand& operand, ir::SsaDef value);
+  bool emitStore(
+          ir::Builder&            builder,
+    const Instruction&            op,
+    const Operand&                operand,
+          ir::SsaDef              value);
 
   /** Emits hull shader control phase pass-through.
    *
@@ -243,6 +260,11 @@ private:
 
   ir::ScalarType getIndexedBaseType(
     const IoVarInfo&              var) const;
+
+  IoRegisterIndex loadRegisterIndices(
+          ir::Builder&            builder,
+    const Instruction&            op,
+    const Operand&                operand);
 
   const IoVarInfo* findIoVar(const IoVarList& list, RegisterType regType, uint32_t regIndex, WriteMask mask) const;
 

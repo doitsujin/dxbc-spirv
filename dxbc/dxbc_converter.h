@@ -148,6 +148,16 @@ private:
 
   ir::SsaDef applyDstModifiers(ir::Builder& builder, ir::SsaDef def, const Instruction& instruction, const Operand& operand);
 
+  ir::SsaDef loadSrc(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, ir::ScalarType type);
+
+  ir::SsaDef loadSrcModified(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, ir::ScalarType type);
+
+  ir::SsaDef loadOperandIndex(ir::Builder& builder, const Instruction& op, const Operand& operand, uint32_t dim);
+
+  bool storeDst(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value);
+
+  bool storeDstModified(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value);
+
   ir::ScalarType determineOperandType(const Operand& operand, ir::ScalarType fallback = ir::ScalarType::eUnknown) const;
 
   ir::ScalarType resolveMinPrecisionType(ir::ScalarType type) const;
