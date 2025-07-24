@@ -94,10 +94,29 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclTessOutputPrimitive:
       return handleTessOutput(op);
 
+    case OpCode::eMov:
+      return handleMov(builder, op);
+
+    case OpCode::eAdd:
+    case OpCode::eDiv:
+    case OpCode::eExp:
+    case OpCode::eFrc:
+    case OpCode::eLog:
+    case OpCode::eMax:
+    case OpCode::eMin:
+    case OpCode::eMul:
+    case OpCode::eRcp:
+    case OpCode::eRoundNe:
+    case OpCode::eRoundNi:
+    case OpCode::eRoundPi:
+    case OpCode::eRoundZ:
+    case OpCode::eRsq:
+    case OpCode::eSqrt:
+      return handleFp32Arithmetic(builder, op);
+
     case OpCode::eRet:
       return handleRet(builder);
 
-    case OpCode::eAdd:
     case OpCode::eAnd:
     case OpCode::eBreak:
     case OpCode::eBreakc:
@@ -111,7 +130,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDerivRtx:
     case OpCode::eDerivRty:
     case OpCode::eDiscard:
-    case OpCode::eDiv:
     case OpCode::eDp2:
     case OpCode::eDp3:
     case OpCode::eDp4:
@@ -122,8 +140,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eEndLoop:
     case OpCode::eEndSwitch:
     case OpCode::eEq:
-    case OpCode::eExp:
-    case OpCode::eFrc:
     case OpCode::eFtoI:
     case OpCode::eFtoU:
     case OpCode::eGe:
@@ -144,33 +160,22 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eLabel:
     case OpCode::eLd:
     case OpCode::eLdMs:
-    case OpCode::eLog:
     case OpCode::eLoop:
     case OpCode::eLt:
     case OpCode::eMad:
-    case OpCode::eMin:
-    case OpCode::eMax:
     case OpCode::eCustomData:
-    case OpCode::eMov:
     case OpCode::eMovc:
-    case OpCode::eMul:
     case OpCode::eNe:
     case OpCode::eNot:
     case OpCode::eOr:
     case OpCode::eResInfo:
     case OpCode::eRetc:
-    case OpCode::eRoundNe:
-    case OpCode::eRoundNi:
-    case OpCode::eRoundPi:
-    case OpCode::eRoundZ:
-    case OpCode::eRsq:
     case OpCode::eSample:
     case OpCode::eSampleC:
     case OpCode::eSampleClz:
     case OpCode::eSampleL:
     case OpCode::eSampleD:
     case OpCode::eSampleB:
-    case OpCode::eSqrt:
     case OpCode::eSwitch:
     case OpCode::eSinCos:
     case OpCode::eUDiv:
@@ -206,7 +211,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eGather4C:
     case OpCode::eGather4Po:
     case OpCode::eGather4PoC:
-    case OpCode::eRcp:
     case OpCode::eF32toF16:
     case OpCode::eF16toF32:
     case OpCode::eUAddc:
@@ -577,6 +581,77 @@ bool Converter::handleTessOutput(const Instruction& op) {
 }
 
 
+bool Converter::handleMov(ir::Builder& builder, const Instruction& op) {
+  /* Mov can either move data without any modification, or
+   * apply modifiers, in which case all operands are float. */
+  auto dst = op.getDst(0u);
+  auto src = op.getSrc(0u);
+
+  if (op.getOpToken().isSaturated() || src.getModifiers()) {
+    auto type = determineDstOperandType(dst, ir::ScalarType::eF32).getBaseType();
+    auto value = loadSrcModified(builder, op, src, dst.getWriteMask(), type);
+    return storeDstModified(builder, op, dst, value);
+  } else {
+    auto type = determineDstOperandType(dst).getBaseType();
+    auto value = loadSrc(builder, op, src, dst.getWriteMask(), type);
+    return storeDst(builder, op, dst, value);
+  }
+}
+
+
+bool Converter::handleFp32Arithmetic(ir::Builder& builder, const Instruction& op) {
+  /* All instructions handled here will generally operate on float vectors. */
+  auto opCode = op.getOpToken().getOpCode();
+
+  bool supportsMinPrecision = opCode != OpCode::eExp &&
+                              opCode != OpCode::eLog &&
+                              opCode != OpCode::eRsq &&
+                              opCode != OpCode::eSqrt;
+
+  dxbc_spv_assert(op.getDstCount() == 1u);
+  dxbc_spv_assert(op.getSrcCount());
+
+  /* Instruction type */
+  auto dst = op.getDst(0u);
+  auto dstType = determineDstOperandType(dst, ir::ScalarType::eF32, supportsMinPrecision);
+
+  /* Load source operands */
+  util::small_vector<ir::SsaDef, 3u> src;
+
+  for (uint32_t i = 0u; i < op.getSrcCount(); i++)
+    src.push_back(loadSrcModified(builder, op, op.getSrc(i), dst.getWriteMask(), dstType.getBaseType()));
+
+  ir::Op result = [opCode, dstType, &src] {
+    switch (opCode) {
+      case OpCode::eAdd:        return ir::Op::FAdd(dstType, src.at(0u), src.at(1u));
+      case OpCode::eDiv:        return ir::Op::FDiv(dstType, src.at(0u), src.at(1u));
+      case OpCode::eExp:        return ir::Op::FExp2(dstType, src.at(0u));
+      case OpCode::eFrc:        return ir::Op::FFract(dstType, src.at(0u));
+      case OpCode::eLog:        return ir::Op::FLog2(dstType, src.at(0u));
+      case OpCode::eMax:        return ir::Op::FMax(dstType, src.at(0u), src.at(1u));
+      case OpCode::eMin:        return ir::Op::FMin(dstType, src.at(0u), src.at(1u));
+      case OpCode::eMul:        return ir::Op::FMul(dstType, src.at(0u), src.at(1u));
+      case OpCode::eRcp:        return ir::Op::FRcp(dstType, src.at(0u));
+      case OpCode::eRoundNe:    return ir::Op::FRound(dstType, src.at(0u), ir::RoundMode::eNearestEven);
+      case OpCode::eRoundNi:    return ir::Op::FRound(dstType, src.at(0u), ir::RoundMode::eNegativeInf);
+      case OpCode::eRoundPi:    return ir::Op::FRound(dstType, src.at(0u), ir::RoundMode::ePositiveInf);
+      case OpCode::eRoundZ:     return ir::Op::FRound(dstType, src.at(0u), ir::RoundMode::eZero);
+      case OpCode::eRsq:        return ir::Op::FRsq(dstType, src.at(0u));
+      case OpCode::eSqrt:       return ir::Op::FSqrt(dstType, src.at(0u));
+      default: break;
+    }
+
+    dxbc_spv_unreachable();
+    return ir::Op();
+  } ();
+
+  if (op.getOpToken().getPreciseMask())
+    result.setFlags(ir::OpFlag::ePrecise);
+
+  return storeDstModified(builder, op, dst, builder.add(std::move(result)));
+}
+
+
 bool Converter::handleRet(ir::Builder& builder) {
   builder.add(ir::Op::Return());
   return true;
@@ -656,15 +731,18 @@ ir::SsaDef Converter::applyDstModifiers(ir::Builder& builder, ir::SsaDef def, co
   if (opToken.isSaturated()) {
     auto type = builder.getOp(def).getType().getBaseType(0u);
 
-    if (type.isUnknownType()) {
-      auto scalarType = determineOperandType(operand, ir::ScalarType::eF32);
-      type = ir::BasicType(scalarType, type.getVectorSize());
-    }
+    if (type.isUnknownType())
+      type = determineDstOperandType(operand, ir::ScalarType::eF32);
 
     if (type.isFloatType()) {
+      ir::OpFlags flags = 0u;
+
+      if (instruction.getOpToken().getPreciseMask())
+        flags |= ir::OpFlag::ePrecise;
+
       def = builder.add(ir::Op::FClamp(type, def,
         makeTypedConstant(builder, type, 0.0f),
-        makeTypedConstant(builder, type, 1.0f)));
+        makeTypedConstant(builder, type, 1.0f)).setFlags(flags));
     } else {
       logOpMessage(LogLevel::eWarn, instruction, "Saturation applied to a non-float result.");
     }
@@ -786,7 +864,7 @@ bool Converter::storeDstModified(ir::Builder& builder, const Instruction& op, co
 }
 
 
-ir::ScalarType Converter::determineOperandType(const Operand& operand, ir::ScalarType fallback) const {
+ir::BasicType Converter::determineDstOperandType(const Operand& operand, ir::ScalarType fallback, bool allowMinPrecision) const {
   /* Use base type from the instruction layout */
   auto type = operand.getInfo().type;
 
@@ -801,27 +879,27 @@ ir::ScalarType Converter::determineOperandType(const Operand& operand, ir::Scala
     case MinPrecision::eMin10Float: {
       if (type == ir::ScalarType::eF32 ||
           type == ir::ScalarType::eUnknown)
-        type = resolveMinPrecisionType(ir::ScalarType::eMinF10);
+        type = resolveMinPrecisionType(ir::ScalarType::eMinF10, allowMinPrecision);
     } break;
 
     case MinPrecision::eMin16Float: {
       if (type == ir::ScalarType::eF32 ||
           type == ir::ScalarType::eUnknown)
-        type = resolveMinPrecisionType(ir::ScalarType::eMinF16);
+        type = resolveMinPrecisionType(ir::ScalarType::eMinF16, allowMinPrecision);
     } break;
 
     case MinPrecision::eMin16Uint: {
       if (type == ir::ScalarType::eU32 ||
           type == ir::ScalarType::eAnyI32 ||
           type == ir::ScalarType::eUnknown)
-        type = resolveMinPrecisionType(ir::ScalarType::eMinU16);
+        type = resolveMinPrecisionType(ir::ScalarType::eMinU16, allowMinPrecision);
     } break;
 
     case MinPrecision::eMin16Sint: {
       if (type == ir::ScalarType::eI32 ||
           type == ir::ScalarType::eAnyI32 ||
           type == ir::ScalarType::eUnknown)
-        type = resolveMinPrecisionType(ir::ScalarType::eMinI16);
+        type = resolveMinPrecisionType(ir::ScalarType::eMinI16, allowMinPrecision);
     } break;
   }
 
@@ -829,25 +907,25 @@ ir::ScalarType Converter::determineOperandType(const Operand& operand, ir::Scala
   if (type == ir::ScalarType::eUnknown)
     type = fallback;
 
-  return type;
+  return makeVectorType(type, operand.getWriteMask());
 }
 
 
-ir::ScalarType Converter::resolveMinPrecisionType(ir::ScalarType type) const {
+ir::ScalarType Converter::resolveMinPrecisionType(ir::ScalarType type, bool allow) const {
   switch (type) {
     case ir::ScalarType::eMinF10:
     case ir::ScalarType::eMinF16:
-      return m_options.enableFp16
+      return m_options.enableFp16 && allow
         ? ir::ScalarType::eF16
         : ir::ScalarType::eF32;
 
     case ir::ScalarType::eMinI16:
-      return m_options.enableInt16
+      return m_options.enableInt16 && allow
         ? ir::ScalarType::eI16
         : ir::ScalarType::eI32;
 
     case ir::ScalarType::eMinU16:
-      return m_options.enableInt16
+      return m_options.enableInt16 && allow
         ? ir::ScalarType::eU16
         : ir::ScalarType::eU32;
 

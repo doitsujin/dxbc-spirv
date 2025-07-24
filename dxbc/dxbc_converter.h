@@ -140,6 +140,10 @@ private:
 
   bool handleTessOutput(const Instruction& op);
 
+  bool handleMov(ir::Builder& builder, const Instruction& op);
+
+  bool handleFp32Arithmetic(ir::Builder& builder, const Instruction& op);
+
   bool handleRet(ir::Builder& builder);
 
   void applyNonUniform(ir::Builder& builder, ir::SsaDef def);
@@ -158,9 +162,12 @@ private:
 
   bool storeDstModified(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value);
 
-  ir::ScalarType determineOperandType(const Operand& operand, ir::ScalarType fallback = ir::ScalarType::eUnknown) const;
+  ir::BasicType determineDstOperandType(
+    const Operand&                operand,
+          ir::ScalarType          fallback          = ir::ScalarType::eUnknown,
+          bool                    allowMinPrecision = true) const;
 
-  ir::ScalarType resolveMinPrecisionType(ir::ScalarType type) const;
+  ir::ScalarType resolveMinPrecisionType(ir::ScalarType type, bool allow) const;
 
   ir::SsaDef composite(ir::Builder& builder, ir::BasicType type,
     const ir::SsaDef* components, Swizzle swizzle, WriteMask mask);
