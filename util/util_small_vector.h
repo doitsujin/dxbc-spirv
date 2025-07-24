@@ -7,6 +7,8 @@
 #include <type_traits>
 #include <utility>
 
+#include "util_debug.h"
+
 namespace dxbc_spv::util {
 
 /** Small vector state with stateful allocator */
@@ -294,6 +296,17 @@ public:
     }
 
     m_state.getAllocator().deallocate(oldStorage, oldCapacity);
+  }
+
+  /** Provides safe access to elements */
+  const T& at(size_t idx) const {
+    dxbc_spv_assert(idx < size());
+    return *ptr(idx);
+  }
+
+  T& at(size_t idx) {
+    dxbc_spv_assert(idx < size());
+    return *ptr(idx);
   }
 
   /** Provides unchecked access to elements */
