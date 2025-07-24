@@ -40,10 +40,6 @@ public:
     /** Maximum tessellation factor override. Shaders may specify a
      *  different value, but any higher values will be ignored. */
     float maxTessFactor = 0.0f;
-    /** Whether to emit 16-bit float instructions for MinF16. */
-    bool enableFp16 = false;
-    /** Whether to emit 16-bit integer instructions for MinU/I16. */
-    bool enableInt16 = false;
   };
 
   Converter(Container container, const Options& options);
@@ -177,8 +173,6 @@ private:
     const Operand&                operand,
           ir::ScalarType          fallback          = ir::ScalarType::eUnknown,
           bool                    allowMinPrecision = true) const;
-
-  ir::ScalarType resolveMinPrecisionType(ir::ScalarType type, bool allow) const;
 
   ir::SsaDef composite(ir::Builder& builder, ir::BasicType type,
     const ir::SsaDef* components, Swizzle swizzle, WriteMask mask);
