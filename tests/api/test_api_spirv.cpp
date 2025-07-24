@@ -51,7 +51,7 @@ Builder test_spirv_push_data() {
   builder.add(Op::Semantic(indexDef, 1u, "SV_TARGET"));
 
   auto sel = builder.add(Op::PushDataLoad(ScalarType::eU32, selector, SsaDef()));
-  auto cond = builder.add(Op::INe(sel, builder.makeConstant(0u)));
+  auto cond = builder.add(Op::INe(ScalarType::eBool, sel, builder.makeConstant(0u)));
 
   auto a = builder.add(Op::PushDataLoad(ScalarType::eI32, data, builder.makeConstant(1u)));
   auto b = builder.add(Op::PushDataLoad(ScalarType::eI32, data, builder.makeConstant(3u)));

@@ -151,7 +151,7 @@ Builder test_misc_lds() {
 
   builder.add(Op::Barrier(Scope::eWorkgroup, Scope::eWorkgroup, MemoryType::eLds));
 
-  auto tidCond = builder.add(Op::ULt(tid, loopCounterPhiDef));
+  auto tidCond = builder.add(Op::ULt(ir::ScalarType::eBool, tid, loopCounterPhiDef));
   builder.add(Op::BranchConditional(tidCond, labelReductionRead, labelReductionMerge));
 
   builder.setCursor(labelReductionRead);
@@ -190,7 +190,7 @@ Builder test_misc_lds() {
   builder.rewriteOp(loopCounterPhiDef, std::move(loopCounterPhi));
 
   /* Check loop counter value and branch */
-  auto cond = builder.add(Op::INe(loopCounterIterDef, builder.makeConstant(0u)));
+  auto cond = builder.add(Op::INe(ScalarType::eBool, loopCounterIterDef, builder.makeConstant(0u)));
   builder.add(Op::BranchConditional(cond, labelLoopHeader, labelLoopMerge));
 
   builder.setCursor(labelLoopMerge);
@@ -297,7 +297,7 @@ Builder test_misc_ps_demote() {
     textureDescriptor, samplerDescriptor, SsaDef(), coord, SsaDef(), SsaDef(), SsaDef(), SsaDef(), SsaDef(), SsaDef(), SsaDef()));
 
   auto alpha = builder.add(Op::CompositeExtract(ScalarType::eF32, color, builder.makeConstant(3u)));
-  auto alphaTest = builder.add(Op::FLt(alpha, builder.makeConstant(0.005f)));
+  auto alphaTest = builder.add(Op::FLt(ScalarType::eBool, alpha, builder.makeConstant(0.005f)));
 
   auto labelDiscard = builder.add(Op::Label());
   builder.add(Op::Demote());
