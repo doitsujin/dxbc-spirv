@@ -583,6 +583,77 @@ bool Converter::handleRet(ir::Builder& builder) {
 }
 
 
+ir::ScalarType Converter::determineOperandType(const Operand& operand, ir::ScalarType fallback) const {
+  /* Use base type from the instruction layout */
+  auto type = operand.getInfo().type;
+
+  /* If the operand is decorated as min precision, apply
+   * it to the operand type if possible. */
+  auto precision = operand.getModifiers().getPrecision();
+
+  switch (precision) {
+    case MinPrecision::eNone:
+      break;
+
+    case MinPrecision::eMin10Float: {
+      if (type == ir::ScalarType::eF32 ||
+          type == ir::ScalarType::eUnknown)
+        type = resolveMinPrecisionType(ir::ScalarType::eMinF10);
+    } break;
+
+    case MinPrecision::eMin16Float: {
+      if (type == ir::ScalarType::eF32 ||
+          type == ir::ScalarType::eUnknown)
+        type = resolveMinPrecisionType(ir::ScalarType::eMinF16);
+    } break;
+
+    case MinPrecision::eMin16Uint: {
+      if (type == ir::ScalarType::eU32 ||
+          type == ir::ScalarType::eAnyI32 ||
+          type == ir::ScalarType::eUnknown)
+        type = resolveMinPrecisionType(ir::ScalarType::eMinU16);
+    } break;
+
+    case MinPrecision::eMin16Sint: {
+      if (type == ir::ScalarType::eI32 ||
+          type == ir::ScalarType::eAnyI32 ||
+          type == ir::ScalarType::eUnknown)
+        type = resolveMinPrecisionType(ir::ScalarType::eMinI16);
+    } break;
+  }
+
+  /* Use fallback type if we couldn't resolve the type. */
+  if (type == ir::ScalarType::eUnknown)
+    type = fallback;
+
+  return type;
+}
+
+
+ir::ScalarType Converter::resolveMinPrecisionType(ir::ScalarType type) const {
+  switch (type) {
+    case ir::ScalarType::eMinF10:
+    case ir::ScalarType::eMinF16:
+      return m_options.enableFp16
+        ? ir::ScalarType::eF16
+        : ir::ScalarType::eF32;
+
+    case ir::ScalarType::eMinI16:
+      return m_options.enableInt16
+        ? ir::ScalarType::eI16
+        : ir::ScalarType::eI32;
+
+    case ir::ScalarType::eMinU16:
+      return m_options.enableInt16
+        ? ir::ScalarType::eU16
+        : ir::ScalarType::eU32;
+
+    default:
+      return type;
+  }
+}
+
+
 ir::SsaDef Converter::composite(ir::Builder& builder, ir::BasicType type,
   const ir::SsaDef* components, Swizzle swizzle, WriteMask mask) {
   /* Apply swizzle and mask and get components in the right order. */
