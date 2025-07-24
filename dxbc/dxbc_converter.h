@@ -147,6 +147,8 @@ private:
 
   bool handleIntArithmetic(ir::Builder& builder, const Instruction& op);
 
+  bool handleIntCompare(ir::Builder& builder, const Instruction& op);
+
   bool handleRet(ir::Builder& builder);
 
   void applyNonUniform(ir::Builder& builder, ir::SsaDef def);
