@@ -120,6 +120,12 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eSqrt:
       return handleFp32Arithmetic(builder, op);
 
+    case OpCode::eEq:
+    case OpCode::eGe:
+    case OpCode::eLt:
+    case OpCode::eNe:
+      return handleFp32Compare(builder, op);
+
     case OpCode::eRet:
       return handleRet(builder);
 
@@ -158,10 +164,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eEndIf:
     case OpCode::eEndLoop:
     case OpCode::eEndSwitch:
-    case OpCode::eEq:
     case OpCode::eFtoI:
     case OpCode::eFtoU:
-    case OpCode::eGe:
     case OpCode::eIf:
     case OpCode::eIEq:
     case OpCode::eIGe:
@@ -175,11 +179,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eLd:
     case OpCode::eLdMs:
     case OpCode::eLoop:
-    case OpCode::eLt:
     case OpCode::eMad:
     case OpCode::eCustomData:
     case OpCode::eMovc:
-    case OpCode::eNe:
     case OpCode::eResInfo:
     case OpCode::eRetc:
     case OpCode::eSample:
@@ -661,6 +663,52 @@ bool Converter::handleFp32Arithmetic(ir::Builder& builder, const Instruction& op
 }
 
 
+bool Converter::handleFp32Compare(ir::Builder& builder, const Instruction& op) {
+  /* All instructions support two operands with modifiers and return a boolean. */
+  auto opCode = op.getOpToken().getOpCode();
+
+  dxbc_spv_assert(op.getDstCount() == 1u);
+  dxbc_spv_assert(op.getSrcCount() == 2u);
+
+  const auto& dst = op.getDst(0u);
+
+  const auto& srcA = op.getSrc(0u);
+  const auto& srcB = op.getSrc(1u);
+
+  /* If only one operand is marked as MinF16, promote to F32 to maintain precision. */
+  auto srcAType = determineOperandType(srcA, ir::ScalarType::eF32);
+  auto srcBType = determineOperandType(srcB, ir::ScalarType::eF32);
+
+  if (srcAType != srcBType)
+    srcAType = ir::ScalarType::eF32;
+
+  /* Load operands */
+  auto a = loadSrcModified(builder, op, srcA, dst.getWriteMask(), srcAType);
+  auto b = loadSrcModified(builder, op, srcB, dst.getWriteMask(), srcAType);
+
+  auto boolType = makeVectorType(ir::ScalarType::eBool, dst.getWriteMask());
+
+  ir::Op result = [opCode, boolType, a, b, &builder] {
+    switch (opCode) {
+      case OpCode::eEq: return ir::Op::FEq(boolType, a, b);
+      case OpCode::eGe: return ir::Op::FGe(boolType, a, b);
+      case OpCode::eLt: return ir::Op::FLt(boolType, a, b);
+      case OpCode::eNe: return ir::Op::FNe(boolType, a, b);
+      default: break;
+    }
+
+    dxbc_spv_unreachable();
+    return ir::Op();
+  } ();
+
+  if (op.getOpToken().getPreciseMask())
+    result.setFlags(ir::OpFlag::ePrecise);
+
+  auto resultDef = boolToInt(builder, builder.add(std::move(result)));
+  return storeDstModified(builder, op, dst, resultDef);
+}
+
+
 bool Converter::handleIntArithmetic(ir::Builder& builder, const Instruction& op) {
   /* All these instructions operate on integer vectors. */
   auto opCode = op.getOpToken().getOpCode();
@@ -946,6 +994,18 @@ bool Converter::storeDst(ir::Builder& builder, const Instruction& op, const Oper
 bool Converter::storeDstModified(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value) {
   value = applyDstModifiers(builder, value, op, operand);
   return storeDst(builder, op, operand, value);
+}
+
+
+ir::SsaDef Converter::boolToInt(ir::Builder& builder, ir::SsaDef def) {
+  auto srcType = builder.getOp(def).getType().getBaseType(0u);
+  dxbc_spv_assert(srcType.isBoolType());
+
+  auto dstType = ir::BasicType(ir::ScalarType::eAnyI32, srcType.getVectorSize());
+
+  return builder.add(ir::Op::Select(dstType, def,
+    makeTypedConstant(builder, dstType, -1),
+    makeTypedConstant(builder, dstType,  0)));
 }
 
 
