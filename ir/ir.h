@@ -1817,9 +1817,10 @@ public:
       .addOperand(value);
   }
 
-  static Op ScopedSwitchCase(Operand literal) {
+  template<typename T, std::enable_if_t<std::is_integral_v<T>, bool> = true>
+  static Op ScopedSwitchCase(T literal) {
     return Op(OpCode::eScopedSwitchCase, Type())
-      .addOperand(literal);
+      .addOperand(Operand(literal));
   }
 
   static Op ScopedSwitchDefault() {
