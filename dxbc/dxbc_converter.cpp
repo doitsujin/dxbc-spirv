@@ -674,6 +674,118 @@ ir::SsaDef Converter::applyDstModifiers(ir::Builder& builder, ir::SsaDef def, co
 }
 
 
+ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, ir::ScalarType type) {
+  switch (operand.getRegisterType()) {
+    case RegisterType::eNull:
+      return ir::SsaDef();
+
+    case RegisterType::eImm32:
+    case RegisterType::eImm64:
+    case RegisterType::eTemp:
+    case RegisterType::eIndexableTemp:
+    case RegisterType::eCbv:
+    case RegisterType::eIcb:
+    case RegisterType::eForkInstanceId:
+    case RegisterType::eJoinInstanceId:
+      /* TODO implement */
+      dxbc_spv_unreachable();
+      return ir::SsaDef();
+
+    case RegisterType::eInput:
+    case RegisterType::eOutput:
+    case RegisterType::ePrimitiveId:
+    case RegisterType::eDepth:
+    case RegisterType::eDepthGe:
+    case RegisterType::eDepthLe:
+    case RegisterType::eCoverageIn:
+    case RegisterType::eCoverageOut:
+    case RegisterType::eControlPointId:
+    case RegisterType::eControlPointIn:
+    case RegisterType::eControlPointOut:
+    case RegisterType::ePatchConstant:
+    case RegisterType::eTessCoord:
+    case RegisterType::eThreadId:
+    case RegisterType::eThreadGroupId:
+    case RegisterType::eThreadIdInGroup:
+    case RegisterType::eThreadIndexInGroup:
+    case RegisterType::eGsInstanceId:
+    case RegisterType::eCycleCounter:
+    case RegisterType::eStencilRef:
+    case RegisterType::eInnerCoverage:
+      return m_ioMap.emitLoad(builder, op, operand, mask, type);
+
+    default: {
+      auto name = makeRegisterDebugName(operand.getRegisterType(), 0u, WriteMask());
+      logOpError(op, "Unhandled source operand: ", name);
+    } return ir::SsaDef();
+  }
+}
+
+
+ir::SsaDef Converter::loadSrcModified(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, ir::ScalarType type) {
+  auto value = loadSrc(builder, op, operand, mask, type);
+  return applySrcModifiers(builder, value, op, operand);
+}
+
+
+ir::SsaDef Converter::loadOperandIndex(ir::Builder& builder, const Instruction& op, const Operand& operand, uint32_t dim) {
+  dxbc_spv_assert(dim < operand.getIndexDimensions());
+
+  auto indexType = operand.getIndexType(dim);
+
+  if (!hasRelativeIndexing(indexType))
+    return builder.makeConstant(operand.getIndex(dim));
+
+  /* Recursively load relative index */
+  ir::SsaDef index = loadSrcModified(builder, op,
+    op.getRawOperand(operand.getIndexOperand(dim)),
+    ComponentBit::eX, ir::ScalarType::eU32);
+
+  if (!hasAbsoluteIndexing(indexType))
+    return index;
+
+  auto base = operand.getIndex(dim);
+
+  if (!base)
+    return index;
+
+  return builder.add(ir::Op::IAdd(ir::ScalarType::eU32, builder.makeConstant(base), index));
+}
+
+
+bool Converter::storeDst(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value) {
+  switch (operand.getRegisterType()) {
+    case RegisterType::eNull:
+      return true;
+
+    case RegisterType::eTemp:
+    case RegisterType::eIndexableTemp:
+      /* TODO implement */
+      dxbc_spv_unreachable();
+      return false;
+
+    case RegisterType::eOutput:
+    case RegisterType::eDepth:
+    case RegisterType::eDepthLe:
+    case RegisterType::eDepthGe:
+    case RegisterType::eCoverageOut:
+    case RegisterType::eStencilRef:
+      return m_ioMap.emitStore(builder, op, operand, value);
+
+    default: {
+      auto name = makeRegisterDebugName(operand.getRegisterType(), 0u, operand.getWriteMask());
+      logOpError(op, "Unhandled destination operand: ", name);
+    } return false;
+  }
+}
+
+
+bool Converter::storeDstModified(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value) {
+  value = applyDstModifiers(builder, value, op, operand);
+  return storeDst(builder, op, operand, value);
+}
+
+
 ir::ScalarType Converter::determineOperandType(const Operand& operand, ir::ScalarType fallback) const {
   /* Use base type from the instruction layout */
   auto type = operand.getInfo().type;
