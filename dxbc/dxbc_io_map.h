@@ -312,8 +312,14 @@ private:
     const Operand&                operand);
 
 
+  /* Converts input to the given scalar type. This will handle boolean
+   * conversions as well. */
+  ir::SsaDef convertScalar(ir::Builder& builder, ir::ScalarType dstType, ir::SsaDef value);
+
+
   /* Looks up matching I/O variable in the given list. */
   const IoVarInfo* findIoVar(const IoVarList& list, RegisterType regType, uint32_t regIndex, WriteMask mask) const;
+
 
   void emitSemanticName(ir::Builder& builder, ir::SsaDef def, const SignatureEntry& entry) const;
 
