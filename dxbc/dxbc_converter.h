@@ -229,6 +229,8 @@ private:
 
   static WriteMask convertMaskTo64Bit(WriteMask mask);
 
+  static bool isValid64BitMask(WriteMask mask);
+
   static bool isValidControlPointCount(uint32_t n);
 
   static bool isValidTessFactor(float f);

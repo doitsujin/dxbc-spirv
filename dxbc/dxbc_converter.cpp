@@ -1070,6 +1070,11 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
   auto loadType = is64BitType(type) ? ir::ScalarType::eU32 : type;
   auto loadDef = ir::SsaDef();
 
+  if (is64BitType(type) && !isValid64BitMask(mask)) {
+    logOpError(op, "Invalid 64-bit component read mask: ", mask);
+    return ir::SsaDef();
+  }
+
   switch (operand.getRegisterType()) {
     case RegisterType::eNull:
       return ir::SsaDef();
@@ -1171,9 +1176,14 @@ bool Converter::storeDst(ir::Builder& builder, const Instruction& op, const Oper
   /* If the incoming operand is a 64-bit type, cast it to a 32-bit
    * vector before handing it off to the underlying register load/store. */
   const auto& valueOp = builder.getOp(value);
+  auto writeMask = operand.getWriteMask();
 
   if (is64BitType(valueOp.getType().getBaseType(0u))) {
-    auto storeType = makeVectorType(ir::ScalarType::eU32, operand.getWriteMask());
+    auto storeType = makeVectorType(ir::ScalarType::eU32, writeMask);
+
+    if (!isValid64BitMask(writeMask))
+      return logOpError(op, "Invalid 64-bit component write mask: ", writeMask);
+
     value = builder.add(ir::Op::ConsumeAs(storeType, value));
   }
 
@@ -1194,7 +1204,7 @@ bool Converter::storeDst(ir::Builder& builder, const Instruction& op, const Oper
       return m_ioMap.emitStore(builder, op, operand, value);
 
     default: {
-      auto name = makeRegisterDebugName(operand.getRegisterType(), 0u, operand.getWriteMask());
+      auto name = makeRegisterDebugName(operand.getRegisterType(), 0u, writeMask);
       logOpError(op, "Unhandled destination operand: ", name);
     } return false;
   }
@@ -1486,6 +1496,17 @@ WriteMask Converter::convertMaskTo32Bit(WriteMask mask) {
 
 WriteMask Converter::convertMaskTo64Bit(WriteMask mask) {
   return makeWriteMaskForComponents(util::popcnt(uint8_t(mask)) * 2u);
+}
+
+
+bool Converter::isValid64BitMask(WriteMask mask) {
+  /* 64-bit masks must either have none or both bits of the .xy and .zw
+   * sub-masks set. Check this by shifting the upper components to the
+   * lower ones and comparing the resulting masks. */
+  uint8_t a = uint8_t(mask) & 0b0101u;
+  uint8_t b = uint8_t(mask) & 0b1010u;
+
+  return a == (b >> 1u);
 }
 
 
