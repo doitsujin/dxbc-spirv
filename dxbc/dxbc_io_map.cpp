@@ -1140,6 +1140,8 @@ std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicLoadFunction(
   }
 
   /* In geometry and tessellation shaders, iterate over vertices */
+  auto loopConstruct = ir::SsaDef();
+
   auto vertexCountDef = determineIncomingVertexCount(builder, vertexCount);
   auto vertexIndexDef = ir::SsaDef();
   auto vertexIndex = ir::SsaDef();
@@ -1147,7 +1149,7 @@ std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicLoadFunction(
   if (vertexCountDef) {
     vertexIndexDef = builder.add(ir::Op::DclTmp(ir::ScalarType::eU32, m_converter.getEntryPoint()));
     builder.add(ir::Op::TmpStore(vertexIndexDef, builder.makeConstant(0u)));
-    builder.add(ir::Op::ScopedLoop());
+    loopConstruct = builder.add(ir::Op::ScopedLoop(ir::SsaDef()));
 
     vertexIndex = builder.add(ir::Op::TmpLoad(ir::ScalarType::eU32, vertexIndexDef));
   }
@@ -1200,10 +1202,15 @@ std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicLoadFunction(
     vertexIndex = builder.add(ir::Op::IAdd(ir::ScalarType::eU32, vertexIndex, builder.makeConstant(1u)));
     builder.add(ir::Op::TmpStore(vertexIndexDef, vertexIndex));
 
-    builder.add(ir::Op::ScopedIf(builder.add(ir::Op::UGe(ir::ScalarType::eBool, vertexIndex, vertexCountDef))));
-    builder.add(ir::Op::ScopedLoopBreak());
-    builder.add(ir::Op::ScopedEndIf());
-    builder.add(ir::Op::ScopedEndLoop());
+    auto condConstruct = builder.add(ir::Op::ScopedIf(ir::SsaDef(),
+      builder.add(ir::Op::UGe(ir::ScalarType::eBool, vertexIndex, vertexCountDef))));
+    builder.add(ir::Op::ScopedLoopBreak(loopConstruct));
+
+    auto condEnd = builder.add(ir::Op::ScopedEndIf(condConstruct));
+    builder.rewriteOp(condConstruct, ir::Op(builder.getOp(condConstruct)).setOperand(0u, condEnd));
+
+    auto loopEnd = builder.add(ir::Op::ScopedEndLoop(loopConstruct));
+    builder.rewriteOp(loopConstruct, ir::Op(builder.getOp(loopConstruct)).setOperand(0u, loopEnd));
   }
 
   builder.add(ir::Op::FunctionEnd());
@@ -1292,7 +1299,7 @@ std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicStoreFunction(
   /* Load value to store */
   auto value = builder.add(ir::Op::ParamLoad(valueType, function, paramValue));
 
-  builder.add(ir::Op::ScopedSwitch(regIndex));
+  auto switchConstruct = builder.add(ir::Op::ScopedSwitch(ir::SsaDef(), regIndex));
 
   for (uint32_t i = 0u; i < var.regCount; i++) {
     for (uint32_t j = 0u; j < componentCount; j++) {
@@ -1302,7 +1309,7 @@ std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicStoreFunction(
       if (!targetVar || !targetVar->baseDef)
         continue;
 
-      builder.add(ir::Op::ScopedSwitchCase(componentCount * i + j));
+      builder.add(ir::Op::ScopedSwitchCase(switchConstruct, componentCount * i + j));
 
       /* If necessary. convert the incoming value to the target type */
       auto targetType = targetVar->baseType.getBaseType(0u).getBaseType();
@@ -1312,11 +1319,13 @@ std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicStoreFunction(
         vertexIndex, ir::SsaDef(), var.regIndex + i, component);
 
       builder.add(ir::Op::OutputStore(targetVar->baseDef, address, scalar));
-      builder.add(ir::Op::ScopedSwitchBreak());
+      builder.add(ir::Op::ScopedSwitchBreak(switchConstruct));
     }
   }
 
-  builder.add(ir::Op::ScopedEndSwitch());
+  auto switchEnd = builder.add(ir::Op::ScopedEndSwitch(switchConstruct));
+  builder.rewriteOp(switchConstruct, ir::Op(builder.getOp(switchConstruct)).setOperand(0u, switchEnd));
+
   builder.add(ir::Op::FunctionEnd());
 
   if (m_converter.m_options.includeDebugNames) {

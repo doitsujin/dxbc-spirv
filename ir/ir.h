@@ -1795,56 +1795,68 @@ public:
       .addOperand(value);
   }
 
-  static Op ScopedIf(SsaDef cond) {
+  static Op ScopedIf(SsaDef endRef, SsaDef cond) {
     return Op(OpCode::eScopedIf, Type())
+      .addOperand(endRef)
       .addOperand(cond);
   }
 
-  static Op ScopedElse() {
-    return Op(OpCode::eScopedElse, Type());
+  static Op ScopedElse(SsaDef construct) {
+    return Op(OpCode::eScopedElse, Type())
+      .addOperand(construct);
   }
 
-  static Op ScopedEndIf() {
-    return Op(OpCode::eScopedEndIf, Type());
+  static Op ScopedEndIf(SsaDef construct) {
+    return Op(OpCode::eScopedEndIf, Type())
+      .addOperand(construct);
   }
 
-  static Op ScopedLoop() {
-    return Op(OpCode::eScopedLoop, Type());
+  static Op ScopedLoop(SsaDef endRef) {
+    return Op(OpCode::eScopedLoop, Type())
+      .addOperand(endRef);
   }
 
-  static Op ScopedLoopBreak() {
-    return Op(OpCode::eScopedLoopBreak, Type());
+  static Op ScopedLoopBreak(SsaDef construct) {
+    return Op(OpCode::eScopedLoopBreak, Type())
+      .addOperand(construct);
   }
 
-  static Op ScopedLoopContinue() {
-    return Op(OpCode::eScopedLoopContinue, Type());
+  static Op ScopedLoopContinue(SsaDef construct) {
+    return Op(OpCode::eScopedLoopContinue, Type())
+      .addOperand(construct);
   }
 
-  static Op ScopedEndLoop() {
-    return Op(OpCode::eScopedEndLoop, Type());
+  static Op ScopedEndLoop(SsaDef construct) {
+    return Op(OpCode::eScopedEndLoop, Type())
+      .addOperand(construct);
   }
 
-  static Op ScopedSwitch(SsaDef value) {
+  static Op ScopedSwitch(SsaDef endRef, SsaDef value) {
     return Op(OpCode::eScopedSwitch, Type())
+      .addOperand(endRef)
       .addOperand(value);
   }
 
   template<typename T, std::enable_if_t<std::is_integral_v<T>, bool> = true>
-  static Op ScopedSwitchCase(T literal) {
+  static Op ScopedSwitchCase(SsaDef construct, T literal) {
     return Op(OpCode::eScopedSwitchCase, Type())
+      .addOperand(construct)
       .addOperand(Operand(literal));
   }
 
-  static Op ScopedSwitchDefault() {
-    return Op(OpCode::eScopedSwitchDefault, Type());
+  static Op ScopedSwitchDefault(SsaDef construct) {
+    return Op(OpCode::eScopedSwitchDefault, Type())
+      .addOperand(construct);
   }
 
-  static Op ScopedSwitchBreak() {
-    return Op(OpCode::eScopedSwitchBreak, Type());
+  static Op ScopedSwitchBreak(SsaDef construct) {
+    return Op(OpCode::eScopedSwitchBreak, Type())
+      .addOperand(construct);
   }
 
-  static Op ScopedEndSwitch() {
-    return Op(OpCode::eScopedEndSwitch, Type());
+  static Op ScopedEndSwitch(SsaDef construct) {
+    return Op(OpCode::eScopedEndSwitch, Type())
+      .addOperand(construct);
   }
 
   static Op Barrier(Scope execScope, Scope memScope, MemoryTypeFlags memTypes) {
