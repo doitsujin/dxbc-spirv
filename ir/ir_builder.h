@@ -213,10 +213,11 @@ public:
 
   /** Removes an instruction. The caller must make sure that
    *  no instructions reference removed instructions. */
-  void remove(SsaDef def);
+  SsaDef remove(SsaDef def);
 
-  /** Convenience method to removes an instruction by reference. */
-  void removeOp(const Op& op);
+  /** Convenience method to removes an instruction by reference.
+   *  Returns the definition of the next instruction. */
+  SsaDef removeOp(const Op& op);
 
   /** Replaces operation for the given SSA definition. Useful when
    *  a 1:1 replcement is required, or when changing operands. Note
@@ -278,7 +279,7 @@ private:
 
   void insertNodes(SsaDef first, SsaDef last);
 
-  void removeNode(SsaDef def);
+  SsaDef removeNode(SsaDef def);
 
   void unlinkNodes(SsaDef first, SsaDef last);
 

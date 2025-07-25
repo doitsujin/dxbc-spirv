@@ -81,7 +81,7 @@ SsaDef Builder::addAfter(SsaDef ref, Op op) {
 }
 
 
-void Builder::remove(SsaDef def) {
+SsaDef Builder::remove(SsaDef def) {
   auto op = getOp(def);
 
   dxbc_spv_assert(op);
@@ -92,12 +92,12 @@ void Builder::remove(SsaDef def) {
   if (op.isConstant())
     m_constants.erase(op);
 
-  removeNode(def);
+  return removeNode(def);
 }
 
 
-void Builder::removeOp(const Op& op) {
-  remove(op.getDef());
+SsaDef Builder::removeOp(const Op& op) {
+  return remove(op.getDef());
 }
 
 
@@ -279,8 +279,9 @@ void Builder::insertNodes(SsaDef first, SsaDef last) {
 }
 
 
-void Builder::removeNode(SsaDef def) {
+SsaDef Builder::removeNode(SsaDef def) {
   auto& metadata = m_metadata.at(def.getId());
+  auto result = metadata.next;
 
   if (m_codeBlockStart == def)
     m_codeBlockStart = metadata.next;
@@ -310,6 +311,7 @@ void Builder::removeNode(SsaDef def) {
   metadata.next = m_free;
 
   m_free = def;
+  return result;
 }
 
 
