@@ -219,12 +219,15 @@ private:
   }
 
   static ir::BasicType makeVectorType(ir::ScalarType type, WriteMask mask) {
-    return ir::BasicType(type, util::popcnt(uint8_t(mask)));
+    uint8_t shift = is64BitType(type) ? 1u : 0u;
+    return ir::BasicType(type, util::popcnt(uint8_t(mask)) >> shift);
   }
 
   static bool isValidControlPointCount(uint32_t n);
 
   static bool isValidTessFactor(float f);
+
+  static bool is64BitType(ir::BasicType type);
 
 };
 
