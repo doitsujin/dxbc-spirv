@@ -163,7 +163,7 @@ private:
 
   ir::SsaDef applyDstModifiers(ir::Builder& builder, ir::SsaDef def, const Instruction& instruction, const Operand& operand);
 
-  ir::SsaDef loadImm32(ir::Builder& builder, const Operand& operand, WriteMask mask, ir::ScalarType type);
+  ir::SsaDef loadImmediate(ir::Builder& builder, const Operand& operand, WriteMask mask, ir::ScalarType type);
 
   ir::SsaDef loadPhaseInstanceId(ir::Builder& builder, WriteMask mask, ir::ScalarType type);
 

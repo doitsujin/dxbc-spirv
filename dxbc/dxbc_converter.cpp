@@ -1133,13 +1133,31 @@ ir::SsaDef Converter::applyDstModifiers(ir::Builder& builder, ir::SsaDef def, co
 }
 
 
-ir::SsaDef Converter::loadImm32(ir::Builder& builder, const Operand& operand, WriteMask mask, ir::ScalarType type) {
+ir::SsaDef Converter::loadImmediate(ir::Builder& builder, const Operand& operand, WriteMask mask, ir::ScalarType type) {
   ir::Op result(ir::OpCode::eConstant, makeVectorType(type, mask));
 
+  /* Compress 64-bit component mask so we only load two components */
+  if (operand.getRegisterType() == RegisterType::eImm64) {
+    dxbc_spv_assert(isValid64BitMask(mask));
+    mask &= ComponentBit::eX | ComponentBit::eZ;
+
+    if (mask & ComponentBit::eZ) {
+      mask |= ComponentBit::eY;
+      mask -= ComponentBit::eZ;
+    }
+  }
+
   for (auto c : mask) {
-    auto index = uint8_t(operand.getSwizzle().map(c));
+    auto index = operand.getComponentCount() == ComponentCount::e4Component
+      ? uint8_t(componentFromBit(c))
+      : uint8_t(0u);
+
     /* Preserve bit pattern */
-    result.addOperand(ir::Operand(operand.getImmediate<uint32_t>(index)));
+    auto value = operand.getRegisterType() == RegisterType::eImm32
+      ? ir::Operand(operand.getImmediate<uint32_t>(index))
+      : ir::Operand(operand.getImmediate<uint64_t>(index));
+
+    result.addOperand(value);
   }
 
   return builder.add(std::move(result));
@@ -1157,9 +1175,12 @@ ir::SsaDef Converter::loadPhaseInstanceId(ir::Builder& builder, WriteMask mask, 
 
 
 ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, ir::ScalarType type) {
-  /* Load 64-bit operands as scalar 32-bits and promote later */
-  auto loadType = is64BitType(type) ? ir::ScalarType::eU32 : type;
+  /* Load non-constant 64-bit operands as scalar 32-bits and promote later */
+  auto loadType = type;
   auto loadDef = ir::SsaDef();
+
+  if (is64BitType(type) && operand.getRegisterType() != RegisterType::eImm64)
+    loadType = ir::ScalarType::eU32;
 
   if (is64BitType(type) && !isValid64BitMask(mask)) {
     logOpError(op, "Invalid 64-bit component read mask: ", mask);
@@ -1174,7 +1195,8 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
       return ir::SsaDef();
 
     case RegisterType::eImm32:
-      loadDef = loadImm32(builder, operand, mask, loadType);
+    case RegisterType::eImm64:
+      loadDef = loadImmediate(builder, operand, mask, loadType);
       break;
 
     case RegisterType::eTemp:
@@ -1187,7 +1209,6 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
       loadDef = loadPhaseInstanceId(builder, mask, loadType);
       break;
 
-    case RegisterType::eImm64:
     case RegisterType::eCbv:
     case RegisterType::eIcb:
       /* TODO implement */
@@ -1228,13 +1249,11 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
     return loadDef;
   }
 
-  if (is64BitType(type))
-    loadDef = builder.add(ir::Op::ConsumeAs(makeVectorType(type, mask), loadDef));
-
-  if (type == ir::ScalarType::eBool) {
-    /* Resolve booleans */
+  /* Resolve boolean and 64-bit types */
+  if (type == ir::ScalarType::eBool)
     loadDef = intToBool(builder, loadDef);
-  }
+  else if (type != loadType)
+    loadDef = builder.add(ir::Op::ConsumeAs(makeVectorType(type, mask), loadDef));
 
   return loadDef;
 }
