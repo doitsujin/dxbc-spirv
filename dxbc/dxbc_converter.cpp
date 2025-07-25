@@ -101,6 +101,7 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return handleTessOutput(op);
 
     case OpCode::eMov:
+    case OpCode::eDMov:
       return handleMov(builder, op);
 
     case OpCode::eMovc:
@@ -298,7 +299,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eImmAtomicUMax:
     case OpCode::eImmAtomicUMin:
     case OpCode::eSync:
-    case OpCode::eDMov:
     case OpCode::eDMovc:
     case OpCode::eEvalSnapped:
     case OpCode::eEvalSampleIndex:
@@ -605,9 +605,12 @@ bool Converter::handleMov(ir::Builder& builder, const Instruction& op) {
   const auto& src = op.getSrc(0u);
 
   bool hasModifiers = op.getOpToken().isSaturated() || src.getModifiers();
-  auto fallbackType = hasModifiers ? ir::ScalarType::eF32 : ir::ScalarType::eUnknown;
+  auto defaultType = dst.getInfo().type;
 
-  auto type = determineOperandType(dst, fallbackType);
+  if (defaultType == ir::ScalarType::eUnknown && hasModifiers)
+    defaultType = ir::ScalarType::eF32;
+
+  auto type = determineOperandType(dst, defaultType, !is64BitType(defaultType));
   auto value = loadSrcModified(builder, op, src, dst.getWriteMask(), type);
 
   if (!value)
