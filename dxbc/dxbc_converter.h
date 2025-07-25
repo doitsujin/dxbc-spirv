@@ -145,7 +145,7 @@ private:
 
   bool handleFloatArithmetic(ir::Builder& builder, const Instruction& op);
 
-  bool handleFp32Compare(ir::Builder& builder, const Instruction& op);
+  bool handleFloatCompare(ir::Builder& builder, const Instruction& op);
 
   bool handleIntArithmetic(ir::Builder& builder, const Instruction& op);
 
@@ -222,6 +222,10 @@ private:
     uint8_t shift = is64BitType(type) ? 1u : 0u;
     return ir::BasicType(type, util::popcnt(uint8_t(mask)) >> shift);
   }
+
+  static WriteMask convertMaskTo32Bit(WriteMask mask);
+
+  static WriteMask convertMaskTo64Bit(WriteMask mask);
 
   static bool isValidControlPointCount(uint32_t n);
 

@@ -133,7 +133,11 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eGe:
     case OpCode::eLt:
     case OpCode::eNe:
-      return handleFp32Compare(builder, op);
+    case OpCode::eDEq:
+    case OpCode::eDGe:
+    case OpCode::eDLt:
+    case OpCode::eDNe:
+      return handleFloatCompare(builder, op);
 
     case OpCode::eAnd:
     case OpCode::eIAdd:
@@ -283,10 +287,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eImmAtomicUMax:
     case OpCode::eImmAtomicUMin:
     case OpCode::eSync:
-    case OpCode::eDEq:
-    case OpCode::eDGe:
-    case OpCode::eDLt:
-    case OpCode::eDNe:
     case OpCode::eDMov:
     case OpCode::eDMovc:
     case OpCode::eDtoF:
@@ -722,7 +722,7 @@ bool Converter::handleFloatArithmetic(ir::Builder& builder, const Instruction& o
 }
 
 
-bool Converter::handleFp32Compare(ir::Builder& builder, const Instruction& op) {
+bool Converter::handleFloatCompare(ir::Builder& builder, const Instruction& op) {
   /* All instructions support two operands with modifiers and return a boolean. */
   auto opCode = op.getOpToken().getOpCode();
 
@@ -734,31 +734,56 @@ bool Converter::handleFp32Compare(ir::Builder& builder, const Instruction& op) {
   const auto& srcA = op.getSrc(0u);
   const auto& srcB = op.getSrc(1u);
 
+  auto componentType = srcA.getInfo().type;
+  dxbc_spv_assert(componentType == srcB.getInfo().type);
+
+  bool is64Bit = is64BitType(componentType);
+
   /* If only one operand is marked as MinF16, promote to F32 to maintain precision. */
-  auto srcAType = determineOperandType(srcA, ir::ScalarType::eF32);
-  auto srcBType = determineOperandType(srcB, ir::ScalarType::eF32);
+  auto srcAType = determineOperandType(srcA, componentType, !is64Bit);
+  auto srcBType = determineOperandType(srcB, componentType, !is64Bit);
 
   if (srcAType != srcBType) {
     srcAType = ir::ScalarType::eF32;
     srcBType = ir::ScalarType::eF32;
   }
 
-  /* Load operands */
-  auto a = loadSrcModified(builder, op, srcA, dst.getWriteMask(), srcAType);
-  auto b = loadSrcModified(builder, op, srcB, dst.getWriteMask(), srcBType);
+  /* Load operands. For the 64-bit variants of these instructions, we need to
+   * promote the component mask that we're reading first. */
+  auto srcReadMask = dst.getWriteMask();
+
+  if (is64Bit)
+    srcReadMask = convertMaskTo64Bit(srcReadMask);
+
+  auto a = loadSrcModified(builder, op, srcA, srcReadMask, srcAType);
+  auto b = loadSrcModified(builder, op, srcB, srcReadMask, srcBType);
 
   if (!a || !b)
     return false;
 
+  /* Result type, make sure to use the correct mask for the component count */
   auto boolType = makeVectorType(ir::ScalarType::eBool, dst.getWriteMask());
 
   ir::Op result = [opCode, boolType, a, b, &builder] {
     switch (opCode) {
-      case OpCode::eEq: return ir::Op::FEq(boolType, a, b);
-      case OpCode::eGe: return ir::Op::FGe(boolType, a, b);
-      case OpCode::eLt: return ir::Op::FLt(boolType, a, b);
-      case OpCode::eNe: return ir::Op::FNe(boolType, a, b);
-      default: break;
+      case OpCode::eEq:
+      case OpCode::eDEq:
+        return ir::Op::FEq(boolType, a, b);
+
+      case OpCode::eGe:
+      case OpCode::eDGe:
+        return ir::Op::FGe(boolType, a, b);
+
+      case OpCode::eLt:
+      case OpCode::eDLt:
+        return ir::Op::FLt(boolType, a, b);
+
+      case OpCode::eNe:
+      case OpCode::eDNe:
+        return ir::Op::FNe(boolType, a, b);
+
+      default:
+        break;
     }
 
     dxbc_spv_unreachable();
@@ -768,6 +793,7 @@ bool Converter::handleFp32Compare(ir::Builder& builder, const Instruction& op) {
   if (op.getOpToken().getPreciseMask())
     result.setFlags(ir::OpFlag::ePrecise);
 
+  /* Convert bool to DXBC integer vector */
   auto resultDef = boolToInt(builder, builder.add(std::move(result)));
   return storeDstModified(builder, op, dst, resultDef);
 }
@@ -1402,6 +1428,21 @@ void Converter::logOp(LogLevel severity, const Instruction& op) const {
   auto instruction = disasm.disassembleOp(op);
 
   Logger::log(severity, "Line ", m_instructionCount, ": ", instruction);
+}
+
+
+WriteMask Converter::convertMaskTo32Bit(WriteMask mask) {
+  dxbc_spv_assert(isValid64BitMask(mask));
+
+  /* Instructions that operate on both 32-bit and 64-bit types do not
+   * match masks in terms of component bits, but instead base it on
+   * the number of components set in the write mask. */
+  return makeWriteMaskForComponents(util::popcnt(uint8_t(mask)) / 2u);
+}
+
+
+WriteMask Converter::convertMaskTo64Bit(WriteMask mask) {
+  return makeWriteMaskForComponents(util::popcnt(uint8_t(mask)) * 2u);
 }
 
 
