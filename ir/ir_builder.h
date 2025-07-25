@@ -26,10 +26,12 @@ struct OpList {
 /** Doubly-linked list of operations. If used as a free list,
  *  acts as a single-linked list with the prev link being null. */
 struct OpMetadata {
+  using UseList = small_vector<SsaDef, 4>;
+
   SsaDef prev = { };
   SsaDef next = { };
 
-  small_vector<SsaDef, 4> uses = { };
+  UseList uses = { };
 };
 
 
@@ -98,6 +100,68 @@ public:
 
   };
 
+
+  class use_iterator {
+    using list_iterator = typename OpMetadata::UseList::const_iterator;
+  public:
+
+    using iterator_category = std::bidirectional_iterator_tag;
+    using difference_type = std::ptrdiff_t;
+    using value_type = Op;
+    using reference_type = const Op&;
+    using pointer = const Op*;
+
+    use_iterator() = default;
+
+    use_iterator(const Builder& builder, list_iterator iter)
+    : m_builder(&builder), m_iter(iter) { }
+
+    reference_type operator * () const {
+      return m_builder->getOp(*m_iter);
+    }
+
+    pointer operator -> () const {
+      return &m_builder->getOp(*m_iter);
+    }
+
+    use_iterator& operator ++ () {
+      m_iter++;
+      return *this;
+    }
+
+    use_iterator operator ++ (int) {
+      use_iterator result = *this;
+      m_iter++;
+      return result;
+    }
+
+    use_iterator& operator -- () {
+      m_iter--;
+      return *this;
+    }
+
+    use_iterator operator -- (int) {
+      use_iterator result = *this;
+      m_iter--;
+      return result;
+    }
+
+    bool operator == (const use_iterator& other) const {
+      return m_builder == other.m_builder && m_iter == other.m_iter;
+    }
+
+    bool operator != (const use_iterator& other) const {
+      return !(this->operator == (other));
+    }
+
+  private:
+
+    const Builder*  m_builder = nullptr;
+    list_iterator   m_iter    = nullptr;
+
+  };
+
+
   Builder();
 
   ~Builder();
@@ -134,7 +198,10 @@ public:
    *  removing any instructions. */
   auto getUses(SsaDef def) const {
     auto& uses = m_metadata.at(def.getId()).uses;
-    return std::make_pair(uses.begin(), uses.end());
+
+    return std::make_pair(
+      use_iterator(*this, uses.begin()),
+      use_iterator(*this, uses.end()));
   }
 
   /** Writes instruction uses into a container. Convenience method to

@@ -2705,14 +2705,12 @@ void SpirvBuilder::emitDebugTypeName(ir::SsaDef def, uint32_t id, const char* su
 void SpirvBuilder::emitDebugMemberNames(ir::SsaDef def, uint32_t structId) {
   auto [a, b] = m_builder.getUses(def);
 
-  for (auto i = a; i != b; i++) {
-    const auto& op = m_builder.getOp(*i);
+  for (auto op = a; op != b; op++) {
+    if (op->getOpCode() == ir::OpCode::eDebugMemberName) {
+      dxbc_spv_assert(ir::SsaDef(op->getOperand(0u)) == def);
 
-    if (op.getOpCode() == ir::OpCode::eDebugMemberName) {
-      dxbc_spv_assert(ir::SsaDef(op.getOperand(0u)) == def);
-
-      auto member = uint32_t(op.getOperand(1u));
-      setDebugMemberName(structId, member, op.getLiteralString(2u).c_str());
+      auto member = uint32_t(op->getOperand(1u));
+      setDebugMemberName(structId, member, op->getLiteralString(2u).c_str());
     }
   }
 }
@@ -2722,19 +2720,17 @@ void SpirvBuilder::emitDebugPushDataName(const PushDataInfo& pushData, uint32_t 
   bool isStruct = m_builder.getOp(pushData.def).getType().isStructType();
   auto [a, b] = m_builder.getUses(pushData.def);
 
-  for (auto i = a; i != b; i++) {
-    const auto& op = m_builder.getOp(*i);
+  for (auto op = a; op != b; op++) {
+    if (op->getOpCode() == ir::OpCode::eDebugName && !isStruct) {
+      dxbc_spv_assert(ir::SsaDef(op->getOperand(0u)) == pushData.def);
 
-    if (op.getOpCode() == ir::OpCode::eDebugName && !isStruct) {
-      dxbc_spv_assert(ir::SsaDef(op.getOperand(0u)) == pushData.def);
-
-      setDebugMemberName(structId, memberIdx, op.getLiteralString(1u).c_str());
+      setDebugMemberName(structId, memberIdx, op->getLiteralString(1u).c_str());
       return;
-    } else if (op.getOpCode() == ir::OpCode::eDebugMemberName && isStruct) {
-      dxbc_spv_assert(ir::SsaDef(op.getOperand(0u)) == pushData.def);
+    } else if (op->getOpCode() == ir::OpCode::eDebugMemberName && isStruct) {
+      dxbc_spv_assert(ir::SsaDef(op->getOperand(0u)) == pushData.def);
 
-      if (pushData.member == uint32_t(op.getOperand(1u))) {
-        setDebugMemberName(structId, memberIdx, op.getLiteralString(2u).c_str());
+      if (pushData.member == uint32_t(op->getOperand(1u))) {
+        setDebugMemberName(structId, memberIdx, op->getLiteralString(2u).c_str());
         return;
       }
     }
