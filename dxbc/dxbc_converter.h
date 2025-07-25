@@ -265,6 +265,8 @@ private:
 
   static bool is64BitType(ir::BasicType type);
 
+  static bool hasAbsNegModifiers(const Operand& operand);
+
 };
 
 }

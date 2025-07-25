@@ -626,7 +626,7 @@ bool Converter::handleMov(ir::Builder& builder, const Instruction& op) {
   const auto& dst = op.getDst(0u);
   const auto& src = op.getSrc(0u);
 
-  bool hasModifiers = op.getOpToken().isSaturated() || src.getModifiers();
+  bool hasModifiers = op.getOpToken().isSaturated() || hasAbsNegModifiers(src);
   auto defaultType = dst.getInfo().type;
 
   if (defaultType == ir::ScalarType::eUnknown && hasModifiers)
@@ -655,7 +655,10 @@ bool Converter::handleMovc(ir::Builder& builder, const Instruction& op) {
   const auto& srcFalse = op.getSrc(2u);
 
   /* Determine register types based on modifier presence */
-  bool hasModifiers = op.getOpToken().isSaturated() || srcTrue.getModifiers() || srcFalse.getModifiers();
+  bool hasModifiers = op.getOpToken().isSaturated() ||
+    hasAbsNegModifiers(srcTrue) ||
+    hasAbsNegModifiers(srcFalse);
+
   auto defaultType = dst.getInfo().type;
 
   if (defaultType == ir::ScalarType::eUnknown && hasModifiers)
@@ -1130,7 +1133,7 @@ bool Converter::handleCase(ir::Builder& builder, const Instruction& op) {
   if (type != ir::OpCode::eScopedSwitch)
     return logOpError(op, "'Case' occurred outside of 'Switch'.");
 
-  auto literal = op.getImm(0u).getImmediate<uint32_t>(0u);
+  auto literal = op.getSrc(0u).getImmediate<uint32_t>(0u);
   builder.add(ir::Op::ScopedSwitchCase(construct, literal));
 
   return true;
@@ -1885,6 +1888,12 @@ bool Converter::is64BitType(ir::BasicType type) {
          scalarType == ir::ScalarType::eU64 ||
          scalarType == ir::ScalarType::eI64 ||
          scalarType == ir::ScalarType::eAnyI64;
+}
+
+
+bool Converter::hasAbsNegModifiers(const Operand& operand) {
+  auto modifiers = operand.getModifiers();
+  return modifiers.isAbsolute() || modifiers.isNegated();
 }
 
 }
