@@ -149,6 +149,8 @@ private:
 
   bool handleFloatCompare(ir::Builder& builder, const Instruction& op);
 
+  bool handleFloatConvert(ir::Builder& builder, const Instruction& op);
+
   bool handleIntArithmetic(ir::Builder& builder, const Instruction& op);
 
   bool handleIntCompare(ir::Builder& builder, const Instruction& op);

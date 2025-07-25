@@ -143,6 +143,18 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDNe:
       return handleFloatCompare(builder, op);
 
+    case OpCode::eFtoI:
+    case OpCode::eFtoU:
+    case OpCode::eItoF:
+    case OpCode::eUtoF:
+    case OpCode::eDtoI:
+    case OpCode::eDtoU:
+    case OpCode::eItoD:
+    case OpCode::eUtoD:
+    case OpCode::eDtoF:
+    case OpCode::eFtoD:
+      return handleFloatConvert(builder, op);
+
     case OpCode::eAnd:
     case OpCode::eIAdd:
     case OpCode::eIMad:
@@ -189,13 +201,10 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eEndIf:
     case OpCode::eEndLoop:
     case OpCode::eEndSwitch:
-    case OpCode::eFtoI:
-    case OpCode::eFtoU:
     case OpCode::eIf:
     case OpCode::eIMul:
     case OpCode::eIShl:
     case OpCode::eIShr:
-    case OpCode::eItoF:
     case OpCode::eLabel:
     case OpCode::eLd:
     case OpCode::eLdMs:
@@ -214,7 +223,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eUDiv:
     case OpCode::eUMul:
     case OpCode::eUShr:
-    case OpCode::eUtoF:
     case OpCode::eDclResource:
     case OpCode::eDclConstantBuffer:
     case OpCode::eDclSampler:
@@ -292,8 +300,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eSync:
     case OpCode::eDMov:
     case OpCode::eDMovc:
-    case OpCode::eDtoF:
-    case OpCode::eFtoD:
     case OpCode::eEvalSnapped:
     case OpCode::eEvalSampleIndex:
     case OpCode::eEvalCentroid:
@@ -301,10 +307,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eAbort:
     case OpCode::eDebugBreak:
     case OpCode::eMsad:
-    case OpCode::eDtoI:
-    case OpCode::eDtoU:
-    case OpCode::eItoD:
-    case OpCode::eUtoD:
     case OpCode::eGather4S:
     case OpCode::eGather4CS:
     case OpCode::eGather4PoS:
@@ -842,6 +844,86 @@ bool Converter::handleFloatCompare(ir::Builder& builder, const Instruction& op) 
 }
 
 
+bool Converter::handleFloatConvert(ir::Builder& builder, const Instruction& op) {
+  /* Handles all float-to-int, int-to-float and float-to-float conversions. */
+  auto opCode = op.getOpToken().getOpCode();
+
+  dxbc_spv_assert(op.getDstCount() == 1u);
+  dxbc_spv_assert(op.getSrcCount() == 1u);
+
+  const auto& dst = op.getDst(0u);
+  const auto& src = op.getSrc(0u);
+
+  auto dstMask = dst.getWriteMask();
+  auto srcMask = dstMask;
+
+  /* Safe because we never apply min precision to 64-bit */
+  auto dstType = makeVectorType(determineOperandType(dst), dstMask);
+  auto srcType = makeVectorType(determineOperandType(src), srcMask);
+
+  if (is64BitType(dstType))
+    srcMask = convertMaskTo32Bit(srcMask);
+  else if (is64BitType(srcType))
+    srcMask = convertMaskTo64Bit(srcMask);
+
+  /* Float-to-integer conversions ae saturating, which causes some problems with
+   * handling infinity if the destination integer type has a larger range. Do not
+   * allow a min-precision source in that case to avoid this. */
+  bool dstIsFloat = dstType.isFloatType();
+  bool srcIsFloat = srcType.isFloatType();
+
+  if (srcIsFloat && !dstIsFloat)
+    srcType = makeVectorType(determineOperandType(src, srcType.getBaseType(), false), srcMask);
+
+  /* Load source operand and apply saturation as necessary. Clamping will flush
+   * any NaN values to zero as required by D3D. */
+  auto value = loadSrcModified(builder, op, src, srcMask, srcType.getBaseType());
+
+  if (!value)
+    return false;
+
+  if (srcIsFloat && !dstIsFloat) {
+    auto lowerBound = builder.add(ir::Op::ConvertItoF(srcType.getBaseType(),
+      builder.add(ir::Op::MinValue(dstType.getBaseType()))));
+    auto upperBound = builder.add(ir::Op::ConvertItoF(srcType.getBaseType(),
+      builder.add(ir::Op::MaxValue(dstType.getBaseType()))));
+
+    value = builder.add(ir::Op::FClamp(srcType, value,
+      broadcastScalar(builder, lowerBound, srcMask),
+      broadcastScalar(builder, upperBound, srcMask)));
+  }
+
+  ir::Op result = [opCode, dstType, value, &builder] {
+    switch (opCode) {
+      case OpCode::eFtoI:
+      case OpCode::eDtoI:
+      case OpCode::eFtoU:
+      case OpCode::eDtoU:
+        return ir::Op::ConvertFtoI(dstType, value);
+
+      case OpCode::eItoF:
+      case OpCode::eItoD:
+      case OpCode::eUtoF:
+      case OpCode::eUtoD:
+        return ir::Op::ConvertItoF(dstType, value);
+
+      case OpCode::eDtoF:
+      case OpCode::eFtoD:
+        return ir::Op::ConvertFtoF(dstType, value);
+
+      default:
+        dxbc_spv_unreachable();
+        return ir::Op();
+    }
+  } ();
+
+  if (dstIsFloat && op.getOpToken().getPreciseMask())
+    result.setFlags(ir::OpFlag::ePrecise);
+
+  return storeDst(builder, op, dst, builder.add(std::move(result)));
+}
+
+
 bool Converter::handleIntArithmetic(ir::Builder& builder, const Instruction& op) {
   /* All these instructions operate on integer vectors. */
   auto opCode = op.getOpToken().getOpCode();
@@ -1251,6 +1333,9 @@ ir::SsaDef Converter::broadcastScalar(ir::Builder& builder, ir::SsaDef def, Writ
   dxbc_spv_assert(type.isScalar());
 
   type = makeVectorType(type.getBaseType(), mask);
+
+  if (type.isScalar())
+    return def;
 
   /* Create vector */
   ir::Op op(ir::OpCode::eCompositeConstruct, type);
