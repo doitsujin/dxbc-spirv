@@ -143,7 +143,7 @@ private:
 
   bool handleMovc(ir::Builder& builder, const Instruction& op);
 
-  bool handleFp32Arithmetic(ir::Builder& builder, const Instruction& op);
+  bool handleFloatArithmetic(ir::Builder& builder, const Instruction& op);
 
   bool handleFp32Compare(ir::Builder& builder, const Instruction& op);
 
