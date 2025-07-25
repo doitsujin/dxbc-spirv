@@ -111,6 +111,10 @@ private:
   } m_hs;
 
 
+  /* Nested control flow structures */
+  util::small_vector<ir::OpCode, 64u> m_controlFlow;
+
+
   bool convertInstruction(ir::Builder& builder, const Instruction& op);
 
   bool initialize(ir::Builder& builder);
@@ -155,7 +159,29 @@ private:
 
   bool handleIntCompare(ir::Builder& builder, const Instruction& op);
 
-  bool handleRet(ir::Builder& builder);
+  bool handleIf(ir::Builder& builder, const Instruction& op);
+
+  bool handleElse(ir::Builder& builder, const Instruction& op);
+
+  bool handleEndIf(ir::Builder& builder, const Instruction& op);
+
+  bool handleLoop(ir::Builder& builder);
+
+  bool handleEndLoop(ir::Builder& builder, const Instruction& op);
+
+  bool handleSwitch(ir::Builder& builder, const Instruction& op);
+
+  bool handleCase(ir::Builder& builder, const Instruction& op);
+
+  bool handleDefault(ir::Builder& builder, const Instruction& op);
+
+  bool handleEndSwitch(ir::Builder& builder, const Instruction& op);
+
+  bool handleBreak(ir::Builder& builder, const Instruction& op);
+
+  bool handleContinue(ir::Builder& builder, const Instruction& op);
+
+  bool handleRet(ir::Builder& builder, const Instruction& op);
 
   void applyNonUniform(ir::Builder& builder, ir::SsaDef def);
 
@@ -170,6 +196,8 @@ private:
   ir::SsaDef loadSrc(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, ir::ScalarType type);
 
   ir::SsaDef loadSrcModified(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, ir::ScalarType type);
+
+  ir::SsaDef loadSrcConditional(ir::Builder& builder, const Instruction& op, const Operand& operand);
 
   ir::SsaDef loadOperandIndex(ir::Builder& builder, const Instruction& op, const Operand& operand, uint32_t dim);
 
