@@ -179,48 +179,70 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eUGe:
       return handleIntCompare(builder, op);
 
-    case OpCode::eRet:
-      return handleRet(builder);
-
     case OpCode::eBreak:
     case OpCode::eBreakc:
-    case OpCode::eCall:
-    case OpCode::eCallc:
-    case OpCode::eCase:
+      return handleBreak(builder, op);
+
     case OpCode::eContinue:
     case OpCode::eContinuec:
-    case OpCode::eCut:
+      return handleContinue(builder, op);
+
+    case OpCode::eIf:
+      return handleIf(builder, op);
+
+    case OpCode::eElse:
+      return handleElse(builder, op);
+
+    case OpCode::eEndIf:
+      return handleEndIf(builder, op);
+
+    case OpCode::eSwitch:
+      return handleSwitch(builder, op);
+
+    case OpCode::eCase:
+      return handleCase(builder, op);
+
     case OpCode::eDefault:
+      return handleDefault(builder, op);
+
+    case OpCode::eEndSwitch:
+      return handleEndSwitch(builder, op);
+
+    case OpCode::eLoop:
+      return handleLoop(builder);
+
+    case OpCode::eEndLoop:
+      return handleEndLoop(builder, op);
+
+    case OpCode::eRet:
+    case OpCode::eRetc:
+      return handleRet(builder, op);
+
+    case OpCode::eCall:
+    case OpCode::eCallc:
+    case OpCode::eCut:
     case OpCode::eDerivRtx:
     case OpCode::eDerivRty:
     case OpCode::eDiscard:
     case OpCode::eDp2:
     case OpCode::eDp3:
     case OpCode::eDp4:
-    case OpCode::eElse:
     case OpCode::eEmit:
     case OpCode::eEmitThenCut:
-    case OpCode::eEndIf:
-    case OpCode::eEndLoop:
-    case OpCode::eEndSwitch:
-    case OpCode::eIf:
     case OpCode::eIMul:
     case OpCode::eIShl:
     case OpCode::eIShr:
     case OpCode::eLabel:
     case OpCode::eLd:
     case OpCode::eLdMs:
-    case OpCode::eLoop:
     case OpCode::eCustomData:
     case OpCode::eResInfo:
-    case OpCode::eRetc:
     case OpCode::eSample:
     case OpCode::eSampleC:
     case OpCode::eSampleClz:
     case OpCode::eSampleL:
     case OpCode::eSampleD:
     case OpCode::eSampleB:
-    case OpCode::eSwitch:
     case OpCode::eSinCos:
     case OpCode::eUDiv:
     case OpCode::eUMul:
@@ -1031,8 +1053,198 @@ bool Converter::handleIntCompare(ir::Builder& builder, const Instruction& op) {
 }
 
 
-bool Converter::handleRet(ir::Builder& builder) {
+bool Converter::handleIf(ir::Builder& builder, const Instruction& op) {
+  auto cond = loadSrcConditional(builder, op, op.getSrc(0u));
+
+  if (!cond)
+    return false;
+
+  builder.add(ir::Op::ScopedIf(cond));
+
+  m_controlFlow.push_back(ir::OpCode::eScopedIf);
+  return true;
+}
+
+
+bool Converter::handleElse(ir::Builder& builder, const Instruction& op) {
+  if (m_controlFlow.empty() || m_controlFlow.back() != ir::OpCode::eScopedIf)
+    return logOpError(op, "'Else' occured without an active 'If'.");
+
+  builder.add(ir::Op::ScopedElse());
+  return true;
+}
+
+
+bool Converter::handleEndIf(ir::Builder& builder, const Instruction& op) {
+  if (m_controlFlow.empty() || m_controlFlow.back() != ir::OpCode::eScopedIf)
+    return logOpError(op, "'EndIf' occured without an active 'If'.");
+
+  builder.add(ir::Op::ScopedEndIf());
+
+  m_controlFlow.pop_back();
+  return true;
+}
+
+
+bool Converter::handleLoop(ir::Builder& builder) {
+  builder.add(ir::Op::ScopedLoop());
+
+  m_controlFlow.push_back(ir::OpCode::eScopedLoop);
+  return true;
+}
+
+
+bool Converter::handleEndLoop(ir::Builder& builder, const Instruction& op) {
+  if (m_controlFlow.empty() || m_controlFlow.back() != ir::OpCode::eScopedLoop)
+    return logOpError(op, "'EndLoop' occured without an active 'Loop'.");
+
+  builder.add(ir::Op::ScopedEndLoop());
+
+  m_controlFlow.pop_back();
+  return true;
+}
+
+
+bool Converter::handleSwitch(ir::Builder& builder, const Instruction& op) {
+  /* Don't allow min-precision here since we use 32-bit literals */
+  auto src = op.getSrc(0u);
+  auto srcType = determineOperandType(src, ir::ScalarType::eAnyI32, false);
+
+  auto selector = loadSrcModified(builder, op, src, ComponentBit::eX, srcType);
+  builder.add(ir::Op::ScopedSwitch(selector));
+
+  m_controlFlow.push_back(ir::OpCode::eScopedSwitch);
+  return true;
+}
+
+
+bool Converter::handleCase(ir::Builder& builder, const Instruction& op) {
+  if (m_controlFlow.empty() || m_controlFlow.back() != ir::OpCode::eScopedSwitch)
+    return logOpError(op, "'Case' occured without an active 'Switch'.");
+
+  auto literal = op.getImm(0u).getImmediate<uint32_t>(0u);
+  builder.add(ir::Op::ScopedSwitchCase(literal));
+
+  return true;
+}
+
+
+bool Converter::handleDefault(ir::Builder& builder, const Instruction& op) {
+  if (m_controlFlow.empty() || m_controlFlow.back() != ir::OpCode::eScopedSwitch)
+    return logOpError(op, "'Default' occured without an active 'Switch'.");
+
+  builder.add(ir::Op::ScopedSwitchDefault());
+  return true;
+}
+
+
+bool Converter::handleEndSwitch(ir::Builder& builder, const Instruction& op) {
+  if (m_controlFlow.empty() || m_controlFlow.back() != ir::OpCode::eScopedSwitch)
+    return logOpError(op, "'EndSwitch' occured without an active 'Switch'.");
+
+  builder.add(ir::Op::ScopedEndSwitch());
+
+  m_controlFlow.pop_back();
+  return true;
+}
+
+
+bool Converter::handleBreak(ir::Builder& builder, const Instruction& op) {
+  auto opCode = op.getOpToken().getOpCode();
+
+  /* Find out whether last breakable construct is a loop or a switch */
+  ir::OpCode construct = [this] {
+    for (size_t i = m_controlFlow.size(); i; i--) {
+      auto construct = m_controlFlow[i - 1u];
+
+      if (construct == ir::OpCode::eScopedLoop || construct == ir::OpCode::eScopedSwitch)
+        return construct;
+    }
+
+    return ir::OpCode::eUnknown;
+  } ();
+
+  if (construct == ir::OpCode::eUnknown)
+    return logOpError(op, "'Break' occured outside of active 'Loop' or 'Switch'.");
+
+  /* Begin conditional block */
+  if (opCode == OpCode::eBreakc) {
+    auto cond = loadSrcConditional(builder, op, op.getSrc(0u));
+
+    if (!cond)
+      return false;
+
+    builder.add(ir::Op::ScopedIf(cond));
+  }
+
+  /* Insert actual break instruction */
+  auto breakOp = (construct == ir::OpCode::eScopedLoop)
+    ? ir::Op::ScopedLoopBreak()
+    : ir::Op::ScopedSwitchBreak();
+
+  builder.add(std::move(breakOp));
+
+  /* End conditional block */
+  if (opCode == OpCode::eBreakc)
+    builder.add(ir::Op::ScopedEndIf());
+
+  return true;
+}
+
+
+bool Converter::handleContinue(ir::Builder& builder, const Instruction& op) {
+  auto opCode = op.getOpToken().getOpCode();
+
+  /* Ensure that there is an active loop somewhere */
+  bool insideLoop = false;
+
+  for (size_t i = m_controlFlow.size(); i && !insideLoop; i--)
+    insideLoop = m_controlFlow[i - 1u] == ir::OpCode::eScopedLoop;
+
+  if (insideLoop)
+    return logOpError(op, "'Continue' occured outside of active 'Loop'.");
+
+  /* Begin conditional block */
+  if (opCode == OpCode::eContinuec) {
+    auto cond = loadSrcConditional(builder, op, op.getSrc(0u));
+
+    if (!cond)
+      return false;
+
+    builder.add(ir::Op::ScopedIf(cond));
+  }
+
+  /* Insert actual continue instruction */
+  builder.add(ir::Op::ScopedLoopContinue());
+
+  /* End conditional block */
+  if (opCode == OpCode::eContinuec)
+    builder.add(ir::Op::ScopedEndIf());
+
+  return true;
+}
+
+
+bool Converter::handleRet(ir::Builder& builder, const Instruction& op) {
+  auto opCode = op.getOpToken().getOpCode();
+
+  /* Begin conditional block */
+  if (opCode == OpCode::eRetc) {
+    auto cond = loadSrcConditional(builder, op, op.getSrc(0u));
+
+    if (!cond)
+      return false;
+
+    builder.add(ir::Op::ScopedIf(cond));
+  }
+
+  /* Insert return instruction */
   builder.add(ir::Op::Return());
+
+  /* End conditional block */
+  if (opCode == OpCode::eRetc)
+    builder.add(ir::Op::ScopedEndIf());
+
   return true;
 }
 
@@ -1262,6 +1474,21 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
 ir::SsaDef Converter::loadSrcModified(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, ir::ScalarType type) {
   auto value = loadSrc(builder, op, operand, mask, type);
   return applySrcModifiers(builder, value, op, operand);
+}
+
+
+ir::SsaDef Converter::loadSrcConditional(ir::Builder& builder, const Instruction& op, const Operand& operand) {
+  /* Load source as boolean operand and invert if necessary,
+   * we can clean this up in an optimization pass later. */
+  auto value = loadSrc(builder, op, operand, ComponentBit::eX, ir::ScalarType::eBool);
+
+  if (!value)
+    return ir::SsaDef();
+
+  if (op.getOpToken().getZeroTest() == TestBoolean::eZero)
+    value = builder.add(ir::Op::BNot(ir::ScalarType::eBool, value));
+
+  return value;
 }
 
 
