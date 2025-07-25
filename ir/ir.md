@@ -84,6 +84,8 @@ struct type, in order to assign debug names to individual struct members.
 |----------------------|-------------|---------------------------------|
 | `Constant`           | any         | Literals for each member        |
 | `Undef`              | any         | None                            |
+| `MinValue`           | scalar      | None                            |
+| `MaxValue`           | scalar      | None                            |
 
 Constant literals are flattened according to the type definition:
 - For a scalar, one token is used.
@@ -94,6 +96,12 @@ Constant literals are flattened according to the type definition:
 `Undef` returns an undefined value of any given type, and is commonly found as an operand
 to `Phi` instructions. For robustness reasons, it is advised to zero-initialize variables
 anyway.
+
+`MinValue` and `MaxValue` instructions can occur anywhere in the code and return the
+lowest and highest representable number for a given data type that is not infinite.
+These instructions are useful for handling min-precision types in some cases, and
+**must** be lowered to constants before lowering to the target IR. These instructions
+cannot be used with `Any*` types.
 
 ### Mode setting instructions
 

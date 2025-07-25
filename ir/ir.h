@@ -1101,6 +1101,9 @@ enum class OpCode : uint16_t {
   eUClamp                       = 752u,
   eUMSad                        = 753u,
 
+  eMinValue                     = 768u,
+  eMaxValue                     = 769u,
+
   Count
 };
 
@@ -2662,6 +2665,14 @@ public:
       .addOperand(ref)
       .addOperand(src)
       .addOperand(accum);
+  }
+
+  static Op MinValue(ScalarType type) {
+    return Op(OpCode::eMinValue, type);
+  }
+
+  static Op MaxValue(ScalarType type) {
+    return Op(OpCode::eMaxValue, type);
   }
 
 private:
