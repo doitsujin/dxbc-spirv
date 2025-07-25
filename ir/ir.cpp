@@ -218,7 +218,6 @@ bool Op::isEquivalent(const Op& other) const {
 uint32_t Op::getFirstLiteralOperandIndex() const {
   switch (m_opCode) {
     case OpCode::eConstant:
-    case OpCode::eScopedSwitchCase:
     case OpCode::eBarrier:
     case OpCode::eEmitVertex:
     case OpCode::eEmitPrimitive:
@@ -253,6 +252,7 @@ uint32_t Op::getFirstLiteralOperandIndex() const {
     case OpCode::eDerivY:
     case OpCode::eFRound:
     case OpCode::ePointer:
+    case OpCode::eScopedSwitchCase:
       return 1u;
 
     case OpCode::eBufferLoad:

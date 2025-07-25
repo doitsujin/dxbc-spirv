@@ -456,20 +456,20 @@ While `Label` begins a block, any `Branch*`, `Switch`, `Return` or `Unreachable`
 Scoped control flow is used to simplify translation from the source IR, and must be lowered to structured
 control flow instructions before SSA construction and any further processing of the shader.
 
-| `ir::OpCode`          | Return type | Arguments... |
-|-----------------------|-------------|--------------|
-| `ScopedIf`            | `void`      | `%cond`      |
-| `ScopedElse`          | `void`      |              |
-| `ScopedEndIf`         | `void`      |              |
-| `ScopedLoop`          | `void`      |              |
-| `ScopedLoopBreak`     | `void`      |              |
-| `ScopedLoopContinue`  | `void`      |              |
-| `ScopedEndLoop`       | `void`      |              |
-| `ScopedSwitch`        | `void`      | `%value`     |
-| `ScopedSwitchCase`    | `void`      | `value`      |
-| `ScopedSwitchDefault` | `void`      |              |
-| `ScopedSwitchBreak`   | `void`      |              |
-| `ScopedEndSwitch`     | `void`      |              |
+| `ir::OpCode`          | Return type | Arguments... |              |
+|-----------------------|-------------|--------------|--------------|
+| `ScopedIf`            | `void`      | `%EndIf`     | `%cond`      |
+| `ScopedElse`          | `void`      | `%If`        |              |
+| `ScopedEndIf`         | `void`      | `%If`        |              |
+| `ScopedLoop`          | `void`      | `%EndLoop`   |              |
+| `ScopedLoopBreak`     | `void`      | `%Loop`      |              |
+| `ScopedLoopContinue`  | `void`      | `%Loop`      |              |
+| `ScopedEndLoop`       | `void`      | `%Loop`      |              |
+| `ScopedSwitch`        | `void`      | `%EndSwitch` | `%value`     |
+| `ScopedSwitchCase`    | `void`      | `%Switch`    | `value`      |
+| `ScopedSwitchDefault` | `void`      | `%Switch`    |              |
+| `ScopedSwitchBreak`   | `void`      | `%Switch`    |              |
+| `ScopedEndSwitch`     | `void`      | `%Switch`    |              |
 
 Note that `ScopedSwitchCase` takes the value as a literal operand that must be of the same
 type as the `%value` parameter of the corresponding `ScopedSwitch` instruction.
