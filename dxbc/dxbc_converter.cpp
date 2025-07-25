@@ -600,15 +600,16 @@ bool Converter::handleMov(ir::Builder& builder, const Instruction& op) {
   const auto& dst = op.getDst(0u);
   const auto& src = op.getSrc(0u);
 
-  if (op.getOpToken().isSaturated() || src.getModifiers()) {
-    auto type = determineOperandType(dst, ir::ScalarType::eF32);
-    auto value = loadSrcModified(builder, op, src, dst.getWriteMask(), type);
-    return storeDstModified(builder, op, dst, value);
-  } else {
-    auto type = determineOperandType(dst);
-    auto value = loadSrc(builder, op, src, dst.getWriteMask(), type);
-    return storeDst(builder, op, dst, value);
-  }
+  bool hasModifiers = op.getOpToken().isSaturated() || src.getModifiers();
+  auto fallbackType = hasModifiers ? ir::ScalarType::eF32 : ir::ScalarType::eUnknown;
+
+  auto type = determineOperandType(dst, fallbackType);
+  auto value = loadSrcModified(builder, op, src, dst.getWriteMask(), type);
+
+  if (!value)
+    return false;
+
+  return storeDstModified(builder, op, dst, value);
 }
 
 
@@ -626,7 +627,7 @@ bool Converter::handleMovc(ir::Builder& builder, const Instruction& op) {
 
   /* Determine register types based on modifier presence */
   bool hasModifiers = op.getOpToken().isSaturated() || srcTrue.getModifiers() || srcFalse.getModifiers();
-  ir::ScalarType fallbackType = hasModifiers ? ir::ScalarType::eF32 : ir::ScalarType::eUnknown;
+  auto fallbackType = hasModifiers ? ir::ScalarType::eF32 : ir::ScalarType::eUnknown;
 
   auto scalarType = determineOperandType(dst, fallbackType);
   auto vectorType = makeVectorType(scalarType, dst.getWriteMask());
@@ -636,6 +637,9 @@ bool Converter::handleMovc(ir::Builder& builder, const Instruction& op) {
 
   auto valueTrue = loadSrcModified(builder, op, srcTrue, dst.getWriteMask(), scalarType);
   auto valueFalse = loadSrcModified(builder, op, srcFalse, dst.getWriteMask(), scalarType);
+
+  if (!cond || !valueTrue || !valueFalse)
+    return false;
 
   auto value = builder.add(ir::Op::Select(vectorType, cond, valueTrue, valueFalse));
   return storeDstModified(builder, op, dst, value);
@@ -663,8 +667,14 @@ bool Converter::handleFp32Arithmetic(ir::Builder& builder, const Instruction& op
   /* Load source operands */
   util::small_vector<ir::SsaDef, 3u> src;
 
-  for (uint32_t i = 0u; i < op.getSrcCount(); i++)
-    src.push_back(loadSrcModified(builder, op, op.getSrc(i), dst.getWriteMask(), scalarType));
+  for (uint32_t i = 0u; i < op.getSrcCount(); i++) {
+    auto value = loadSrcModified(builder, op, op.getSrc(i), dst.getWriteMask(), scalarType);
+
+    if (!value)
+      return false;
+
+    src.push_back(value);
+  }
 
   ir::Op result = [opCode, vectorType, &src] {
     switch (opCode) {
@@ -713,12 +723,17 @@ bool Converter::handleFp32Compare(ir::Builder& builder, const Instruction& op) {
   auto srcAType = determineOperandType(srcA, ir::ScalarType::eF32);
   auto srcBType = determineOperandType(srcB, ir::ScalarType::eF32);
 
-  if (srcAType != srcBType)
+  if (srcAType != srcBType) {
     srcAType = ir::ScalarType::eF32;
+    srcBType = ir::ScalarType::eF32;
+  }
 
   /* Load operands */
   auto a = loadSrcModified(builder, op, srcA, dst.getWriteMask(), srcAType);
-  auto b = loadSrcModified(builder, op, srcB, dst.getWriteMask(), srcAType);
+  auto b = loadSrcModified(builder, op, srcB, dst.getWriteMask(), srcBType);
+
+  if (!a || !b)
+    return false;
 
   auto boolType = makeVectorType(ir::ScalarType::eBool, dst.getWriteMask());
 
@@ -815,6 +830,9 @@ bool Converter::handleIntCompare(ir::Builder& builder, const Instruction& op) {
   /* Load operands */
   auto a = loadSrcModified(builder, op, srcA, dst.getWriteMask(), srcAType);
   auto b = loadSrcModified(builder, op, srcB, dst.getWriteMask(), srcBType);
+
+  if (!a || !b)
+    return false;
 
   auto boolType = makeVectorType(ir::ScalarType::eBool, dst.getWriteMask());
 
@@ -964,20 +982,27 @@ ir::SsaDef Converter::loadPhaseInstanceId(ir::Builder& builder, WriteMask mask, 
 
 
 ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, ir::ScalarType type) {
+  /* Load 64-bit operands as scalar 32-bits and promote later */
+  auto loadType = is64BitType(type) ? ir::ScalarType::eU32 : type;
+  auto loadDef = ir::SsaDef();
+
   switch (operand.getRegisterType()) {
     case RegisterType::eNull:
       return ir::SsaDef();
 
     case RegisterType::eImm32:
-      return loadImm32(builder, operand, mask, type);
+      loadDef = loadImm32(builder, operand, mask, loadType);
+      break;
 
     case RegisterType::eTemp:
     case RegisterType::eIndexableTemp:
-      return m_regFile.emitLoad(builder, op, operand, mask, type);
+      loadDef = m_regFile.emitLoad(builder, op, operand, mask, loadType);
+      break;
 
     case RegisterType::eForkInstanceId:
     case RegisterType::eJoinInstanceId:
-      return loadPhaseInstanceId(builder, mask, type);
+      loadDef = loadPhaseInstanceId(builder, mask, loadType);
+      break;
 
     case RegisterType::eImm64:
     case RegisterType::eCbv:
@@ -1007,13 +1032,23 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
     case RegisterType::eCycleCounter:
     case RegisterType::eStencilRef:
     case RegisterType::eInnerCoverage:
-      return m_ioMap.emitLoad(builder, op, operand, mask, type);
+      loadDef = m_ioMap.emitLoad(builder, op, operand, mask, loadType);
+      break;
 
-    default: {
-      auto name = makeRegisterDebugName(operand.getRegisterType(), 0u, WriteMask());
-      logOpError(op, "Unhandled source operand: ", name);
-    } return ir::SsaDef();
+    default:
+      break;
   }
+
+  if (!loadDef) {
+    auto name = makeRegisterDebugName(operand.getRegisterType(), 0u, WriteMask());
+    logOpError(op, "Failed to load operand: ", name);
+    return loadDef;
+  }
+
+  if (is64BitType(type))
+    loadDef = builder.add(ir::Op::ConsumeAs(makeVectorType(type, mask), loadDef));
+
+  return loadDef;
 }
 
 
@@ -1049,6 +1084,15 @@ ir::SsaDef Converter::loadOperandIndex(ir::Builder& builder, const Instruction& 
 
 
 bool Converter::storeDst(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value) {
+  /* If the incoming operand is a 64-bit type, cast it to a 32-bit
+   * vector before handing it off to the underlying register load/store. */
+  const auto& valueOp = builder.getOp(value);
+
+  if (is64BitType(valueOp.getType().getBaseType(0u))) {
+    auto storeType = makeVectorType(ir::ScalarType::eU32, operand.getWriteMask());
+    value = builder.add(ir::Op::ConsumeAs(storeType, value));
+  }
+
   switch (operand.getRegisterType()) {
     case RegisterType::eNull:
       return true;
@@ -1353,6 +1397,16 @@ bool Converter::isValidControlPointCount(uint32_t n) {
 
 bool Converter::isValidTessFactor(float f) {
   return f >= 1.0f && f <= 64.0f;
+}
+
+
+bool Converter::is64BitType(ir::BasicType type) {
+  auto scalarType = type.getBaseType();
+
+  return scalarType == ir::ScalarType::eF64 ||
+         scalarType == ir::ScalarType::eU64 ||
+         scalarType == ir::ScalarType::eI64 ||
+         scalarType == ir::ScalarType::eAnyI64;
 }
 
 }
