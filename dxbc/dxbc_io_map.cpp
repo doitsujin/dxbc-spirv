@@ -984,11 +984,7 @@ ir::SsaDef IoMap::loadIoRegister(
         .addOperand(var->baseDef)
         .addOperand(addressDef));
 
-      /* Convert to expected type if it doesn't match */
-      if (varScalarType != scalarType)
-        scalar = builder.add(ir::Op::ConsumeAs(scalarType, scalar));
-
-      components[componentIndex] = scalar;
+      components[componentIndex] = convertScalar(builder, scalarType, scalar);
     }
   }
 
@@ -1029,13 +1025,8 @@ bool IoMap::storeIoRegister(
       /* Convert scalar to required type */
       bool isFunction = builder.getOp(var.baseDef).getOpCode() == ir::OpCode::eFunction;
 
-      auto srcScalarType = valueType.getBaseType(0u).getBaseType();
       auto dstScalarType = var.baseType.getBaseType(0u).getBaseType();
-
-      auto scalar = baseScalar;
-
-      if (srcScalarType != dstScalarType)
-        scalar = builder.add(ir::Op::ConsumeAs(dstScalarType, scalar));
+      auto scalar = convertScalar(builder, dstScalarType, baseScalar);
 
       /* Compute address vector for register */
       auto addressDef = computeRegisterAddress(builder, var,
@@ -1185,8 +1176,7 @@ std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicLoadFunction(
           .addOperand(srcVar->baseDef)
           .addOperand(srcAddress));
 
-        if (loadType != scalarType)
-          scalar = builder.add(ir::Op::ConsumeAs(scalarType, scalar));
+        scalar = convertScalar(builder, scalarType, scalar);
       }
 
       /* Need to build the address manually since the destination
@@ -1316,10 +1306,7 @@ std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicStoreFunction(
 
       /* If necessary. convert the incoming value to the target type */
       auto targetType = targetVar->baseType.getBaseType(0u).getBaseType();
-
-      auto scalar = targetType != valueType
-        ? builder.add(ir::Op::ConsumeAs(targetType, value))
-        : value;
+      auto scalar = convertScalar(builder, targetType, value);
 
       auto address = computeRegisterAddress(builder, *targetVar,
         vertexIndex, ir::SsaDef(), var.regIndex + i, component);
@@ -1389,6 +1376,25 @@ IoRegisterIndex IoMap::loadRegisterIndices(
   }
 
   return result;
+}
+
+
+ir::SsaDef IoMap::convertScalar(ir::Builder& builder, ir::ScalarType dstType, ir::SsaDef value) {
+  const auto& srcType = builder.getOp(value).getType();
+  dxbc_spv_assert(srcType.isScalarType());
+
+  auto scalarType = srcType.getBaseType(0u).getBaseType();
+
+  if (scalarType == dstType)
+    return value;
+
+  if (scalarType == ir::ScalarType::eBool)
+    return m_converter.boolToInt(builder, value);
+
+  if (dstType == ir::ScalarType::eBool)
+    return m_converter.intToBool(builder, value);
+
+  return builder.add(ir::Op::ConsumeAs(dstType, value));
 }
 
 
