@@ -129,6 +129,10 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDRcp:
       return handleFloatArithmetic(builder, op);
 
+    case OpCode::eMad:
+    case OpCode::eDFma:
+      return handleFloatMad(builder, op);
+
     case OpCode::eEq:
     case OpCode::eGe:
     case OpCode::eLt:
@@ -196,7 +200,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eLd:
     case OpCode::eLdMs:
     case OpCode::eLoop:
-    case OpCode::eMad:
     case OpCode::eCustomData:
     case OpCode::eResInfo:
     case OpCode::eRetc:
@@ -297,7 +300,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclGsInstanceCount:
     case OpCode::eAbort:
     case OpCode::eDebugBreak:
-    case OpCode::eDFma:
     case OpCode::eMsad:
     case OpCode::eDtoI:
     case OpCode::eDtoU:
@@ -656,11 +658,8 @@ bool Converter::handleFloatArithmetic(ir::Builder& builder, const Instruction& o
   /* Instruction type */
   const auto& dst = op.getDst(0u);
 
-  bool is64Bit = is64BitType(dst.getInfo().type);
-
-  auto defaultType = is64Bit
-    ? ir::ScalarType::eF64
-    : ir::ScalarType::eF32;
+  auto defaultType = dst.getInfo().type;
+  bool is64Bit = is64BitType(defaultType);
 
   /* Some ops need to operate on 32-bit floats, so ignore min-precision
    * hints for those. This includes all 64-bit operations. */
@@ -719,6 +718,50 @@ bool Converter::handleFloatArithmetic(ir::Builder& builder, const Instruction& o
     result.setFlags(ir::OpFlag::ePrecise);
 
   return storeDstModified(builder, op, dst, builder.add(std::move(result)));
+}
+
+
+bool Converter::handleFloatMad(ir::Builder& builder, const Instruction& op) {
+  /* Mad and DFma take these operands:
+   * (dst0) Result
+   * (dst0) First number to multiply
+   * (dst1) Second number to multiply
+   * (dst2) Number to add to the product
+   *
+   * FXC is inconsistent in whether it emits Mad or separate multiply and
+   * add instructions, which causes invariance issues. Default to separate
+   * instructions, unless a precise modifier is used.
+   */
+  dxbc_spv_assert(op.getDstCount() == 1u);
+  dxbc_spv_assert(op.getSrcCount() == 3u);
+
+  /* Instruction type */
+  const auto& dst = op.getDst(0u);
+
+  auto defaultType = dst.getInfo().type;
+  bool is64Bit = is64BitType(defaultType);
+
+  auto scalarType = determineOperandType(dst, defaultType, !is64Bit);
+  auto vectorType = makeVectorType(scalarType, dst.getWriteMask());
+
+  auto factorA = loadSrcModified(builder, op, op.getSrc(0u), dst.getWriteMask(), scalarType);
+  auto factorB = loadSrcModified(builder, op, op.getSrc(1u), dst.getWriteMask(), scalarType);
+  auto addend = loadSrcModified(builder, op, op.getSrc(2u), dst.getWriteMask(), scalarType);
+
+  if (!factorA || !factorB || !addend)
+    return false;
+
+  ir::SsaDef result;
+
+  if (op.getOpToken().getPreciseMask()) {
+    result = builder.add(ir::Op::FMad(vectorType,
+      factorA, factorB, addend).setFlags(ir::OpFlag::ePrecise));
+  } else {
+    auto product = builder.add(ir::Op::FMul(vectorType, factorA, factorB));
+    result = builder.add(ir::Op::FAdd(vectorType, product, addend));
+  }
+
+  return storeDstModified(builder, op, dst, result);
 }
 
 

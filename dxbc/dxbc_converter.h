@@ -145,6 +145,8 @@ private:
 
   bool handleFloatArithmetic(ir::Builder& builder, const Instruction& op);
 
+  bool handleFloatMad(ir::Builder& builder, const Instruction& op);
+
   bool handleFloatCompare(ir::Builder& builder, const Instruction& op);
 
   bool handleIntArithmetic(ir::Builder& builder, const Instruction& op);
