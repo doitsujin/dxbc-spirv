@@ -639,8 +639,7 @@ bool Converter::handleMovc(ir::Builder& builder, const Instruction& op) {
   auto scalarType = determineOperandType(dst, fallbackType);
   auto vectorType = makeVectorType(scalarType, dst.getWriteMask());
 
-  auto cond = intToBool(builder, loadSrc(builder, op,
-    op.getSrc(0u), dst.getWriteMask(), ir::ScalarType::eAnyI32));
+  auto cond = loadSrc(builder, op, op.getSrc(0u), dst.getWriteMask(), ir::ScalarType::eBool);
 
   auto valueTrue = loadSrcModified(builder, op, srcTrue, dst.getWriteMask(), scalarType);
   auto valueFalse = loadSrcModified(builder, op, srcFalse, dst.getWriteMask(), scalarType);
@@ -842,8 +841,7 @@ bool Converter::handleFloatCompare(ir::Builder& builder, const Instruction& op) 
     result.setFlags(ir::OpFlag::ePrecise);
 
   /* Convert bool to DXBC integer vector */
-  auto resultDef = boolToInt(builder, builder.add(std::move(result)));
-  return storeDstModified(builder, op, dst, resultDef);
+  return storeDstModified(builder, op, dst, builder.add(std::move(result)));
 }
 
 
@@ -1020,8 +1018,7 @@ bool Converter::handleIntCompare(ir::Builder& builder, const Instruction& op) {
     return ir::Op();
   } ();
 
-  auto resultDef = boolToInt(builder, builder.add(std::move(result)));
-  return storeDstModified(builder, op, dst, resultDef);
+  return storeDstModified(builder, op, dst, builder.add(std::move(result)));
 }
 
 
@@ -1160,6 +1157,9 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
     return ir::SsaDef();
   }
 
+  if (type == ir::ScalarType::eBool)
+    loadType = ir::ScalarType::eAnyI32;
+
   switch (operand.getRegisterType()) {
     case RegisterType::eNull:
       return ir::SsaDef();
@@ -1222,6 +1222,11 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
   if (is64BitType(type))
     loadDef = builder.add(ir::Op::ConsumeAs(makeVectorType(type, mask), loadDef));
 
+  if (type == ir::ScalarType::eBool) {
+    /* Resolve booleans */
+    loadDef = intToBool(builder, loadDef);
+  }
+
   return loadDef;
 }
 
@@ -1258,18 +1263,21 @@ ir::SsaDef Converter::loadOperandIndex(ir::Builder& builder, const Instruction& 
 
 
 bool Converter::storeDst(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value) {
-  /* If the incoming operand is a 64-bit type, cast it to a 32-bit
-   * vector before handing it off to the underlying register load/store. */
   const auto& valueOp = builder.getOp(value);
   auto writeMask = operand.getWriteMask();
 
   if (is64BitType(valueOp.getType().getBaseType(0u))) {
+    /* If the incoming operand is a 64-bit type, cast it to a 32-bit
+     * vector before handing it off to the underlying register load/store. */
     auto storeType = makeVectorType(ir::ScalarType::eU32, writeMask);
 
     if (!isValid64BitMask(writeMask))
       return logOpError(op, "Invalid 64-bit component write mask: ", writeMask);
 
     value = builder.add(ir::Op::ConsumeAs(storeType, value));
+  } else if (valueOp.getType().getBaseType(0u).isBoolType()) {
+    /* Convert boolean results to the DXBC representation of -1. */
+    value = boolToInt(builder, value);
   }
 
   switch (operand.getRegisterType()) {
