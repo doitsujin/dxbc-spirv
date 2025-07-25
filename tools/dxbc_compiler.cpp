@@ -10,6 +10,8 @@
 #include "../ir/ir_serialize.h"
 #include "../ir/ir_validation.h"
 
+#include "../ir/passes/ir_pass_cfg_convert.h"
+
 #include "../dxbc/dxbc_container.h"
 #include "../dxbc/dxbc_converter.h"
 #include "../dxbc/dxbc_disasm.h"
@@ -147,6 +149,8 @@ bool compileShader(util::ByteReader reader, const Options& options) {
     std::cerr << "Error: Failed to convert shader." << std::endl;
     return false;
   }
+
+  ir::ConvertControlFlowPass::runPass(builder);
 
   /* Output results */
   if (options.printIrAsm)

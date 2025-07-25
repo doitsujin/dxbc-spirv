@@ -1,6 +1,7 @@
 #pragma once
 
 #include "dxbc_container.h"
+#include "dxbc_control_flow.h"
 #include "dxbc_io_map.h"
 #include "dxbc_parser.h"
 #include "dxbc_registers.h"
@@ -60,6 +61,7 @@ private:
 
   RegisterFile  m_regFile;
   IoMap         m_ioMap;
+  ControlFlow   m_controlFlow;
   Parser        m_parser;
 
   uint32_t      m_instructionCount = 0u;
@@ -109,10 +111,6 @@ private:
 
     util::small_vector<std::pair<ir::SsaDef, uint32_t>, 8u> phaseInstanceCounts;
   } m_hs;
-
-
-  /* Nested control flow structures */
-  util::small_vector<ir::OpCode, 64u> m_controlFlow;
 
 
   bool convertInstruction(ir::Builder& builder, const Instruction& op);

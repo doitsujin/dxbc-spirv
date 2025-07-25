@@ -1105,167 +1105,170 @@ bool Converter::handleIf(ir::Builder& builder, const Instruction& op) {
   if (!cond)
     return false;
 
-  builder.add(ir::Op::ScopedIf(cond));
-
-  m_controlFlow.push_back(ir::OpCode::eScopedIf);
+  auto construct = builder.add(ir::Op::ScopedIf(ir::SsaDef(), cond));
+  m_controlFlow.push(construct);
   return true;
 }
 
 
 bool Converter::handleElse(ir::Builder& builder, const Instruction& op) {
-  if (m_controlFlow.empty() || m_controlFlow.back() != ir::OpCode::eScopedIf)
-    return logOpError(op, "'Else' occured without an active 'If'.");
+  auto [construct, type] = m_controlFlow.getConstruct(builder);
 
-  builder.add(ir::Op::ScopedElse());
+  if (type != ir::OpCode::eScopedIf)
+    return logOpError(op, "'Else' occurred outside of 'If'.");
+
+  builder.add(ir::Op::ScopedElse(construct));
   return true;
 }
 
 
 bool Converter::handleEndIf(ir::Builder& builder, const Instruction& op) {
-  if (m_controlFlow.empty() || m_controlFlow.back() != ir::OpCode::eScopedIf)
-    return logOpError(op, "'EndIf' occured without an active 'If'.");
+  auto [construct, type] = m_controlFlow.getConstruct(builder);
 
-  builder.add(ir::Op::ScopedEndIf());
+  if (type != ir::OpCode::eScopedIf)
+    return logOpError(op, "'EndIf' occurred outside of 'If'.");
 
-  m_controlFlow.pop_back();
+  auto constructEnd = builder.add(ir::Op::ScopedEndIf(construct));
+  builder.rewriteOp(construct, ir::Op(builder.getOp(construct)).setOperand(0u, constructEnd));
+
+  m_controlFlow.pop();
   return true;
 }
 
 
 bool Converter::handleLoop(ir::Builder& builder) {
-  builder.add(ir::Op::ScopedLoop());
-
-  m_controlFlow.push_back(ir::OpCode::eScopedLoop);
+  auto construct = builder.add(ir::Op::ScopedLoop(ir::SsaDef()));
+  m_controlFlow.push(construct);
   return true;
 }
 
 
 bool Converter::handleEndLoop(ir::Builder& builder, const Instruction& op) {
-  if (m_controlFlow.empty() || m_controlFlow.back() != ir::OpCode::eScopedLoop)
-    return logOpError(op, "'EndLoop' occured without an active 'Loop'.");
+  auto [construct, type] = m_controlFlow.getConstruct(builder);
 
-  builder.add(ir::Op::ScopedEndLoop());
+  if (type != ir::OpCode::eScopedLoop)
+    return logOpError(op, "'EndLoop' occurred outside of 'Loop'.");
 
-  m_controlFlow.pop_back();
+  auto constructEnd = builder.add(ir::Op::ScopedEndLoop(construct));
+  builder.rewriteOp(construct, ir::Op(builder.getOp(construct)).setOperand(0u, constructEnd));
+
+  m_controlFlow.pop();
   return true;
 }
 
 
 bool Converter::handleSwitch(ir::Builder& builder, const Instruction& op) {
-  /* Don't allow min-precision here since we use 32-bit literals */
+  /* Don't allow min precision here since we need 32-bit literals */
   auto src = op.getSrc(0u);
   auto srcType = determineOperandType(src, ir::ScalarType::eAnyI32, false);
 
   auto selector = loadSrcModified(builder, op, src, ComponentBit::eX, srcType);
-  builder.add(ir::Op::ScopedSwitch(selector));
+  auto construct = builder.add(ir::Op::ScopedSwitch(ir::SsaDef(), selector));
 
-  m_controlFlow.push_back(ir::OpCode::eScopedSwitch);
+  m_controlFlow.push(construct);
   return true;
 }
 
 
 bool Converter::handleCase(ir::Builder& builder, const Instruction& op) {
-  if (m_controlFlow.empty() || m_controlFlow.back() != ir::OpCode::eScopedSwitch)
-    return logOpError(op, "'Case' occured without an active 'Switch'.");
+  auto [construct, type] = m_controlFlow.getConstruct(builder);
+
+  if (type != ir::OpCode::eScopedSwitch)
+    return logOpError(op, "'Case' occurred outside of 'Switch'.");
 
   auto literal = op.getImm(0u).getImmediate<uint32_t>(0u);
-  builder.add(ir::Op::ScopedSwitchCase(literal));
+  builder.add(ir::Op::ScopedSwitchCase(construct, literal));
 
   return true;
 }
 
 
 bool Converter::handleDefault(ir::Builder& builder, const Instruction& op) {
-  if (m_controlFlow.empty() || m_controlFlow.back() != ir::OpCode::eScopedSwitch)
-    return logOpError(op, "'Default' occured without an active 'Switch'.");
+  auto [construct, type] = m_controlFlow.getConstruct(builder);
 
-  builder.add(ir::Op::ScopedSwitchDefault());
+  if (type != ir::OpCode::eScopedSwitch)
+    return logOpError(op, "'Default' occurred outside of 'Switch'.");
+
+  builder.add(ir::Op::ScopedSwitchDefault(construct));
   return true;
 }
 
 
 bool Converter::handleEndSwitch(ir::Builder& builder, const Instruction& op) {
-  if (m_controlFlow.empty() || m_controlFlow.back() != ir::OpCode::eScopedSwitch)
-    return logOpError(op, "'EndSwitch' occured without an active 'Switch'.");
+  auto [construct, type] = m_controlFlow.getConstruct(builder);
 
-  builder.add(ir::Op::ScopedEndSwitch());
+  if (type != ir::OpCode::eScopedSwitch)
+    return logOpError(op, "'EndSwitch' occurred outside of 'Switch'.");
 
-  m_controlFlow.pop_back();
+  auto constructEnd = builder.add(ir::Op::ScopedEndSwitch(construct));
+  builder.rewriteOp(construct, ir::Op(builder.getOp(construct)).setOperand(0u, constructEnd));
+
+  m_controlFlow.pop();
   return true;
 }
 
 
 bool Converter::handleBreak(ir::Builder& builder, const Instruction& op) {
-  auto opCode = op.getOpToken().getOpCode();
+  auto [construct, type] = m_controlFlow.getBreakConstruct(builder);
 
-  /* Find out whether last breakable construct is a loop or a switch */
-  ir::OpCode construct = [this] {
-    for (size_t i = m_controlFlow.size(); i; i--) {
-      auto construct = m_controlFlow[i - 1u];
-
-      if (construct == ir::OpCode::eScopedLoop || construct == ir::OpCode::eScopedSwitch)
-        return construct;
-    }
-
-    return ir::OpCode::eUnknown;
-  } ();
-
-  if (construct == ir::OpCode::eUnknown)
-    return logOpError(op, "'Break' occured outside of active 'Loop' or 'Switch'.");
+  if (!construct)
+    return logOpError(op, "'Break' occurred outside of 'Loop' or 'Switch'.");
 
   /* Begin conditional block */
-  if (opCode == OpCode::eBreakc) {
+  ir::SsaDef condBlock = { };
+
+  if (op.getOpToken().getOpCode() == OpCode::eBreakc) {
     auto cond = loadSrcConditional(builder, op, op.getSrc(0u));
 
     if (!cond)
       return false;
 
-    builder.add(ir::Op::ScopedIf(cond));
+    condBlock = builder.add(ir::Op::ScopedIf(ir::SsaDef(), cond));
   }
 
   /* Insert actual break instruction */
-  auto breakOp = (construct == ir::OpCode::eScopedLoop)
-    ? ir::Op::ScopedLoopBreak()
-    : ir::Op::ScopedSwitchBreak();
+  auto breakOp = (type == ir::OpCode::eScopedLoop)
+    ? ir::Op::ScopedLoopBreak(construct)
+    : ir::Op::ScopedSwitchBreak(construct);
 
   builder.add(std::move(breakOp));
 
   /* End conditional block */
-  if (opCode == OpCode::eBreakc)
-    builder.add(ir::Op::ScopedEndIf());
+  if (condBlock) {
+    auto condEnd = builder.add(ir::Op::ScopedEndIf(condBlock));
+    builder.rewriteOp(condBlock, ir::Op(builder.getOp(condBlock)).setOperand(0u, condEnd));
+  }
 
   return true;
 }
 
 
 bool Converter::handleContinue(ir::Builder& builder, const Instruction& op) {
-  auto opCode = op.getOpToken().getOpCode();
+  auto [construct, type] = m_controlFlow.getContinueConstruct(builder);
 
-  /* Ensure that there is an active loop somewhere */
-  bool insideLoop = false;
-
-  for (size_t i = m_controlFlow.size(); i && !insideLoop; i--)
-    insideLoop = m_controlFlow[i - 1u] == ir::OpCode::eScopedLoop;
-
-  if (insideLoop)
-    return logOpError(op, "'Continue' occured outside of active 'Loop'.");
+  if (!construct)
+    return logOpError(op, "'Continue' occurred outside of 'Loop'.");
 
   /* Begin conditional block */
-  if (opCode == OpCode::eContinuec) {
+  ir::SsaDef condBlock = { };
+
+  if (op.getOpToken().getOpCode() == OpCode::eBreakc) {
     auto cond = loadSrcConditional(builder, op, op.getSrc(0u));
 
     if (!cond)
       return false;
 
-    builder.add(ir::Op::ScopedIf(cond));
+    condBlock = builder.add(ir::Op::ScopedIf(ir::SsaDef(), cond));
   }
 
   /* Insert actual continue instruction */
-  builder.add(ir::Op::ScopedLoopContinue());
+  builder.add(ir::Op::ScopedLoopContinue(construct));
 
   /* End conditional block */
-  if (opCode == OpCode::eContinuec)
-    builder.add(ir::Op::ScopedEndIf());
+  if (condBlock) {
+    auto condEnd = builder.add(ir::Op::ScopedEndIf(condBlock));
+    builder.rewriteOp(condBlock, ir::Op(builder.getOp(condBlock)).setOperand(0u, condEnd));
+  }
 
   return true;
 }
@@ -1275,21 +1278,25 @@ bool Converter::handleRet(ir::Builder& builder, const Instruction& op) {
   auto opCode = op.getOpToken().getOpCode();
 
   /* Begin conditional block */
+  ir::SsaDef condBlock = { };
+
   if (opCode == OpCode::eRetc) {
     auto cond = loadSrcConditional(builder, op, op.getSrc(0u));
 
     if (!cond)
       return false;
 
-    builder.add(ir::Op::ScopedIf(cond));
+    condBlock = builder.add(ir::Op::ScopedIf(ir::SsaDef(), cond));
   }
 
   /* Insert return instruction */
   builder.add(ir::Op::Return());
 
   /* End conditional block */
-  if (opCode == OpCode::eRetc)
-    builder.add(ir::Op::ScopedEndIf());
+  if (condBlock) {
+    auto condEnd = builder.add(ir::Op::ScopedEndIf(condBlock));
+    builder.rewriteOp(condBlock, ir::Op(builder.getOp(condBlock)).setOperand(0u, condEnd));
+  }
 
   return true;
 }
