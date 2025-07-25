@@ -1378,10 +1378,11 @@ public:
   Op& addLiteralString(const char* string);
 
   /** Overrides an existing operand. */
-  Op& setOperand(uint32_t index, Operand arg) {
+  template<typename T>
+  Op& setOperand(uint32_t index, T arg) {
     dxbc_spv_assert(index < getOperandCount());
 
-    m_operands[index] = arg;
+    m_operands[index] = Operand(arg);
     return *this;
   }
 
