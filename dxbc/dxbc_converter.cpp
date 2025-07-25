@@ -105,6 +105,7 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return handleMov(builder, op);
 
     case OpCode::eMovc:
+    case OpCode::eDMovc:
       return handleMovc(builder, op);
 
     case OpCode::eAdd:
@@ -299,7 +300,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eImmAtomicUMax:
     case OpCode::eImmAtomicUMin:
     case OpCode::eSync:
-    case OpCode::eDMovc:
     case OpCode::eEvalSnapped:
     case OpCode::eEvalSampleIndex:
     case OpCode::eEvalCentroid:
@@ -634,12 +634,21 @@ bool Converter::handleMovc(ir::Builder& builder, const Instruction& op) {
 
   /* Determine register types based on modifier presence */
   bool hasModifiers = op.getOpToken().isSaturated() || srcTrue.getModifiers() || srcFalse.getModifiers();
-  auto fallbackType = hasModifiers ? ir::ScalarType::eF32 : ir::ScalarType::eUnknown;
+  auto defaultType = dst.getInfo().type;
 
-  auto scalarType = determineOperandType(dst, fallbackType);
+  if (defaultType == ir::ScalarType::eUnknown && hasModifiers)
+    defaultType = ir::ScalarType::eF32;
+
+  auto scalarType = determineOperandType(dst, defaultType, !is64BitType(defaultType));
   auto vectorType = makeVectorType(scalarType, dst.getWriteMask());
 
-  auto cond = loadSrc(builder, op, op.getSrc(0u), dst.getWriteMask(), ir::ScalarType::eBool);
+  /* For dmovc, we need to treat the condition as a 32-bit operand */
+  auto condMask = dst.getWriteMask();
+
+  if (is64BitType(defaultType))
+    condMask = convertMaskTo32Bit(condMask);
+
+  auto cond = loadSrc(builder, op, op.getSrc(0u), condMask, ir::ScalarType::eBool);
 
   auto valueTrue = loadSrcModified(builder, op, srcTrue, dst.getWriteMask(), scalarType);
   auto valueFalse = loadSrcModified(builder, op, srcFalse, dst.getWriteMask(), scalarType);
