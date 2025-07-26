@@ -76,6 +76,17 @@ inline SsaDef findContainingBlock(const Builder& builder, SsaDef op) {
 }
 
 
+/** Removes instruction if it goes unused. If the instruction gets
+ *  removed, this will return (true, next), where next is the next
+ *  instruction in line. Otherwise, the return value is (false, def). */
+inline std::pair<bool, SsaDef> removeIfUnused(Builder& builder, SsaDef def) {
+  if (!builder.getUseCount(def))
+    return std::make_pair(true, builder.remove(def));
+
+  return std::make_pair(false, def);
+}
+
+
 /** Helper class for per-def look-up tables. Initializes a local
  *  array with the total def count of the given builder, and will
  *  dynamically add more entries as necessary. */
