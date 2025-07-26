@@ -52,11 +52,29 @@ void forEachPhiOperand(const Op& op, const Proc& proc) {
   dxbc_spv_assert(op.getOpCode() == OpCode::ePhi);
 
   for (uint32_t i = 0u; i < op.getOperandCount(); i += 2u) {
-    auto block = SsaDef(op.getOperand(0u));
-    auto value = SsaDef(op.getOperand(1u));
+    auto block = SsaDef(op.getOperand(i + 0u));
+    auto value = SsaDef(op.getOperand(i + 1u));
 
     proc(block, value);
   }
+}
+
+
+/** Finds block containing an instruction. */
+inline SsaDef findContainingBlock(const Builder& builder, SsaDef op) {
+  do {
+    auto opCode = builder.getOp(op).getOpCode();
+
+    if (opCode == OpCode::eFunction || isBlockTerminator(opCode))
+      break;
+
+    if (opCode == OpCode::eLabel)
+      return op;
+
+    op = builder.getPrev(op);
+  } while (op);
+
+  return SsaDef();
 }
 
 
