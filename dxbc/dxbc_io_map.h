@@ -88,7 +88,7 @@ public:
   bool handleDclStream(const Operand& operand);
 
   /** Handles hull shader phases. Notably, this resets I/O indexing info. */
-  bool handleHsPhase();
+  void handleHsPhase();
 
   /** Handles an input or output declaration of any kind. If possible, this uses
    *  the signature to determine the correct layout for the declaration. */

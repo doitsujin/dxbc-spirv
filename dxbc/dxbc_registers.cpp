@@ -14,6 +14,12 @@ RegisterFile::~RegisterFile() {
 }
 
 
+void RegisterFile::handleHsPhase() {
+  m_rRegs.clear();
+  m_xRegs.clear();
+}
+
+
 bool RegisterFile::handleDclIndexableTemp(ir::Builder& builder, const Instruction& op) {
   /* dcl_indexable_temp:
    * (imm0) The register index to declare

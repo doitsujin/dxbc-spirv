@@ -23,6 +23,11 @@ public:
 
   ~RegisterFile();
 
+  /** Handles hull shader phase. Each phase has its local set of
+   *  temporary registers, so we need to discard them. */
+  void handleHsPhase();
+
+
   /** Declares temporary array. */
   bool handleDclIndexableTemp(ir::Builder& builder, const Instruction& op);
 
