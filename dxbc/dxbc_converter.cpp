@@ -554,7 +554,11 @@ bool Converter::handleHsPhase(ir::Builder& builder, const Instruction& op) {
 
   m_hs.phase = phase;
 
-  return m_ioMap.handleHsPhase();
+  /* Re-program register files as necessary */
+  m_regFile.handleHsPhase();
+  m_ioMap.handleHsPhase();
+
+  return true;
 }
 
 

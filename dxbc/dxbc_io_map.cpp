@@ -36,12 +36,11 @@ bool IoMap::handleDclStream(const Operand& operand) {
 }
 
 
-bool IoMap::handleHsPhase() {
+void IoMap::handleHsPhase() {
   /* Nuke index ranges here since they are declared per phase.
    * This is particularly necessary for writable ranges, which
    * are commonly used for tess factors. */
   m_indexRanges.clear();
-  return true;
 }
 
 
