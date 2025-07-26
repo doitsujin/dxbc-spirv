@@ -240,8 +240,6 @@ void Builder::removeUse(SsaDef target, SsaDef user) {
       return;
     }
   }
-
-  dxbc_spv_unreachable();
 }
 
 
