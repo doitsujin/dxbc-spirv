@@ -10,6 +10,7 @@
 #include "../ir/ir_serialize.h"
 #include "../ir/ir_validation.h"
 
+#include "../ir/passes/ir_pass_cfg_cleanup.h"
 #include "../ir/passes/ir_pass_cfg_convert.h"
 
 #include "../dxbc/dxbc_container.h"
@@ -38,12 +39,7 @@ struct Options {
 bool validateIr(const ir::Builder& builder) {
   ir::Validator validator(builder);
 
-  return validator.validateStructure(std::cerr) &&
-         validator.validateShaderIo(std::cerr) &&
-         validator.validateResources(std::cerr) &&
-         validator.validateLoadStoreOps(std::cerr) &&
-         validator.validateImageOps(std::cerr) &&
-         validator.validateCompositeOps(std::cerr);
+  return validator.validateFinalIr(std::cerr);
 }
 
 
@@ -151,6 +147,7 @@ bool compileShader(util::ByteReader reader, const Options& options) {
   }
 
   ir::ConvertControlFlowPass::runPass(builder);
+  ir::CleanupControlFlowPass::runPass(builder);
 
   /* Output results */
   if (options.printIrAsm)
