@@ -118,7 +118,7 @@ void Builder::rewriteOp(SsaDef def, Op op) {
 }
 
 
-void Builder::rewriteDef(SsaDef oldDef, SsaDef newDef) {
+SsaDef Builder::rewriteDef(SsaDef oldDef, SsaDef newDef) {
   auto& oldMetadata = m_metadata.at(oldDef.getId());
   dxbc_spv_assert(oldDef != newDef);
 
@@ -135,7 +135,7 @@ void Builder::rewriteDef(SsaDef oldDef, SsaDef newDef) {
 
   oldMetadata.uses.clear();
 
-  remove(oldDef);
+  return remove(oldDef);
 }
 
 

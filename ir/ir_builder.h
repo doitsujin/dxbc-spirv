@@ -227,8 +227,8 @@ public:
 
   /** Rewrites SSA definition. All uses of the previous definition
    *  will be replaced with the new definition, and the previous
-   *  instruction will be removed. */
-  void rewriteDef(SsaDef oldDef, SsaDef newDef);
+   *  instruction will be removed. Returns next valid instruction. */
+  SsaDef rewriteDef(SsaDef oldDef, SsaDef newDef);
 
   /** Reorders a block of instructions before another instruction.
    *  This only changes the linked list of instructions. Note that
