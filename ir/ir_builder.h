@@ -195,6 +195,18 @@ public:
     return add(Op::Undef(type));
   }
 
+  /** Changes the type of the given operation without having
+   *  to rewrite the entire operation. */
+  void setOpType(SsaDef def, const Type& type) {
+    m_ops.at(def.getId()).setType(type);
+  }
+
+  /** Changes flags of the given operation without having
+   *  to rewrite the entire operation. */
+  void setOpFlags(SsaDef def, OpFlags flags) {
+    m_ops.at(def.getId()).setFlags(flags);
+  }
+
   /** Convenince method to add an instruction either after the
    *  current insertion cursor, or the end of the declarative
    *  block if the op in question is declarative.
