@@ -340,7 +340,7 @@ bool CleanupControlFlowPass::isBlockReachable(SsaDef block) const {
       if (construct != Construct::eStructuredLoop)
         return true;
 
-      auto containingBlock = getContainingBlock(use->getDef());
+      auto containingBlock = findContainingBlock(m_builder, use->getDef());
       auto continueBlock = SsaDef(labelOp.getOperand(1u));
 
       if (containingBlock != continueBlock)
@@ -359,14 +359,6 @@ bool CleanupControlFlowPass::isBlockUsed(SsaDef block) const {
   /* If the block itself is a continue block, we need to keep it intact,
    * otherwise only consider blocks that are directly reachable. */
   return isBlockReachable(block) || isContinueBlock(block);
-}
-
-
-SsaDef CleanupControlFlowPass::getContainingBlock(SsaDef block) const {
-  while (block && m_builder.getOp(block).getOpCode() != OpCode::eLabel)
-    block = m_builder.getPrev(block);
-
-  return block;
 }
 
 
