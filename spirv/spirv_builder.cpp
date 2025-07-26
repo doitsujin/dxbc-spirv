@@ -1121,6 +1121,7 @@ void SpirvBuilder::emitDclSrvUav(const ir::Op& op) {
 
             default:
               dxbc_spv_unreachable();
+              return spv::ImageFormatUnknown;
           }
         } ();
       }
