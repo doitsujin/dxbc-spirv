@@ -84,8 +84,6 @@ private:
 
   bool isBlockUsed(SsaDef block) const;
 
-  SsaDef getContainingBlock(SsaDef block) const;
-
   Construct getConstructForBlock(SsaDef block) const;
 
 };

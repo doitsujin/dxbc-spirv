@@ -62,17 +62,15 @@ void forEachPhiOperand(const Op& op, const Proc& proc) {
 
 /** Finds block containing an instruction. */
 inline SsaDef findContainingBlock(const Builder& builder, SsaDef op) {
-  do {
+  while ((op = builder.getPrev(op))) {
     auto opCode = builder.getOp(op).getOpCode();
-
-    if (opCode == OpCode::eFunction || isBlockTerminator(opCode))
-      break;
 
     if (opCode == OpCode::eLabel)
       return op;
 
-    op = builder.getPrev(op);
-  } while (op);
+    if (opCode == OpCode::eFunction || isBlockTerminator(opCode))
+      break;
+  }
 
   return SsaDef();
 }
