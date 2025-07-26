@@ -71,6 +71,10 @@ private:
   std::unordered_map<SsaPassTempKey, SsaDef> m_globalDefs;
 
 
+  void resolveTempLoadStore();
+
+  void removeTempDecls();
+
   Builder::iterator handleLabel(Builder::iterator op);
 
   Builder::iterator handleBlockTerminator(Builder::iterator op);
