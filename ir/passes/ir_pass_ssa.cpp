@@ -19,38 +19,8 @@ SsaConstructionPass::~SsaConstructionPass() {
 
 
 void SsaConstructionPass::runPass() {
-  auto iter = m_builder.getCode().first;
-
-  while (iter != m_builder.end()) {
-    switch (iter->getOpCode()) {
-      case OpCode::eLabel:
-        iter = handleLabel(iter);
-        break;
-
-      case OpCode::eBranch:
-      case OpCode::eBranchConditional:
-      case OpCode::eSwitch:
-      case OpCode::eReturn:
-      case OpCode::eUnreachable:
-        iter = handleBlockTerminator(iter);
-        break;
-
-      case OpCode::ePhi:
-        iter = handlePhi(iter);
-        break;
-
-      case OpCode::eTmpLoad:
-        iter = handleTmpLoad(iter);
-        break;
-
-      case OpCode::eTmpStore:
-        iter = handleTmpStore(iter);
-        break;
-
-      default:
-        ++iter;
-    }
-  }
+  resolveTempLoadStore();
+  removeTempDecls();
 }
 
 
@@ -118,6 +88,64 @@ bool SsaConstructionPass::validatePostConditions(std::ostream& str) const {
 void SsaConstructionPass::runPass(Builder& builder) {
   SsaConstructionPass pass(builder);
   pass.runPass();
+}
+
+
+void SsaConstructionPass::resolveTempLoadStore() {
+  auto iter = m_builder.getCode().first;
+
+  while (iter != m_builder.end()) {
+    switch (iter->getOpCode()) {
+      case OpCode::eLabel:
+        iter = handleLabel(iter);
+        break;
+
+      case OpCode::eBranch:
+      case OpCode::eBranchConditional:
+      case OpCode::eSwitch:
+      case OpCode::eReturn:
+      case OpCode::eUnreachable:
+        iter = handleBlockTerminator(iter);
+        break;
+
+      case OpCode::ePhi:
+        iter = handlePhi(iter);
+        break;
+
+      case OpCode::eTmpLoad:
+        iter = handleTmpLoad(iter);
+        break;
+
+      case OpCode::eTmpStore:
+        iter = handleTmpStore(iter);
+        break;
+
+      default:
+        ++iter;
+    }
+  }
+}
+
+
+void SsaConstructionPass::removeTempDecls() {
+  auto iter = m_builder.getDeclarations().first;
+
+  while (iter != m_builder.getDeclarations().second) {
+    if (iter->getOpCode() == OpCode::eDclTmp) {
+      /* Remove all uses, which should all be debug instructions */
+      auto [a, b] = m_builder.getUses(iter->getDef());
+
+      for (auto use = a; use != b; use++) {
+        dxbc_spv_assert(use->isDeclarative());
+        m_builder.removeOp(*use);
+      }
+
+      /* Remove instruction */
+      iter = m_builder.iter(m_builder.removeOp(*iter));
+    } else {
+      ++iter;
+    }
+  }
 }
 
 
