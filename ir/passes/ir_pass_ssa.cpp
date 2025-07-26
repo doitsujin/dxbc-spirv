@@ -1,5 +1,7 @@
 #include "ir_pass_ssa.h"
 
+#include "../ir_validation.h"
+
 #include "../../util/util_log.h"
 
 namespace dxbc_spv::ir {
@@ -52,17 +54,52 @@ void SsaConstructionPass::runPass() {
 }
 
 
-bool SsaConstructionPass::validatePostConditions() const {
+bool SsaConstructionPass::validatePreConditions(std::ostream& str) const {
+  if (!Validator(m_builder).validateStructuredCfg(str))
+    return false;
+
+  DefMetadata<SsaDef> useFuncs(m_builder);
+
+  auto [a, b] = m_builder.getCode();
+
+  SsaDef func = { };
+
+  for (auto op = a; op != b; op++) {
+    switch (op->getOpCode()) {
+      case OpCode::eFunction: {
+        func = op->getDef();
+      } break;
+
+      case OpCode::eTmpLoad:
+      case OpCode::eTmpStore: {
+        auto var = SsaDef(op->getOperand(0u));
+
+        if (useFuncs[var] && useFuncs[var] != func) {
+          str << "Temp " << var << " used in multiple functions (" << func << " and " << useFuncs[var] << ")." << std::endl;
+          return false;
+        }
+      } break;
+
+      default:
+        break;
+    }
+  }
+
+  return true;
+}
+
+
+bool SsaConstructionPass::validatePostConditions(std::ostream& str) const {
+  if (!Validator(m_builder).validatePhi(str))
+    return false;
+
   auto [a, b] = m_builder.getCode();
 
   for (auto op = a; op != b; op++) {
-    bool result = [this, op] {
+    bool result = [this, op, &str] {
       switch (op->getOpCode()) {
         case OpCode::eLabel:
-          return validateLabel(*op);
-
-        case OpCode::ePhi:
-          return validatePhi(*op);
+          return validateLabel(str, *op);
 
         default:
           return true;
@@ -73,16 +110,14 @@ bool SsaConstructionPass::validatePostConditions() const {
       return result;
   }
 
+
   return true;
 }
 
 
 void SsaConstructionPass::runPass(Builder& builder) {
   SsaConstructionPass pass(builder);
-
   pass.runPass();
-
-  dxbc_spv_assert(pass.validatePostConditions());
 }
 
 
@@ -354,43 +389,27 @@ SsaDef SsaConstructionPass::findOnlyPredecessor(SsaDef block) {
 }
 
 
-SsaDef SsaConstructionPass::findContainingBlock(SsaDef terminator) {
-  dxbc_spv_assert(isBlockTerminator(m_builder.getOp(terminator).getOpCode()));
+SsaDef SsaConstructionPass::findContainingBlock(SsaDef def) {
+  dxbc_spv_assert(isBlockTerminator(m_builder.getOp(def).getOpCode()));
 
-  if (m_metadata[terminator])
-    return m_metadata[terminator];
+  if (!m_metadata[def])
+    m_metadata[def] = ir::findContainingBlock(m_builder, def);
 
-  /* Look for label preceding the instruction and write it
-   * back for look-up purposes while we're at it. */
-  auto iter = m_builder.iter(terminator);
-
-  while (iter != m_builder.begin() && iter->getOpCode() != OpCode::eLabel)
-    iter--;
-
-  dxbc_spv_assert(iter->getOpCode() == OpCode::eLabel);
-
-  m_metadata[terminator] = iter->getDef();
-  return iter->getDef();
+  return m_metadata[def];
 }
 
 
-bool SsaConstructionPass::validateLabel(const Op& label) const {
+bool SsaConstructionPass::validateLabel(std::ostream& str, const Op& label) const {
   if (!m_blocks[label.getDef()].isFilled) {
-    Logger::err("Block ", label.getDef(), " not filled.");
+    str << "Block " << label.getDef() << " not filled." << std::endl;
     return false;
   }
 
   if (!m_blocks[label.getDef()].isSealed) {
-    Logger::err("Block ", label.getDef(), " not sealed.");
+    str << "Block " << label.getDef() << " not sealed." << std::endl;
     return false;
   }
 
-  return true;
-}
-
-
-bool SsaConstructionPass::validatePhi(const Op& phi) const {
-  /* TODO implement */
   return true;
 }
 

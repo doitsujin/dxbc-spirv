@@ -1,4 +1,5 @@
 #include "ir_validation.h"
+#include "ir_utils.h"
 
 namespace dxbc_spv::ir {
 
@@ -1109,6 +1110,89 @@ bool Validator::validateStructuredCfg(std::ostream& str) const {
 }
 
 
+bool Validator::validatePhi(std::ostream& str) const {
+  SsaDef block = { };
+
+  for (auto op = m_builder.getCode().first; op != m_builder.getCode().second; op++) {
+    if (op->getOpCode() == OpCode::eLabel)
+      block = op->getDef();
+
+    if (op->getOpCode() == OpCode::ePhi) {
+      /* Validate that phis are all in the correct place, include all
+       * predecessors exactly once, do not contain any self-references,
+       * and contain multiple unique values. */
+      auto prev = m_builder.getPrev(op->getDef());
+
+      if (prev != block && m_builder.getOp(prev).getOpCode() != OpCode::ePhi) {
+        str << "Phi occurred after " << m_builder.getOp(prev).getOpCode() << "." << std::endl;
+        m_disasm.disassembleOp(str, *op);
+        return false;
+      }
+
+      /* Gather predecessors */
+      util::small_vector<SsaDef, 16u> preds;
+
+      auto [a, b] = m_builder.getUses(block);
+
+      for (auto use = a; use != b; use++) {
+        if (isBranchInstruction(use->getOpCode()))
+          preds.push_back(findContainingBlock(m_builder, use->getDef()));
+      }
+
+      /* Validate operands */
+      bool unique = false;
+      bool hasSelfRef = false;
+
+      SsaDef prevValue = { };
+      SsaDef invalidBlock = { };
+
+      forEachPhiOperand(*op, [&] (SsaDef block, SsaDef value) {
+        if (!value || value == op->getDef())
+          hasSelfRef = true;
+
+        if (prevValue && prevValue != value)
+          unique = true;
+
+        prevValue = value;
+
+        bool foundPred = false;
+
+        for (auto& p : preds) {
+          if (p == block) {
+            p = SsaDef();
+            foundPred = true;
+            break;
+          }
+        }
+
+        if (!foundPred)
+          invalidBlock = block;
+      });
+
+      if (!unique) {
+        std::cerr << "Phi operands not unique." << std::endl;
+        m_disasm.disassembleOp(str, *op);
+        return false;
+      }
+
+      if (hasSelfRef) {
+        std::cerr << "Phi contains self-reference." << std::endl;
+        m_disasm.disassembleOp(str, *op);
+        return false;
+      }
+
+      if (invalidBlock) {
+        std::cerr << "Block " << invalidBlock << " not a valid operand for phi." << std::endl;
+        m_disasm.disassembleOp(str, *op);
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+
 bool Validator::validateFinalIr(std::ostream& str) const {
   return validateStructure(str)
       && validateShaderIo(str)
@@ -1116,7 +1200,8 @@ bool Validator::validateFinalIr(std::ostream& str) const {
       && validateLoadStoreOps(str)
       && validateImageOps(str)
       && validateCompositeOps(str)
-      && validateStructuredCfg(str);
+      && validateStructuredCfg(str)
+      && validatePhi(str);
 }
 
 

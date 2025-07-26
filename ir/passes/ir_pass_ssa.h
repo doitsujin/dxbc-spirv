@@ -33,11 +33,15 @@ public:
   /** Runs pass. */
   void runPass();
 
+  /** Validates pre-conditions of the pass, specifically that control flow
+   *  is valid and all tempooraries are used in exactly one function. */
+  bool validatePreConditions(std::ostream& str) const;
+
   /** Validates post-conditions of the pass. This includes:
    *  - All temporaries are removed.
    *  - All blocks are filled and sealed.
    *  - All inserted phi instructions are valid. */
-  bool validatePostConditions() const;
+  bool validatePostConditions(std::ostream& str) const;
 
   /** Initializes and runs pass on the given builder. */
   static void runPass(Builder& builder);
@@ -101,11 +105,9 @@ private:
 
   SsaDef findOnlyPredecessor(SsaDef block);
 
-  SsaDef findContainingBlock(SsaDef terminator);
+  SsaDef findContainingBlock(SsaDef def);
 
-  bool validateLabel(const Op& label) const;
-
-  bool validatePhi(const Op& phi) const;
+  bool validateLabel(std::ostream& str, const Op& label) const;
 
 };
 

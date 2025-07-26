@@ -46,6 +46,9 @@ public:
   /** Validates structured control flow instructions. */
   bool validateStructuredCfg(std::ostream& str) const;
 
+  /** Validates phi instructions */
+  bool validatePhi(std::ostream& str) const;
+
   /** Executes all validation passes that are useful on the final
    *  shader module right before lowering to SPIR-V or another IR. */
   bool validateFinalIr(std::ostream& str) const;
