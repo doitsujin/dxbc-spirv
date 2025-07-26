@@ -19,6 +19,7 @@ dxbc_spv_files = files([
   'ir/ir_serialize.cpp',
   'ir/ir_validation.cpp',
 
+  'ir/passes/ir_pass_cfg_cleanup.cpp',
   'ir/passes/ir_pass_cfg_convert.cpp',
 
   'util/util_float16.cpp',
