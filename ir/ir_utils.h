@@ -22,6 +22,44 @@ inline bool isBlockTerminator(OpCode opCode) {
 }
 
 
+/** For a branch instruction, iterates over branch targets. */
+template<typename Proc>
+void forEachBranchTarget(const Op& op, const Proc& proc) {
+  switch (op.getOpCode()) {
+    case OpCode::eBranch: {
+      proc(SsaDef(op.getOperand(0u)));
+    } break;
+
+    case OpCode::eBranchConditional: {
+      proc(SsaDef(op.getOperand(1u)));
+      proc(SsaDef(op.getOperand(2u)));
+    } break;
+
+    case OpCode::eSwitch: {
+      for (uint32_t i = 1u; i < op.getOperandCount(); i += 2u)
+        proc(SsaDef(op.getOperand(i)));
+    } break;
+
+    default:
+      return;
+  }
+}
+
+
+/** For a phi op, iterate over all block -> value pairs */
+template<typename Proc>
+void forEachPhiOperand(const Op& op, const Proc& proc) {
+  dxbc_spv_assert(op.getOpCode() == OpCode::ePhi);
+
+  for (uint32_t i = 0u; i < op.getOperandCount(); i += 2u) {
+    auto block = SsaDef(op.getOperand(0u));
+    auto value = SsaDef(op.getOperand(1u));
+
+    proc(block, value);
+  }
+}
+
+
 /** Helper class for per-def look-up tables. Initializes a local
  *  array with the total def count of the given builder, and will
  *  dynamically add more entries as necessary. */
@@ -40,6 +78,11 @@ public:
     if (def.getId() >= m_data.size())
       m_data.resize(def.getId() + 1u);
 
+    return m_data[def.getId()];
+  }
+
+  const T& operator [] (SsaDef def) const {
+    dxbc_spv_assert(def && def.getId() < m_data.size());
     return m_data[def.getId()];
   }
 
