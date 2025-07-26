@@ -12,6 +12,7 @@
 
 #include "../ir/passes/ir_pass_cfg_cleanup.h"
 #include "../ir/passes/ir_pass_cfg_convert.h"
+#include "../ir/passes/ir_pass_ssa.h"
 
 #include "../dxbc/dxbc_container.h"
 #include "../dxbc/dxbc_converter.h"
@@ -148,6 +149,7 @@ bool compileShader(util::ByteReader reader, const Options& options) {
 
   ir::ConvertControlFlowPass::runPass(builder);
   ir::CleanupControlFlowPass::runPass(builder);
+  ir::SsaConstructionPass::runPass(builder);
 
   /* Output results */
   if (options.printIrAsm)
