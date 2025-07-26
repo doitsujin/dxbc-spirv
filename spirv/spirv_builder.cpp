@@ -3734,7 +3734,8 @@ void SpirvBuilder::emitSetTessPrimitive(const ir::Op& op) {
 
 
 void SpirvBuilder::emitSetTessDomain(const ir::Op& op) {
-  dxbc_spv_assert(m_stage == ir::ShaderStage::eDomain);
+  dxbc_spv_assert(m_stage == ir::ShaderStage::eHull ||
+                  m_stage == ir::ShaderStage::eDomain);
 
   auto domain = ir::PrimitiveType(op.getOperand(1u));
 
