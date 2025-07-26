@@ -12,6 +12,7 @@
 
 #include "../ir/passes/ir_pass_cfg_cleanup.h"
 #include "../ir/passes/ir_pass_cfg_convert.h"
+#include "../ir/passes/ir_pass_lower_min16.h"
 #include "../ir/passes/ir_pass_ssa.h"
 
 #include "../dxbc/dxbc_container.h"
@@ -150,6 +151,7 @@ bool compileShader(util::ByteReader reader, const Options& options) {
   ir::ConvertControlFlowPass::runPass(builder);
   ir::CleanupControlFlowPass::runPass(builder);
   ir::SsaConstructionPass::runPass(builder);
+  ir::LowerMin16Pass::runPass(builder, ir::LowerMin16Pass::Options());
 
   /* Output results */
   if (options.printIrAsm)
