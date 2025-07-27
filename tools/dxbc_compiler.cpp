@@ -1,3 +1,4 @@
+#include <chrono>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -12,7 +13,9 @@
 
 #include "../ir/passes/ir_pass_cfg_cleanup.h"
 #include "../ir/passes/ir_pass_cfg_convert.h"
+#include "../ir/passes/ir_pass_lower_consume.h"
 #include "../ir/passes/ir_pass_lower_min16.h"
+#include "../ir/passes/ir_pass_scalarize.h"
 #include "../ir/passes/ir_pass_ssa.h"
 
 #include "../dxbc/dxbc_container.h"
@@ -35,7 +38,51 @@ struct Options {
   bool convertOnly = false;
   bool noDebug = false;
   bool noColors = false;
+  bool benchmark = false;
 };
+
+
+struct Timers {
+  std::chrono::high_resolution_clock::time_point tConvertBegin;
+  std::chrono::high_resolution_clock::time_point tConvertEnd;
+  std::chrono::high_resolution_clock::time_point tAfterPasses;
+  std::chrono::high_resolution_clock::time_point tSerializeBegin;
+  std::chrono::high_resolution_clock::time_point tSerializeEnd;
+  std::chrono::high_resolution_clock::time_point tLowerSpirvBegin;
+  std::chrono::high_resolution_clock::time_point tLowerSpirvEnd;
+};
+
+void printDuration(const char* type, std::chrono::high_resolution_clock::duration dur) {
+  std::cout << type << ": " << std::setprecision(1) <<
+    double(std::chrono::duration_cast<std::chrono::microseconds>(dur).count()) / 1000.0 << " ms" << std::endl;
+}
+
+void printTimers(const Timers& timers) {
+  auto defaultTime = std::chrono::high_resolution_clock::time_point();
+
+  auto totalDuration = timers.tConvertEnd - timers.tConvertBegin;
+  printDuration("conversion", totalDuration);
+
+  if (timers.tAfterPasses != defaultTime) {
+    totalDuration = timers.tAfterPasses - timers.tConvertBegin;
+    printDuration("passes", timers.tAfterPasses - timers.tConvertEnd);
+  }
+
+  if (timers.tSerializeBegin != defaultTime) {
+    auto serializeDuration = timers.tSerializeEnd - timers.tSerializeBegin;
+    printDuration("serialize", serializeDuration);
+    totalDuration += serializeDuration;
+  }
+
+  if (timers.tLowerSpirvBegin != defaultTime) {
+    auto spirvDuration = timers.tLowerSpirvEnd - timers.tLowerSpirvBegin;
+    printDuration("spirv", spirvDuration);
+    totalDuration += spirvDuration;
+  }
+
+  printDuration("total", totalDuration);
+}
+
 
 
 bool validateIr(const ir::Builder& builder) {
@@ -58,7 +105,9 @@ bool printIrAssembly(const ir::Builder& builder, const Options& options) {
 }
 
 
-bool writeIrBinary(const ir::Builder& builder, const Options& options) {
+bool writeIrBinary(const ir::Builder& builder, const Options& options, Timers& timers) {
+  timers.tSerializeBegin = std::chrono::high_resolution_clock::now();
+
   ir::Serializer serializer(builder);
 
   std::vector<uint8_t> data(serializer.computeSerializedSize());
@@ -67,6 +116,8 @@ bool writeIrBinary(const ir::Builder& builder, const Options& options) {
     std::cerr << "Error: Failed to serialize IR." << std::endl;
     return false;
   }
+
+  timers.tSerializeEnd = std::chrono::high_resolution_clock::now();
 
   std::ofstream file(options.irBinTarget, std::ios_base::out | std::ios_base::binary | std::ios_base::trunc);
 
@@ -80,7 +131,9 @@ bool writeIrBinary(const ir::Builder& builder, const Options& options) {
 }
 
 
-bool writeSpirvBinary(const ir::Builder& builder, const Options& options) {
+bool writeSpirvBinary(const ir::Builder& builder, const Options& options, Timers& timers) {
+  timers.tLowerSpirvBegin = std::chrono::high_resolution_clock::now();
+
   spirv::BasicResourceMapping mapping = { };
 
   spirv::SpirvBuilder::Options spirvOptions = { };
@@ -104,6 +157,8 @@ bool writeSpirvBinary(const ir::Builder& builder, const Options& options) {
 
   std::vector<char> data(size);
   spirvBuilder.getSpirvBinary(size, data.data());
+
+  timers.tLowerSpirvEnd = std::chrono::high_resolution_clock::now();
 
   /* Write SPIR-V binary to file */
   std::ofstream file(options.spvTarget, std::ios_base::out | std::ios_base::binary | std::ios_base::trunc);
@@ -134,6 +189,9 @@ bool compileShader(util::ByteReader reader, const Options& options) {
     return stream.str();
   } ();
 
+  Timers timers = { };
+  timers.tConvertBegin = std::chrono::high_resolution_clock::now();
+
   /* Set up conversion options */
   dxbc::Converter::Options dxbcOptions = { };
   dxbcOptions.includeDebugNames = !options.noDebug;
@@ -148,20 +206,32 @@ bool compileShader(util::ByteReader reader, const Options& options) {
     return false;
   }
 
+  timers.tConvertEnd = std::chrono::high_resolution_clock::now();
+
   ir::ConvertControlFlowPass::runPass(builder);
   ir::CleanupControlFlowPass::runPass(builder);
   ir::SsaConstructionPass::runPass(builder);
   ir::LowerMin16Pass::runPass(builder, ir::LowerMin16Pass::Options());
+  ir::ScalarizePass::runPass(builder, ir::ScalarizePass::Options());
+
+  while (ir::LowerConsumePass::runResolveCastChainsPass(builder) ||
+         ir::ScalarizePass::runResolveRedundantCompositesPass(builder))
+    continue;
+
+  timers.tAfterPasses = std::chrono::high_resolution_clock::now();
 
   /* Output results */
   if (options.printIrAsm)
     printIrAssembly(builder, options);
 
   if (!options.irBinTarget.empty())
-    writeIrBinary(builder, options);
+    writeIrBinary(builder, options, timers);
 
   if (!options.spvTarget.empty())
-    writeSpirvBinary(builder, options);
+    writeSpirvBinary(builder, options, timers);
+
+  if (options.benchmark)
+    printTimers(timers);
 
   return validateIr(builder);
 }
@@ -203,7 +273,9 @@ int main(int argc, char** argv) {
     } else if (arg == "--no-debug") {
       options.noDebug = true;
     } else if (arg == "--no-colors") {
-      options.noColors= true;
+      options.noColors = true;
+    } else if (arg == "--benchmark") {
+      options.benchmark = true;
     } else {
       if (arg.size() >= 2u && arg[0] == '-' && arg[1] == '-') {
         std::cerr << "Invalid option: " << arg << std::endl;
