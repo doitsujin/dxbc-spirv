@@ -120,6 +120,7 @@ void Builder::rewriteOp(SsaDef def, Op op) {
 
 void Builder::rewriteDef(SsaDef oldDef, SsaDef newDef) {
   auto& oldMetadata = m_metadata.at(oldDef.getId());
+  dxbc_spv_assert(oldDef != newDef);
 
   for (auto u : oldMetadata.uses) {
     auto& op = m_ops.at(u.getId());
