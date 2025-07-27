@@ -135,6 +135,11 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDFma:
       return handleFloatMad(builder, op);
 
+    case OpCode::eDp2:
+    case OpCode::eDp3:
+    case OpCode::eDp4:
+      return handleFloatDot(builder, op);
+
     case OpCode::eEq:
     case OpCode::eGe:
     case OpCode::eLt:
@@ -224,9 +229,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDerivRtx:
     case OpCode::eDerivRty:
     case OpCode::eDiscard:
-    case OpCode::eDp2:
-    case OpCode::eDp3:
-    case OpCode::eDp4:
     case OpCode::eEmit:
     case OpCode::eEmitThenCut:
     case OpCode::eIMul:
@@ -797,6 +799,50 @@ bool Converter::handleFloatMad(ir::Builder& builder, const Instruction& op) {
   }
 
   return storeDstModified(builder, op, dst, result);
+}
+
+
+bool Converter::handleFloatDot(ir::Builder& builder, const Instruction& op) {
+  /* Dp2/3/4 take two vector operands, produce a scalar, and replicate
+   * that in all components included in the destination write mask.
+   * (dst0) Result. Write mask may not be scalar.
+   * (src0) First vector
+   * (src1) Second vector
+   */
+  auto opCode = op.getOpToken().getOpCode();
+
+  /* The opcode determines which source components to read,
+   * since the write mask can be literally anything. */
+  auto readMask = [opCode] {
+    switch (opCode) {
+      case OpCode::eDp2: return makeWriteMaskForComponents(2u);
+      case OpCode::eDp3: return makeWriteMaskForComponents(3u);
+      case OpCode::eDp4: return makeWriteMaskForComponents(4u);
+      default: break;
+    }
+
+    dxbc_spv_unreachable();
+    return WriteMask();
+  } ();
+
+  /* Load source vectors and pass them to the internal dot instruction as they are */
+  const auto& dst = op.getDst(0u);
+
+  auto scalarType = determineOperandType(dst, ir::ScalarType::eF32);
+
+  auto vectorA = loadSrcModified(builder, op, op.getSrc(0u), readMask, scalarType);
+  auto vectorB = loadSrcModified(builder, op, op.getSrc(1u), readMask, scalarType);
+
+  auto result = builder.add(ir::Op::FDot(scalarType, vectorA, vectorB));
+
+  if (op.getOpToken().getPreciseMask())
+    builder.setOpFlags(result, ir::OpFlag::ePrecise);
+
+  /* Apply result modifiers *before* broadcasting */
+  applyDstModifiers(builder, result, op, dst);
+
+  result = broadcastScalar(builder, result, dst.getWriteMask());
+  return storeDst(builder, op, dst, result);
 }
 
 

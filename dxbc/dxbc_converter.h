@@ -151,6 +151,8 @@ private:
 
   bool handleFloatMad(ir::Builder& builder, const Instruction& op);
 
+  bool handleFloatDot(ir::Builder& builder, const Instruction& op);
+
   bool handleFloatCompare(ir::Builder& builder, const Instruction& op);
 
   bool handleFloatConvert(ir::Builder& builder, const Instruction& op);
