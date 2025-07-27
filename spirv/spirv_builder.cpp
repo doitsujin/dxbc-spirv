@@ -1156,7 +1156,7 @@ void SpirvBuilder::emitDclUavCounter(const ir::Op& op) {
 
 
 uint32_t SpirvBuilder::getDescriptorArrayIndex(const ir::Op& op) {
-  const auto& dclOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& dclOp = m_builder.getOpForOperand(op, 0u);
 
   if (getDescriptorArraySize(dclOp) == 1u)
     return 0u; /* no array */
@@ -1169,7 +1169,7 @@ uint32_t SpirvBuilder::getDescriptorArrayIndex(const ir::Op& op) {
 
 
 uint32_t SpirvBuilder::getImageDescriptorPointer(const ir::Op& op) {
-  const auto& dclOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& dclOp = m_builder.getOpForOperand(op, 0u);
   dxbc_spv_assert(!declaresPlainBufferResource(dclOp));
 
   auto resourceId = getIdForDef(dclOp.getDef());
@@ -1188,8 +1188,8 @@ uint32_t SpirvBuilder::getImageDescriptorPointer(const ir::Op& op) {
 
 
 void SpirvBuilder::emitPushDataLoad(const ir::Op& op) {
-  const auto& dclOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
-  const auto& addressOp = m_builder.getOp(ir::SsaDef(op.getOperand(1u)));
+  const auto& dclOp = m_builder.getOpForOperand(op, 0u);
+  const auto& addressOp = m_builder.getOpForOperand(op, 1u);
 
   dxbc_spv_assert(!addressOp || addressOp.isConstant());
 
@@ -1237,7 +1237,7 @@ void SpirvBuilder::emitPushDataLoad(const ir::Op& op) {
 
 void SpirvBuilder::emitConstantLoad(const ir::Op& op) {
   /* Declare private variable for constant data */
-  const auto& constantOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& constantOp = m_builder.getOpForOperand(op, 0u);
   dxbc_spv_assert(constantOp.isConstant());
 
   auto entry = m_constantVars.find(constantOp.getDef());
@@ -1274,7 +1274,7 @@ void SpirvBuilder::emitConstantLoad(const ir::Op& op) {
 
 
 void SpirvBuilder::emitDescriptorLoad(const ir::Op& op) {
-  const auto& dclOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& dclOp = m_builder.getOpForOperand(op, 0u);
 
   auto typeId = m_descriptorTypes.at(dclOp.getDef());
   auto id = getIdForDef(op.getDef());
@@ -1317,8 +1317,8 @@ void SpirvBuilder::emitDescriptorLoad(const ir::Op& op) {
 
 void SpirvBuilder::emitBufferLoad(const ir::Op& op) {
   /* Get op that loaded the descriptor, and the resource declaration */
-  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
-  const auto& dclOp = m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u)));
+  const auto& descriptorOp = m_builder.getOpForOperand(op, 0u);
+  const auto& dclOp = m_builder.getOpForOperand(descriptorOp, 0u);
 
   bool isUav = descriptorOp.getType() == ir::ScalarType::eUav;
   bool isSparse = bool(op.getFlags() & ir::OpFlag::eSparseFeedback);
@@ -1430,10 +1430,10 @@ void SpirvBuilder::emitBufferLoad(const ir::Op& op) {
 
 void SpirvBuilder::emitBufferStore(const ir::Op& op) {
   /* Get op that loaded the descriptor, and the resource declaration */
-  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
-  const auto& dclOp = m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u)));
+  const auto& descriptorOp = m_builder.getOpForOperand(op, 0u);
+  const auto& dclOp = m_builder.getOpForOperand(descriptorOp, 0u);
 
-  const auto& valueOp = m_builder.getOp(ir::SsaDef(op.getOperand(2u)));
+  const auto& valueOp = m_builder.getOpForOperand(op, 2u);
 
   auto addressDef = ir::SsaDef(op.getOperand(1u));
   auto uavFlags = getUavFlags(dclOp);
@@ -1508,8 +1508,8 @@ void SpirvBuilder::emitBufferStore(const ir::Op& op) {
 
 void SpirvBuilder::emitBufferQuery(const ir::Op& op) {
   /* Get op that loaded the descriptor, and the resource declaration */
-  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
-  const auto& dclOp = m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u)));
+  const auto& descriptorOp = m_builder.getOpForOperand(op, 0u);
+  const auto& dclOp = m_builder.getOpForOperand(descriptorOp, 0u);
 
   auto id = getIdForDef(op.getDef());
 
@@ -1529,8 +1529,8 @@ void SpirvBuilder::emitBufferQuery(const ir::Op& op) {
 
 void SpirvBuilder::emitBufferAtomic(const ir::Op& op) {
   /* Get op that loaded the descriptor, and the resource declaration */
-  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
-  const auto& dclOp = m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u)));
+  const auto& descriptorOp = m_builder.getOpForOperand(op, 0u);
+  const auto& dclOp = m_builder.getOpForOperand(descriptorOp, 0u);
 
   auto addressDef = ir::SsaDef(op.getOperand(1u));
   auto operandDef = ir::SsaDef(op.getOperand(2u));
@@ -1575,7 +1575,7 @@ void SpirvBuilder::emitBufferAtomic(const ir::Op& op) {
 
 
 void SpirvBuilder::emitMemoryLoad(const ir::Op& op) {
-  const auto& ptrOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& ptrOp = m_builder.getOpForOperand(op, 0u);
   auto addressDef = ir::SsaDef(op.getOperand(1u));
 
   /* Set up memory operands based on pointer properties */
@@ -1609,7 +1609,7 @@ void SpirvBuilder::emitMemoryLoad(const ir::Op& op) {
 
 
 void SpirvBuilder::emitMemoryStore(const ir::Op& op) {
-  const auto& ptrOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& ptrOp = m_builder.getOpForOperand(op, 0u);
 
   auto addressDef = ir::SsaDef(op.getOperand(1u));
   auto valueDef = ir::SsaDef(op.getOperand(2u));
@@ -1639,7 +1639,7 @@ void SpirvBuilder::emitMemoryStore(const ir::Op& op) {
 
 
 void SpirvBuilder::emitMemoryAtomic(const ir::Op& op) {
-  const auto& ptrOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& ptrOp = m_builder.getOpForOperand(op, 0u);
 
   auto addressDef = ir::SsaDef(op.getOperand(1u));
   auto operandDef = ir::SsaDef(op.getOperand(2u));
@@ -1659,8 +1659,8 @@ void SpirvBuilder::emitMemoryAtomic(const ir::Op& op) {
 
 
 void SpirvBuilder::emitCounterAtomic(const ir::Op& op) {
-  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
-  const auto& dclOp = m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u)));
+  const auto& descriptorOp = m_builder.getOpForOperand(op, 0u);
+  const auto& dclOp = m_builder.getOpForOperand(descriptorOp, 0u);
 
   auto accessChainId = emitAccessChain(spv::StorageClassStorageBuffer,
     dclOp.getType(), getIdForDef(descriptorOp.getDef()), ir::SsaDef(), 0u, true);
@@ -1675,7 +1675,7 @@ void SpirvBuilder::emitCounterAtomic(const ir::Op& op) {
 
 void SpirvBuilder::emitLdsAtomic(const ir::Op& op) {
   /* Trivially traverse LDS type and emit atomic operation */
-  const auto& dclOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& dclOp = m_builder.getOpForOperand(op, 0u);
 
   auto addressDef = ir::SsaDef(op.getOperand(1u));
   auto operandDef = ir::SsaDef(op.getOperand(2u));
@@ -1733,8 +1733,8 @@ uint32_t SpirvBuilder::emitMergeImageCoordLayer(const ir::SsaDef& coordDef, cons
 
 
 void SpirvBuilder::emitImageLoad(const ir::Op& op) {
-  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
-  const auto& dclOp = m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u)));
+  const auto& descriptorOp = m_builder.getOpForOperand(op, 0u);
+  const auto& dclOp = m_builder.getOpForOperand(descriptorOp, 0u);
 
   auto id = getIdForDef(op.getDef());
 
@@ -1795,8 +1795,8 @@ void SpirvBuilder::emitImageLoad(const ir::Op& op) {
 
 
 void SpirvBuilder::emitImageStore(const ir::Op& op) {
-  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
-  const auto& dclOp = m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u)));
+  const auto& descriptorOp = m_builder.getOpForOperand(op, 0u);
+  const auto& dclOp = m_builder.getOpForOperand(descriptorOp, 0u);
 
   /* Set up image operands */
   SpirvImageOperands imageOperands = { };
@@ -1821,8 +1821,8 @@ void SpirvBuilder::emitImageStore(const ir::Op& op) {
 
 
 void SpirvBuilder::emitImageAtomic(const ir::Op& op) {
-  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
-  const auto& dclOp = m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u)));
+  const auto& descriptorOp = m_builder.getOpForOperand(op, 0u);
+  const auto& dclOp = m_builder.getOpForOperand(descriptorOp, 0u);
 
   /* Build coordinate vector */
   auto layerDef = ir::SsaDef(op.getOperand(1u));
@@ -2041,8 +2041,8 @@ void SpirvBuilder::emitImageComputeLod(const ir::Op& op) {
 void SpirvBuilder::emitImageQuerySize(const ir::Op& op) {
   enableCapability(spv::CapabilityImageQuery);
 
-  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
-  const auto& dclOp = m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u)));
+  const auto& descriptorOp = m_builder.getOpForOperand(op, 0u);
+  const auto& dclOp = m_builder.getOpForOperand(descriptorOp, 0u);
 
   auto kind = getResourceKind(dclOp);
 
@@ -2129,11 +2129,11 @@ void SpirvBuilder::emitImageQuerySize(const ir::Op& op) {
 void SpirvBuilder::emitImageQueryMips(const ir::Op& op) {
   enableCapability(spv::CapabilityImageQuery);
 
-  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& descriptorOp = m_builder.getOpForOperand(op, 0u);
 
   dxbc_spv_assert(descriptorOp.getType() == ir::ScalarType::eSrv);
   dxbc_spv_assert(!resourceIsMultisampled(getResourceKind(
-    m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u))))));
+    m_builder.getOpForOperand(descriptorOp, 0u))));
 
   auto id = getIdForDef(op.getDef());
 
@@ -2148,10 +2148,10 @@ void SpirvBuilder::emitImageQueryMips(const ir::Op& op) {
 void SpirvBuilder::emitImageQuerySamples(const ir::Op& op) {
   enableCapability(spv::CapabilityImageQuery);
 
-  const auto& descriptorOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& descriptorOp = m_builder.getOpForOperand(op, 0u);
 
   dxbc_spv_assert(resourceIsMultisampled(getResourceKind(
-    m_builder.getOp(ir::SsaDef(descriptorOp.getOperand(0u))))));
+    m_builder.getOpForOperand(descriptorOp, 0u))));
 
   auto id = getIdForDef(op.getDef());
 
@@ -2167,7 +2167,7 @@ void SpirvBuilder::emitConvert(const ir::Op& op) {
   /* Everything can be a vector here */
   dxbc_spv_assert(op.getType().isBasicType());
 
-  const auto& srcOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& srcOp = m_builder.getOpForOperand(op, 0u);
   dxbc_spv_assert(srcOp.getType().isBasicType());
 
   auto srcId = getIdForDef(srcOp.getDef());
@@ -2403,7 +2403,7 @@ void SpirvBuilder::emitSwitch(const ir::Op& op) {
   m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(1u))));
 
   for (uint32_t i = 2u; i < op.getOperandCount(); i += 2u) {
-    const auto& constant = m_builder.getOp(ir::SsaDef(op.getOperand(i)));
+    const auto& constant = m_builder.getOpForOperand(op, i);
     dxbc_spv_assert(constant.isConstant());
 
     m_code.push_back(uint32_t(constant.getOperand(0u)));
@@ -2749,7 +2749,7 @@ void SpirvBuilder::emitFunction(const ir::Op& op) {
   typeKey.returnType = op.getType();
 
   for (uint32_t i = 0u; i < op.getOperandCount(); i++) {
-    const auto& paramDef = m_builder.getOp(ir::SsaDef(op.getOperand(i)));
+    const auto& paramDef = m_builder.getOpForOperand(op, i);
     dxbc_spv_assert(paramDef.getOpCode() == ir::OpCode::eDclParam);
 
     typeKey.paramTypes.push_back(paramDef.getType());
@@ -3080,7 +3080,7 @@ void SpirvBuilder::emitLoadVariable(const ir::Op& op) {
 
   /* Loading draw parameter built-ins requires special care */
   if (op.getOpCode() == ir::OpCode::eInputLoad) {
-    const auto& inputDcl = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+    const auto& inputDcl = m_builder.getOpForOperand(op, 0u);
 
     if (inputDcl.getOpCode() == ir::OpCode::eDclInputBuiltIn) {
       auto builtIn = ir::BuiltIn(inputDcl.getOperand(1u));
@@ -3121,7 +3121,7 @@ void SpirvBuilder::emitLoadVariable(const ir::Op& op) {
   /* When loading a control point output in a hull shader, we
    * need to ensure that a barrier is properly inserted. */
   if (m_stage == ir::ShaderStage::eHull && op.getOpCode() == ir::OpCode::eOutputLoad) {
-    const auto& outputDcl = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+    const auto& outputDcl = m_builder.getOpForOperand(op, 0u);
     m_tessControl.needsIoBarrier |= !isPatchConstant(outputDcl);
   }
 
@@ -3135,7 +3135,7 @@ void SpirvBuilder::emitStoreVariable(const ir::Op& op) {
   bool hasWrapperArray = false;
 
   if (op.getOpCode() == ir::OpCode::eOutputStore) {
-    const auto& outputDcl = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+    const auto& outputDcl = m_builder.getOpForOperand(op, 0u);
 
     if (outputDcl.getOpCode() == ir::OpCode::eDclOutputBuiltIn) {
       auto builtIn = ir::BuiltIn(outputDcl.getOperand(1u));
@@ -3166,7 +3166,7 @@ void SpirvBuilder::emitStoreVariable(const ir::Op& op) {
 void SpirvBuilder::emitCompositeOp(const ir::Op& op) {
   bool isInsert = op.getOpCode() == ir::OpCode::eCompositeInsert;
 
-  const auto& addressOp = m_builder.getOp(ir::SsaDef(op.getOperand(1u)));
+  const auto& addressOp = m_builder.getOpForOperand(op, 1u);
   dxbc_spv_assert(addressOp.isConstant() && addressOp.getType().isBasicType());
 
   auto typeId = getIdForType(op.getType());
@@ -3451,7 +3451,7 @@ void SpirvBuilder::emitFRound(const ir::Op& op) {
 void SpirvBuilder::emitInterpolation(const ir::Op& op) {
   enableCapability(spv::CapabilityInterpolationFunction);
 
-  const auto& inputOp = m_builder.getOp(ir::SsaDef(op.getOperand(0u)));
+  const auto& inputOp = m_builder.getOpForOperand(op, 0u);
 
   dxbc_spv_assert(inputOp.getOpCode() == ir::OpCode::eDclInput ||
                   inputOp.getOpCode() == ir::OpCode::eDclInputBuiltIn);
@@ -4008,7 +4008,7 @@ uint32_t SpirvBuilder::defDescriptor(const ir::Op& op, uint32_t typeId, spv::Sto
 
   /* Map binding and set */
   const auto& bindingOp = op.getOpCode() == ir::OpCode::eDclUavCounter
-    ? m_builder.getOp(ir::SsaDef(op.getOperand(1u)))
+    ? m_builder.getOpForOperand(op, 1u)
     : op;
 
   auto resource = mapDescriptor(op, bindingOp);
@@ -4535,7 +4535,7 @@ bool SpirvBuilder::declaresPlainBufferResource(const ir::Op& op) {
 
 uint32_t SpirvBuilder::getDescriptorArraySize(const ir::Op& op) {
   if (op.getOpCode() == ir::OpCode::eDclUavCounter)
-    return getDescriptorArraySize(m_builder.getOp(ir::SsaDef(op.getOperand(1u))));
+    return getDescriptorArraySize(m_builder.getOpForOperand(op, 1u));
 
   dxbc_spv_assert(op.getOpCode() == ir::OpCode::eDclCbv ||
                   op.getOpCode() == ir::OpCode::eDclSrv ||
@@ -4585,7 +4585,7 @@ ir::Type SpirvBuilder::traverseType(ir::Type type, ir::SsaDef address) const {
   } else if (addressOp.getOpCode() == ir::OpCode::eCompositeConstruct) {
     /* Mixture of constant and dynamic indexing, handle appropriately. */
     for (uint32_t i = 0u; i < addressType.getVectorSize(); i++) {
-      const auto& indexOp = m_builder.getOp(ir::SsaDef(addressOp.getOperand(i)));
+      const auto& indexOp = m_builder.getOpForOperand(addressOp, i);
       dxbc_spv_assert(type.isArrayType() || indexOp.isConstant());
 
       uint32_t index = 0u;
