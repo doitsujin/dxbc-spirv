@@ -430,7 +430,7 @@ bool Validator::validateLoadStoreOps(std::ostream& str) const {
       if (isBuffer) {
         /* The descriptor does not carry type information */
         const auto& descriptor = m_builder.getOp(SsaDef(op->getOperand(0u)));
-        const auto& dcl = m_builder.getOp(SsaDef(descriptor.getOperand(0u)));
+        const auto& dcl = m_builder.getOpForOperand(descriptor, 0u);
 
         expectedType = dcl.getType();
 
@@ -460,7 +460,7 @@ bool Validator::validateLoadStoreOps(std::ostream& str) const {
           if ((isConstant = address.isConstant())) {
             constantValue = uint32_t(address.getOperand(0u));
           } else if (address.getOpCode() == OpCode::eCompositeConstruct) {
-            const auto& component = m_builder.getOp(SsaDef(address.getOperand(i)));
+            const auto& component = m_builder.getOpForOperand(address, i);
 
             if ((isConstant = component.isConstant()))
               constantValue = uint32_t(component.getOperand(0u));
@@ -537,7 +537,7 @@ bool Validator::validateLoadStoreOps(std::ostream& str) const {
 
       if (code == OpCode::eBufferLoad || code == OpCode::eBufferStore) {
         const auto& descriptor = m_builder.getOp(SsaDef(op->getOperand(0u)));
-        const auto& dcl = m_builder.getOp(SsaDef(descriptor.getOperand(0u)));
+        const auto& dcl = m_builder.getOpForOperand(descriptor, 0u);
 
         if (dcl.getOpCode() == OpCode::eDclSrv || dcl.getOpCode() == OpCode::eDclUav) {
           auto kind = ResourceKind(dcl.getOperand(4u));
@@ -616,7 +616,7 @@ bool Validator::validateImageOps(std::ostream& str) const {
     }
 
     /* Check that the image declaration is valid */
-    const auto& image = m_builder.getOp(SsaDef(imageDescriptor.getOperand(0u)));
+    const auto& image = m_builder.getOpForOperand(imageDescriptor, 0u);
 
     auto kind = ResourceKind(image.getOperand(4u));
     auto flags = UavFlags(image.getOperand(5u));
@@ -1140,7 +1140,7 @@ Op Validator::decomposeAddress(const Op& op, uint32_t member) const {
   }
 
   if (op.getOpCode() == OpCode::eCompositeConstruct)
-    return m_builder.getOp(SsaDef(op.getOperand(member)));
+    return m_builder.getOpForOperand(op, member);
 
   return Op();
 }
