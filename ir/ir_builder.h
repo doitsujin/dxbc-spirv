@@ -109,6 +109,17 @@ public:
     return m_ops.at(def.getId());
   }
 
+  /** Queries instruction for the operand of another instruction. Convenience
+   *  method that assumes that the given operand is an SSA def. */
+  const Op& getOpForOperand(const Op& op, uint32_t operandIndex) const {
+    dxbc_spv_assert(operandIndex < op.getFirstLiteralOperandIndex());
+    return getOp(SsaDef(op.getOperand(operandIndex)));
+  }
+
+  const Op& getOpForOperand(SsaDef def, uint32_t operandIndex) const {
+    return getOpForOperand(getOp(def), operandIndex);
+  }
+
   /** Queries SSA def of next or previous instruction in stream. */
   SsaDef getNext(SsaDef def) const { return def ? m_metadata.at(def.getId()).next : SsaDef(); }
   SsaDef getPrev(SsaDef def) const { return def ? m_metadata.at(def.getId()).prev : SsaDef(); }
