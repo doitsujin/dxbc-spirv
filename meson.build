@@ -17,12 +17,14 @@ dxbc_spv_files = files([
   'ir/ir_builder.cpp',
   'ir/ir_disasm.cpp',
   'ir/ir_serialize.cpp',
+  'ir/ir_utils.cpp',
   'ir/ir_validation.cpp',
 
   'ir/passes/ir_pass_cfg_cleanup.cpp',
   'ir/passes/ir_pass_cfg_convert.cpp',
   'ir/passes/ir_pass_lower_consume.cpp',
   'ir/passes/ir_pass_lower_min16.cpp',
+  'ir/passes/ir_pass_propagate_types.cpp',
   'ir/passes/ir_pass_scalarize.cpp',
   'ir/passes/ir_pass_ssa.cpp',
 

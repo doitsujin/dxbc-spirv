@@ -86,6 +86,15 @@ inline std::pair<bool, SsaDef> removeIfUnused(Builder& builder, SsaDef def) {
   return std::make_pair(false, def);
 }
 
+/** Converts constant op using Convert* semantics */
+Op convertConstant(const Op& op, BasicType dstType);
+
+/** Converts constant op using Cast semantics */
+Op castConstant(const Op& op, BasicType dstType);
+
+/** Converts constant op using ConsumeAs semantics */
+Op consumeConstant(const Op& op, BasicType dstType);
+
 
 /** Helper class for per-def look-up tables. Initializes a local
  *  array with the total def count of the given builder, and will

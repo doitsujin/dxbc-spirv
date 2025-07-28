@@ -85,21 +85,26 @@ inline uint32_t byteSize(ScalarType type) {
   switch (type) {
     case ScalarType::eI8:
     case ScalarType::eU8:
+    case ScalarType::eAnyI8:
       return 1u;
 
     case ScalarType::eI16:
     case ScalarType::eU16:
     case ScalarType::eF16:
+    case ScalarType::eAnyI16:
       return 2u;
 
+    case ScalarType::eUnknown:
     case ScalarType::eI32:
     case ScalarType::eU32:
     case ScalarType::eF32:
+    case ScalarType::eAnyI32:
       return 4u;
 
     case ScalarType::eI64:
     case ScalarType::eU64:
     case ScalarType::eF64:
+    case ScalarType::eAnyI64:
       return 8u;
 
     default:
