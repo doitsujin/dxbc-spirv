@@ -2062,7 +2062,7 @@ void SpirvBuilder::emitImageQuerySize(const ir::Op& op) {
    * need to specify the mip level to query for resources that can support mips. */
   uint32_t queryComponents = sizeDimensions + (resourceIsLayered(kind) ? 1u : 0u);
 
-  auto queryTypeId = getIdForType(ir::BasicType(sizeType.getBaseType(0u).getBaseType(), queryComponents));
+  auto queryTypeId = getIdForType(ir::BasicType(scalarType, queryComponents));
   auto queryId = allocId();
 
   if (descriptorOp.getType() == ir::ScalarType::eSrv && !resourceIsMultisampled(kind)) {
@@ -2312,9 +2312,7 @@ void SpirvBuilder::emitAtomic(const ir::Op& op, const ir::Type& type, ir::SsaDef
     return std::make_pair(spv::OpNop, 0u);
   } ();
 
-  const auto& operandOp = m_builder.getOp(operandDef);
-
-  dxbc_spv_assert(operandOp.getType() == (argCount
+  dxbc_spv_assert(m_builder.getOp(operandDef).getType() == (argCount
     ? ir::BasicType(type.getBaseType(0u).getBaseType(), argCount)
     : ir::BasicType()));
 
@@ -3449,10 +3447,8 @@ void SpirvBuilder::emitFRound(const ir::Op& op) {
 void SpirvBuilder::emitInterpolation(const ir::Op& op) {
   enableCapability(spv::CapabilityInterpolationFunction);
 
-  const auto& inputOp = m_builder.getOpForOperand(op, 0u);
-
-  dxbc_spv_assert(inputOp.getOpCode() == ir::OpCode::eDclInput ||
-                  inputOp.getOpCode() == ir::OpCode::eDclInputBuiltIn);
+  dxbc_spv_assert(m_builder.getOpForOperand(op, 0u).getOpCode() == ir::OpCode::eDclInput ||
+                  m_builder.getOpForOperand(op, 0u).getOpCode() == ir::OpCode::eDclInputBuiltIn);
 
   /* Determine opcode */
   auto extOp = [&] {
