@@ -999,10 +999,7 @@ bool IoMap::storeIoRegister(
         uint32_t                regIndexAbsolute,
         WriteMask               writeMask,
         ir::SsaDef              value) {
-  const auto& valueDef = builder.getOp(value);
-  auto valueType = valueDef.getType();
-
-  dxbc_spv_assert(valueType.isBasicType());
+  dxbc_spv_assert(builder.getOp(value).getType().isBasicType());
 
   /* Write each component individually */
   uint32_t componentIndex = 0u;
