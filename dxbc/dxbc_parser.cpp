@@ -14,9 +14,9 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   }} },
   /* And */
   { 3u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eDstReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* Break */
   { 0u },
@@ -35,7 +35,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   }} },
   /* Case */
   { 1u, {{
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* Continue */
   { 0u },
@@ -131,9 +131,9 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   }} },
   /* IAdd */
   { 3u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eDstReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* If */
   { 1u, {{
@@ -142,8 +142,8 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   /* IEq */
   { 3u, {{
     { OperandKind::eDstReg, ir::ScalarType::eBool   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* IGe */
   { 3u, {{
@@ -159,10 +159,10 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   }} },
   /* IMad */
   { 4u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eDstReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* IMax */
   { 3u, {{
@@ -179,32 +179,32 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   /* IMul */
   { 4u, {{
     { OperandKind::eDstReg, ir::ScalarType::eI32    },
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eDstReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* INe */
   { 3u, {{
     { OperandKind::eDstReg, ir::ScalarType::eBool   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* INeg */
   { 2u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eDstReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* IShl */
   { 3u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eDstReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* IShr */
   { 3u, {{
     { OperandKind::eDstReg, ir::ScalarType::eI32    },
     { OperandKind::eSrcReg, ir::ScalarType::eI32    },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* ItoF */
   { 2u, {{
@@ -218,15 +218,15 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   /* Ld */
   { 3u, {{
     { OperandKind::eDstReg, ir::ScalarType::eF32      },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
     { OperandKind::eSrcReg, ir::ScalarType::eSrv      },
   }} },
   /* LdMs */
   { 4u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
     { OperandKind::eSrcReg, ir::ScalarType::eSrv      },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* Log */
   { 2u, {{
@@ -290,19 +290,19 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   { 0u },
   /* Not */
   { 2u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eDstReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* Or */
   { 3u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eDstReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* ResInfo */
   { 3u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* Ret */
@@ -391,7 +391,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   }} },
   /* Switch */
   { 1u, {{
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* SinCos */
   { 3u, {{
@@ -421,16 +421,16 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   /* UMul */
   { 4u, {{
     { OperandKind::eDstReg, ir::ScalarType::eU32    },
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eDstReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* UMad */
   { 4u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eDstReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* UMax */
   { 3u, {{
@@ -448,7 +448,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   { 3u, {{
     { OperandKind::eDstReg, ir::ScalarType::eU32    },
     { OperandKind::eSrcReg, ir::ScalarType::eU32    },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* UtoF */
   { 2u, {{
@@ -457,9 +457,9 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   }} },
   /* Xor */
   { 3u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eDstReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* DclResource */
   { 3u, {{
@@ -565,7 +565,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   { 3u, {{
     { OperandKind::eDstReg, ir::ScalarType::eF32      },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* SampleInfo */
   { 2u, {{
@@ -677,50 +677,50 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   }} },
   /* CountBits */
   { 2u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eDstReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* FirstBitHi */
   { 2u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32    },
   }} },
   /* FirstBitLo */
   { 2u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eDstReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* FirstBitShi */
   { 2u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eI32    },
   }} },
   /* UBfe */
   { 4u, {{
     { OperandKind::eDstReg, ir::ScalarType::eU32    },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32    },
   }} },
   /* IBfe */
   { 4u, {{
     { OperandKind::eDstReg, ir::ScalarType::eI32    },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eI32    },
   }} },
   /* Bfi */
   { 5u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eDstReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* BfRev */
   { 2u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eDstReg, ir::ScalarType::eU32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* Swapc */
   { 5u, {{
@@ -816,89 +816,89 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   /* StoreUavTyped */
   { 3u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUav      },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* LdRaw */
   { 3u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* StoreRaw */
   { 3u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* LdStructured */
   { 4u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* StoreStructured */
   { 4u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* AtomicAnd */
   { 3u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* AtomicOr */
   { 3u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* AtomicXor */
   { 3u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* AtomicCmpStore */
   { 4u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* AtomicIAdd */
   { 3u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* AtomicIMax */
   { 3u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* AtomicIMin */
   { 3u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* AtomicUMax */
   { 3u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* AtomicUMin */
   { 3u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* ImmAtomicAlloc */
   { 2u, {{
@@ -912,74 +912,74 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   }} },
   /* ImmAtomicIAdd */
   { 4u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eDstReg, ir::ScalarType::eU32   },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* ImmAtomicAnd */
   { 4u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eDstReg, ir::ScalarType::eU32   },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* ImmAtomicOr */
   { 4u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eDstReg, ir::ScalarType::eU32   },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* ImmAtomicXor */
   { 4u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eDstReg, ir::ScalarType::eU32   },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* ImmAtomicExch */
   { 4u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eDstReg, ir::ScalarType::eU32   },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* ImmAtomicCmpExch */
   { 5u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eDstReg, ir::ScalarType::eU32   },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* ImmAtomicIMax */
   { 4u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eDstReg, ir::ScalarType::eU32   },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* ImmAtomicIMin */
   { 4u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eDstReg, ir::ScalarType::eU32   },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* ImmAtomicUMax */
   { 4u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eDstReg, ir::ScalarType::eU32   },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* ImmAtomicUMin */
   { 4u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eDstReg, ir::ScalarType::eU32   },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* Sync */
   { 0u },
@@ -1063,7 +1063,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   { 3u, {{
     { OperandKind::eDstReg, ir::ScalarType::eF32    },
     { OperandKind::eSrcReg, ir::ScalarType::eF32    },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* EvalCentroid */
   { 2u, {{
@@ -1167,22 +1167,22 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   { 4u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* LdMsS */
   { 5u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
     { OperandKind::eSrcReg, ir::ScalarType::eSrv      },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* LdUavTypedS */
   { 4u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
     { OperandKind::eSrcReg, ir::ScalarType::eUav      },
   }} },
   /* LdRawS */
@@ -1196,8 +1196,8 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   { 5u, {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
-    { OperandKind::eSrcReg, ir::ScalarType::eAnyI32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32   },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* SampleLS */

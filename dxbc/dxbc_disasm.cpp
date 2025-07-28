@@ -479,12 +479,12 @@ void Disassembler::disassembleImmediate(std::ostream& stream, const Operand& arg
         break;
 
       case MinPrecision::eMin16Sint:
-        if (type == ir::ScalarType::eUnknown || type == ir::ScalarType::eAnyI32)
+        if (type == ir::ScalarType::eUnknown || type == ir::ScalarType::eU32)
           type = ir::ScalarType::eI32;
         break;
 
       case MinPrecision::eMin16Uint:
-        if (type == ir::ScalarType::eUnknown || type == ir::ScalarType::eAnyI32)
+        if (type == ir::ScalarType::eUnknown || type == ir::ScalarType::eU32)
           type = ir::ScalarType::eU32;
         break;
     }
@@ -492,12 +492,6 @@ void Disassembler::disassembleImmediate(std::ostream& stream, const Operand& arg
     /* Resolve ambiguous types based on context */
     if (type == ir::ScalarType::eUnknown)
       type = ir::ScalarType::eF32;
-
-    if (type == ir::ScalarType::eAnyI32)
-      type = ir::ScalarType::eI32;
-
-    if (type == ir::ScalarType::eAnyI64)
-      type = ir::ScalarType::eI64;
 
     switch (type) {
       case ir::ScalarType::eBool:

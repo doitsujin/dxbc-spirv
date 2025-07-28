@@ -1019,7 +1019,7 @@ bool Converter::handleIntArithmetic(ir::Builder& builder, const Instruction& op)
   /* Instruction type. Everything supports min precision here. */
   const auto& dst = op.getDst(0u);
 
-  auto scalarType = determineOperandType(dst, ir::ScalarType::eAnyI32);
+  auto scalarType = determineOperandType(dst, ir::ScalarType::eU32);
   auto vectorType = makeVectorType(scalarType, dst.getWriteMask());
 
   /* Load source operands */
@@ -1070,12 +1070,12 @@ bool Converter::handleIntCompare(ir::Builder& builder, const Instruction& op) {
 
   /* Operand types may differ in signedness, but need to have the same
    * bit width. Get rid of min precision if necessary. */
-  auto srcAType = determineOperandType(srcA, ir::ScalarType::eAnyI32);
-  auto srcBType = determineOperandType(srcB, ir::ScalarType::eAnyI32);
+  auto srcAType = determineOperandType(srcA, ir::ScalarType::eU32);
+  auto srcBType = determineOperandType(srcB, ir::ScalarType::eU32);
 
   if (ir::BasicType(srcAType).isMinPrecisionType() != ir::BasicType(srcBType).isMinPrecisionType()) {
-    srcAType = determineOperandType(srcA, ir::ScalarType::eAnyI32, false);
-    srcBType = determineOperandType(srcB, ir::ScalarType::eAnyI32, false);
+    srcAType = determineOperandType(srcA, ir::ScalarType::eU32, false);
+    srcBType = determineOperandType(srcB, ir::ScalarType::eU32, false);
   }
 
   /* Load operands */
@@ -1167,7 +1167,7 @@ bool Converter::handleEndLoop(ir::Builder& builder, const Instruction& op) {
 bool Converter::handleSwitch(ir::Builder& builder, const Instruction& op) {
   /* Don't allow min precision here since we need 32-bit literals */
   auto src = op.getSrc(0u);
-  auto srcType = determineOperandType(src, ir::ScalarType::eAnyI32, false);
+  auto srcType = determineOperandType(src, ir::ScalarType::eU32, false);
 
   auto selector = loadSrcModified(builder, op, src, ComponentBit::eX, srcType);
   auto construct = builder.add(ir::Op::ScopedSwitch(ir::SsaDef(), selector));
@@ -1460,7 +1460,7 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
   }
 
   if (type == ir::ScalarType::eBool)
-    loadType = ir::ScalarType::eAnyI32;
+    loadType = ir::ScalarType::eU32;
 
   switch (operand.getRegisterType()) {
     case RegisterType::eNull:
@@ -1629,7 +1629,7 @@ ir::SsaDef Converter::boolToInt(ir::Builder& builder, ir::SsaDef def) {
   auto srcType = builder.getOp(def).getType().getBaseType(0u);
   dxbc_spv_assert(srcType.isBoolType());
 
-  auto dstType = ir::BasicType(ir::ScalarType::eAnyI32, srcType.getVectorSize());
+  auto dstType = ir::BasicType(ir::ScalarType::eU32, srcType.getVectorSize());
 
   return builder.add(ir::Op::Select(dstType, def,
     makeTypedConstant(builder, dstType, -1),
@@ -1641,7 +1641,7 @@ ir::SsaDef Converter::intToBool(ir::Builder& builder, ir::SsaDef def) {
   auto srcType = builder.getOp(def).getType().getBaseType(0u);
 
   if (!srcType.isIntType()) {
-    srcType = ir::BasicType(ir::ScalarType::eAnyI32, srcType.getVectorSize());
+    srcType = ir::BasicType(ir::ScalarType::eU32, srcType.getVectorSize());
     def = builder.add(ir::Op::ConsumeAs(srcType, def));
   }
 
@@ -1693,12 +1693,12 @@ ir::ScalarType Converter::determineOperandType(const Operand& operand, ir::Scala
     } break;
 
     case MinPrecision::eMin16Uint: {
-      if (type == ir::ScalarType::eU32 || type == ir::ScalarType::eAnyI32 || type == ir::ScalarType::eUnknown)
+      if (type == ir::ScalarType::eI32 || type == ir::ScalarType::eU32 || type == ir::ScalarType::eUnknown)
         return allowMinPrecision ? ir::ScalarType::eMinU16 : ir::ScalarType::eU32;
     } break;
 
     case MinPrecision::eMin16Sint: {
-      if (type == ir::ScalarType::eI32 || type == ir::ScalarType::eAnyI32 || type == ir::ScalarType::eUnknown)
+      if (type == ir::ScalarType::eI32 || type == ir::ScalarType::eU32 || type == ir::ScalarType::eUnknown)
         return allowMinPrecision ? ir::ScalarType::eMinI16 : ir::ScalarType::eI32;
     } break;
   }
@@ -1784,13 +1784,9 @@ ir::SsaDef Converter::makeTypedConstant(ir::Builder& builder, ir::BasicType type
       case ir::ScalarType::eU16:  return ir::Operand(uint16_t(value));
       case ir::ScalarType::eU32:  return ir::Operand(uint32_t(value));
       case ir::ScalarType::eU64:  return ir::Operand(uint64_t(value));
-      case ir::ScalarType::eAnyI8:
       case ir::ScalarType::eI8:   return ir::Operand(int8_t(value));
-      case ir::ScalarType::eAnyI16:
       case ir::ScalarType::eI16:  return ir::Operand(int16_t(value));
-      case ir::ScalarType::eAnyI32:
       case ir::ScalarType::eI32:  return ir::Operand(int32_t(value));
-      case ir::ScalarType::eAnyI64:
       case ir::ScalarType::eI64:  return ir::Operand(int64_t(value));
       case ir::ScalarType::eF16:  return ir::Operand(util::float16_t(value));
       case ir::ScalarType::eF32:  return ir::Operand(float(value));
@@ -1936,8 +1932,7 @@ bool Converter::is64BitType(ir::BasicType type) {
 
   return scalarType == ir::ScalarType::eF64 ||
          scalarType == ir::ScalarType::eU64 ||
-         scalarType == ir::ScalarType::eI64 ||
-         scalarType == ir::ScalarType::eAnyI64;
+         scalarType == ir::ScalarType::eI64;
 }
 
 
