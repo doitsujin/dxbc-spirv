@@ -24,9 +24,16 @@ public:
   LowerConsumePass             (const LowerConsumePass&) = delete;
   LowerConsumePass& operator = (const LowerConsumePass&) = delete;
 
+  /** Lowers consume instructions to equivalent Cast and
+   *  Convert sequences. */
+  void lowerConsume();
+
   /** Eliminates redundant consume and cast operations.
    *  Returns true if any progress was made. */
   bool resolveCastChains();
+
+  /** Initializes and runs lowering pass. */
+  static void runLowerConsumePass(Builder& builder);
 
   /** Initializes and runs pass to resolve cast
    *  chains on the given builder only. */
@@ -37,6 +44,12 @@ private:
   Builder& m_builder;
 
   std::pair<bool, Builder::iterator> handleCastChain(Builder::iterator op);
+
+  Builder::iterator handleConsume(Builder::iterator op);
+
+  Builder::iterator handleCast(Builder::iterator op);
+
+  Builder::iterator handleConvert(Builder::iterator op);
 
 };
 

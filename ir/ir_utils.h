@@ -86,6 +86,13 @@ inline std::pair<bool, SsaDef> removeIfUnused(Builder& builder, SsaDef def) {
   return std::make_pair(false, def);
 }
 
+
+/** Normalizes sub-dword basic scalar or vector types to 32-bit for
+ *  use in consume operations. */
+ScalarType normalizeTypeForConsume(ScalarType type);
+BasicType normalizeTypeForConsume(BasicType type);
+
+
 /** Converts constant op using Convert* semantics */
 Op convertConstant(const Op& op, BasicType dstType);
 
