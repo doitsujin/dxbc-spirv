@@ -28,6 +28,10 @@ struct float16_t {
     return f16tof32(data);
   }
 
+  explicit operator double () const {
+    return double(f16tof32(data));
+  }
+
   static float16_t fromRaw(uint16_t data) {
     float16_t result = { };
     result.data = data;
