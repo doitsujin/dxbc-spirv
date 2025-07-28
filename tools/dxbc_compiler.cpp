@@ -15,6 +15,7 @@
 #include "../ir/passes/ir_pass_cfg_convert.h"
 #include "../ir/passes/ir_pass_lower_consume.h"
 #include "../ir/passes/ir_pass_lower_min16.h"
+#include "../ir/passes/ir_pass_propagate_types.h"
 #include "../ir/passes/ir_pass_scalarize.h"
 #include "../ir/passes/ir_pass_ssa.h"
 
@@ -217,6 +218,8 @@ bool compileShader(util::ByteReader reader, const Options& options) {
   while (ir::LowerConsumePass::runResolveCastChainsPass(builder) ||
          ir::ScalarizePass::runResolveRedundantCompositesPass(builder))
     continue;
+
+  ir::PropagateTypesPass::runPass(builder, ir::PropagateTypesPass::Options());
 
   timers.tAfterPasses = std::chrono::high_resolution_clock::now();
 
