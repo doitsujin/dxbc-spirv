@@ -209,13 +209,6 @@ std::pair<Operand, Operand> LowerMin16Pass::resolveRange(ScalarType type) const 
     case ScalarType::eMinU16:
       break;
 
-    /* Ambiguous integer types */
-    case ScalarType::eAnyI8:
-    case ScalarType::eAnyI16:
-    case ScalarType::eAnyI32:
-    case ScalarType::eAnyI64:
-      break;
-
     /* non-numeric types */
     case ScalarType::eVoid:
     case ScalarType::eUnknown:

@@ -100,8 +100,7 @@ anyway.
 `MinValue` and `MaxValue` instructions can occur anywhere in the code and return the
 lowest and highest representable number for a given data type that is not infinite.
 These instructions are useful for handling min-precision types in some cases, and
-**must** be lowered to constants before lowering to the target IR. These instructions
-cannot be used with `Any*` types.
+**must** be lowered to constants before lowering to the target IR.
 
 ### Mode setting instructions
 

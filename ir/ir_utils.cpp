@@ -47,14 +47,6 @@ ScalarType normalizeTypeForConsume(ScalarType type) {
     case ScalarType::eU64:
       return ScalarType::eU64;
 
-    case ScalarType::eAnyI8:
-    case ScalarType::eAnyI16:
-    case ScalarType::eAnyI32:
-      return ScalarType::eAnyI32;
-
-    case ScalarType::eAnyI64:
-      return ScalarType::eAnyI64;
-
     default:
       dxbc_spv_unreachable();
       return ScalarType::eUnknown;
@@ -87,17 +79,13 @@ Op convertConstant(const Op& op, BasicType dstType) {
           bool v = uint64_t(src) != 0u;
           return std::make_pair(uint64_t(v ? 1u : 0u), double(v ? 1.0 : 0.0));
         }
-        case ScalarType::eAnyI8:
         case ScalarType::eI8:
           return normalizeConstantLiteral<int8_t>(src);
-        case ScalarType::eAnyI16:
         case ScalarType::eI16:
           return normalizeConstantLiteral<int16_t>(src);
         case ScalarType::eMinI16:
-        case ScalarType::eAnyI32:
         case ScalarType::eI32:
           return normalizeConstantLiteral<int32_t>(src);
-        case ScalarType::eAnyI64:
         case ScalarType::eI64:
           return normalizeConstantLiteral<int64_t>(src);
         case ScalarType::eU8:
@@ -127,17 +115,13 @@ Op convertConstant(const Op& op, BasicType dstType) {
       switch (dstType.getBaseType()) {
         case ScalarType::eBool:
           return Operand(normalizedInt ? 1u : 0u);
-        case ScalarType::eAnyI8:
         case ScalarType::eI8:
           return Operand(int8_t(normalizedInt));
-        case ScalarType::eAnyI16:
         case ScalarType::eI16:
           return Operand(int16_t(normalizedInt));
         case ScalarType::eMinI16:
-        case ScalarType::eAnyI32:
         case ScalarType::eI32:
           return Operand(int32_t(normalizedInt));
-        case ScalarType::eAnyI64:
         case ScalarType::eI64:
           return Operand(int64_t(normalizedInt));
         case ScalarType::eU8:

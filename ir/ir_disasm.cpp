@@ -194,14 +194,10 @@ void Disassembler::disassembleOperandLiteral(std::ostream& stream, const Op& op,
     switch (type) {
       case ScalarType::eBool: stream << (bool(operand) ? "True" : "False"); return;
 
-      case ScalarType::eAnyI8:
       case ScalarType::eI8:  stream << int32_t(int8_t(operand)); return;
-      case ScalarType::eAnyI16:
       case ScalarType::eI16: stream << int32_t(int16_t(operand)); return;
       case ScalarType::eMinI16:
-      case ScalarType::eAnyI32:
       case ScalarType::eI32: stream << int32_t(operand); return;
-      case ScalarType::eAnyI64:
       case ScalarType::eI64: stream << int64_t(operand); return;
 
       case ScalarType::eU8:  stream << uint32_t(uint8_t(operand)); return;

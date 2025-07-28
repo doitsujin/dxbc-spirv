@@ -58,13 +58,6 @@ enum class ScalarType : uint8_t {
 
   eMinF10       = 17,
 
-  /** Sign-agnostic integer types. These must be lowered to
-   *  signed or unsigned integers depending on actual usage. */
-  eAnyI8        = 18,
-  eAnyI16       = 19,
-  eAnyI32       = 20,
-  eAnyI64       = 21,
-
   /** Opaque descriptor types. Used for resource access. */
   eSampler      = 22,
   eCbv          = 23,
@@ -85,26 +78,22 @@ inline uint32_t byteSize(ScalarType type) {
   switch (type) {
     case ScalarType::eI8:
     case ScalarType::eU8:
-    case ScalarType::eAnyI8:
       return 1u;
 
     case ScalarType::eI16:
     case ScalarType::eU16:
     case ScalarType::eF16:
-    case ScalarType::eAnyI16:
       return 2u;
 
     case ScalarType::eUnknown:
     case ScalarType::eI32:
     case ScalarType::eU32:
     case ScalarType::eF32:
-    case ScalarType::eAnyI32:
       return 4u;
 
     case ScalarType::eI64:
     case ScalarType::eU64:
     case ScalarType::eF64:
-    case ScalarType::eAnyI64:
       return 8u;
 
     default:
@@ -195,19 +184,9 @@ public:
         || type == ScalarType::eMinU16;
   }
 
-  /** Checks whether base type is a sign-agnostic integer type */
-  bool isAnyIntType() const {
-    auto type = getBaseType();
-
-    return type == ScalarType::eAnyI8
-        || type == ScalarType::eAnyI16
-        || type == ScalarType::eAnyI32
-        || type == ScalarType::eAnyI64;
-  }
-
   /** Checks whether base type is an integer type */
   bool isIntType() const {
-    return isSignedIntType() || isUnsignedIntType() || isAnyIntType();
+    return isSignedIntType() || isUnsignedIntType();
   }
 
   /** Checks whether base type is a float type */
