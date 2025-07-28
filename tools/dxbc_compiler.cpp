@@ -220,6 +220,7 @@ bool compileShader(util::ByteReader reader, const Options& options) {
     continue;
 
   ir::PropagateTypesPass::runPass(builder, ir::PropagateTypesPass::Options());
+  ir::LowerConsumePass::runLowerConsumePass(builder);
 
   timers.tAfterPasses = std::chrono::high_resolution_clock::now();
 
