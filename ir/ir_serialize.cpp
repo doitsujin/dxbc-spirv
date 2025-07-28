@@ -267,6 +267,7 @@ bool Deserializer::deserialize(Builder& builder) {
       : builder.add(Op(op.getOpCode(), op.getType()));
 
     dxbc_spv_assert(result == def);
+    (void)result;
   }
 
   /* Add actual ops to builder */
