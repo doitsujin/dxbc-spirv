@@ -1374,6 +1374,9 @@ IoRegisterIndex IoMap::loadRegisterIndices(
   if (dim > 1u)
     result.vertexIndex = m_converter.loadOperandIndex(builder, op, operand, 0u);
 
+  if (result.regType == RegisterType::eControlPointOut && m_converter.m_hs.phase == HullShaderPhase::eControlPoint)
+    result.vertexIndex = loadTessControlPointId(builder);
+
   if (hasAbsoluteIndexing(operand.getIndexType(dim - 1u)))
     result.regIndexAbsolute = operand.getIndex(dim - 1u);
 
