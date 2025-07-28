@@ -1525,7 +1525,7 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
   if (type == ir::ScalarType::eBool)
     loadDef = intToBool(builder, loadDef);
   else if (type != loadType)
-    loadDef = builder.add(ir::Op::ConsumeAs(makeVectorType(type, mask), loadDef));
+    loadDef = builder.add(ir::Op::Cast(makeVectorType(type, mask), loadDef));
 
   return loadDef;
 }
@@ -1589,7 +1589,7 @@ bool Converter::storeDst(ir::Builder& builder, const Instruction& op, const Oper
     if (!isValid64BitMask(writeMask))
       return logOpError(op, "Invalid 64-bit component write mask: ", writeMask);
 
-    value = builder.add(ir::Op::ConsumeAs(storeType, value));
+    value = builder.add(ir::Op::Cast(storeType, value));
   } else if (valueOp.getType().getBaseType(0u).isBoolType()) {
     /* Convert boolean results to the DXBC representation of -1. */
     value = boolToInt(builder, value);
