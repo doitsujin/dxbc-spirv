@@ -579,7 +579,7 @@ bool IoMap::declareIoSysval(
         type.addArrayDimension(arraySize);
 
       return declareSimpleBuiltIn(builder, signatureEntry, regType,
-        regIndex, componentMask, sv, type, ir::BuiltIn::ePosition, interpolation);
+        regIndex, ComponentBit::eAll, sv, type, ir::BuiltIn::ePosition, interpolation);
     }
 
     case Sysval::eClipDistance:
@@ -982,6 +982,10 @@ ir::SsaDef IoMap::loadIoRegister(
       auto scalar = builder.add(ir::Op(opCode, varScalarType)
         .addOperand(var->baseDef)
         .addOperand(addressDef));
+
+      /* Fix up pixel shader position.w semantics */
+      if (m_shaderInfo.getType() == ShaderType::ePixel && var->sv == Sysval::ePosition && c == ComponentBit::eW)
+        scalar = builder.add(ir::Op(ir::OpCode::eFRcp, varScalarType).addOperand(scalar));
 
       components[componentIndex] = convertScalar(builder, scalarType, scalar);
     }
