@@ -87,6 +87,20 @@ inline std::pair<bool, SsaDef> removeIfUnused(Builder& builder, SsaDef def) {
 }
 
 
+/** Checks whether a given instruction is the only non-debug user of
+ *  an instruction. */
+inline bool isOnlyUse(const Builder& builder, SsaDef def, SsaDef use) {
+  auto [a, b] = builder.getUses(def);
+
+  for (auto i = a; i != b; i++) {
+    if (i->getDef() != use && !i->isDeclarative())
+      return false;
+  }
+
+  return true;
+}
+
+
 /** Normalizes sub-dword basic scalar or vector types to 32-bit for
  *  use in consume operations. */
 ScalarType normalizeTypeForConsume(ScalarType type);
