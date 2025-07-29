@@ -284,6 +284,13 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_misc_function_with_args);
   ADD_TEST(test_misc_function_with_return);
 
+  ADD_TEST(test_cfg_if);
+  ADD_TEST(test_cfg_if_else);
+  ADD_TEST(test_cfg_loop_once);
+  ADD_TEST(test_cfg_loop_infinite);
+  ADD_TEST(test_cfg_switch_simple);
+  ADD_TEST(test_cfg_switch_complex);
+
   return result;
 }
 

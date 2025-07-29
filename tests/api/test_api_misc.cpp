@@ -476,4 +476,268 @@ Builder test_misc_function_with_return() {
   return builder;
 }
 
+
+Builder test_cfg_if() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+  auto lStart = builder.add(Op::Label());
+
+  auto outDef = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(outDef, 0u, "SV_TARGET"));
+
+  auto posDef = builder.add(Op::DclInputBuiltIn(BasicType(ScalarType::eF32, 4u), entryPoint, BuiltIn::ePosition, InterpolationModes()));
+  builder.add(Op::Semantic(posDef, 0u, "SV_POSITION"));
+
+  auto z = builder.add(Op::InputLoad(ScalarType::eF32, posDef, builder.makeConstant(2u)));
+  auto w = builder.add(Op::InputLoad(ScalarType::eF32, posDef, builder.makeConstant(3u)));
+
+  auto cond = builder.add(Op::FNe(w, builder.makeConstant(0.0f)));
+
+  auto lTrue = builder.add(Op::Label());
+  auto zDiv = builder.add(Op::FDiv(ScalarType::eF32, z, w));
+
+  auto lMerge = builder.add(Op::Label());
+  builder.addBefore(lTrue, Op::BranchConditional(cond, lTrue, lMerge));
+  builder.addBefore(lMerge, Op::Branch(lMerge));
+  builder.rewriteOp(lStart, Op::LabelSelection(lMerge));
+
+  auto zPhi = builder.add(Op::Phi(ScalarType::eF32)
+    .addPhi(lStart, z)
+    .addPhi(lTrue, zDiv));
+
+  builder.add(Op::OutputStore(outDef, SsaDef(), zPhi));
+  builder.add(Op::Return());
+  return builder;
+}
+
+
+Builder test_cfg_if_else() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+  auto lStart = builder.add(Op::Label());
+
+  auto outDef = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(outDef, 0u, "SV_TARGET"));
+
+  auto posDef = builder.add(Op::DclInputBuiltIn(BasicType(ScalarType::eF32, 4u), entryPoint, BuiltIn::ePosition, InterpolationModes()));
+  builder.add(Op::Semantic(posDef, 0u, "SV_POSITION"));
+
+  auto z = builder.add(Op::InputLoad(ScalarType::eF32, posDef, builder.makeConstant(2u)));
+  auto w = builder.add(Op::InputLoad(ScalarType::eF32, posDef, builder.makeConstant(3u)));
+
+  auto cond = builder.add(Op::FGt(z, w));
+
+  auto lTrue = builder.add(Op::Label());
+  auto zDivT = builder.add(Op::FDiv(ScalarType::eF32, z, w));
+
+  auto lFalse = builder.add(Op::Label());
+  auto zDivF = builder.add(Op::FDiv(ScalarType::eF32, w, z));
+
+  auto lMerge = builder.add(Op::Label());
+  builder.addBefore(lTrue, Op::BranchConditional(cond, lTrue, lFalse));
+  builder.addBefore(lFalse, Op::Branch(lMerge));
+  builder.addBefore(lMerge, Op::Branch(lMerge));
+  builder.rewriteOp(lStart, Op::LabelSelection(lMerge));
+
+  auto zPhi = builder.add(Op::Phi(ScalarType::eF32)
+    .addPhi(lTrue, zDivT)
+    .addPhi(lFalse, zDivF));
+
+  builder.add(Op::OutputStore(outDef, SsaDef(), zPhi));
+  builder.add(Op::Return());
+  return builder;
+}
+
+
+Builder test_cfg_loop_once() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+  builder.add(Op::Label());
+
+  auto outDef = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(outDef, 0u, "SV_TARGET"));
+
+  auto posDef = builder.add(Op::DclInputBuiltIn(BasicType(ScalarType::eF32, 4u), entryPoint, BuiltIn::ePosition, InterpolationModes()));
+  builder.add(Op::Semantic(posDef, 0u, "SV_POSITION"));
+
+  auto x = builder.add(Op::InputLoad(ScalarType::eF32, posDef, builder.makeConstant(0u)));
+
+  auto loopHeader = builder.add(Op::Label());
+  builder.addBefore(loopHeader, Op::Branch(loopHeader));
+
+  auto loopBody = builder.add(Op::Label());
+  builder.addBefore(loopBody, Op::Branch(loopBody));
+
+  auto xAdd = builder.add(Op::FAdd(ScalarType::eF32, x, builder.makeConstant(1.0f)));
+
+  auto loopContinue = builder.add(Op::Label());
+  builder.add(Op::Branch(loopHeader));
+
+  auto loopMerge = builder.add(Op::Label());
+  builder.addBefore(loopContinue, Op::Branch(loopMerge));
+  builder.rewriteOp(loopHeader, Op::LabelLoop(loopMerge, loopContinue));
+
+  builder.add(Op::OutputStore(outDef, SsaDef(), xAdd));
+  builder.add(Op::Return());
+  return builder;
+}
+
+
+Builder test_cfg_loop_infinite() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+  auto labelStart = builder.add(Op::Label());
+
+  auto outDef = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(outDef, 0u, "SV_TARGET"));
+
+  auto posDef = builder.add(Op::DclInputBuiltIn(BasicType(ScalarType::eF32, 4u), entryPoint, BuiltIn::ePosition, InterpolationModes()));
+  builder.add(Op::Semantic(posDef, 0u, "SV_POSITION"));
+
+  auto x = builder.add(Op::InputLoad(ScalarType::eF32, posDef, builder.makeConstant(0u)));
+
+  auto loopHeader = builder.add(Op::Label());
+  builder.addBefore(loopHeader, Op::Branch(loopHeader));
+
+  auto xPhi = builder.add(Op::Phi(ScalarType::eF32));
+
+  auto loopBody = builder.add(Op::Label());
+  builder.addBefore(loopBody, Op::Branch(loopBody));
+
+  auto xAdd = builder.add(Op::FAdd(ScalarType::eF32, xPhi, builder.makeConstant(1.0f)));
+  auto xCond = builder.add(Op::FGe(xAdd, builder.makeConstant(10000.0f)));
+
+  auto returnBlock = builder.add(Op::Label());
+  builder.add(Op::OutputStore(outDef, SsaDef(), xAdd));
+  builder.add(Op::Return());
+
+  auto returnMerge = builder.add(Op::Label());
+  builder.addBefore(returnBlock, Op::BranchConditional(xCond, returnBlock, returnMerge));
+  builder.rewriteOp(loopBody, Op::LabelSelection(returnMerge));
+
+  auto loopContinue = builder.add(Op::Label());
+  builder.addBefore(loopContinue, Op::Branch(loopContinue));
+
+  builder.rewriteOp(xPhi, Op::Phi(ScalarType::eF32)
+    .addPhi(labelStart, x)
+    .addPhi(loopContinue, xAdd));
+
+  builder.add(Op::Branch(loopHeader));
+
+  auto loopMerge = builder.add(Op::Label());
+  builder.add(Op::Unreachable());
+  builder.rewriteOp(loopHeader, Op::LabelLoop(loopMerge, loopContinue));
+  return builder;
+}
+
+
+Builder test_cfg_switch_simple() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+  auto labelStart = builder.add(Op::Label());
+
+  auto outDef = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(outDef, 0u, "SV_TARGET"));
+
+  auto posDef = builder.add(Op::DclInputBuiltIn(BasicType(ScalarType::eF32, 4u), entryPoint, BuiltIn::ePosition, InterpolationModes()));
+  builder.add(Op::Semantic(posDef, 0u, "SV_POSITION"));
+
+  auto selDef = builder.add(Op::DclInput(ScalarType::eI32, entryPoint, 1u, 0u, InterpolationMode::eFlat));
+  builder.add(Op::Semantic(selDef, 0u, "SEL"));
+
+  auto sel = builder.add(Op::InputLoad(ScalarType::eI32, selDef, SsaDef()));
+
+  auto case3 = builder.add(Op::Label());
+  auto x = builder.add(Op::InputLoad(ScalarType::eF32, posDef, builder.makeConstant(0u)));
+  builder.add(Op::OutputStore(outDef, SsaDef(), x));
+
+  auto case7 = builder.add(Op::Label());
+  auto y = builder.add(Op::InputLoad(ScalarType::eF32, posDef, builder.makeConstant(1u)));
+  builder.add(Op::OutputStore(outDef, SsaDef(), y));
+
+  auto case9 = builder.add(Op::Label());
+  auto z = builder.add(Op::InputLoad(ScalarType::eF32, posDef, builder.makeConstant(2u)));
+  builder.add(Op::OutputStore(outDef, SsaDef(), z));
+
+  auto caseDefault = builder.add(Op::Label());
+  auto w = builder.add(Op::InputLoad(ScalarType::eF32, posDef, builder.makeConstant(3u)));
+  builder.add(Op::OutputStore(outDef, SsaDef(), w));
+
+  auto switchMerge = builder.add(Op::Label());
+  builder.rewriteOp(labelStart, Op::LabelSelection(switchMerge));
+
+  builder.addBefore(switchMerge, Op::Branch(switchMerge));
+  builder.addBefore(caseDefault, Op::Branch(switchMerge));
+  builder.addBefore(case9, Op::Branch(switchMerge));
+  builder.addBefore(case7, Op::Branch(switchMerge));
+
+  builder.addBefore(case3, Op::Switch(sel, caseDefault)
+    .addCase(builder.makeConstant(3), case3)
+    .addCase(builder.makeConstant(6), case7)
+    .addCase(builder.makeConstant(7), case7)
+    .addCase(builder.makeConstant(9), case9));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+
+Builder test_cfg_switch_complex() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+  auto labelStart = builder.add(Op::Label());
+
+  auto outDef = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(outDef, 0u, "SV_TARGET"));
+
+  auto posDef = builder.add(Op::DclInputBuiltIn(BasicType(ScalarType::eF32, 4u), entryPoint, BuiltIn::ePosition, InterpolationModes()));
+  builder.add(Op::Semantic(posDef, 0u, "SV_POSITION"));
+
+  auto selDef = builder.add(Op::DclInput(ScalarType::eI32, entryPoint, 1u, 0u, InterpolationMode::eFlat));
+  builder.add(Op::Semantic(selDef, 0u, "SEL"));
+
+  auto sel = builder.add(Op::InputLoad(ScalarType::eI32, selDef, SsaDef()));
+
+  auto case3 = builder.add(Op::Label());
+  auto x = builder.add(Op::InputLoad(ScalarType::eF32, posDef, builder.makeConstant(0u)));
+
+  auto case7 = builder.add(Op::Label());
+  auto y = builder.add(Op::InputLoad(ScalarType::eF32, posDef, builder.makeConstant(1u)));
+
+  auto case9 = builder.add(Op::Label());
+  auto a = builder.add(Op::Phi(ScalarType::eF32)
+    .addPhi(labelStart, builder.makeConstant(-1.0f))
+    .addPhi(case7, y));
+  auto z = builder.add(Op::InputLoad(ScalarType::eF32, posDef, builder.makeConstant(2u)));
+
+  z = builder.add(Op::FAdd(ScalarType::eF32, z, a));
+
+  auto case17 = builder.add(Op::Label());
+  auto w = builder.add(Op::InputLoad(ScalarType::eF32, posDef, builder.makeConstant(3u)));
+
+  auto switchMerge = builder.add(Op::Label());
+  builder.rewriteOp(labelStart, Op::LabelSelection(switchMerge));
+
+  builder.addBefore(switchMerge, Op::Branch(switchMerge));
+  builder.addBefore(case7, Op::Branch(switchMerge));
+  builder.addBefore(case9, Op::Branch(case9));
+  builder.addBefore(case17, Op::Branch(switchMerge));
+
+  builder.addBefore(case3, Op::Switch(sel, switchMerge)
+    .addCase(builder.makeConstant(3), case3)
+    .addCase(builder.makeConstant(7), case7)
+    .addCase(builder.makeConstant(9), case9)
+    .addCase(builder.makeConstant(17), case17));
+
+  auto phi = builder.add(Op::Phi(ScalarType::eF32)
+    .addPhi(labelStart, builder.makeConstant(0.0f))
+    .addPhi(case3, x)
+    .addPhi(case9, z)
+    .addPhi(case17, w));
+
+  builder.add(Op::OutputStore(outDef, SsaDef(), phi));
+  builder.add(Op::Return());
+  return builder;
+}
+
 }
