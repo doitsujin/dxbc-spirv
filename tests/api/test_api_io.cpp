@@ -437,7 +437,7 @@ Builder make_test_io_gs_basic(ir::PrimitiveType inType, ir::PrimitiveType outTyp
 
   builder.add(Op::SetGsInstances(entryPoint, 1u));
   builder.add(Op::SetGsInputPrimitive(entryPoint, inType));
-  builder.add(Op::SetGsOutputPrimitive(entryPoint, outType, 0u));
+  builder.add(Op::SetGsOutputPrimitive(entryPoint, outType, 0x1u));
   builder.add(Op::SetGsOutputVertices(entryPoint, vertexCount));
 
   auto baseBlock = builder.add(Op::Label());
@@ -547,7 +547,7 @@ Builder test_io_gs_instanced() {
 
   builder.add(Op::SetGsInstances(entryPoint, 12u));
   builder.add(Op::SetGsInputPrimitive(entryPoint, PrimitiveType::ePoints));
-  builder.add(Op::SetGsOutputPrimitive(entryPoint, PrimitiveType::ePoints, 0u));
+  builder.add(Op::SetGsOutputPrimitive(entryPoint, PrimitiveType::ePoints, 0x1u));
   builder.add(Op::SetGsOutputVertices(entryPoint, 1u));
 
   builder.add(Op::Label());
@@ -601,7 +601,7 @@ Builder test_io_gs_xfb() {
 
   builder.add(Op::SetGsInstances(entryPoint, 1u));
   builder.add(Op::SetGsInputPrimitive(entryPoint, PrimitiveType::ePoints));
-  builder.add(Op::SetGsOutputPrimitive(entryPoint, PrimitiveType::ePoints, 0u));
+  builder.add(Op::SetGsOutputPrimitive(entryPoint, PrimitiveType::ePoints, 0x1u));
   builder.add(Op::SetGsOutputVertices(entryPoint, 1u));
 
   builder.add(Op::Label());
@@ -638,8 +638,7 @@ Builder test_io_gs_multi_stream_xfb_raster_0() {
 
   builder.add(Op::SetGsInstances(entryPoint, 1u));
   builder.add(Op::SetGsInputPrimitive(entryPoint, PrimitiveType::ePoints));
-  builder.add(Op::SetGsOutputPrimitive(entryPoint, PrimitiveType::ePoints, 0u));
-  builder.add(Op::SetGsOutputPrimitive(entryPoint, PrimitiveType::ePoints, 1u));
+  builder.add(Op::SetGsOutputPrimitive(entryPoint, PrimitiveType::ePoints, 0x3u));
   builder.add(Op::SetGsOutputVertices(entryPoint, 1u));
 
   builder.add(Op::Label());
@@ -675,8 +674,7 @@ Builder test_io_gs_multi_stream_xfb_raster_1() {
 
   builder.add(Op::SetGsInstances(entryPoint, 1u));
   builder.add(Op::SetGsInputPrimitive(entryPoint, PrimitiveType::ePoints));
-  builder.add(Op::SetGsOutputPrimitive(entryPoint, PrimitiveType::ePoints, 0u));
-  builder.add(Op::SetGsOutputPrimitive(entryPoint, PrimitiveType::ePoints, 1u));
+  builder.add(Op::SetGsOutputPrimitive(entryPoint, PrimitiveType::ePoints, 0x3u));
   builder.add(Op::SetGsOutputVertices(entryPoint, 1u));
 
   builder.add(Op::Label());

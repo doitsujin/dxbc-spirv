@@ -3659,7 +3659,7 @@ void SpirvBuilder::emitSetGsOutputVertices(const ir::Op& op) {
 
 void SpirvBuilder::emitSetGsOutputPrimitive(const ir::Op& op) {
   auto primitiveType = ir::PrimitiveType(op.getOperand(1u));
-  auto stream = uint32_t(ir::PrimitiveType(op.getOperand(2u)));
+  auto streamMask = uint32_t(ir::PrimitiveType(op.getOperand(2u)));
 
   auto execMode = [&] {
     switch (primitiveType) {
@@ -3672,15 +3672,12 @@ void SpirvBuilder::emitSetGsOutputPrimitive(const ir::Op& op) {
     return spv::ExecutionMode();
   } ();
 
-  /* We cannot express different primitive types per stream, so only do it
-   * once and hope that they are all the same. */
-  if (!m_geometry.streamMask)
-    pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId, execMode);
+  pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId, execMode);
 
-  if (stream)
+  if (streamMask != 0x1u)
     enableCapability(spv::CapabilityGeometryStreams);
 
-  m_geometry.streamMask |= 1u << stream;
+  m_geometry.streamMask = streamMask;
 }
 
 

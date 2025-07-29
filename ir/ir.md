@@ -113,7 +113,7 @@ These instructions provide additional information that may affect the execution 
 | `SetGsInstances`         | `void`      | `%EntryPoint` | `n`                  |                        |                         |
 | `SetGsInputPrimitive`    | `void`      | `%EntryPoint` | `ir::PrimitiveType`  |                        |                         |
 | `SetGsOutputVertices`    | `void`      | `%EntryPoint` | `n`                  |                        |                         |
-| `SetGsOutputPrimitive`   | `void`      | `%EntryPoint` | `ir::PrimitiveType`  | `stream`               |                         |
+| `SetGsOutputPrimitive`   | `void`      | `%EntryPoint` | `ir::PrimitiveType`  | `stream mask`          |                         |
 | `SetPsEarlyFragmentTest` | `void`      | `%EntryPoint` |                      |                        |                         |
 | `SetPsDepthGreaterEqual` | `void`      | `%EntryPoint` |                      |                        |                         |
 | `SetPsDepthLessEqual`    | `void`      | `%EntryPoint` |                      |                        |                         |
