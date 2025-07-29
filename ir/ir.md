@@ -492,16 +492,16 @@ stage, barriers with a wider execution scope are only meaningful in hull and com
 
 ### Pixel shader instructions
 
-| `ir::OpCode`              | Return type | Arguments...         |                         |
-|---------------------------|-------------|----------------------|-------------------------|
-| `Demote`                  | `void`      | None                 |                         |
-| `InterpolateAtCentroid`   | any         | `%DclInput`          |                         |
-| `InterpolateAtSample`     | any         | `%DclInput`          | `%sample`               |
-| `InterpolateAtOffset`     | any         | `%DclInput`          | `%offset` (`vec2<f32>`) |
-| `DerivX`                  | any         | `%value`             | `ir::DerivativeMode`    |
-| `DerivY`                  | any         | `%value`             | `ir::DerivativeMode`    |
-| `RovScopedLockBegin`      | `void`      | `ir::MemoryTypeMask` | `ir::RovScope`          |
-| `RovScopedLockEnd`        | `void`      | `ir::MemoryTypeMask` |                         |
+| `ir::OpCode`              | Return type | Arguments...         |                         |                         |
+|---------------------------|-------------|----------------------|-------------------------|-------------------------|
+| `Demote`                  | `void`      | None                 |                         |                         |
+| `InterpolateAtCentroid`   | any         | `%DclInput`          | `%address`              |                         |
+| `InterpolateAtSample`     | any         | `%DclInput`          | `%address`              | `%sample`               |
+| `InterpolateAtOffset`     | any         | `%DclInput`          | `%address`              | `%offset` (`vec2<f32>`) |
+| `DerivX`                  | any         | `%value`             | `ir::DerivativeMode`    |                         |
+| `DerivY`                  | any         | `%value`             | `ir::DerivativeMode`    |                         |
+| `RovScopedLockBegin`      | `void`      | `ir::MemoryTypeMask` | `ir::RovScope`          |                         |
+| `RovScopedLockEnd`        | `void`      | `ir::MemoryTypeMask` |                         |                         |
 
 The memory type mask argument in the `RovScopedLock*` instructions declares which types of UAV
 memory should be made visible or available before or after the given lock operation. This will

@@ -237,17 +237,26 @@ Builder test_io_ps_interpolate_centroid() {
   auto in1Def = builder.add(Op::DclInput(BasicType(ScalarType::eF32, 3u), entryPoint, 1u, 0u, InterpolationModes()));
   builder.add(Op::Semantic(in1Def, 0u, "IN_VECTOR"));
 
+  auto in2Def = builder.add(Op::DclInput(BasicType(ScalarType::eF32, 3u), entryPoint, 2u, 0u, InterpolationMode::eSample));
+  builder.add(Op::Semantic(in2Def, 1u, "IN_VECTOR"));
+
   auto out0Def = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 0u, 0u));
   builder.add(Op::Semantic(out0Def, 0u, "SV_TARGET"));
 
   auto out1Def = builder.add(Op::DclOutput(BasicType(ScalarType::eF32, 3u), entryPoint, 1u, 0u));
   builder.add(Op::Semantic(out1Def, 1u, "SV_TARGET"));
 
+  auto out2Def = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 2u, 0u));
+  builder.add(Op::Semantic(out2Def, 2u, "SV_TARGET"));
+
   builder.add(Op::OutputStore(out0Def, SsaDef(),
-    builder.add(Op::InterpolateAtCentroid(ScalarType::eF32, in0Def))));
+    builder.add(Op::InterpolateAtCentroid(ScalarType::eF32, in0Def, SsaDef()))));
 
   builder.add(Op::OutputStore(out1Def, SsaDef(),
-    builder.add(Op::InterpolateAtCentroid(BasicType(ScalarType::eF32, 3u), in1Def))));
+    builder.add(Op::InterpolateAtCentroid(BasicType(ScalarType::eF32, 3u), in1Def, SsaDef()))));
+
+  builder.add(Op::OutputStore(out2Def, SsaDef(),
+    builder.add(Op::InterpolateAtCentroid(ScalarType::eF32, in2Def, builder.makeConstant(1u)))));
 
   builder.add(Op::Return());
   return builder;
@@ -268,18 +277,28 @@ Builder test_io_ps_interpolate_sample() {
   auto in1Def = builder.add(Op::DclInput(BasicType(ScalarType::eF32, 3u), entryPoint, 1u, 0u, InterpolationModes()));
   builder.add(Op::Semantic(in1Def, 0u, "IN_VECTOR"));
 
+  auto in2Def = builder.add(Op::DclInput(BasicType(ScalarType::eF32, 3u), entryPoint, 2u, 0u, InterpolationMode::eCentroid));
+  builder.add(Op::Semantic(in2Def, 1u, "IN_VECTOR"));
+
   auto out0Def = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 0u, 0u));
   builder.add(Op::Semantic(out0Def, 0u, "SV_TARGET"));
 
   auto out1Def = builder.add(Op::DclOutput(BasicType(ScalarType::eF32, 3u), entryPoint, 1u, 0u));
   builder.add(Op::Semantic(out1Def, 1u, "SV_TARGET"));
 
+  auto out2Def = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 2u, 0u));
+  builder.add(Op::Semantic(out2Def, 2u, "SV_TARGET"));
+
   builder.add(Op::OutputStore(out0Def, SsaDef(),
-    builder.add(Op::InterpolateAtSample(ScalarType::eF32, in0Def,
+    builder.add(Op::InterpolateAtSample(ScalarType::eF32, in0Def, SsaDef(),
       builder.add(Op::InputLoad(ScalarType::eU32, sampleIdDef, SsaDef()))))));
 
   builder.add(Op::OutputStore(out1Def, SsaDef(),
-    builder.add(Op::InterpolateAtSample(BasicType(ScalarType::eF32, 3u), in1Def,
+    builder.add(Op::InterpolateAtSample(BasicType(ScalarType::eF32, 3u), in1Def, SsaDef(),
+      builder.add(Op::InputLoad(ScalarType::eU32, sampleIdDef, SsaDef()))))));
+
+  builder.add(Op::OutputStore(out2Def, SsaDef(),
+    builder.add(Op::InterpolateAtSample(ScalarType::eF32, in2Def, builder.makeConstant(1u),
       builder.add(Op::InputLoad(ScalarType::eU32, sampleIdDef, SsaDef()))))));
 
   builder.add(Op::Return());
@@ -301,19 +320,28 @@ Builder test_io_ps_interpolate_offset() {
   auto in1Def = builder.add(Op::DclInput(BasicType(ScalarType::eF32, 3u), entryPoint, 1u, 0u, InterpolationModes()));
   builder.add(Op::Semantic(in1Def, 0u, "IN_VECTOR"));
 
+  auto in2Def = builder.add(Op::DclInput(BasicType(ScalarType::eF32, 3u), entryPoint, 2u, 0u, InterpolationMode::eCentroid));
+  builder.add(Op::Semantic(in2Def, 1u, "IN_VECTOR"));
+
   auto out0Def = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 0u, 0u));
   builder.add(Op::Semantic(out0Def, 0u, "SV_TARGET"));
 
   auto out1Def = builder.add(Op::DclOutput(BasicType(ScalarType::eF32, 3u), entryPoint, 1u, 0u));
   builder.add(Op::Semantic(out1Def, 1u, "SV_TARGET"));
 
+  auto out2Def = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 2u, 0u));
+  builder.add(Op::Semantic(out2Def, 2u, "SV_TARGET"));
+
   auto offsetDef = builder.add(Op::InputLoad(BasicType(ScalarType::eF32, 2u), offsetInputDef, SsaDef()));
 
   builder.add(Op::OutputStore(out0Def, SsaDef(),
-    builder.add(Op::InterpolateAtOffset(ScalarType::eF32, in0Def, offsetDef))));
+    builder.add(Op::InterpolateAtOffset(ScalarType::eF32, in0Def, SsaDef(), offsetDef))));
 
   builder.add(Op::OutputStore(out1Def, SsaDef(),
-    builder.add(Op::InterpolateAtOffset(BasicType(ScalarType::eF32, 3u), in1Def, offsetDef))));
+    builder.add(Op::InterpolateAtOffset(BasicType(ScalarType::eF32, 3u), in1Def, SsaDef(), offsetDef))));
+
+  builder.add(Op::OutputStore(out2Def, SsaDef(),
+    builder.add(Op::InterpolateAtOffset(ScalarType::eF32, in2Def, builder.makeConstant(1u), offsetDef))));
 
   builder.add(Op::Return());
   return builder;

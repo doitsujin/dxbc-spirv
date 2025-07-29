@@ -2162,20 +2162,23 @@ public:
     return Op(OpCode::eDemote, Type());
   }
 
-  static Op InterpolateAtCentroid(Type type, SsaDef input) {
+  static Op InterpolateAtCentroid(Type type, SsaDef input, SsaDef address) {
     return Op(OpCode::eInterpolateAtCentroid, type)
-      .addOperand(input);
+      .addOperand(input)
+      .addOperand(address);
   }
 
-  static Op InterpolateAtSample(Type type, SsaDef input, SsaDef sample) {
+  static Op InterpolateAtSample(Type type, SsaDef input, SsaDef address, SsaDef sample) {
     return Op(OpCode::eInterpolateAtSample, type)
       .addOperand(input)
+      .addOperand(address)
       .addOperand(sample);
   }
 
-  static Op InterpolateAtOffset(Type type, SsaDef input, SsaDef offset) {
+  static Op InterpolateAtOffset(Type type, SsaDef input, SsaDef address, SsaDef offset) {
     return Op(OpCode::eInterpolateAtOffset, type)
       .addOperand(input)
+      .addOperand(address)
       .addOperand(offset);
   }
 

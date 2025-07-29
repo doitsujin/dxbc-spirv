@@ -3470,16 +3470,36 @@ void SpirvBuilder::emitInterpolation(const ir::Op& op) {
     return GLSLstd450Bad;
   } ();
 
+  /* If we're addressing a single vector or array component,
+   * emit an access chain. The address must be scalar. */
+  auto typeId = getIdForType(op.getType());
+
+  auto ptrId = getIdForDef(ir::SsaDef(op.getOperand(0u)));
+  auto addressId = getIdForDef(ir::SsaDef(op.getOperand(1u)));
+
+  if (addressId) {
+    auto accessChainId = allocId();
+
+    m_code.push_back(makeOpcodeToken(spv::OpAccessChain, 5u));
+    m_code.push_back(getIdForPtrType(typeId, spv::StorageClassInput));
+    m_code.push_back(accessChainId);
+    m_code.push_back(ptrId);
+    m_code.push_back(addressId);
+
+    ptrId = accessChainId;
+  }
+
   /* Emit GLSL extended instruction */
   auto id = getIdForDef(op.getDef());
 
-  m_code.push_back(makeOpcodeToken(spv::OpExtInst, 5u + op.getOperandCount()));
-  m_code.push_back(getIdForType(op.getType()));
+  m_code.push_back(makeOpcodeToken(spv::OpExtInst, 4u + op.getOperandCount()));
+  m_code.push_back(typeId);
   m_code.push_back(id);
   m_code.push_back(importGlslExt());
   m_code.push_back(uint32_t(extOp));
+  m_code.push_back(ptrId);
 
-  for (uint32_t i = 0u; i < op.getOperandCount(); i++)
+  for (uint32_t i = 2u; i < op.getOperandCount(); i++)
     m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(i))));
 
   emitFpMode(op, id);
