@@ -11,6 +11,7 @@
 #include "../ir/ir_serialize.h"
 #include "../ir/ir_validation.h"
 
+#include "../ir/passes/ir_pass_arithmetic.h"
 #include "../ir/passes/ir_pass_cfg_cleanup.h"
 #include "../ir/passes/ir_pass_cfg_convert.h"
 #include "../ir/passes/ir_pass_lower_consume.h"
@@ -221,8 +222,14 @@ bool compileShader(util::ByteReader reader, const Options& options) {
     continue;
 
   ir::PropagateTypesPass::runPass(builder, ir::PropagateTypesPass::Options());
-  ir::LowerConsumePass::runLowerConsumePass(builder);
   ir::RemoveUnusedPass::runPass(builder);
+  ir::LowerConsumePass::runLowerConsumePass(builder);
+
+  ir::ArithmeticPass::runLoweringPasses(builder, ir::ArithmeticPass::Options());
+
+  ir::RemoveUnusedPass::runPass(builder);
+
+
 
   timers.tAfterPasses = std::chrono::high_resolution_clock::now();
 
