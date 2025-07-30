@@ -831,6 +831,7 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eUMulExtended: return os << "UMulExtended";
     case OpCode::eMinValue: return os << "MinValue";
     case OpCode::eMaxValue: return os << "MaxValue";
+    case OpCode::eDrain: return os << "Drain";
   }
 
   return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";

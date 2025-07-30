@@ -523,6 +523,7 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eUMSad:
     case ir::OpCode::eMinValue:
     case ir::OpCode::eMaxValue:
+    case ir::OpCode::eDrain:
     case ir::OpCode::Count:
       /* Invalid opcodes */
       std::cerr << "Invalid opcode " << op.getOpCode() << std::endl;

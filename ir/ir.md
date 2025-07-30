@@ -71,6 +71,7 @@ whereas literals do not use a prefix.
 |----------------------|-------------|----------------|----------|--------|
 | `DebugName`          | `void`      | `%instruction` | String   |        |
 | `DebugMemberName`    | `void`      | `%instruction` | `member` | String |
+| `Drain`              | any         | `%instruction` |          |        |
 
 It is not meaningful to set debug names for mode setting instructions (see below).
 Otherwise, any instruction can be a valid target. The debug name may require multiple
@@ -78,6 +79,10 @@ operands depending on its size. Literal strings are null-terminated.
 
 The `DebugMemberName` instruction can be applied to `Dcl*` instructions that declare a
 struct type, in order to assign debug names to individual struct members.
+
+`Drain` is a pseudo-instruction that either returns void or returns the result of the
+argument unmodified, and will not be touched by any code passes. It is only intended
+for debugging purposes and will not be included in any valid shader program.
 
 ### Constant declarations
 | `ir::OpCode`         | Return type | Arguments...                    |

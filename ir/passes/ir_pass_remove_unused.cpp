@@ -172,6 +172,9 @@ bool RemoveUnusedPass::hasSideEffect(OpCode opCode) {
     /* ROV lock */
     case OpCode::eRovScopedLockBegin:
     case OpCode::eRovScopedLockEnd:
+
+    /* Debug drain */
+    case OpCode::eDrain:
       return true;
 
 

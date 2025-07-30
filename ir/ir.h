@@ -1088,6 +1088,8 @@ enum class OpCode : uint16_t {
   eMinValue                     = 768u,
   eMaxValue                     = 769u,
 
+  eDrain                        = 992u,
+
   Count
 };
 
@@ -2673,6 +2675,11 @@ public:
 
   static Op MaxValue(ScalarType type) {
     return Op(OpCode::eMaxValue, type);
+  }
+
+  static Op Drain(Type type, SsaDef def) {
+    return Op(OpCode::eDrain, type)
+      .addOperand(def);
   }
 
 private:
