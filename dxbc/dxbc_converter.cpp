@@ -103,6 +103,18 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclStream:
       return handleStream(op);
 
+    case OpCode::eDclGsInstanceCount:
+      return handleGsInstanceCount(op);
+
+    case OpCode::eDclGsInputPrimitive:
+      return handleGsInputPrimitive(op);
+
+    case OpCode::eDclGsOutputPrimitiveTopology:
+      return handleGsOutputPrimitive(op);
+
+    case OpCode::eDclMaxOutputVertexCount:
+      return handleGsOutputVertexCount(op);
+
     case OpCode::eMov:
     case OpCode::eDMov:
       return handleMov(builder, op);
@@ -265,9 +277,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclResource:
     case OpCode::eDclConstantBuffer:
     case OpCode::eDclSampler:
-    case OpCode::eDclGsOutputPrimitiveTopology:
-    case OpCode::eDclGsInputPrimitive:
-    case OpCode::eDclMaxOutputVertexCount:
     case OpCode::eLod:
     case OpCode::eGather4:
     case OpCode::eSamplePos:
@@ -333,7 +342,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eImmAtomicUMax:
     case OpCode::eImmAtomicUMin:
     case OpCode::eSync:
-    case OpCode::eDclGsInstanceCount:
     case OpCode::eAbort:
     case OpCode::eDebugBreak:
     case OpCode::eMsad:
@@ -417,6 +425,11 @@ bool Converter::finalize(ir::Builder& builder) {
     }
   }
 
+  if (m_parser.getShaderInfo().getType() == ShaderType::eGeometry) {
+    if (!emitGsStateSetup(builder))
+      return false;
+  }
+
   return true;
 }
 
@@ -477,6 +490,28 @@ void Converter::emitHsPatchConstantFunction(ir::Builder& builder) {
     for (uint32_t i = 0u; i < e.second; i++)
       builder.add(ir::Op::FunctionCall(ir::Type(), e.first).addParam(builder.makeConstant(i)));
   }
+}
+
+
+bool Converter::emitGsStateSetup(ir::Builder& builder) {
+  auto inputPrimitive = resolvePrimitiveType(m_gs.inputPrimitive);
+  auto outputTopology = resolvePrimitiveTopology(m_gs.outputTopology);
+
+  if (!inputPrimitive) {
+    Logger::err("GS input primitive type ", m_gs.inputPrimitive, " not valid.");
+    return false;
+  }
+
+  if (!outputTopology) {
+    Logger::err("GS output primitive topology ", m_gs.outputTopology, " not valid.");
+    return false;
+  }
+
+  builder.add(ir::Op::SetGsInstances(getEntryPoint(), m_gs.instanceCount));
+  builder.add(ir::Op::SetGsInputPrimitive(getEntryPoint(), *inputPrimitive));
+  builder.add(ir::Op::SetGsOutputPrimitive(getEntryPoint(), *outputTopology, m_gs.streamMask));
+  builder.add(ir::Op::SetGsOutputVertices(getEntryPoint(), m_gs.outputVertices));
+  return true;
 }
 
 
@@ -642,6 +677,30 @@ bool Converter::handleStream(const Instruction& op) {
 
   m_gs.streamIndex = mreg.getIndex(0u);
   m_gs.streamMask |= 1u << m_gs.streamIndex;
+  return true;
+}
+
+
+bool Converter::handleGsInstanceCount(const Instruction& op) {
+  m_gs.instanceCount = op.getImm(0u).getImmediate<uint32_t>(0u);
+  return true;
+}
+
+
+bool Converter::handleGsInputPrimitive(const Instruction& op) {
+  m_gs.inputPrimitive = op.getOpToken().getPrimitiveType();
+  return true;
+}
+
+
+bool Converter::handleGsOutputPrimitive(const Instruction& op) {
+  m_gs.outputTopology = op.getOpToken().getPrimitiveTopology();
+  return true;
+}
+
+
+bool Converter::handleGsOutputVertexCount(const Instruction& op) {
+  m_gs.outputVertices = op.getImm(0u).getImmediate<uint32_t>(0u);
   return true;
 }
 

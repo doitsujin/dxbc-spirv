@@ -115,6 +115,12 @@ private:
 
   /* Geometry shader state */
   struct {
+    uint32_t instanceCount = 1u;
+
+    PrimitiveType     inputPrimitive = PrimitiveType::eUndefined;
+    PrimitiveTopology outputTopology = PrimitiveTopology::eUndefined;
+    uint32_t          outputVertices = 0u;
+
     uint32_t streamIndex = 0u;
     uint32_t streamMask = 0u;
   } m_gs;
@@ -131,6 +137,8 @@ private:
   bool emitHsStateSetup(ir::Builder& builder);
 
   void emitHsPatchConstantFunction(ir::Builder& builder);
+
+  bool emitGsStateSetup(ir::Builder& builder);
 
   bool handleDclGlobalFlags(ir::Builder& builder, const Instruction& op);
 
@@ -149,6 +157,14 @@ private:
   bool handleTessOutput(const Instruction& op);
 
   bool handleStream(const Instruction& op);
+
+  bool handleGsInstanceCount(const Instruction& op);
+
+  bool handleGsInputPrimitive(const Instruction& op);
+
+  bool handleGsOutputPrimitive(const Instruction& op);
+
+  bool handleGsOutputVertexCount(const Instruction& op);
 
   bool handleMov(ir::Builder& builder, const Instruction& op);
 
