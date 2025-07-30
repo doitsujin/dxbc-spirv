@@ -2681,9 +2681,16 @@ public:
     return Op(OpCode::eMaxValue, type);
   }
 
-  static Op Drain(Type type, SsaDef def) {
+  template<typename T, typename... Tx>
+  static Op Drain(Type type, T arg, Tx... args) {
     return Op(OpCode::eDrain, type)
-      .addOperand(def);
+      .addOperands(arg, args...);
+  }
+
+  template<typename T, typename... Tx>
+  static Op Drain(T arg, Tx... args) {
+    return Op(OpCode::eDrain, Type())
+      .addOperands(arg, args...);
   }
 
 private:
