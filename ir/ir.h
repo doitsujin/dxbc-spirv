@@ -1653,11 +1653,11 @@ public:
       .addOperand(n);
   }
 
-  static Op SetGsOutputPrimitive(SsaDef def, PrimitiveType type, uint32_t stream) {
+  static Op SetGsOutputPrimitive(SsaDef def, PrimitiveType type, uint32_t streamMask) {
     return Op(OpCode::eSetGsOutputPrimitive, Type())
       .addOperand(def)
       .addOperand(type)
-      .addOperand(stream);
+      .addOperand(streamMask);
   }
 
   static Op SetPsEarlyFragmentTest(SsaDef def) {
