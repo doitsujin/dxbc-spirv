@@ -231,14 +231,19 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eRetc:
       return handleRet(builder, op);
 
+    case OpCode::eCut:
+    case OpCode::eCutStream:
+    case OpCode::eEmit:
+    case OpCode::eEmitStream:
+    case OpCode::eEmitThenCut:
+    case OpCode::eEmitThenCutStream:
+      return handleGsEmitCut(builder, op);
+
     case OpCode::eCall:
     case OpCode::eCallc:
-    case OpCode::eCut:
     case OpCode::eDerivRtx:
     case OpCode::eDerivRty:
     case OpCode::eDiscard:
-    case OpCode::eEmit:
-    case OpCode::eEmitThenCut:
     case OpCode::eIMul:
     case OpCode::eIShl:
     case OpCode::eIShr:
@@ -267,9 +272,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eGather4:
     case OpCode::eSamplePos:
     case OpCode::eSampleInfo:
-    case OpCode::eEmitStream:
-    case OpCode::eCutStream:
-    case OpCode::eEmitThenCutStream:
     case OpCode::eInterfaceCall:
     case OpCode::eBufInfo:
     case OpCode::eDerivRtxCoarse:
@@ -1322,6 +1324,51 @@ bool Converter::handleRet(ir::Builder& builder, const Instruction& op) {
     auto condEnd = builder.add(ir::Op::ScopedEndIf(condBlock));
     builder.rewriteOp(condBlock, ir::Op(builder.getOp(condBlock)).setOperand(0u, condEnd));
   }
+
+  return true;
+}
+
+
+bool Converter::handleGsEmitCut(ir::Builder& builder, const Instruction& op) {
+  /* The Stream* variants of these instructions take a stream register
+   * as a destination operand. */
+  auto opCode = op.getOpToken().getOpCode();
+
+  uint32_t streamIndex = 0u;
+
+  if (opCode == OpCode::eCutStream ||
+      opCode == OpCode::eEmitStream ||
+      opCode == OpCode::eEmitThenCutStream) {
+    const auto& mreg = op.getDst(0u);
+
+    if (mreg.getRegisterType() != RegisterType::eStream) {
+      logOpError(op, "Invalid stream operand.");
+      return false;
+    }
+
+    streamIndex = mreg.getIndex(0u);
+  }
+
+  bool emitVertex = opCode == OpCode::eEmit ||
+                    opCode == OpCode::eEmitStream ||
+                    opCode == OpCode::eEmitThenCut ||
+                    opCode == OpCode::eEmitThenCutStream;
+
+  bool emitPrimitive = opCode == OpCode::eCut ||
+                       opCode == OpCode::eCutStream ||
+                       opCode == OpCode::eEmitThenCut ||
+                       opCode == OpCode::eEmitThenCutStream;
+
+  if (emitVertex && !m_ioMap.handleEmitVertex(builder, streamIndex)) {
+    logOpError(op, "Failed to copy output registers.");
+    return false;
+  }
+
+  if (emitVertex)
+    builder.add(ir::Op::EmitVertex(streamIndex));
+
+  if (emitPrimitive)
+    builder.add(ir::Op::EmitPrimitive(streamIndex));
 
   return true;
 }
