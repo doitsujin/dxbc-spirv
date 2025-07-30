@@ -224,7 +224,7 @@ public:
 
   /** Constructs an element in-place at the end of the array. */
   template<typename... Args>
-  T& emplace_back(Args... args) {
+  T& emplace_back(Args&&... args) {
     reserve(m_state.size + 1);
     return *(new (ptr(m_state.size++)) T(std::forward<Args>(args)...));
   }
