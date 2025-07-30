@@ -498,6 +498,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::ePointer:
       return emitPointer(op);
 
+    case ir::OpCode::eDrain:
+      return emitDrain(op);
+
     case ir::OpCode::eUnknown:
     case ir::OpCode::eLastDeclarative:
     case ir::OpCode::eDclTmp:
@@ -523,7 +526,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eUMSad:
     case ir::OpCode::eMinValue:
     case ir::OpCode::eMaxValue:
-    case ir::OpCode::eDrain:
     case ir::OpCode::Count:
       /* Invalid opcodes */
       std::cerr << "Invalid opcode " << op.getOpCode() << std::endl;
@@ -2595,6 +2597,18 @@ void SpirvBuilder::emitPointer(const ir::Op& op) {
   pushOp(m_code, spv::OpBitcast, typeId, id, getIdForDef(addressDef));
 
   emitDebugName(op.getDef(), id);
+}
+
+
+void SpirvBuilder::emitDrain(const ir::Op& op) {
+  const auto& type = op.getType();
+
+  if (!type.isVoidType()) {
+    pushOp(m_code, spv::OpCopyObject,
+      getIdForType(type),
+      getIdForDef(op.getDef()),
+      getIdForDef(ir::SsaDef(op.getOperand(0u))));
+  }
 }
 
 

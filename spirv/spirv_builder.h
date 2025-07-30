@@ -281,6 +281,8 @@ private:
 
   void emitPointer(const ir::Op& op);
 
+  void emitDrain(const ir::Op& op);
+
   void emitMemoryModel();
 
   void emitFpMode(const ir::Op& op, uint32_t id, uint32_t mask = 0u);
