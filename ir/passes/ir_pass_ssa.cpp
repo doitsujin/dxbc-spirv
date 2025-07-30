@@ -133,11 +133,12 @@ void SsaConstructionPass::removeTempDecls() {
   while (iter != m_builder.getDeclarations().second) {
     if (iter->getOpCode() == OpCode::eDclTmp) {
       /* Remove all uses, which should all be debug instructions */
-      auto [a, b] = m_builder.getUses(iter->getDef());
+      util::small_vector<SsaDef, 4u> uses;
+      m_builder.getUses(iter->getDef(), uses);
 
-      for (auto use = a; use != b; use++) {
-        dxbc_spv_assert(use->isDeclarative());
-        m_builder.removeOp(*use);
+      for (auto use : uses) {
+        dxbc_spv_assert(m_builder.getOp(use).isDeclarative());
+        m_builder.remove(use);
       }
 
       /* Remove instruction */
