@@ -762,7 +762,7 @@ Builder make_test_io_hs(PrimitiveType primType, TessWindingOrder winding, TessPa
   builder.add(Op::Semantic(factorInDef, 0u, "FACTOR"));
 
   auto controlPointDef = builder.add(Op::DclInputBuiltIn(ScalarType::eU32, entryPoint, BuiltIn::eTessControlPointId));
-  builder.add(Op::Semantic(factorInDef, 0u, "SV_OUTPUTCONTROLPOINTID"));
+  builder.add(Op::Semantic(controlPointDef, 0u, "SV_OUTPUTCONTROLPOINTID"));
 
   auto primitiveIdDef = builder.add(Op::DclInputBuiltIn(Type(ScalarType::eU32).addArrayDimension(32u), entryPoint, BuiltIn::ePrimitiveId));
   builder.add(Op::Semantic(primitiveIdDef, 0u, "PRIMITIVE_ID"));
