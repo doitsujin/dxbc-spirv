@@ -26,6 +26,10 @@ struct IoVarInfo {
   uint32_t regIndex = 0u;
   uint32_t regCount = 0u;
 
+  /* Geometry shader stream index. If negative, this output is not
+   * associated with any specific stream. */
+  int32_t gsStream = -1;
+
   /* System value represented by this variable. There may be two entries
    * with overlapping register components where one has a system value
    * and the other does not. */
@@ -55,8 +59,8 @@ struct IoVarInfo {
   ir::SsaDef evalSnapped = { };
 
   /* Checks whether the variable matches the given conditions */
-  bool matches(RegisterType type, uint32_t index, WriteMask mask) const {
-    return type == regType && (mask & componentMask) &&
+  bool matches(RegisterType type, uint32_t index, int32_t stream, WriteMask mask) const {
+    return type == regType && (mask & componentMask) && stream == gsStream &&
       (index >= regIndex && index < regIndex + regCount);
   }
 };
@@ -103,6 +107,9 @@ public:
 
   /** Handles an index range declaration for I/O variables. */
   bool handleDclIndexRange(ir::Builder& builder, const Instruction& op);
+
+  /** For geometry shaders, copies per-stream outputs from temporaries. */
+  bool handleEmitVertex(ir::Builder& builder, uint32_t stream);
 
   /** Handles interpolation instruction on a given input. Since these operate
    *  on input variables directly rather than loading them first, they need
@@ -157,7 +164,7 @@ private:
   Signature       m_osgn = { };
   Signature       m_psgn = { };
 
-  uint32_t        m_gsStream = 0u;
+  uint32_t        m_gsConvertedCount = 0u;
 
   ir::SsaDef      m_clipDistance = { };
   ir::SsaDef      m_cullDistance = { };
@@ -281,6 +288,7 @@ private:
           ir::SsaDef              vertexIndex,
           ir::SsaDef              regIndexRelative,
           uint32_t                regIndexAbsolute,
+          int32_t                 stream,
           WriteMask               writeMask,
           ir::SsaDef              value);
 
@@ -368,7 +376,12 @@ private:
 
 
   /* Looks up matching I/O variable in the given list. */
-  IoVarInfo* findIoVar(IoVarList& list, RegisterType regType, uint32_t regIndex, WriteMask mask);
+  IoVarInfo* findIoVar(IoVarList& list, RegisterType regType, uint32_t regIndex, int32_t stream, WriteMask mask);
+
+
+  /* Assigns current stream index to GS outputs and emits temporary
+   * variables to deal with register aliasing. */
+  bool handleGsOutputStreams(ir::Builder& builder);
 
 
   void emitSemanticName(ir::Builder& builder, ir::SsaDef def, const SignatureEntry& entry) const;

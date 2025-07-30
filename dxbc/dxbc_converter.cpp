@@ -100,6 +100,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclTessOutputPrimitive:
       return handleTessOutput(op);
 
+    case OpCode::eDclStream:
+      return handleStream(op);
+
     case OpCode::eMov:
     case OpCode::eDMov:
       return handleMov(builder, op);
@@ -289,7 +292,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eBfi:
     case OpCode::eBfRev:
     case OpCode::eSwapc:
-    case OpCode::eDclStream:
     case OpCode::eDclFunctionBody:
     case OpCode::eDclFunctionTable:
     case OpCode::eDclInterface:
@@ -624,6 +626,20 @@ bool Converter::handleTessPartitioning(const Instruction& op) {
 
 bool Converter::handleTessOutput(const Instruction& op) {
   m_hs.primitiveType = op.getOpToken().getTessellatorOutput();
+  return true;
+}
+
+
+bool Converter::handleStream(const Instruction& op) {
+  const auto& mreg = op.getDst(0u);
+
+  if (mreg.getRegisterType() != RegisterType::eStream) {
+    logOpError(op, "Invalid stream operand.");
+    return false;
+  }
+
+  m_gs.streamIndex = mreg.getIndex(0u);
+  m_gs.streamMask |= 1u << m_gs.streamIndex;
   return true;
 }
 

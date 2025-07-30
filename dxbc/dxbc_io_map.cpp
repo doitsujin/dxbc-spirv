@@ -25,17 +25,6 @@ bool IoMap::init(const Container& dxbc, ShaderInfo shaderInfo) {
 }
 
 
-bool IoMap::handleDclStream(const Operand& operand) {
-  /* Operand validation must be done by the converter itself */
-  dxbc_spv_assert(operand.getRegisterType() == RegisterType::eStream &&
-                  operand.getIndexDimensions() == 1u &&
-                  operand.getIndexType(0u) == IndexType::eImm32);
-
-  m_gsStream = operand.getIndex(0u);
-  return true;
-}
-
-
 void IoMap::handleHsPhase() {
   /* Nuke index ranges here since they are declared per phase.
    * This is particularly necessary for writable ranges, which
@@ -62,7 +51,14 @@ bool IoMap::handleDclIoVar(ir::Builder& builder, const Instruction& op) {
   if (!isRegularIoRegister(regType))
     return declareIoBuiltIn(builder, regType);
 
-  return declareIoRegisters(builder, op, regType);
+  /* Declare variable as normal and handle output register
+   * stream assignments in geometry shaders. */
+  bool result = declareIoRegisters(builder, op, regType);
+
+  if (m_shaderInfo.getType() == ShaderType::eGeometry)
+    result = result && handleGsOutputStreams(builder);
+
+  return result;
 }
 
 
@@ -95,13 +91,13 @@ bool IoMap::handleDclIndexRange(ir::Builder& builder, const Instruction& op) {
   /* As a special case, if the underlying declaration already is an
     * array and the declared range maps perfectly to it, we can address
     * it directly. Common for tessellation factors. */
-  auto first = findIoVar(m_variables, mapping.regType, mapping.regIndex, mapping.componentMask);
+  auto first = findIoVar(m_variables, mapping.regType, mapping.regIndex, -1, mapping.componentMask);
 
   if (first && first->baseType.isArrayType() && first->componentMask == mapping.componentMask && !vertexCount) {
     bool match = true;
 
     for (uint32_t i = 0u; i < mapping.regCount && match; i++) {
-      auto var = findIoVar(m_variables, mapping.regType, mapping.regIndex + i, mapping.componentMask);
+      auto var = findIoVar(m_variables, mapping.regType, mapping.regIndex + i, mapping.gsStream, mapping.componentMask);
       match = var && var->baseDef == first->baseDef && var->baseIndex == first->baseIndex + int32_t(i);
     }
 
@@ -125,6 +121,41 @@ bool IoMap::handleDclIndexRange(ir::Builder& builder, const Instruction& op) {
   }
 
   return bool(mapping.baseDef);
+}
+
+
+bool IoMap::handleEmitVertex(ir::Builder& builder, uint32_t stream) {
+  /* Copy from temporary registers to the actual outputs */
+  for (const auto& v : m_variables) {
+    if (v.gsStream != int32_t(stream))
+      continue;
+
+    auto value = loadIoRegister(builder, ir::ScalarType::eUnknown, v.regType,
+      ir::SsaDef(), ir::SsaDef(), v.regIndex, Swizzle::identity(), v.componentMask);
+
+    if (!value)
+      return false;
+
+    if (!storeIoRegister(builder, v.regType, ir::SsaDef(), ir::SsaDef(),
+        v.regIndex, stream, v.componentMask, value))
+      return false;
+  }
+
+  /* Invalidate all emitted temporaries. Not *strictly* necessary,
+   * but may avoid some inconsistet behaviour with broken app code. */
+  for (const auto& v : m_variables) {
+    if (v.gsStream != int32_t(stream))
+      continue;
+
+    for (auto c : v.componentMask) {
+      auto* var = findIoVar(m_variables, RegisterType::eOutput, v.regIndex, -1, c);
+
+      if (var)
+        builder.add(ir::Op::TmpStore(var->baseDef, builder.makeUndef(var->baseType)));
+    }
+  }
+
+  return true;
 }
 
 
@@ -221,7 +252,7 @@ bool IoMap::emitStore(
   auto index = loadRegisterIndices(builder, op, operand);
 
   if (!storeIoRegister(builder, index.regType, index.vertexIndex,
-      index.regIndexRelative, index.regIndexAbsolute, operand.getWriteMask(), value))
+      index.regIndexRelative, index.regIndexAbsolute, -1, operand.getWriteMask(), value))
     return m_converter.logOpError(op, "Failed to process I/O store.");
 
   return true;
@@ -316,8 +347,8 @@ bool IoMap::emitHsControlPointPhasePassthrough(ir::Builder& builder) {
       return false;
     }
 
-    if (!storeIoRegister(builder, RegisterType::eControlPointOut,
-        controlPointId, ir::SsaDef(), e.getRegisterIndex(), e.getComponentMask(), value))
+    if (!storeIoRegister(builder, RegisterType::eControlPointOut, controlPointId,
+        ir::SsaDef(), e.getRegisterIndex(), -1, e.getComponentMask(), value))
       return false;
   }
 
@@ -507,8 +538,10 @@ bool IoMap::declareIoSignatureVars(
 
   /* Omit any overlapping declarations. This is relevant for hull shaders,
    * where partial declarations are common in fork/join phases. */
+  auto stream = m_converter.m_gs.streamIndex;
+
   for (const auto& e : m_variables) {
-    if (e.matches(regType, regIndex, componentMask) && e.sv == Sysval::eNone) {
+    if (e.matches(regType, regIndex, stream, componentMask) && e.sv == Sysval::eNone) {
       componentMask -= e.componentMask;
 
       if (!componentMask)
@@ -530,7 +563,8 @@ bool IoMap::declareIoSignatureVars(
    * declaration. If no signature entry is present, assume a float vec4. */
   auto entries = signature->filter([=] (const SignatureEntry& e) {
     return (e.getRegisterIndex() == int32_t(regIndex)) &&
-           (e.getComponentMask() & componentMask);
+           (e.getComponentMask() & componentMask) &&
+           (e.getStreamIndex() == stream);
   });
 
   for (auto e = entries; e != signature->end(); e++) {
@@ -810,12 +844,14 @@ bool IoMap::declareClipCullDistance(
   uint32_t elementMask = 0u;
   uint32_t elementShift = -1u;
 
-  auto entries = signature->filter([sv, cStream = m_gsStream] (const SignatureEntry& e) {
+  auto stream = m_converter.m_gs.streamIndex;
+
+  auto entries = signature->filter([sv, stream] (const SignatureEntry& e) {
     auto signatureSv = (sv == Sysval::eClipDistance)
       ? SignatureSysval::eClipDistance
       : SignatureSysval::eCullDistance;
 
-    return e.getStreamIndex() == cStream &&
+    return e.getStreamIndex() == stream &&
            e.getSystemValue() == signatureSv;
   });
 
@@ -1002,7 +1038,7 @@ ir::SsaDef IoMap::loadIoRegister(
     auto componentIndex = uint8_t(componentFromBit(c));
 
     auto& list = regIndexRelative ? m_indexRanges : m_variables;
-    auto* var = findIoVar(list, regType, regIndexAbsolute, c);
+    auto* var = findIoVar(list, regType, regIndexAbsolute, -1, c);
 
     if (!var) {
       /* Shouldn't happen, but some custom DXBC emitters produce broken shaders */
@@ -1022,6 +1058,9 @@ ir::SsaDef IoMap::loadIoRegister(
       /* Emit actual load op depending on the variable type */
       auto opCode = [varOpCode] {
         switch (varOpCode) {
+          case ir::OpCode::eDclTmp:
+            return ir::OpCode::eTmpLoad;
+
           case ir::OpCode::eDclInput:
           case ir::OpCode::eDclInputBuiltIn:
             return ir::OpCode::eInputLoad;
@@ -1045,9 +1084,12 @@ ir::SsaDef IoMap::loadIoRegister(
         return ir::SsaDef();
       }
 
-      auto scalar = builder.add(ir::Op(opCode, varScalarType)
-        .addOperand(var->baseDef)
-        .addOperand(addressDef));
+      auto loadOp = ir::Op(opCode, varScalarType).addOperand(var->baseDef);
+
+      if (opCode != ir::OpCode::eTmpLoad)
+        loadOp.addOperand(addressDef);
+
+      auto scalar = builder.add(std::move(loadOp));
 
       /* Fix up pixel shader position.w semantics */
       if (m_shaderInfo.getType() == ShaderType::ePixel && var->sv == Sysval::ePosition && c == ComponentBit::eW)
@@ -1067,6 +1109,7 @@ bool IoMap::storeIoRegister(
         ir::SsaDef              vertexIndex,
         ir::SsaDef              regIndexRelative,
         uint32_t                regIndexAbsolute,
+        int32_t                 stream,
         WriteMask               writeMask,
         ir::SsaDef              value) {
   dxbc_spv_assert(builder.getOp(value).getType().isBasicType());
@@ -1085,11 +1128,12 @@ bool IoMap::storeIoRegister(
     const auto& list = regIndexRelative ? m_indexRanges : m_variables;
 
     for (const auto& var : list) {
-      if (!var.matches(regType, regIndexAbsolute, c))
+      if (!var.matches(regType, regIndexAbsolute, stream, c))
         continue;
 
       /* Convert scalar to required type */
-      bool isFunction = builder.getOp(var.baseDef).getOpCode() == ir::OpCode::eFunction;
+      auto dclOpCode = builder.getOp(var.baseDef).getOpCode();
+      bool isFunction = dclOpCode == ir::OpCode::eFunction;
 
       auto dstScalarType = var.baseType.getBaseType(0u).getBaseType();
       auto scalar = convertScalar(builder, dstScalarType, baseScalar);
@@ -1099,8 +1143,11 @@ bool IoMap::storeIoRegister(
         vertexIndex, regIndexRelative, regIndexAbsolute, c);
 
       if (!isFunction) {
-        /* Emit plain output store if possible */
-        builder.add(ir::Op::OutputStore(var.baseDef, addressDef, scalar));
+        /* Emit plain store if possible */
+        if (dclOpCode == ir::OpCode::eDclOutput || dclOpCode == ir::OpCode::eDclOutputBuiltIn)
+          builder.add(ir::Op::OutputStore(var.baseDef, addressDef, scalar));
+        else
+          builder.add(ir::Op::TmpStore(var.baseDef, scalar));
       } else {
         /* Unroll address vector and emit function call. */
         const auto& addressOp = builder.getOp(addressDef);
@@ -1142,7 +1189,7 @@ ir::SsaDef IoMap::interpolateIoRegister(
 
   while (readMask) {
     auto& list = regIndexRelative ? m_indexRanges : m_variables;
-    auto* var = findIoVar(list, regType, regIndexAbsolute, readMask.first());
+    auto* var = findIoVar(list, regType, regIndexAbsolute, -1, readMask.first());
 
     if (!var) {
       /* Shouldn't happen, but some custom DXBC emitters produce broken shaders */
@@ -1310,7 +1357,7 @@ std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicLoadFunction(
 
     for (auto component : var.componentMask) {
       auto scalar = ir::SsaDef();
-      auto srcVar = findIoVar(m_variables, var.regType, var.regIndex + i, component);
+      auto srcVar = findIoVar(m_variables, var.regType, var.regIndex + i, var.gsStream, component);
 
       if (!srcVar || !srcVar->baseDef) {
         scalar = builder.makeUndef(scalarType);
@@ -1454,7 +1501,7 @@ std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicStoreFunction(
   for (uint32_t i = 0u; i < var.regCount; i++) {
     for (uint32_t j = 0u; j < componentCount; j++) {
       auto component = ComponentBit(uint8_t(var.componentMask.first()) << j);
-      auto targetVar = findIoVar(m_variables, var.regType, var.regIndex + i, component);
+      auto targetVar = findIoVar(m_variables, var.regType, var.regIndex + i, var.gsStream, component);
 
       if (!targetVar || !targetVar->baseDef)
         continue;
@@ -1468,7 +1515,13 @@ std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicStoreFunction(
       auto address = computeRegisterAddress(builder, *targetVar,
         vertexIndex, ir::SsaDef(), var.regIndex + i, component);
 
-      builder.add(ir::Op::OutputStore(targetVar->baseDef, address, scalar));
+      auto dclOp = builder.getOp(targetVar->baseDef).getOpCode();
+
+      if (dclOp == ir::OpCode::eDclOutput || dclOp == ir::OpCode::eDclOutputBuiltIn)
+        builder.add(ir::Op::OutputStore(targetVar->baseDef, address, scalar));
+      else
+        builder.add(ir::Op::TmpStore(targetVar->baseDef, scalar));
+
       builder.add(ir::Op::ScopedSwitchBreak(switchConstruct));
     }
   }
@@ -1653,7 +1706,7 @@ ir::ScalarType IoMap::getIndexedBaseType(
   const IoVarInfo&              var) {
   /* Use same type as the base I/O variable if possible. If we cannot
    * determine it for whatever reason, use u32 as a fallback. */
-  auto baseVar = findIoVar(m_variables, var.regType, var.regIndex, var.componentMask);
+  auto baseVar = findIoVar(m_variables, var.regType, var.regIndex, var.gsStream, var.componentMask);
 
   if (!baseVar || !baseVar->baseDef)
     return ir::ScalarType::eU32;
@@ -1712,9 +1765,9 @@ ir::SsaDef IoMap::convertScalar(ir::Builder& builder, ir::ScalarType dstType, ir
 }
 
 
-IoVarInfo* IoMap::findIoVar(IoVarList& list, RegisterType regType, uint32_t regIndex, WriteMask mask) {
+IoVarInfo* IoMap::findIoVar(IoVarList& list, RegisterType regType, uint32_t regIndex, int32_t stream, WriteMask mask) {
   for (auto& e : list) {
-    if (e.matches(regType, regIndex, mask))
+    if (e.matches(regType, regIndex, stream, mask))
       return &e;
   }
 
@@ -1724,6 +1777,52 @@ IoVarInfo* IoMap::findIoVar(IoVarList& list, RegisterType regType, uint32_t regI
 
 void IoMap::emitSemanticName(ir::Builder& builder, ir::SsaDef def, const SignatureEntry& entry) const {
   builder.add(ir::Op::Semantic(def, entry.getSemanticIndex(), entry.getSemanticName()));
+}
+
+
+bool IoMap::handleGsOutputStreams(ir::Builder& builder) {
+  /* For geometry shaders, output registers can alias with no stream info.
+   * To work around this, we declare temporary variables for each register
+   * component mapped to an output register, and copy on Emit. */
+  for (; m_gsConvertedCount < m_variables.size(); m_gsConvertedCount++) {
+    /* Can't use reference here since we'll invalidate it */
+    auto var = m_variables.at(m_gsConvertedCount);
+
+    if (var.regType != RegisterType::eOutput || var.gsStream >= 0 || !var.baseDef)
+      continue;
+
+    /* Only consider actual output declarations */
+    const auto& dclOp = builder.getOp(var.baseDef);
+
+    if (dclOp.getOpCode() != ir::OpCode::eDclOutput &&
+        dclOp.getOpCode() != ir::OpCode::eDclOutputBuiltIn)
+      continue;
+
+    /* Assign current stream index to real output */
+    int32_t stream = int32_t(m_converter.m_gs.streamIndex);
+    m_variables.at(m_gsConvertedCount).gsStream = stream;
+
+    /* Find or declare temporary variable for each component
+     * of the given output */
+    dxbc_spv_assert(var.regCount == 1u);
+
+    for (auto c : var.componentMask) {
+      auto* tmp = IoMap::findIoVar(m_variables, var.regType, var.regIndex, -1, c);
+
+      if (!tmp) {
+        auto& mapping = m_variables.emplace_back();
+        mapping.regType = var.regType;
+        mapping.regIndex = var.regIndex;
+        mapping.regCount = var.regCount;
+        mapping.gsStream = -1;
+        mapping.componentMask = c;
+        mapping.baseType = var.baseType;
+        mapping.baseDef = builder.add(ir::Op::DclTmp(mapping.baseType, m_converter.getEntryPoint()));
+      }
+    }
+  }
+
+  return true;
 }
 
 
@@ -1891,7 +1990,7 @@ ir::Op& IoMap::addDeclarationArgs(ir::Op& declaration, RegisterType type, ir::In
   auto isInput = isInputRegister(type);
 
   if (!isInput && m_shaderInfo.getType() == ShaderType::eGeometry)
-    declaration.addOperand(m_gsStream);
+    declaration.addOperand(m_converter.m_gs.streamIndex);
 
   if (isInput && m_shaderInfo.getType() == ShaderType::ePixel)
     declaration.addOperand(interpolation);

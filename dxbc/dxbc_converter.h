@@ -113,6 +113,13 @@ private:
   } m_hs;
 
 
+  /* Geometry shader state */
+  struct {
+    uint32_t streamIndex = 0u;
+    uint32_t streamMask = 0u;
+  } m_gs;
+
+
   bool convertInstruction(ir::Builder& builder, const Instruction& op);
 
   bool initialize(ir::Builder& builder);
@@ -140,6 +147,8 @@ private:
   bool handleTessPartitioning(const Instruction& op);
 
   bool handleTessOutput(const Instruction& op);
+
+  bool handleStream(const Instruction& op);
 
   bool handleMov(ir::Builder& builder, const Instruction& op);
 
