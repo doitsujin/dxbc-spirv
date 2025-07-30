@@ -853,6 +853,10 @@ public:
 
   bool operator == (const SsaDef& other) const { return m_id == other.m_id; }
   bool operator != (const SsaDef& other) const { return m_id != other.m_id; }
+  bool operator >= (const SsaDef& other) const { return m_id >= other.m_id; }
+  bool operator <= (const SsaDef& other) const { return m_id <= other.m_id; }
+  bool operator >  (const SsaDef& other) const { return m_id >  other.m_id; }
+  bool operator <  (const SsaDef& other) const { return m_id <  other.m_id; }
 
 private:
 
