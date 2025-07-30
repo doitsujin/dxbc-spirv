@@ -47,6 +47,13 @@ struct IoVarInfo {
    * If negative, the base definition cannot be dynamically indexed. */
   int32_t baseIndex = -1;
 
+  /* Interpolation functions for dynamically indexed inputs. These all
+   * take the register index and up to one additional parameter for the
+   * interpolation instruction, and return the interpolated input vector. */
+  ir::SsaDef evalCentroid = { };
+  ir::SsaDef evalSample = { };
+  ir::SsaDef evalSnapped = { };
+
   /* Checks whether the variable matches the given conditions */
   bool matches(RegisterType type, uint32_t index, WriteMask mask) const {
     return type == regType && (mask & componentMask) &&
@@ -96,6 +103,13 @@ public:
 
   /** Handles an index range declaration for I/O variables. */
   bool handleDclIndexRange(ir::Builder& builder, const Instruction& op);
+
+  /** Handles interpolation instruction on a given input. Since these operate
+   *  on input variables directly rather than loading them first, they need
+   *  special treatment. */
+  bool handleEval(
+          ir::Builder&            builder,
+    const Instruction&            op);
 
   /** Loads an input or output value and returns a scalar or vector containing
    *  one element for each component in the component mask. Applies swizzles,
@@ -152,6 +166,8 @@ private:
   ir::SsaDef      m_tessFactorOuter = { };
 
   ir::SsaDef      m_vertexCountIn = { };
+
+  ir::SsaDef      m_convertEvalOffsetFunction = { };
 
   IoVarList       m_variables;
   IoVarList       m_indexRanges;
@@ -269,6 +285,20 @@ private:
           ir::SsaDef              value);
 
 
+  /* Main function to interpolate an input register. Functions
+   * similarly to the regular load function. */
+  ir::SsaDef interpolateIoRegister(
+          ir::Builder&            builder,
+          ir::OpCode              opCode,
+          ir::ScalarType          scalarType,
+          RegisterType            regType,
+          ir::SsaDef              regIndexRelative,
+          uint32_t                regIndexAbsolute,
+          Swizzle                 swizzle,
+          WriteMask               writeMask,
+          ir::SsaDef              argument);
+
+
   /* Computes address vector into the given I/O register variable.
    * Takes scalar, vector and array types into account. */
   ir::SsaDef computeRegisterAddress(
@@ -294,6 +324,26 @@ private:
           uint32_t                arraySize);
 
 
+  /* Builds function to convert evalSnapped offsets */
+  ir::SsaDef emitConvertEvalOffsetFunction(
+          ir::Builder&            builder);
+
+
+  /* Builds interpolation function for a dynamically indexed input. */
+  ir::SsaDef emitInterpolationFunction(
+          ir::Builder&            builder,
+    const IoVarInfo&              var,
+          ir::OpCode              opCode);
+
+
+  /* Retrieves or creates interpolation function for a dynamically
+   * indexed input variable. */
+  ir::SsaDef getInterpolationFunction(
+          ir::Builder&            builder,
+          IoVarInfo&              var,
+          ir::OpCode              opCode);
+
+
   /* Retrieves the instruction that starts the shader's main function, or
    * the current hull shader phase. Used when emitting additional functions. */
   ir::SsaDef getCurrentFunction() const;
@@ -301,7 +351,7 @@ private:
 
   /* Determines scalar type for a dynamically indexed array */
   ir::ScalarType getIndexedBaseType(
-    const IoVarInfo&              var) const;
+    const IoVarInfo&              var);
 
 
   /* Helper to process I/O register indexing. This will decompose the
@@ -318,7 +368,7 @@ private:
 
 
   /* Looks up matching I/O variable in the given list. */
-  const IoVarInfo* findIoVar(const IoVarList& list, RegisterType regType, uint32_t regIndex, WriteMask mask) const;
+  IoVarInfo* findIoVar(IoVarList& list, RegisterType regType, uint32_t regIndex, WriteMask mask);
 
 
   void emitSemanticName(ir::Builder& builder, ir::SsaDef def, const SignatureEntry& entry) const;

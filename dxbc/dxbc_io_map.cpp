@@ -128,6 +128,72 @@ bool IoMap::handleDclIndexRange(ir::Builder& builder, const Instruction& op) {
 }
 
 
+bool IoMap::handleEval(
+        ir::Builder&            builder,
+  const Instruction&            op) {
+  /* Eval* instructions have the following operands:
+   * (dst0) Interpolated result
+   * (src0) Swizzled input to interpolate
+   * (src1) Sample index or offset, if applicable */
+  const auto& dst = op.getDst(0u);
+  const auto& src = op.getSrc(0u);
+
+  if (m_shaderInfo.getType() != ShaderType::ePixel) {
+    m_converter.logOpError(op, "Eval instruction encountered outside of pixel shader.");
+    return false;
+  }
+
+  auto opCode = [&op] {
+    switch (op.getOpToken().getOpCode()) {
+      case OpCode::eEvalCentroid:     return ir::OpCode::eInterpolateAtCentroid;
+      case OpCode::eEvalSnapped:      return ir::OpCode::eInterpolateAtOffset;
+      case OpCode::eEvalSampleIndex:  return ir::OpCode::eInterpolateAtSample;
+      default:                        break;
+    }
+
+    dxbc_spv_unreachable();
+    return ir::OpCode::eUnknown;
+  } ();
+
+  /* Load additional argument depending on the opcode */
+  ir::SsaDef argument = { };
+
+  if (opCode != ir::OpCode::eInterpolateAtCentroid) {
+    const auto& src1 = op.getSrc(1u);
+
+    if (opCode == ir::OpCode::eInterpolateAtOffset) {
+      argument = m_converter.loadSrcModified(builder, op, src1,
+        ComponentBit::eX | ComponentBit::eY, ir::ScalarType::eI32);
+
+      if (!m_convertEvalOffsetFunction)
+        m_convertEvalOffsetFunction = emitConvertEvalOffsetFunction(builder);
+
+      argument = builder.add(ir::Op::FunctionCall(ir::BasicType(ir::ScalarType::eF32, 2u), m_convertEvalOffsetFunction)
+        .addParam(builder.add(ir::Op::CompositeExtract(ir::ScalarType::eI32, argument, builder.makeConstant(0u))))
+        .addParam(builder.add(ir::Op::CompositeExtract(ir::ScalarType::eI32, argument, builder.makeConstant(1u)))));
+    } else if (opCode == ir::OpCode::eInterpolateAtSample) {
+      argument = m_converter.loadSrcModified(builder, op, src1,
+        ComponentBit::eX, ir::ScalarType::eU32);
+    }
+  }
+
+  /* Handle actual interpolation */
+  auto index = loadRegisterIndices(builder, op, src);
+  dxbc_spv_assert(!index.vertexIndex);
+
+  ir::SsaDef result = interpolateIoRegister(builder, opCode, dst.getInfo().type,
+    index.regType, index.regIndexRelative, index.regIndexAbsolute,
+    src.getSwizzle(), dst.getWriteMask(), argument);
+
+  if (!result) {
+    m_converter.logOpError(op, "Failed to process I/O load.");
+    return false;
+  }
+
+  return m_converter.storeDstModified(builder, op, dst, result);
+}
+
+
 ir::SsaDef IoMap::emitLoad(
         ir::Builder&            builder,
   const Instruction&            op,
@@ -935,8 +1001,8 @@ ir::SsaDef IoMap::loadIoRegister(
   for (auto c : swizzle.getReadMask(writeMask)) {
     auto componentIndex = uint8_t(componentFromBit(c));
 
-    const auto& list = regIndexRelative ? m_indexRanges : m_variables;
-    const auto* var = findIoVar(list, regType, regIndexAbsolute, c);
+    auto& list = regIndexRelative ? m_indexRanges : m_variables;
+    auto* var = findIoVar(list, regType, regIndexAbsolute, c);
 
     if (!var) {
       /* Shouldn't happen, but some custom DXBC emitters produce broken shaders */
@@ -1058,6 +1124,90 @@ bool IoMap::storeIoRegister(
   }
 
   return true;
+}
+
+
+ir::SsaDef IoMap::interpolateIoRegister(
+        ir::Builder&            builder,
+        ir::OpCode              opCode,
+        ir::ScalarType          scalarType,
+        RegisterType            regType,
+        ir::SsaDef              regIndexRelative,
+        uint32_t                regIndexAbsolute,
+        Swizzle                 swizzle,
+        WriteMask               writeMask,
+        ir::SsaDef              argument) {
+  std::array<ir::SsaDef, 4u> components = { };
+  auto readMask = swizzle.getReadMask(writeMask);
+
+  while (readMask) {
+    auto& list = regIndexRelative ? m_indexRanges : m_variables;
+    auto* var = findIoVar(list, regType, regIndexAbsolute, readMask.first());
+
+    if (!var) {
+      /* Shouldn't happen, but some custom DXBC emitters produce broken shaders */
+      auto name = m_converter.makeRegisterDebugName(regType, regIndexAbsolute, readMask);
+      Logger::warn("I/O variable ", name, " not found (dynamically indexed: ", regIndexRelative ? "yes" : "no", ").");
+
+      auto componentIndex = uint8_t(componentFromBit(readMask.first()));
+      components[componentIndex] = builder.add(ir::Op::Undef(scalarType));
+      readMask -= readMask.first();
+    } else {
+      /* Process entire variable at once to avoid redundant function calls */
+      auto iterationMask = readMask & var->componentMask;
+
+      if (regIndexRelative) {
+        auto address = computeRegisterAddress(builder, *var,
+          ir::SsaDef(), regIndexRelative, regIndexAbsolute, readMask.first());
+        dxbc_spv_assert(builder.getOp(address).getType() == ir::BasicType(ir::ScalarType::eU32, 2u));
+
+        /* Get or declare function for the given opcode and variable */
+        auto functionDef = getInterpolationFunction(builder, *var, opCode);
+        dxbc_spv_assert(functionDef);
+
+        /* Build function call, passing the register index first and then
+         * the extra arguments. */
+        auto functionType = m_converter.makeVectorType(scalarType, var->componentMask);
+        auto callOp = ir::Op::FunctionCall(functionType, functionDef);
+        callOp.addParam(m_converter.extractFromVector(builder, address, 0u));
+
+        if (argument)
+          callOp.addParam(argument);
+
+        auto functionResult = builder.add(std::move(callOp));
+
+        /* Extract scalars from result vector */
+        for (auto c : iterationMask) {
+          auto indexInSrc = util::popcnt(uint8_t(var->componentMask) & (uint8_t(c) - 1u));
+
+          auto componentIndex = uint8_t(componentFromBit(c));
+          components[componentIndex] = m_converter.extractFromVector(builder, functionResult, indexInSrc);
+        }
+      } else {
+        /* If we can address registers directly, just process
+         * one component at a time as normal */
+        for (auto c : iterationMask) {
+          auto address = computeRegisterAddress(builder, *var,
+            ir::SsaDef(), ir::SsaDef(), regIndexAbsolute, c);
+
+          ir::Op op(opCode, scalarType);
+          op.addOperand(var->baseDef);
+          op.addOperand(address);
+
+          if (argument)
+            op.addOperand(argument);
+
+          auto componentIndex = uint8_t(componentFromBit(c));
+          components[componentIndex] = builder.add(std::move(op));
+        }
+      }
+
+      readMask -= iterationMask;
+    }
+  }
+
+  auto returnType = m_converter.makeVectorType(scalarType, writeMask);
+  return m_converter.composite(builder, returnType, components.data(), swizzle, writeMask);
 }
 
 
@@ -1339,6 +1489,158 @@ std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicStoreFunction(
 }
 
 
+ir::SsaDef IoMap::emitConvertEvalOffsetFunction(
+        ir::Builder&            builder) {
+  auto paramXDef = builder.add(ir::Op::DclParam(ir::ScalarType::eI32));
+  auto paramYDef = builder.add(ir::Op::DclParam(ir::ScalarType::eI32));
+
+  if (m_converter.m_options.includeDebugNames) {
+    builder.add(ir::Op::DebugName(paramXDef, "x"));
+    builder.add(ir::Op::DebugName(paramYDef, "y"));
+  }
+
+  auto functionDef = builder.addBefore(builder.getCode().first->getDef(),
+    ir::Op::Function(ir::BasicType(ir::ScalarType::eF32, 2u)).addParam(paramXDef).addParam(paramYDef));
+
+  auto cursor = builder.setCursor(functionDef);
+
+  if (m_converter.m_options.includeDebugNames)
+    builder.add(ir::Op::DebugName(functionDef, "convert_eval_offsets"));
+
+  /* Incoming values have a range of [-0.5..0.5) */
+  auto factor = builder.makeConstant(1.0f / 16.0f);
+
+  std::array<ir::SsaDef, 2u> results = { paramXDef, paramYDef };
+
+  for (uint32_t i = 0u; i < 2u; i++) {
+    auto& r = results[i];
+    r = builder.add(ir::Op::ParamLoad(ir::ScalarType::eI32, functionDef, r));
+    r = builder.add(ir::Op::SBitExtract(ir::ScalarType::eI32, r, builder.makeConstant(0), builder.makeConstant(4)));
+    r = builder.add(ir::Op::ConvertItoF(ir::ScalarType::eF32, r));
+    r = builder.add(ir::Op::FMul(ir::ScalarType::eF32, r, factor));
+  }
+
+  auto result = builder.add(ir::Op::CompositeConstruct(
+    ir::BasicType(ir::ScalarType::eF32, 2u), results[0u], results[1u]));
+  builder.add(ir::Op::Return(ir::BasicType(ir::ScalarType::eF32, 2u), result));
+  builder.add(ir::Op::FunctionEnd());
+
+  builder.setCursor(cursor);
+  return functionDef;
+}
+
+
+ir::SsaDef IoMap::emitInterpolationFunction(
+        ir::Builder&            builder,
+  const IoVarInfo&              var,
+        ir::OpCode              opCode) {
+  /* Build function declaration op */
+  auto functionType = m_converter.makeVectorType(ir::ScalarType::eF32, var.componentMask);
+  auto functionOp = ir::Op::Function(functionType);
+
+  /* Register index relative to start of indexed range */
+  auto paramReg = builder.add(ir::Op::DclParam(ir::ScalarType::eU32));
+  functionOp.addParam(paramReg);
+
+  if (m_converter.m_options.includeDebugNames)
+    builder.add(ir::Op::DebugName(paramReg, "reg"));
+
+  /* Declare extra argument depending on the function parameter type */
+  ir::BasicType argType = { };
+  const char* argName = nullptr;
+
+  if (opCode == ir::OpCode::eInterpolateAtSample) {
+    argType = ir::ScalarType::eU32;
+    argName = "sample";
+  } else if (opCode == ir::OpCode::eInterpolateAtOffset) {
+    argType = ir::BasicType(ir::ScalarType::eF32, 2u);
+    argName = "offset";
+  }
+
+  ir::SsaDef paramArg = { };
+
+  if (!argType.isVoidType()) {
+    paramArg = builder.add(ir::Op::DclParam(argType));
+    functionOp.addParam(paramArg);
+
+    if (m_converter.m_options.includeDebugNames && argName)
+      builder.add(ir::Op::DebugName(paramArg, argName));
+  }
+
+  /* Declare function and temporary result variable */
+  auto functionDef = builder.addBefore(builder.getCode().first->getDef(), std::move(functionOp));
+
+  if (m_converter.m_options.includeDebugNames) {
+    auto regName = m_converter.makeRegisterDebugName(var.regType, var.regIndex, var.componentMask) + std::string("_indexed");
+    auto funcName = [opCode] {
+      switch (opCode) {
+        case ir::OpCode::eInterpolateAtCentroid:  return "eval_centroid_";
+        case ir::OpCode::eInterpolateAtSample:    return "eval_sample_";
+        case ir::OpCode::eInterpolateAtOffset:    return "eval_snapped_";
+        default:                                  return "eval_undefined_";
+      }
+    } ();
+
+    builder.add(ir::Op::DebugName(functionDef, (std::string(funcName) + regName).c_str()));
+  }
+
+  auto cursor = builder.setCursor(functionDef);
+
+  /* Load function parameters */
+  auto regIndex = builder.add(ir::Op::ParamLoad(ir::ScalarType::eU32, functionDef, paramReg));
+  auto argValue = ir::SsaDef();
+
+  if (paramArg)
+    argValue = builder.add(ir::Op::ParamLoad(argType, functionDef, paramArg));
+
+  auto switchConstruct = builder.add(ir::Op::ScopedSwitch(ir::SsaDef(), regIndex));
+
+  /* Iterate over all registers in the range and emit interpolation for
+   * all included registers and ranges. */
+  for (uint32_t i = 0u; i < var.regCount; i++) {
+    builder.add(ir::Op::ScopedSwitchCase(switchConstruct, i));
+
+    auto result = interpolateIoRegister(builder, opCode, ir::ScalarType::eF32,
+      var.regType, ir::SsaDef(), var.regIndex + i, Swizzle::identity(), var.componentMask, argValue);
+    builder.add(ir::Op::Return(functionType, result));
+
+    builder.add(ir::Op::ScopedSwitchBreak(switchConstruct));
+  }
+
+  auto switchEnd = builder.add(ir::Op::ScopedEndSwitch(switchConstruct));
+  builder.rewriteOp(switchConstruct, ir::Op::ScopedSwitch(switchEnd, regIndex));
+
+  builder.add(ir::Op::Return(functionType, builder.makeUndef(functionType)));
+  builder.add(ir::Op::FunctionEnd());
+
+  builder.setCursor(cursor);
+  return functionDef;
+}
+
+
+ir::SsaDef IoMap::getInterpolationFunction(
+        ir::Builder&            builder,
+        IoVarInfo&              var,
+        ir::OpCode              opCode) {
+  auto& def = [&var, opCode] () -> ir::SsaDef& {
+    switch (opCode) {
+      case ir::OpCode::eInterpolateAtCentroid:  return var.evalCentroid;
+      case ir::OpCode::eInterpolateAtSample:    return var.evalSample;
+      case ir::OpCode::eInterpolateAtOffset:    return var.evalSnapped;
+      default:                                  break;
+    }
+
+    dxbc_spv_unreachable();
+    return var.evalCentroid;
+  } ();
+
+  if (!def)
+    def = emitInterpolationFunction(builder, var, opCode);
+
+  return def;
+}
+
+
 ir::SsaDef IoMap::getCurrentFunction() const {
   if (m_shaderInfo.getType() == ShaderType::eHull)
     return m_converter.m_hs.phaseFunction;
@@ -1348,7 +1650,7 @@ ir::SsaDef IoMap::getCurrentFunction() const {
 
 
 ir::ScalarType IoMap::getIndexedBaseType(
-  const IoVarInfo&              var) const {
+  const IoVarInfo&              var) {
   /* Use same type as the base I/O variable if possible. If we cannot
    * determine it for whatever reason, use u32 as a fallback. */
   auto baseVar = findIoVar(m_variables, var.regType, var.regIndex, var.componentMask);
@@ -1410,8 +1712,8 @@ ir::SsaDef IoMap::convertScalar(ir::Builder& builder, ir::ScalarType dstType, ir
 }
 
 
-const IoVarInfo* IoMap::findIoVar(const IoVarList& list, RegisterType regType, uint32_t regIndex, WriteMask mask) const {
-  for (const auto& e : list) {
+IoVarInfo* IoMap::findIoVar(IoVarList& list, RegisterType regType, uint32_t regIndex, WriteMask mask) {
+  for (auto& e : list) {
     if (e.matches(regType, regIndex, mask))
       return &e;
   }

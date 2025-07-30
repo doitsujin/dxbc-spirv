@@ -184,6 +184,11 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eUGe:
       return handleIntCompare(builder, op);
 
+    case OpCode::eEvalSnapped:
+    case OpCode::eEvalSampleIndex:
+    case OpCode::eEvalCentroid:
+      return m_ioMap.handleEval(builder, op);
+
     case OpCode::eBreak:
     case OpCode::eBreakc:
       return handleBreak(builder, op);
@@ -324,9 +329,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eImmAtomicUMax:
     case OpCode::eImmAtomicUMin:
     case OpCode::eSync:
-    case OpCode::eEvalSnapped:
-    case OpCode::eEvalSampleIndex:
-    case OpCode::eEvalCentroid:
     case OpCode::eDclGsInstanceCount:
     case OpCode::eAbort:
     case OpCode::eDebugBreak:
