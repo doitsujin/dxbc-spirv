@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "ir.h"
+#include "ir_container.h"
 
 #include "../util/util_small_vector.h"
 
@@ -30,6 +31,8 @@ struct OpMetadata {
 
   SsaDef prev = { };
   SsaDef next = { };
+
+  Op op = { };
 
   UseList uses = { };
 };
@@ -166,11 +169,10 @@ public:
 
   ~Builder();
 
-  /** Queries instruction for given SSA def. Note that references to
-   *  instructions get invalidated any time instructions are modified.
-   *  Will return a \c eUnknown op if \c def is a null def. */
+  /** Queries instruction for given SSA def. Will return
+   *  an \c eUnknown op if \c def is a null def. */
   const Op& getOp(SsaDef def) const {
-    return m_ops.at(def.getId());
+    return m_ops.at(def).op;
   }
 
   /** Queries instruction for the operand of another instruction. Convenience
@@ -185,19 +187,19 @@ public:
   }
 
   /** Queries SSA def of next or previous instruction in stream. */
-  SsaDef getNext(SsaDef def) const { return def ? m_metadata.at(def.getId()).next : SsaDef(); }
-  SsaDef getPrev(SsaDef def) const { return def ? m_metadata.at(def.getId()).prev : SsaDef(); }
+  SsaDef getNext(SsaDef def) const { return def ? m_ops.at(def).next : SsaDef(); }
+  SsaDef getPrev(SsaDef def) const { return def ? m_ops.at(def).prev : SsaDef(); }
 
   /** Queries number of users of a given SSA def. */
   uint32_t getUseCount(SsaDef def) const {
-    return uint32_t(m_metadata.at(def.getId()).uses.size());
+    return uint32_t(m_ops.at(def).uses.size());
   }
 
   /** Gets iterator pair over all uses of an instruction. Note that
    *  these iterators get invalidated when modifying, adding or
    *  removing any instructions. */
   auto getUses(SsaDef def) const {
-    auto& uses = m_metadata.at(def.getId()).uses;
+    auto& uses = m_ops.at(def).uses;
 
     return std::make_pair(
       use_iterator(*this, uses.begin()),
@@ -208,7 +210,7 @@ public:
    *  create a local copy of the use array when iterators cannot be used. */
   template<typename Container>
   void getUses(SsaDef def, Container& container) {
-    auto& uses = m_metadata.at(def.getId()).uses;
+    auto& uses = m_ops.at(def).uses;
 
     for (auto use : uses)
       container.push_back(use);
@@ -248,7 +250,7 @@ public:
    *  are necessarly used, but passes can use this to allocate look-up tables
    *  from SSA IDs to their own internal metadata. */
   uint32_t getDefCount() const {
-    return uint32_t(m_ops.size());
+    return m_ops.getMaxValidDef().getId() + 1u;
   }
 
   /** Convenience method to create and add a constant op. */
@@ -265,13 +267,13 @@ public:
   /** Changes the type of the given operation without having
    *  to rewrite the entire operation. */
   void setOpType(SsaDef def, const Type& type) {
-    m_ops.at(def.getId()).setType(type);
+    m_ops.at(def).op.setType(type);
   }
 
   /** Changes flags of the given operation without having
    *  to rewrite the entire operation. */
   void setOpFlags(SsaDef def, OpFlags flags) {
-    m_ops.at(def.getId()).setFlags(flags);
+    m_ops.at(def).op.setFlags(flags);
   }
 
   /** Convenince method to add an instruction either after the
@@ -338,8 +340,7 @@ public:
 
 private:
 
-  std::vector<Op>         m_ops;
-  std::vector<OpMetadata> m_metadata;
+  Container<OpMetadata> m_ops;
 
   std::unordered_set<Op, ConstantHash, ConstantEq> m_constants;
 
