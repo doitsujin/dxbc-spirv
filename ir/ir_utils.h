@@ -116,37 +116,4 @@ Op castConstant(const Op& op, BasicType dstType);
 /** Converts constant op using ConsumeAs semantics */
 Op consumeConstant(const Op& op, BasicType dstType);
 
-
-/** Helper class for per-def look-up tables. Initializes a local
- *  array with the total def count of the given builder, and will
- *  dynamically add more entries as necessary. */
-template<typename T>
-class DefMetadata {
-
-public:
-
-  DefMetadata() = default;
-  DefMetadata(const Builder& builder, T value = T())
-  : m_data(builder.getDefCount(), value) { }
-
-  T& operator [] (SsaDef def) {
-    dxbc_spv_assert(def);
-
-    if (def.getId() >= m_data.size())
-      m_data.resize(def.getId() + 1u);
-
-    return m_data[def.getId()];
-  }
-
-  const T& operator [] (SsaDef def) const {
-    dxbc_spv_assert(def && def.getId() < m_data.size());
-    return m_data[def.getId()];
-  }
-
-private:
-
-  std::vector<T> m_data;
-
-};
-
 }
