@@ -58,10 +58,10 @@ private:
    *   variable in the current block, and will be reset between blocks.
    * - For branch instructions, this points to the containing block.
    * - For phi instructions, this points to the temporary variable. */
-  DefMetadata<SsaDef> m_metadata;
+  Container<SsaDef> m_metadata;
 
   /* Per-block state */
-  DefMetadata<SsaPassBlockState> m_blocks;
+  Container<SsaPassBlockState> m_blocks;
 
   /* List of variables defined in the current block. */
   util::small_vector<SsaDef, 256u> m_localTemps;

@@ -7,8 +7,7 @@
 namespace dxbc_spv::ir {
 
 SsaConstructionPass::SsaConstructionPass(Builder& builder)
-: m_builder(builder)
-, m_metadata(builder) {
+: m_builder(builder) {
 
 }
 
@@ -28,7 +27,7 @@ bool SsaConstructionPass::validatePreConditions(std::ostream& str) const {
   if (!Validator(m_builder).validateStructuredCfg(str))
     return false;
 
-  DefMetadata<SsaDef> useFuncs(m_builder);
+  Container<SsaDef> useFuncs;
 
   auto [a, b] = m_builder.getCode();
 
