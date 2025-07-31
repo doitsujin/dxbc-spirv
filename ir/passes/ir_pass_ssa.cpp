@@ -314,10 +314,11 @@ SsaDef SsaConstructionPass::normalizePhi(SsaDef phi) {
   /* Filter out phis that have only a self-reference
    * and a single unique value */
   forEachPhiOperand(phiOp, [&] (SsaDef, SsaDef value) {
-    if (def != value && def != phi) {
-      isTrivial = isTrivial && !def;
+    if (def != value && def != phi)
+      isTrivial = !def;
+
+    if (!def && value != phi)
       def = value;
-    }
   });
 
   if (!isTrivial)
@@ -333,7 +334,7 @@ SsaDef SsaConstructionPass::normalizePhi(SsaDef phi) {
   auto [a, b] = m_builder.getUses(phi);
 
   for (auto use = a; use != b; use++) {
-    if (use->getOpCode() == OpCode::ePhi)
+    if (use->getOpCode() == OpCode::ePhi && use->getDef() != phi)
       uses.push_back(use->getDef());
   }
 
