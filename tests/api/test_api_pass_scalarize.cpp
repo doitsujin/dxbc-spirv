@@ -263,7 +263,7 @@ Builder test_scalarize(const ScalarizePass::Options& options, BasicType uintType
     if (floatType.getBaseType() != ScalarType::eF32)
       floatValue = builder.add(Op::ConvertFtoF(BasicType(ScalarType::eF32, uintType.getVectorSize()), floatValue));
 
-    floatValue = builder.add(Op::Cast(uintType, floatValue));
+    floatValue = builder.add(Op::Cast(BasicType(ScalarType::eU32, uintType.getVectorSize()), floatValue));
     builder.add(Op::BufferStore(uavDescriptor, threadId, uintValue, 4u));
   }
 
