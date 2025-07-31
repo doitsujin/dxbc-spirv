@@ -12,10 +12,7 @@ int main(int argc, char** argv) {
   if (argc > 1)
     filter = argv[1u];
 
-  auto tests = dxbc_spv::test_api::enumerateTests(filter);
-
-  for (auto& t : dxbc_spv::test_api::enumerateSpirvTests(filter))
-    tests.push_back(std::move(t));
+  auto tests = dxbc_spv::test_api::enumerateTestsInCategory(nullptr, filter);
 
   for (const auto& test : tests) {
     std::cout << test.name << ":" << std::endl;

@@ -5,25 +5,47 @@
 #include "test_api_resources.h"
 #include "test_api_spirv.h"
 
-#define ADD_TEST(test) addTest(result, filter, #test, &test)
+#define ADD_TEST(test) addTest(result, category, filter, #test, &test)
+
+#define ADD_CATEGORY(cat, fn) addTestCategory(result, cat, category, \
+  [] (std::vector<NamedTest>& r, const char* c, const char* f) { fn(r, c, f); }, filter)
 
 namespace dxbc_spv::test_api {
 
 using GetTestPfn = ir::Builder (*)();
 
-void addTest(std::vector<NamedTest>& tests, const char* filter,
+std::vector<std::string> enumerateTestCategories() {
+  std::vector<std::string> result = {
+    std::string("lowering"),
+    std::string("spirv"),
+  };
+
+  return result;
+}
+
+
+void addTest(std::vector<NamedTest>& tests, const char* category, const char* filter,
     const char* name, GetTestPfn fn) {
   if (filter && !std::strstr(name, filter))
     return;
 
   auto& test = tests.emplace_back();
   test.name = name;
+  test.category = category;
   test.builder = fn();
 }
 
-std::vector<NamedTest> enumerateTests(const char* filter) {
-  std::vector<NamedTest> result;
 
+template<typename Fn>
+void addTestCategory(std::vector<NamedTest>& result, const char* name, const char* categoryFilter, const Fn& fn, const char* filter) {
+  if (categoryFilter && std::string(categoryFilter) != name)
+    return;
+
+  fn(result, name, filter);
+}
+
+
+void enumerateLoweringTests(std::vector<NamedTest>& result, const char* category, const char* filter) {
   ADD_TEST(test_io_vs);
   ADD_TEST(test_io_vs_vertex_id);
   ADD_TEST(test_io_vs_instance_id);
@@ -290,20 +312,28 @@ std::vector<NamedTest> enumerateTests(const char* filter) {
   ADD_TEST(test_cfg_loop_infinite);
   ADD_TEST(test_cfg_switch_simple);
   ADD_TEST(test_cfg_switch_complex);
-
-  return result;
 }
 
 
-std::vector<NamedTest> enumerateSpirvTests(const char* filter) {
-  std::vector<NamedTest> result;
-
+void enumerateSpirvTests(std::vector<NamedTest>& result, const char* category, const char* filter) {
   ADD_TEST(test_spirv_spec_constant);
   ADD_TEST(test_spirv_push_data);
   ADD_TEST(test_spirv_raw_pointer);
   ADD_TEST(test_spirv_cbv_srv_uav_structs);
+}
 
+
+std::vector<NamedTest> enumerateTestsInCategory(const char* category, const char* filter) {
+  std::vector<NamedTest> result;
+  ADD_CATEGORY("lowering", enumerateLoweringTests);
+  ADD_CATEGORY("spirv", enumerateSpirvTests);
   return result;
 }
+
+
+std::vector<NamedTest> enumerateTests(const char* filter) {
+  return enumerateTestsInCategory("lowering", filter);
+}
+
 
 }

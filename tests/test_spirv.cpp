@@ -35,8 +35,8 @@ std::vector<char> generateSpirv(const ir::Builder& builder, const SpirvBuilder::
 
 
 bool runTest(const Options& options, const NamedTest& test) {
-  const std::string refFile = options.basePath + "/" + test.name + ".ref.spv";
-  const std::string newFile = options.basePath + "/" + test.name + ".new.spv";
+  const std::string refFile = options.basePath + "/" + test.category + "/" + test.name + ".ref.spv";
+  const std::string newFile = options.basePath + "/" + test.category + "/" + test.name + ".new.spv";
 
   std::ifstream refStream;
   std::ofstream dstStream;
@@ -124,8 +124,7 @@ void runTests(const Options& options, const std::vector<NamedTest>& tests) {
 
 void run(const Options& options) {
   const char* filter = !options.testFilter.empty() ? options.testFilter.c_str() : nullptr;
-  runTests(options, test_api::enumerateTests(filter));
-  runTests(options, test_api::enumerateSpirvTests(filter));
+  runTests(options, test_api::enumerateTestsInCategory(nullptr, filter));
 }
 
 }

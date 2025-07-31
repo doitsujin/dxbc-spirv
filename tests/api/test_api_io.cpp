@@ -311,7 +311,7 @@ Builder test_io_ps_interpolate_offset() {
 
   builder.add(Op::Label());
 
-  auto offsetInputDef = builder.add(Op::DclInput(BasicType(ScalarType::eF32, 2u), entryPoint, 2u, 0u, InterpolationModes()));
+  auto offsetInputDef = builder.add(Op::DclInput(BasicType(ScalarType::eF32, 2u), entryPoint, 3u, 0u, InterpolationModes()));
   builder.add(Op::Semantic(offsetInputDef, 0u, "OFFSET"));
 
   auto in0Def = builder.add(Op::DclInput(ScalarType::eF32, entryPoint, 0u, 0u, InterpolationMode::eNoPerspective));
