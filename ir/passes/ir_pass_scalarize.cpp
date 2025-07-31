@@ -17,7 +17,9 @@ ScalarizePass::~ScalarizePass() {
 
 void ScalarizePass::run() {
   scalarizeVectorOps();
-  resolveRedundantComposites();
+
+  while (resolveRedundantComposites())
+    continue;
 }
 
 
@@ -303,12 +305,24 @@ uint32_t ScalarizePass::determineVectorSize(ScalarType type) const {
 
 SsaDef ScalarizePass::extractOperandComponents(SsaDef operand, uint32_t first, uint32_t count) {
   /* Use current insertion cursor to emit composite ops */
-  auto operandType = m_builder.getOp(operand).getType().getBaseType(0u);
+  const auto& operandOp = m_builder.getOp(operand);
+  auto operandType = operandOp.getType().getBaseType(0u);
   dxbc_spv_assert(first + count <= operandType.getVectorSize());
 
   if (operandType.isScalar()) {
     /* Trivial case */
     return operand;
+  } else if (operandOp.isUndef()) {
+    /* Emit undef of the base type */
+    return m_builder.makeUndef(BasicType(operandType.getBaseType(), count));
+  } else if (operandOp.isConstant()) {
+    /* Extract requested scalars from the constant */
+    Op constant(OpCode::eConstant, BasicType(operandType.getBaseType(), count));
+
+    for (uint32_t i = 0u; i < count; i++)
+      constant.addOperand(operandOp.getOperand(first + i));
+
+    return m_builder.add(std::move(constant));
   } else if (count == 1u) {
     /* Simple vector extract if we want a scalar */
     return m_builder.add(Op::CompositeExtract(
@@ -419,7 +433,7 @@ Builder::iterator ScalarizePass::handlePhi(Builder::iterator op) {
     Op phi(op->getOpCode(), BasicType(vectorType.getBaseType(), vectorSize));
     phi.setFlags(op->getFlags());
 
-    forEachPhiOperand(phi, [&] (SsaDef block, SsaDef value) {
+    forEachPhiOperand(*op, [&] (SsaDef block, SsaDef value) {
       SsaDef def = { };
 
       for (const auto& map : operandMap) {
@@ -430,7 +444,15 @@ Builder::iterator ScalarizePass::handlePhi(Builder::iterator op) {
       }
 
       if (!def) {
-        m_builder.setCursor(value);
+        /* If the operand is also a phi, insert extract op after
+         * the phi section of the block */
+        auto location = value;
+
+        while (m_builder.getOp(location).getOpCode() == OpCode::ePhi) {
+          m_builder.setCursor(location);
+          location = m_builder.getNext(location);
+        }
+
         def = extractOperandComponents(value, index, vectorSize);
         operandMap.push_back(std::make_pair(value, def));
       }
@@ -452,7 +474,7 @@ Builder::iterator ScalarizePass::handlePhi(Builder::iterator op) {
   auto resultDef = assembleResultVector(result.size(), result.data());
 
   m_builder.rewriteDef(op->getDef(), resultDef);
-  return m_builder.iter(resultDef)++;
+  return m_builder.iter(result.at(0u));
 }
 
 
