@@ -2,6 +2,7 @@
 #include "test_api_arithmetic.h"
 #include "test_api_io.h"
 #include "test_api_misc.h"
+#include "test_api_pass_scalarize.h"
 #include "test_api_resources.h"
 #include "test_api_spirv.h"
 
@@ -323,10 +324,42 @@ void enumerateSpirvTests(std::vector<NamedTest>& result, const char* category, c
 }
 
 
+void enumeratePassesTests(std::vector<NamedTest>& result, const char* category, const char* filter) {
+  ADD_TEST(test_pass_scalarize_32_vec1);
+  ADD_TEST(test_pass_scalarize_32_vec2);
+  ADD_TEST(test_pass_scalarize_32_vec3);
+  ADD_TEST(test_pass_scalarize_32_vec4);
+
+  ADD_TEST(test_pass_scalarize_64_vec1);
+  ADD_TEST(test_pass_scalarize_64_vec2);
+
+  ADD_TEST(test_pass_scalarize_16_vec1);
+  ADD_TEST(test_pass_scalarize_16_vec2);
+  ADD_TEST(test_pass_scalarize_16_vec3);
+  ADD_TEST(test_pass_scalarize_16_vec4);
+
+  ADD_TEST(test_pass_scalarize_16_vec1_as_vec2);
+  ADD_TEST(test_pass_scalarize_16_vec2_as_vec2);
+  ADD_TEST(test_pass_scalarize_16_vec3_as_vec2);
+  ADD_TEST(test_pass_scalarize_16_vec4_as_vec2);
+
+  ADD_TEST(test_pass_scalarize_8_vec1);
+  ADD_TEST(test_pass_scalarize_8_vec2);
+  ADD_TEST(test_pass_scalarize_8_vec3);
+  ADD_TEST(test_pass_scalarize_8_vec4);
+
+  ADD_TEST(test_pass_scalarize_8_vec1_as_vec4);
+  ADD_TEST(test_pass_scalarize_8_vec2_as_vec4);
+  ADD_TEST(test_pass_scalarize_8_vec3_as_vec4);
+  ADD_TEST(test_pass_scalarize_8_vec4_as_vec4);
+}
+
+
 std::vector<NamedTest> enumerateTestsInCategory(const char* category, const char* filter) {
   std::vector<NamedTest> result;
   ADD_CATEGORY("lowering", enumerateLoweringTests);
   ADD_CATEGORY("spirv", enumerateSpirvTests);
+  ADD_CATEGORY("passes", enumeratePassesTests);
   return result;
 }
 
