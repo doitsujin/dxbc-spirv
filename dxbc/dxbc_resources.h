@@ -105,6 +105,16 @@ public:
           WriteMask               componentMask,
           ir::ScalarType          scalarType);
 
+  /** Stores vectorized data into a raw or structured buffer. Addressing
+   *  works exactly the same as it does for loads. */
+  bool emitRawStructuredStore(
+          ir::Builder&            builder,
+    const Instruction&            op,
+    const Operand&                operand,
+          ir::SsaDef              elementIndex,
+          ir::SsaDef              elementOffset,
+          ir::SsaDef              data);
+
 private:
 
   Converter&      m_converter;

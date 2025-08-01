@@ -216,6 +216,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eLdStructured:
       return handleLdStructured(builder, op);
 
+    case OpCode::eStoreStructured:
+      return handleStoreStructured(builder, op);
+
     case OpCode::eBreak:
     case OpCode::eBreakc:
       return handleBreak(builder, op);
@@ -327,7 +330,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eStoreUavTyped:
     case OpCode::eLdRaw:
     case OpCode::eStoreRaw:
-    case OpCode::eStoreStructured:
     case OpCode::eAtomicAnd:
     case OpCode::eAtomicOr:
     case OpCode::eAtomicXor:
@@ -1221,6 +1223,33 @@ bool Converter::handleLdStructured(ir::Builder& builder, const Instruction& op) 
       return false;
 
     return data && storeDstModified(builder, op, dstValue, data);
+  }
+}
+
+
+bool Converter::handleStoreStructured(ir::Builder& builder, const Instruction& op) {
+  /* store_structured has the following operands:
+   * (dst0) Target resource
+   * (src0) Structure index
+   * (src1) Structure offset
+   * (src2) Data to store
+   */
+  const auto& resource = op.getDst(0u);
+
+  auto structIndex = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX, ir::ScalarType::eU32);
+  auto structOffset = loadSrcModified(builder, op, op.getSrc(1u), ComponentBit::eX, ir::ScalarType::eU32);
+
+  const auto& srcData = op.getSrc(2u);
+  auto srcType = determineOperandType(srcData, ir::ScalarType::eUnknown);
+
+  auto value = loadSrcModified(builder, op, srcData, resource.getWriteMask(), srcType);
+
+  if (resource.getRegisterType() == RegisterType::eTgsm) {
+    /* TODO implement */
+    return true;
+  } else {
+    return m_resources.emitRawStructuredStore(builder, op,
+      resource, structIndex, structOffset, value);
   }
 }
 

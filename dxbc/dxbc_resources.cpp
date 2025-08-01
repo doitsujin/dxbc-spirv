@@ -248,6 +248,57 @@ std::pair<ir::SsaDef, ir::SsaDef> ResourceMap::emitRawStructuredLoad(
 }
 
 
+bool ResourceMap::emitRawStructuredStore(
+        ir::Builder&            builder,
+  const Instruction&            op,
+  const Operand&                operand,
+        ir::SsaDef              elementIndex,
+        ir::SsaDef              elementOffset,
+        ir::SsaDef              data) {
+  auto [descriptor, resource] = loadDescriptor(builder, op, operand);
+
+  if (!resource)
+    return false;
+
+  /* Scalarize data vector and convert to resource type */
+  auto bufferType = resource->type.getBaseType(0u).getBaseType();
+  auto dataType = builder.getOp(data).getType().getBaseType(0u).getBaseType();
+
+  auto writeMask = operand.getWriteMask();
+  std::array<ir::SsaDef, 4u> components = { };
+
+  uint32_t srcIndex = 0u;
+
+  for (auto c : writeMask) {
+    auto dstIndex = uint8_t(componentFromBit(c));
+    components[dstIndex] = m_converter.extractFromVector(builder, data, srcIndex++);
+
+    if (dataType != bufferType)
+      components[dstIndex] = builder.add(ir::Op::ConsumeAs(bufferType, components[dstIndex]));
+  }
+
+  /* Walk over consecutive blocks, revectorize the components and store */
+  while (writeMask) {
+    auto block = extractConsecutiveComponents(writeMask);
+    auto blockAlignment = computeRawStructuredAlignment(builder, *resource, elementOffset, block);
+
+    auto blockVector = m_converter.composite(builder,
+      m_converter.makeVectorType(bufferType, block),
+      components.data(), Swizzle::identity(), block);
+
+    auto address = resource->kind == ir::ResourceKind::eBufferStructured
+      ? m_converter.computeStructuredAddress(builder, elementIndex, elementOffset, block)
+      : m_converter.computeRawAddress(builder, elementIndex, block);
+
+    builder.add(ir::Op::BufferStore(descriptor, address, blockVector, blockAlignment));
+
+    writeMask -= block;
+  }
+
+  return true;
+}
+
+
 std::pair<ir::SsaDef, const ResourceInfo*> ResourceMap::loadDescriptor(
         ir::Builder&            builder,
   const Instruction&            op,
