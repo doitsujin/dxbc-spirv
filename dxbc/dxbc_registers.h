@@ -34,7 +34,6 @@ public:
   bool handleDclTgsmRaw(ir::Builder& builder, const Instruction& op);
   bool handleDclTgsmStructured(ir::Builder& builder, const Instruction& op);
 
-
   /** Loads temporary register. */
   ir::SsaDef emitLoad(
           ir::Builder&            builder,
@@ -43,13 +42,22 @@ public:
           WriteMask               componentMask,
           ir::ScalarType          type);
 
-
   /** Stores temporary register. */
   bool emitStore(
           ir::Builder&            builder,
     const Instruction&            op,
     const Operand&                operand,
           ir::SsaDef              value);
+
+  /** Loads data from shared memoory. */
+  ir::SsaDef emitTgsmLoad(
+          ir::Builder&            builder,
+    const Instruction&            op,
+    const Operand&                operand,
+          ir::SsaDef              elementIndex,
+          ir::SsaDef              elementOffset,
+          WriteMask               componentMask,
+          ir::ScalarType          scalarType);
 
 private:
 
@@ -64,6 +72,8 @@ private:
   ir::SsaDef getOrDeclareTemp(ir::Builder& builder, uint32_t index, Component component);
 
   ir::SsaDef getIndexableTemp(uint32_t index);
+
+  ir::SsaDef getTgsmRegister(const Instruction& op, const Operand& operand);
 
   bool declareLds(ir::Builder& builder, const Instruction& op, const Operand& operand, const ir::Type& type);
 

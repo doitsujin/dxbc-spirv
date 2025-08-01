@@ -191,6 +191,46 @@ bool RegisterFile::emitStore(
 }
 
 
+ir::SsaDef RegisterFile::emitTgsmLoad(
+        ir::Builder&            builder,
+  const Instruction&            op,
+  const Operand&                operand,
+        ir::SsaDef              elementIndex,
+        ir::SsaDef              elementOffset,
+        WriteMask               componentMask,
+        ir::ScalarType          scalarType) {
+  auto tgsmReg = getTgsmRegister(op, operand);
+
+  if (!tgsmReg)
+    return ir::SsaDef();
+
+  const auto& tgsmType = builder.getOp(tgsmReg).getType();
+  bool isStructured = !tgsmType.getSubType(0u).isScalarType();
+
+  /* Scalarize loads */
+  std::array<ir::SsaDef, 4u> components = { };
+  auto readMask = operand.getSwizzle().getReadMask(componentMask);
+
+  for (auto c : readMask) {
+    auto componentIndex = uint8_t(componentFromBit(c));
+
+    auto address = isStructured
+      ? m_converter.computeStructuredAddress(builder, elementIndex, elementOffset, c)
+      : m_converter.computeRawAddress(builder, elementIndex, c);
+
+    components[componentIndex] = builder.add(ir::Op::LdsLoad(ir::ScalarType::eUnknown, tgsmReg, address));
+
+    if (scalarType != ir::ScalarType::eUnknown)
+      components[componentIndex] = builder.add(ir::Op::ConsumeAs(scalarType, components[componentIndex]));
+  }
+
+  /* Create result vector */
+  return m_converter.composite(builder,
+    m_converter.makeVectorType(scalarType, componentMask),
+    components.data(), operand.getSwizzle(), componentMask);
+}
+
+
 ir::SsaDef RegisterFile::loadArrayIndex(ir::Builder& builder, const Instruction& op, const Operand& operand) {
   if (operand.getRegisterType() != RegisterType::eIndexableTemp)
     return ir::SsaDef();
@@ -214,6 +254,23 @@ ir::SsaDef RegisterFile::getOrDeclareTemp(ir::Builder& builder, uint32_t index, 
 
 ir::SsaDef RegisterFile::getIndexableTemp(uint32_t index) {
   return index < m_xRegs.size() ? m_xRegs[index] : ir::SsaDef();
+}
+
+
+ir::SsaDef RegisterFile::getTgsmRegister(const Instruction& op, const Operand& operand) {
+  if (operand.getRegisterType() != RegisterType::eTgsm) {
+    m_converter.logOpError(op, "Register not a valid TGSM register.");
+    return ir::SsaDef();
+  }
+
+  uint32_t index = operand.getIndex(0u);
+
+  if (index >= m_gRegs.size()) {
+    m_converter.logOpError(op, "TGSM register not declared.");
+    return ir::SsaDef();
+  }
+
+  return m_gRegs[index];
 }
 
 

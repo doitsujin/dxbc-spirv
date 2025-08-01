@@ -1217,8 +1217,9 @@ bool Converter::handleLdStructured(ir::Builder& builder, const Instruction& op) 
   auto dstType = determineOperandType(dstValue, ir::ScalarType::eUnknown);
 
   if (resource.getRegisterType() == RegisterType::eTgsm) {
-    /* TODO implement */
-    return true;
+    auto data = m_regFile.emitTgsmLoad(builder, op, resource,
+      structIndex, structOffset, dstValue.getWriteMask(), dstType);
+    return data && storeDstModified(builder, op, dstValue, data);
   } else {
     auto [data, feedback] = m_resources.emitRawStructuredLoad(builder, op,
       resource, structIndex, structOffset, dstValue.getWriteMask(), dstType);
