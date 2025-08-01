@@ -227,6 +227,8 @@ private:
 
   bool handleGsEmitCut(ir::Builder& builder, const Instruction& op);
 
+  bool handleSync(ir::Builder& builder, const Instruction& op);
+
   void applyNonUniform(ir::Builder& builder, ir::SsaDef def);
 
   ir::SsaDef applySrcModifiers(ir::Builder& builder, ir::SsaDef def, const Instruction& instruction, const Operand& operand);

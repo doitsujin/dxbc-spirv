@@ -275,6 +275,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eEmitThenCutStream:
       return handleGsEmitCut(builder, op);
 
+    case OpCode::eSync:
+      return handleSync(builder, op);
+
     case OpCode::eCall:
     case OpCode::eCallc:
     case OpCode::eDerivRtx:
@@ -357,7 +360,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eImmAtomicIMin:
     case OpCode::eImmAtomicUMax:
     case OpCode::eImmAtomicUMin:
-    case OpCode::eSync:
     case OpCode::eAbort:
     case OpCode::eDebugBreak:
     case OpCode::eMsad:
@@ -1516,6 +1518,40 @@ bool Converter::handleGsEmitCut(ir::Builder& builder, const Instruction& op) {
 
   if (emitPrimitive)
     builder.add(ir::Op::EmitPrimitive(streamIndex));
+
+  return true;
+}
+
+
+bool Converter::handleSync(ir::Builder& builder, const Instruction& op) {
+  auto syncFlags = op.getOpToken().getSyncFlags();
+
+  /* Translate sync flags to memory scopes directly, we can
+   * clean up unnecessary barrier flags in a dedicated pass. */
+  auto execScope = ir::Scope::eThread;
+  auto memScope = ir::Scope::eThread;
+  auto memTypes = ir::MemoryTypeFlags();
+
+  if (syncFlags & SyncFlag::eWorkgroupThreads)
+    execScope = ir::Scope::eWorkgroup;
+
+  if (syncFlags & SyncFlag::eWorkgroupMemory) {
+    memScope = ir::Scope::eWorkgroup;
+    memTypes |= ir::MemoryType::eLds;
+  }
+
+  if (syncFlags & SyncFlag::eUavMemoryLocal) {
+    memScope = ir::Scope::eWorkgroup;
+    memTypes |= ir::MemoryType::eUavBuffer | ir::MemoryType::eUavImage;
+  }
+
+  if (syncFlags & SyncFlag::eUavMemoryGlobal) {
+    memScope = ir::Scope::eGlobal;
+    memTypes |= ir::MemoryType::eUavBuffer | ir::MemoryType::eUavImage;
+  }
+
+  if (execScope != ir::Scope::eThread || memScope != ir::Scope::eThread)
+    builder.add(ir::Op::Barrier(execScope, memScope, memTypes));
 
   return true;
 }
