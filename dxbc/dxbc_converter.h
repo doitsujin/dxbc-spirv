@@ -26,6 +26,9 @@ class Converter {
   friend IoMap;
   friend RegisterFile;
   friend ResourceMap;
+
+  /* Mask to apply to shift and bit count operands */
+  static constexpr uint32_t BitCountMask = 0x1f;
 public:
 
   struct Options {
@@ -197,6 +200,8 @@ private:
 
   bool handleIntMultiply(ir::Builder& builder, const Instruction& op);
 
+  bool handleIntShift(ir::Builder& builder, const Instruction& op);
+
   bool handleIntCompare(ir::Builder& builder, const Instruction& op);
 
   bool handleLdStructured(ir::Builder& builder, const Instruction& op);
@@ -246,6 +251,8 @@ private:
   ir::SsaDef loadSrcModified(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, ir::ScalarType type);
 
   ir::SsaDef loadSrcConditional(ir::Builder& builder, const Instruction& op, const Operand& operand);
+
+  ir::SsaDef loadSrcBitCount(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask);
 
   ir::SsaDef loadOperandIndex(ir::Builder& builder, const Instruction& op, const Operand& operand, uint32_t dim);
 

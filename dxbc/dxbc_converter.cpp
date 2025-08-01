@@ -213,6 +213,11 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eUMul:
       return handleIntMultiply(builder, op);
 
+    case OpCode::eIShl:
+    case OpCode::eIShr:
+    case OpCode::eUShr:
+      return handleIntShift(builder, op);
+
     case OpCode::eIEq:
     case OpCode::eIGe:
     case OpCode::eILt:
@@ -287,8 +292,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDerivRtx:
     case OpCode::eDerivRty:
     case OpCode::eDiscard:
-    case OpCode::eIShl:
-    case OpCode::eIShr:
     case OpCode::eLabel:
     case OpCode::eLd:
     case OpCode::eLdMs:
@@ -302,7 +305,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eSampleB:
     case OpCode::eSinCos:
     case OpCode::eUDiv:
-    case OpCode::eUShr:
     case OpCode::eDclResource:
     case OpCode::eDclSampler:
     case OpCode::eLod:
@@ -1227,6 +1229,38 @@ bool Converter::handleIntMultiply(ir::Builder& builder, const Instruction& op) {
 }
 
 
+bool Converter::handleIntShift(ir::Builder& builder, const Instruction& op) {
+  /* Shift instructions only use the lower 5 bits of the shift amount.
+   * (dst0) Result value
+   * (src0) Operand to shift
+   * (src1) Shift amount
+   */
+  const auto& dst = op.getDst(0u);
+
+  auto scalarType = determineOperandType(dst, ir::ScalarType::eU32);
+  auto src = loadSrcModified(builder, op, op.getSrc(0u), dst.getWriteMask(), scalarType);
+  auto amount = loadSrcBitCount(builder, op, op.getSrc(1u), dst.getWriteMask());
+
+  auto opCode = [&op] {
+    switch (op.getOpToken().getOpCode()) {
+      case OpCode::eIShl: return ir::OpCode::eIShl;
+      case OpCode::eIShr: return ir::OpCode::eSShr;
+      case OpCode::eUShr: return ir::OpCode::eUShr;
+      default:            break;
+    }
+
+    dxbc_spv_unreachable();
+    return ir::OpCode::eUnknown;
+  } ();
+
+  auto resultOp = ir::Op(opCode, makeVectorType(scalarType, dst.getWriteMask()))
+    .addOperand(src)
+    .addOperand(amount);
+
+  return storeDst(builder, op, dst, builder.add(std::move(resultOp)));
+}
+
+
 bool Converter::handleIntCompare(ir::Builder& builder, const Instruction& op) {
   /* All instructions support two operands with modifiers and return a boolean. */
   auto opCode = op.getOpToken().getOpCode();
@@ -1865,6 +1899,15 @@ ir::SsaDef Converter::loadSrcConditional(ir::Builder& builder, const Instruction
     value = builder.add(ir::Op::BNot(ir::ScalarType::eBool, value));
 
   return value;
+}
+
+
+ir::SsaDef Converter::loadSrcBitCount(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask) {
+  auto scalarType = determineOperandType(operand, ir::ScalarType::eU32);
+  auto vectorType = makeVectorType(scalarType, mask);
+
+  auto value = loadSrcModified(builder, op, operand, mask, scalarType);
+  return builder.add(ir::Op::IAnd(vectorType, value, makeTypedConstant(builder, vectorType, BitCountMask)));
 }
 
 
