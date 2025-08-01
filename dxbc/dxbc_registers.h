@@ -59,6 +59,15 @@ public:
           WriteMask               componentMask,
           ir::ScalarType          scalarType);
 
+  /** Stores data to shared memoory. */
+  bool emitTgsmStore(
+          ir::Builder&            builder,
+    const Instruction&            op,
+    const Operand&                operand,
+          ir::SsaDef              elementIndex,
+          ir::SsaDef              elementOffset,
+          ir::SsaDef              data);
+
 private:
 
   Converter& m_converter;

@@ -231,6 +231,45 @@ ir::SsaDef RegisterFile::emitTgsmLoad(
 }
 
 
+bool RegisterFile::emitTgsmStore(
+        ir::Builder&            builder,
+  const Instruction&            op,
+  const Operand&                operand,
+        ir::SsaDef              elementIndex,
+        ir::SsaDef              elementOffset,
+        ir::SsaDef              data) {
+  auto tgsmReg = getTgsmRegister(op, operand);
+
+  if (!tgsmReg)
+    return false;
+
+  const auto& tgsmType = builder.getOp(tgsmReg).getType();
+
+  auto scalarType = tgsmType.getBaseType(0u).getBaseType();
+  auto dataType = builder.getOp(data).getType().getBaseType(0u).getBaseType();
+
+  bool isStructured = !tgsmType.getSubType(0u).isScalarType();
+
+  /* Scalarize stores */
+  uint32_t srcIndex = 0u;
+
+  for (auto c : operand.getWriteMask()) {
+    auto address = isStructured
+      ? m_converter.computeStructuredAddress(builder, elementIndex, elementOffset, c)
+      : m_converter.computeRawAddress(builder, elementIndex, c);
+
+    auto scalar = m_converter.extractFromVector(builder, data, srcIndex++);
+
+    if (scalarType != dataType)
+      scalar = builder.add(ir::Op::ConsumeAs(scalarType, scalar));
+
+    builder.add(ir::Op::LdsStore(tgsmReg, address, scalar));
+  }
+
+  return true;
+}
+
+
 ir::SsaDef RegisterFile::loadArrayIndex(ir::Builder& builder, const Instruction& op, const Operand& operand) {
   if (operand.getRegisterType() != RegisterType::eIndexableTemp)
     return ir::SsaDef();

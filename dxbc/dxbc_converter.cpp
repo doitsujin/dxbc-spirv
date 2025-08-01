@@ -1250,8 +1250,8 @@ bool Converter::handleStoreStructured(ir::Builder& builder, const Instruction& o
   auto value = loadSrcModified(builder, op, srcData, resource.getWriteMask(), srcType);
 
   if (resource.getRegisterType() == RegisterType::eTgsm) {
-    /* TODO implement */
-    return true;
+    return m_regFile.emitTgsmStore(builder, op,
+      resource, structIndex, structOffset, value);
   } else {
     return m_resources.emitRawStructuredStore(builder, op,
       resource, structIndex, structOffset, value);
