@@ -33,6 +33,9 @@ public:
   /** Runs pass. */
   void runPass();
 
+  /** Runs trivial phi elimination pass */
+  void resolveTrivialPhi();
+
   /** Validates pre-conditions of the pass, specifically that control flow
    *  is valid and all tempooraries are used in exactly one function. */
   bool validatePreConditions(std::ostream& str) const;
@@ -46,6 +49,12 @@ public:
   /** Initializes and runs pass on the given builder. */
   static void runPass(Builder& builder);
 
+  /** Runs pass to resolve trivial phi. This is automatically invoked
+   *  once when running the regular SSA construction pass, but may be
+   *  required after passes that change control flow or merge arithmetic
+   *  operations as well. */
+  static void runResolveTrivialPhiPass(Builder& builder);
+
 private:
 
   Builder& m_builder;
@@ -54,17 +63,12 @@ private:
   SsaDef m_block = { };
 
   /* Per-def metadata.
-   * - For temp variables, this stores the last known definition of the
-   *   variable in the current block, and will be reset between blocks.
    * - For branch instructions, this points to the containing block.
    * - For phi instructions, this points to the temporary variable. */
   Container<SsaDef> m_metadata;
 
   /* Per-block state */
   Container<SsaPassBlockState> m_blocks;
-
-  /* List of variables defined in the current block. */
-  util::small_vector<SsaDef, 256u> m_localTemps;
 
   /* Global look-up table that stores the last valid definition of each
    * temporary variable for each block where it is used, including phis. */
@@ -89,17 +93,11 @@ private:
 
   SsaDef getDefForVariable(SsaDef var);
 
-  void insertLocalDef(SsaDef var, SsaDef def);
-
-  void insertGlobalDef(SsaDef block, SsaDef var, SsaDef def);
-
   void insertDef(SsaDef block, SsaDef var, SsaDef def);
 
   SsaDef insertPhi(SsaDef block, SsaDef var);
 
   SsaDef evaluatePhi(SsaDef block, SsaDef phi);
-
-  SsaDef normalizePhi(SsaDef phi);
 
   void fillBlock(SsaDef block, SsaDef terminator);
 
@@ -112,6 +110,8 @@ private:
   SsaDef findContainingBlock(SsaDef def);
 
   bool validateLabel(std::ostream& str, const Op& label) const;
+
+  SsaDef getOnlyUniquePhiOperand(SsaDef phi);
 
 };
 

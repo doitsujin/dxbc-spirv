@@ -20,6 +20,48 @@ SsaConstructionPass::~SsaConstructionPass() {
 void SsaConstructionPass::runPass() {
   resolveTempLoadStore();
   removeTempDecls();
+  resolveTrivialPhi();
+}
+
+
+void SsaConstructionPass::resolveTrivialPhi() {
+  std::vector<SsaDef> queue;
+
+  /* Gather trivial phi */
+  auto [a, b] = m_builder.getCode();
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::ePhi) {
+      if (getOnlyUniquePhiOperand(iter->getDef()))
+        queue.push_back(iter->getDef());
+    }
+  }
+
+  /* Recursively check and eliminate phi */
+  while (!queue.empty()) {
+    auto phi = queue.back();
+    queue.pop_back();
+
+    /* Might already have eliminated phi? */
+    if (!m_builder.getOp(phi))
+      continue;
+
+    /* Get replacement operand if phi is trivial */
+    auto def = getOnlyUniquePhiOperand(phi);
+
+    if (!def)
+      continue;
+
+    /* Add all phis affected by the rewrie to the queue */
+    auto [a, b] = m_builder.getUses(phi);
+
+    for (auto iter = a; iter != b; iter++) {
+      if (iter->getOpCode() == OpCode::ePhi && iter->getDef() != phi)
+        queue.push_back(iter->getDef());
+    }
+
+    m_builder.rewriteDef(phi, def);
+  }
 }
 
 
@@ -87,6 +129,12 @@ bool SsaConstructionPass::validatePostConditions(std::ostream& str) const {
 void SsaConstructionPass::runPass(Builder& builder) {
   SsaConstructionPass pass(builder);
   pass.runPass();
+}
+
+
+void SsaConstructionPass::runResolveTrivialPhiPass(Builder& builder) {
+  SsaConstructionPass pass(builder);
+  pass.resolveTrivialPhi();
 }
 
 
@@ -161,13 +209,6 @@ Builder::iterator SsaConstructionPass::handleLabel(Builder::iterator op) {
 
 
 Builder::iterator SsaConstructionPass::handleBlockTerminator(Builder::iterator op) {
-  /* Commit all definitions to the global look-up table
-   * and reset the block-local lookup table. */
-  for (auto temp : m_localTemps)
-    insertGlobalDef(m_block, temp, std::exchange(m_metadata[temp], SsaDef()));
-
-  m_localTemps.clear();
-
   /* Reset local block tracking and make it easier to look
    * up the block for a given branch */
   auto block = std::exchange(m_block, SsaDef());
@@ -182,7 +223,7 @@ Builder::iterator SsaConstructionPass::handleBlockTerminator(Builder::iterator o
 
 Builder::iterator SsaConstructionPass::handlePhi(Builder::iterator op) {
   auto var = m_metadata[op->getDef()];
-  insertLocalDef(var, op->getDef());
+  insertDef(m_block, var, op->getDef());
 
   return ++op;
 }
@@ -202,7 +243,7 @@ Builder::iterator SsaConstructionPass::handleTmpStore(Builder::iterator op) {
   auto var = SsaDef(op->getOperand(0u));
   auto def = SsaDef(op->getOperand(1u));
 
-  insertLocalDef(var, def);
+  insertDef(m_block, var, def);
 
   return m_builder.iter(m_builder.removeOp(*op));
 }
@@ -211,16 +252,11 @@ Builder::iterator SsaConstructionPass::handleTmpStore(Builder::iterator op) {
 SsaDef SsaConstructionPass::lookupVariableInBlock(SsaDef block, SsaDef var) {
   SsaDef def = { };
 
-  if (block == m_block) {
-    /* Query local look-up table */
-    def = m_metadata[var];
-  } else {
-    /* Query global look-up table */
-    auto entry = m_globalDefs.find(SsaPassTempKey(block, var));
+  /* Query global look-up table */
+  auto entry = m_globalDefs.find(SsaPassTempKey(block, var));
 
-    if (entry != m_globalDefs.end())
-      def = entry->second;
-  }
+  if (entry != m_globalDefs.end())
+    def = entry->second;
 
   if (def)
     return def;
@@ -246,24 +282,8 @@ SsaDef SsaConstructionPass::lookupVariableInBlock(SsaDef block, SsaDef var) {
 }
 
 
-void SsaConstructionPass::insertLocalDef(SsaDef var, SsaDef def) {
-  /* If this is the first time we're defining the variable in
-   * the current block, we need to add it to the local list */
-  if (!std::exchange(m_metadata[var], def))
-    m_localTemps.push_back(var);
-}
-
-
-void SsaConstructionPass::insertGlobalDef(SsaDef block, SsaDef var, SsaDef def) {
-  m_globalDefs.insert_or_assign(SsaPassTempKey(block, var), def);
-}
-
-
 void SsaConstructionPass::insertDef(SsaDef block, SsaDef var, SsaDef def) {
-  if (block == m_block)
-    insertLocalDef(var, def);
-  else
-    insertGlobalDef(block, var, def);
+  m_globalDefs.insert_or_assign(SsaPassTempKey(block, var), def);
 }
 
 
@@ -301,51 +321,7 @@ SsaDef SsaConstructionPass::evaluatePhi(SsaDef block, SsaDef phi) {
   }
 
   m_builder.rewriteOp(phi, std::move(op));
-  return normalizePhi(phi);
-}
-
-
-SsaDef SsaConstructionPass::normalizePhi(SsaDef phi) {
-  const auto& phiOp = m_builder.getOp(phi);
-
-  SsaDef def = { };
-  bool isTrivial = true;
-
-  /* Filter out phis that have only a self-reference
-   * and a single unique value */
-  forEachPhiOperand(phiOp, [&] (SsaDef, SsaDef value) {
-    if (def != value && def != phi)
-      isTrivial = !def;
-
-    if (!def && value != phi)
-      def = value;
-  });
-
-  if (!isTrivial)
-    return phi;
-
-  /* Block has no predecessors */
-  if (!def)
-    def = m_builder.makeUndef(phiOp.getType());
-
-  /* Remember phi ops that use this phi as an operand */
-  util::small_vector<SsaDef, 16> uses;
-
-  auto [a, b] = m_builder.getUses(phi);
-
-  for (auto use = a; use != b; use++) {
-    if (use->getOpCode() == OpCode::ePhi && use->getDef() != phi)
-      uses.push_back(use->getDef());
-  }
-
-  /* Replace all uses of the phi with the unique value */
-  m_builder.rewriteDef(phi, def);
-
-  /* Recursively normalize phi uses */
-  for (auto use : uses)
-    normalizePhi(use);
-
-  return def;
+  return phi;
 }
 
 
@@ -440,6 +416,28 @@ bool SsaConstructionPass::validateLabel(std::ostream& str, const Op& label) cons
   }
 
   return true;
+}
+
+
+SsaDef SsaConstructionPass::getOnlyUniquePhiOperand(SsaDef phi) {
+  dxbc_spv_assert(m_builder.getOp(phi).getOpCode() == OpCode::ePhi);
+
+  SsaDef unique = { };
+
+  forEachPhiOperand(m_builder.getOp(phi), [phi, &unique] (SsaDef, SsaDef value) {
+    if (!unique && value != phi)
+      unique = value;
+    else if (value != unique && value != phi)
+      unique = phi;
+  });
+
+  if (unique == phi)
+    return SsaDef();
+
+  if (!unique)
+    unique = m_builder.makeUndef(m_builder.getOp(phi).getType());
+
+  return unique;
 }
 
 }
