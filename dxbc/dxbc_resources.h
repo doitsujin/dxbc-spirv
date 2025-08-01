@@ -79,6 +79,9 @@ public:
    *  internal look-up table. */
   bool handleDclConstantBuffer(ir::Builder& builder, const Instruction& op);
 
+  /** Processed a structured resource or UAV declaration. */
+  bool handleDclResourceStructured(ir::Builder& builder, const Instruction& op);
+
   /** Loads data from a constant buffer using one or more BufferLoad
    *  instruction. If possiblem this will emit a vectorized load. */
   ir::SsaDef emitConstantBufferLoad(
@@ -86,7 +89,21 @@ public:
     const Instruction&            op,
     const Operand&                operand,
           WriteMask               componentMask,
-          ir::ScalarType          type);
+          ir::ScalarType          scalarType);
+
+  /** Loads vectorized data from a raw or structured buffer. The element
+   *  offset is the raw byte offset into the structure for structured
+   *  buffers, and must be null for raw buffers.
+   *  If the instruction is a sparse feedback instruction, the sparse
+   *  feedback value will be returned in the second part of the result. */
+  std::pair<ir::SsaDef, ir::SsaDef> emitRawStructuredLoad(
+          ir::Builder&            builder,
+    const Instruction&            op,
+    const Operand&                operand,
+          ir::SsaDef              elementIndex,
+          ir::SsaDef              elementOffset,
+          WriteMask               componentMask,
+          ir::ScalarType          scalarType);
 
 private:
 
@@ -102,6 +119,15 @@ private:
   ResourceInfo* insertResourceInfo(
     const Instruction&            op,
     const Operand&                operand);
+
+  static uint32_t computeRawStructuredAlignment(
+          ir::Builder&            builder,
+    const ResourceInfo&           resource,
+          ir::SsaDef              elementOffset,
+          WriteMask               components);
+
+  static ir::UavFlags getUavFlags(
+    const Instruction&            op);
 
 };
 

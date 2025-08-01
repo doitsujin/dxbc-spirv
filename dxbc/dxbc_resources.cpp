@@ -62,6 +62,43 @@ bool ResourceMap::handleDclConstantBuffer(ir::Builder& builder, const Instructio
 }
 
 
+bool ResourceMap::handleDclResourceStructured(ir::Builder& builder, const Instruction& op) {
+  /* dcl_resource_structured and dcl_uav_structured have the following operands:
+   * (dst0) The resource or uav register to declare
+   * (imm0) The structure size / stride in bytes
+   * (imm1) The register space (SM5.1 only)
+   */
+  const auto& operand = op.getDst(0u);
+
+  if (operand.getRegisterType() != RegisterType::eResource &&
+      operand.getRegisterType() != RegisterType::eUav)
+    return m_converter.logOpError(op, "Instruction does not declare a valid resource.");
+
+  auto info = insertResourceInfo(op, operand);
+
+  if (!info)
+    return false;
+
+  /* Emit actual resource declaration */
+  auto structSize = op.getImm(0u).getImmediate<uint32_t>(0u);
+
+  info->kind = ir::ResourceKind::eBufferStructured;
+  info->type = ir::Type(ir::ScalarType::eUnknown)
+    .addArrayDimension(structSize / sizeof(uint32_t))
+    .addArrayDimension(0u);
+
+  if (operand.getRegisterType() == RegisterType::eUav) {
+    info->resourceDef = builder.add(ir::Op::DclUav(info->type, m_converter.getEntryPoint(),
+      info->resourceIndex, info->resourceCount, info->regSpace, info->kind, getUavFlags(op)));
+  } else {
+    info->resourceDef = builder.add(ir::Op::DclSrv(info->type, m_converter.getEntryPoint(),
+      info->resourceIndex, info->resourceCount, info->regSpace, info->kind));
+  }
+
+  return true;
+}
+
+
 ir::SsaDef ResourceMap::emitConstantBufferLoad(
         ir::Builder&            builder,
   const Instruction&            op,
@@ -127,6 +164,87 @@ ir::SsaDef ResourceMap::emitConstantBufferLoad(
   return m_converter.composite(builder,
     m_converter.makeVectorType(scalarType, componentMask),
     components.data(), operand.getSwizzle(), componentMask);
+}
+
+
+std::pair<ir::SsaDef, ir::SsaDef> ResourceMap::emitRawStructuredLoad(
+        ir::Builder&            builder,
+  const Instruction&            op,
+  const Operand&                operand,
+        ir::SsaDef              elementIndex,
+        ir::SsaDef              elementOffset,
+        WriteMask               componentMask,
+        ir::ScalarType          scalarType) {
+  auto [descriptor, resource] = loadDescriptor(builder, op, operand);
+
+  if (!resource)
+    return std::make_pair(ir::SsaDef(), ir::SsaDef());
+
+  auto opCode = op.getOpToken().getOpCode();
+  auto bufferType = resource->type.getBaseType(0u).getBaseType();
+
+  /* If sparse feedback is enabled, load all requested components
+   * to avoid having to merge multiple sparse feedback infos. */
+  bool isSparse = (opCode == OpCode::eLdStructuredS || opCode == OpCode::eLdRawS) &&
+    op.getDst(1u).getRegisterType() != RegisterType::eNull;
+  auto readMask = operand.getSwizzle().getReadMask(componentMask);
+
+  if (isSparse) {
+    auto hiMask = 0x7fu >> util::lzcnt8(uint8_t(readMask));
+    auto loMask = 0xffu << util::tzcnt(uint8_t(readMask));
+
+    readMask = WriteMask(hiMask & loMask);
+  }
+
+  /* Emit vectorized loads like we do for constant buffers */
+  std::array<ir::SsaDef, 4u> components = { };
+
+  ir::SsaDef sparseFeedback = { };
+
+  while (readMask) {
+    /* Consecutive blocks of components to read */
+    auto block = extractConsecutiveComponents(readMask);
+    auto blockType = ir::BasicType(bufferType, util::popcnt(uint8_t(block)));
+
+    dxbc_spv_assert(!isSparse || readMask == block);
+
+    auto resultType = isSparse
+      ? ir::Type().addStructMember(ir::ScalarType::eU32).addStructMember(blockType)
+      : ir::Type().addStructMember(blockType);
+
+    auto blockAlignment = computeRawStructuredAlignment(builder, *resource, elementOffset, block);
+
+    auto address = resource->kind == ir::ResourceKind::eBufferStructured
+      ? m_converter.computeStructuredAddress(builder, elementIndex, elementOffset, block)
+      : m_converter.computeRawAddress(builder, elementIndex, block);
+
+    /* Load buffer data and convert to desired result type */
+    auto result = builder.add(ir::Op::BufferLoad(resultType, descriptor, address, blockAlignment));
+
+    if (isSparse) {
+      builder.setOpFlags(result, ir::OpFlag::eSparseFeedback);
+      sparseFeedback = m_converter.extractFromVector(builder, result, 0u);
+      result = m_converter.extractFromVector(builder, result, 1u);
+    }
+
+    /* For regular loads, split the vector into scalars */
+    for (uint32_t i = 0u; i < blockType.getVectorSize(); i++) {
+      auto index = uint8_t(componentFromBit(block.first())) + i;
+      components[index] = m_converter.extractFromVector(builder, result, i);
+
+      if (scalarType != bufferType)
+        components[index] = builder.add(ir::Op::ConsumeAs(scalarType, components[index]));
+    }
+
+    readMask -= block;
+  }
+
+  /* Build result vector */
+  auto data = m_converter.composite(builder,
+    m_converter.makeVectorType(scalarType, componentMask),
+    components.data(), operand.getSwizzle(), componentMask);
+
+  return std::make_pair(data, sparseFeedback);
 }
 
 
@@ -232,6 +350,53 @@ ResourceInfo* ResourceMap::insertResourceInfo(
   }
 
   return &info;
+}
+
+
+uint32_t ResourceMap::computeRawStructuredAlignment(
+        ir::Builder&            builder,
+  const ResourceInfo&           resource,
+        ir::SsaDef              elementOffset,
+        WriteMask               components) {
+  /* Raw buffer, alignment can be just about anything */
+  if (!elementOffset)
+    return sizeof(uint32_t);
+
+  /* Determine struct offset based on the address parameter.
+   * If it is not constant, assume small alignment. */
+  const auto& elementOp = builder.getOp(elementOffset);
+
+  if (!elementOp.isConstant())
+    return sizeof(uint32_t);
+
+  uint32_t componentIndex = uint8_t(componentFromBit(components.first()));
+  uint32_t structOffset = uint32_t(elementOp.getOperand(0u)) + componentIndex + sizeof(uint32_t);
+
+  /* Compute alignment of the underlying structure and cap at 16 bytes,
+   * which is the largest vector unit we can possibly load in one go */
+  uint32_t structAlignment = resource.type.getSubType(0u).byteSize();
+  structAlignment &= -structAlignment;
+  structAlignment = std::min(structAlignment, 16u);
+
+  /* Compute actual offset alignment */
+  uint32_t offsetAlignment = structAlignment | structOffset;
+  return offsetAlignment & -offsetAlignment;
+}
+
+
+ir::UavFlags ResourceMap::getUavFlags(
+  const Instruction&            op) {
+  auto flags = op.getOpToken().getUavFlags();
+
+  ir::UavFlags result = 0u;
+
+  if (flags & UavFlag::eGloballyCoherent)
+    result |= ir::UavFlag::eCoherent;
+
+  if (flags & UavFlag::eRasterizerOrdered)
+    result |= ir::UavFlag::eRasterizerOrdered;
+
+  return result;
 }
 
 }

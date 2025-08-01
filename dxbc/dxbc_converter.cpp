@@ -79,6 +79,10 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclConstantBuffer:
       return m_resources.handleDclConstantBuffer(builder, op);
 
+    case OpCode::eDclResourceStructured:
+    case OpCode::eDclUavStructured:
+      return m_resources.handleDclResourceStructured(builder, op);
+
     case OpCode::eHsDecls:
     case OpCode::eHsControlPointPhase:
     case OpCode::eHsForkPhase:
@@ -209,6 +213,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eEvalCentroid:
       return m_ioMap.handleEval(builder, op);
 
+    case OpCode::eLdStructured:
+      return handleLdStructured(builder, op);
+
     case OpCode::eBreak:
     case OpCode::eBreakc:
       return handleBreak(builder, op);
@@ -313,16 +320,13 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclThreadGroup:
     case OpCode::eDclUavTyped:
     case OpCode::eDclUavRaw:
-    case OpCode::eDclUavStructured:
     case OpCode::eDclThreadGroupSharedMemoryRaw:
     case OpCode::eDclThreadGroupSharedMemoryStructured:
     case OpCode::eDclResourceRaw:
-    case OpCode::eDclResourceStructured:
     case OpCode::eLdUavTyped:
     case OpCode::eStoreUavTyped:
     case OpCode::eLdRaw:
     case OpCode::eStoreRaw:
-    case OpCode::eLdStructured:
     case OpCode::eStoreStructured:
     case OpCode::eAtomicAnd:
     case OpCode::eAtomicOr:
@@ -1189,6 +1193,38 @@ bool Converter::handleIntCompare(ir::Builder& builder, const Instruction& op) {
 }
 
 
+bool Converter::handleLdStructured(ir::Builder& builder, const Instruction& op) {
+  /* ld_structured has the following operands:
+   * (dst0) Result vector
+   * (dst1) Sparse feedback value (scalar, optional)
+   * (src0) Structure index
+   * (src1) Structure offset
+   * (src2) Resource register (u# / t# / g#)
+   */
+  const auto& dstValue = op.getDst(0u);
+
+  auto structIndex = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX, ir::ScalarType::eU32);
+  auto structOffset = loadSrcModified(builder, op, op.getSrc(1u), ComponentBit::eX, ir::ScalarType::eU32);
+
+  const auto& resource = op.getSrc(2u);
+
+  auto dstType = determineOperandType(dstValue, ir::ScalarType::eUnknown);
+
+  if (resource.getRegisterType() == RegisterType::eTgsm) {
+    /* TODO implement */
+    return true;
+  } else {
+    auto [data, feedback] = m_resources.emitRawStructuredLoad(builder, op,
+      resource, structIndex, structOffset, dstValue.getWriteMask(), dstType);
+
+    if (feedback && !storeDstModified(builder, op, op.getDst(1u), feedback))
+      return false;
+
+    return data && storeDstModified(builder, op, dstValue, data);
+  }
+}
+
+
 bool Converter::handleIf(ir::Builder& builder, const Instruction& op) {
   auto cond = loadSrcConditional(builder, op, op.getSrc(0u));
 
@@ -1759,6 +1795,39 @@ bool Converter::storeDstModified(ir::Builder& builder, const Instruction& op, co
 }
 
 
+ir::SsaDef Converter::computeRawAddress(ir::Builder& builder, ir::SsaDef byteAddress, WriteMask componentMask) {
+  const auto& offsetOp = builder.getOp(byteAddress);
+
+  /* Explicit u32 for use as a constant */
+  uint32_t componentIndex = uint8_t(componentFromBit(componentMask.first()));
+
+  if (offsetOp.isConstant()) {
+    /* If we know the struct offset is constant, just emit another constant */
+    uint32_t dwordOffset = (uint32_t(offsetOp.getOperand(0u)) / sizeof(uint32_t)) + componentIndex;
+    return builder.makeConstant(dwordOffset);
+  } else {
+    /* Otherwise, dynamically adjust the offset to be a dword index */
+    auto result = builder.add(ir::Op::UShr(ir::ScalarType::eU32,
+      byteAddress, builder.makeConstant(2u)));
+
+    if (componentIndex) {
+      result = builder.add(ir::Op::IAdd(ir::ScalarType::eU32, result,
+        builder.makeConstant(componentIndex)));
+    }
+
+    return result;
+  }
+}
+
+
+ir::SsaDef Converter::computeStructuredAddress(ir::Builder& builder, ir::SsaDef elementIndex, ir::SsaDef elementOffset, WriteMask componentMask) {
+  auto type = ir::BasicType(ir::ScalarType::eU32, 2u);
+  elementOffset = computeRawAddress(builder, elementOffset, componentMask);
+
+  return builder.add(ir::Op::CompositeConstruct(type, elementIndex, elementOffset));
+}
+
+
 ir::SsaDef Converter::boolToInt(ir::Builder& builder, ir::SsaDef def) {
   auto srcType = builder.getOp(def).getType().getBaseType(0u);
   dxbc_spv_assert(srcType.isBoolType());
@@ -1903,7 +1972,7 @@ ir::SsaDef Converter::extractFromVector(ir::Builder& builder, ir::SsaDef def, ui
   if (op.getOpCode() == ir::OpCode::eCompositeConstruct)
     return ir::SsaDef(op.getOperand(component));
 
-  return builder.add(ir::Op::CompositeExtract(op.getType().getSubType(0u), def, builder.makeConstant(component)));
+  return builder.add(ir::Op::CompositeExtract(op.getType().getSubType(component), def, builder.makeConstant(component)));
 }
 
 

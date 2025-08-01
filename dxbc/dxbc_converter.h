@@ -187,6 +187,8 @@ private:
 
   bool handleIntCompare(ir::Builder& builder, const Instruction& op);
 
+  bool handleLdStructured(ir::Builder& builder, const Instruction& op);
+
   bool handleIf(ir::Builder& builder, const Instruction& op);
 
   bool handleElse(ir::Builder& builder, const Instruction& op);
@@ -234,6 +236,10 @@ private:
   bool storeDst(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value);
 
   bool storeDstModified(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value);
+
+  ir::SsaDef computeRawAddress(ir::Builder& builder, ir::SsaDef byteAddress, WriteMask componentMask);
+
+  ir::SsaDef computeStructuredAddress(ir::Builder& builder, ir::SsaDef elementIndex, ir::SsaDef elementOffset, WriteMask componentMask);
 
   ir::SsaDef boolToInt(ir::Builder& builder, ir::SsaDef def);
 
