@@ -125,19 +125,32 @@ uint32_t Type::byteAlignment() const {
 
 
 uint32_t Type::byteOffset(uint32_t member) const {
-  dxbc_spv_assert(member < m_structSize);
+  if (isArrayType())
+    return member * getSubType(0u).byteSize();
 
-  uint32_t offset = 0u;
+  if (isStructType()) {
+    dxbc_spv_assert(member < m_structSize);
 
-  for (uint32_t i = 0u; i < member; i++) {
-    uint32_t memberAlignment = getBaseType(i).byteAlignment();
+    uint32_t offset = 0u;
 
-    offset = util::align(offset, memberAlignment);
-    offset += getBaseType(i).byteSize();
+    for (uint32_t i = 0u; i < member; i++) {
+      uint32_t memberAlignment = getBaseType(i).byteAlignment();
+
+      offset = util::align(offset, memberAlignment);
+      offset += getBaseType(i).byteSize();
+    }
+
+    uint32_t memberAlignment = getBaseType(member).byteAlignment();
+    return util::align(offset, memberAlignment);
   }
 
-  uint32_t memberAlignment = getBaseType(member).byteAlignment();
-  return util::align(offset, memberAlignment);
+  if (isVectorType()) {
+    dxbc_spv_assert(member < getBaseType(0u).getVectorSize());
+    return member * ir::byteSize(getBaseType(0u).getBaseType());
+  }
+
+  dxbc_spv_unreachable(0u);
+  return 0u;
 }
 
 
