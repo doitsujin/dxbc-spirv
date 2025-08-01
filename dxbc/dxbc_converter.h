@@ -5,6 +5,7 @@
 #include "dxbc_io_map.h"
 #include "dxbc_parser.h"
 #include "dxbc_registers.h"
+#include "dxbc_resources.h"
 #include "dxbc_signature.h"
 #include "dxbc_types.h"
 
@@ -24,6 +25,7 @@ namespace dxbc_spv::dxbc {
 class Converter {
   friend IoMap;
   friend RegisterFile;
+  friend ResourceMap;
 public:
 
   struct Options {
@@ -61,6 +63,7 @@ private:
 
   RegisterFile  m_regFile;
   IoMap         m_ioMap;
+  ResourceMap   m_resources;
   ControlFlow   m_controlFlow;
   Parser        m_parser;
 

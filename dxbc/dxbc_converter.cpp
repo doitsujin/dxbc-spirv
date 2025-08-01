@@ -4,10 +4,11 @@
 namespace dxbc_spv::dxbc {
 
 Converter::Converter(Container container, const Options& options)
-: m_dxbc    (std::move(container))
-, m_options (options)
-, m_regFile (*this)
-, m_ioMap   (*this) {
+: m_dxbc      (std::move(container))
+, m_options   (options)
+, m_regFile   (*this)
+, m_ioMap     (*this)
+, m_resources (*this) {
   if (options.maxTessFactor != 0.0f) {
     if (isValidTessFactor(options.maxTessFactor))
       m_hs.maxTessFactor = options.maxTessFactor;
@@ -23,7 +24,8 @@ Converter::~Converter() {
 
 
 bool Converter::convertShader(ir::Builder& builder) {
-  if (!initParser(m_parser, m_dxbc.getCodeChunk()) || !m_ioMap.init(m_dxbc, m_parser.getShaderInfo()))
+  if (!initParser(m_parser, m_dxbc.getCodeChunk()) ||
+      !m_ioMap.init(m_dxbc, m_parser.getShaderInfo()))
     return false;
 
   initialize(builder);
@@ -73,6 +75,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
 
     case OpCode::eDclIndexRange:
       return m_ioMap.handleDclIndexRange(builder, op);
+
+    case OpCode::eDclConstantBuffer:
+      return m_resources.handleDclConstantBuffer(builder, op);
 
     case OpCode::eHsDecls:
     case OpCode::eHsControlPointPhase:
@@ -275,7 +280,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eUMul:
     case OpCode::eUShr:
     case OpCode::eDclResource:
-    case OpCode::eDclConstantBuffer:
     case OpCode::eDclSampler:
     case OpCode::eLod:
     case OpCode::eGather4:
@@ -1448,8 +1452,11 @@ void Converter::applyNonUniform(ir::Builder& builder, ir::SsaDef def) {
 ir::SsaDef Converter::applySrcModifiers(ir::Builder& builder, ir::SsaDef def, const Instruction& instruction, const Operand& operand) {
   auto mod = operand.getModifiers();
 
-  if (mod.isNonUniform())
-    applyNonUniform(builder, def);
+  if (mod.isNonUniform()) {
+    /* We already apply nonuniform modifiers to descriptor loads for CBV */
+    if (operand.getRegisterType() != RegisterType::eCbv)
+      applyNonUniform(builder, def);
+  }
 
   if (mod.isAbsolute() || mod.isNegated()) {
     /* Ensure the operand has a type we can work with, and assume float32
@@ -1606,6 +1613,9 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
       break;
 
     case RegisterType::eCbv:
+      loadDef = m_resources.emitConstantBufferLoad(builder, op, operand, mask, loadType);
+      break;
+
     case RegisterType::eIcb:
       /* TODO implement */
       dxbc_spv_unreachable();
