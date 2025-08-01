@@ -218,6 +218,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eUShr:
       return handleIntShift(builder, op);
 
+    case OpCode::eBfi:
+      return handleBitInsert(builder, op);
+
     case OpCode::eIEq:
     case OpCode::eIGe:
     case OpCode::eILt:
@@ -330,7 +333,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eFirstBitShi:
     case OpCode::eUBfe:
     case OpCode::eIBfe:
-    case OpCode::eBfi:
     case OpCode::eBfRev:
     case OpCode::eSwapc:
     case OpCode::eDclFunctionBody:
@@ -1308,6 +1310,32 @@ bool Converter::handleIntCompare(ir::Builder& builder, const Instruction& op) {
   } ();
 
   return storeDstModified(builder, op, dst, builder.add(std::move(result)));
+}
+
+
+bool Converter::handleBitInsert(ir::Builder& builder, const Instruction& op) {
+  /* bfi takes the following operands:
+   * (dst0) Result value
+   * (src0) Number of bits to take from src2
+   * (src1) Offset where to insert the bits
+   * (src2) Operand to insert
+   * (src3) Base operand
+   */
+  const auto& dst = op.getDst(0u);
+
+  auto scalarType = determineOperandType(dst, ir::ScalarType::eU32, false);
+
+  auto base = loadSrcModified(builder, op, op.getSrc(3u), dst.getWriteMask(), scalarType);
+  auto value = loadSrcModified(builder, op, op.getSrc(2u), dst.getWriteMask(), scalarType);
+
+  auto offset = loadSrcBitCount(builder, op, op.getSrc(1u), dst.getWriteMask());
+  auto count = loadSrcBitCount(builder, op, op.getSrc(0u), dst.getWriteMask());
+
+  auto resultDef = builder.add(ir::Op::IBitInsert(
+    makeVectorType(scalarType, dst.getWriteMask()),
+    base, value, offset, count));
+
+  return storeDst(builder, op, dst, resultDef);
 }
 
 

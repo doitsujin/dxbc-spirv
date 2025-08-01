@@ -204,6 +204,8 @@ private:
 
   bool handleIntCompare(ir::Builder& builder, const Instruction& op);
 
+  bool handleBitInsert(ir::Builder& builder, const Instruction& op);
+
   bool handleLdStructured(ir::Builder& builder, const Instruction& op);
 
   bool handleStoreStructured(ir::Builder& builder, const Instruction& op);
