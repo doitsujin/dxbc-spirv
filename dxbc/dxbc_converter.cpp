@@ -130,6 +130,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclMaxOutputVertexCount:
       return handleGsOutputVertexCount(op);
 
+    case OpCode::eDclThreadGroup:
+      return handleCsWorkgroupSize(builder, op);
+
     case OpCode::eMov:
     case OpCode::eDMov:
       return handleMov(builder, op);
@@ -326,7 +329,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclFunctionBody:
     case OpCode::eDclFunctionTable:
     case OpCode::eDclInterface:
-    case OpCode::eDclThreadGroup:
     case OpCode::eDclUavTyped:
     case OpCode::eDclUavRaw:
     case OpCode::eDclResourceRaw:
@@ -715,6 +717,18 @@ bool Converter::handleGsOutputPrimitive(const Instruction& op) {
 
 bool Converter::handleGsOutputVertexCount(const Instruction& op) {
   m_gs.outputVertices = op.getImm(0u).getImmediate<uint32_t>(0u);
+  return true;
+}
+
+
+bool Converter::handleCsWorkgroupSize(ir::Builder& builder, const Instruction& op) {
+  m_cs.workgroupSizeX = op.getImm(0u).getImmediate<uint32_t>(0u);
+  m_cs.workgroupSizeY = op.getImm(1u).getImmediate<uint32_t>(0u);
+  m_cs.workgroupSizeZ = op.getImm(2u).getImmediate<uint32_t>(0u);
+
+  builder.add(ir::Op::SetCsWorkgroupSize(getEntryPoint(),
+    m_cs.workgroupSizeX, m_cs.workgroupSizeY, m_cs.workgroupSizeZ));
+
   return true;
 }
 

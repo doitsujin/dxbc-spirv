@@ -129,6 +129,14 @@ private:
   } m_gs;
 
 
+  /* Compute shader state */
+  struct {
+    uint32_t workgroupSizeX = 0u;
+    uint32_t workgroupSizeY = 0u;
+    uint32_t workgroupSizeZ = 0u;
+  } m_cs;
+
+
   bool convertInstruction(ir::Builder& builder, const Instruction& op);
 
   bool initialize(ir::Builder& builder);
@@ -168,6 +176,8 @@ private:
   bool handleGsOutputPrimitive(const Instruction& op);
 
   bool handleGsOutputVertexCount(const Instruction& op);
+
+  bool handleCsWorkgroupSize(ir::Builder& builder, const Instruction& op);
 
   bool handleMov(ir::Builder& builder, const Instruction& op);
 
