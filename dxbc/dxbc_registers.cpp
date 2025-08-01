@@ -55,6 +55,43 @@ bool RegisterFile::handleDclIndexableTemp(ir::Builder& builder, const Instructio
 }
 
 
+bool RegisterFile::handleDclTgsmRaw(ir::Builder& builder, const Instruction& op) {
+  /* dcl_tgsm_raw:
+   * (dst0) The register to declare
+   * (imm0) Byte count (not dword count)
+   */
+  auto byteCount = op.getImm(0u).getImmediate<uint32_t>(0u);
+
+  if (!byteCount || byteCount > MaxTgsmSize)
+    return m_converter.logOpError(op, "Invalid byte count for LDS: ", byteCount);
+
+  auto type = ir::Type(ir::ScalarType::eUnknown)
+    .addArrayDimension(byteCount / sizeof(uint32_t));
+
+  return declareLds(builder, op, op.getDst(0u), type);
+}
+
+
+bool RegisterFile::handleDclTgsmStructured(ir::Builder& builder, const Instruction& op) {
+  /* dcl_tgsm_structured:
+   * (dst0) The register to declare
+   * (imm0) Structure size, in bytes
+   * (imm1) Structure count
+   */
+  auto structSize = op.getImm(0u).getImmediate<uint32_t>(0u);
+  auto structCount = op.getImm(1u).getImmediate<uint32_t>(0u);
+
+  if (!structSize || !structCount || structCount * structSize > MaxTgsmSize)
+    return m_converter.logOpError(op, "Invalid structure size or count for LDS: ", structSize, "[", structCount, "]");
+
+  auto type = ir::Type(ir::ScalarType::eUnknown)
+    .addArrayDimension(structSize / sizeof(uint32_t))
+    .addArrayDimension(structCount);
+
+  return declareLds(builder, op, op.getDst(0u), type);
+}
+
+
 ir::SsaDef RegisterFile::emitLoad(
         ir::Builder&            builder,
   const Instruction&            op,
@@ -177,6 +214,29 @@ ir::SsaDef RegisterFile::getOrDeclareTemp(ir::Builder& builder, uint32_t index, 
 
 ir::SsaDef RegisterFile::getIndexableTemp(uint32_t index) {
   return index < m_xRegs.size() ? m_xRegs[index] : ir::SsaDef();
+}
+
+
+bool RegisterFile::declareLds(ir::Builder& builder, const Instruction& op, const Operand& operand, const ir::Type& type) {
+  auto regIndex = operand.getIndex(0u);
+
+  if (regIndex >= m_gRegs.size())
+    m_gRegs.resize(regIndex + 1u);
+
+  if (m_gRegs[regIndex]) {
+    auto name = m_converter.makeRegisterDebugName(operand.getRegisterType(), regIndex, WriteMask());
+    return m_converter.logOpError(op, "Register ", name, " already declared");
+  }
+
+  m_gRegs[regIndex] = builder.add(ir::Op::DclLds(type, m_converter.getEntryPoint()));
+
+  /* Emit debug name */
+  if (m_converter.m_options.includeDebugNames) {
+    auto name = m_converter.makeRegisterDebugName(operand.getRegisterType(), regIndex, WriteMask());
+    builder.add(ir::Op::DebugName(m_gRegs[regIndex], name.c_str()));
+  }
+
+  return true;
 }
 
 }

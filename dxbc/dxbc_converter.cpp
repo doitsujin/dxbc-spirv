@@ -76,6 +76,12 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclIndexRange:
       return m_ioMap.handleDclIndexRange(builder, op);
 
+    case OpCode::eDclThreadGroupSharedMemoryRaw:
+      return m_regFile.handleDclTgsmRaw(builder, op);
+
+    case OpCode::eDclThreadGroupSharedMemoryStructured:
+      return m_regFile.handleDclTgsmStructured(builder, op);
+
     case OpCode::eDclConstantBuffer:
       return m_resources.handleDclConstantBuffer(builder, op);
 
@@ -323,8 +329,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclThreadGroup:
     case OpCode::eDclUavTyped:
     case OpCode::eDclUavRaw:
-    case OpCode::eDclThreadGroupSharedMemoryRaw:
-    case OpCode::eDclThreadGroupSharedMemoryStructured:
     case OpCode::eDclResourceRaw:
     case OpCode::eLdUavTyped:
     case OpCode::eStoreUavTyped:
