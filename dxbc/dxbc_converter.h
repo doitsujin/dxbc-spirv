@@ -195,6 +195,8 @@ private:
 
   bool handleIntArithmetic(ir::Builder& builder, const Instruction& op);
 
+  bool handleIntMultiply(ir::Builder& builder, const Instruction& op);
+
   bool handleIntCompare(ir::Builder& builder, const Instruction& op);
 
   bool handleLdStructured(ir::Builder& builder, const Instruction& op);

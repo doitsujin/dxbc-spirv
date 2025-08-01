@@ -209,6 +209,10 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eXor:
       return handleIntArithmetic(builder, op);
 
+    case OpCode::eIMul:
+    case OpCode::eUMul:
+      return handleIntMultiply(builder, op);
+
     case OpCode::eIEq:
     case OpCode::eIGe:
     case OpCode::eILt:
@@ -283,7 +287,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDerivRtx:
     case OpCode::eDerivRty:
     case OpCode::eDiscard:
-    case OpCode::eIMul:
     case OpCode::eIShl:
     case OpCode::eIShr:
     case OpCode::eLabel:
@@ -299,7 +302,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eSampleB:
     case OpCode::eSinCos:
     case OpCode::eUDiv:
-    case OpCode::eUMul:
     case OpCode::eUShr:
     case OpCode::eDclResource:
     case OpCode::eDclSampler:
@@ -1162,6 +1164,66 @@ bool Converter::handleIntArithmetic(ir::Builder& builder, const Instruction& op)
   } ();
 
   return storeDst(builder, op, dst, resultDef);
+}
+
+
+bool Converter::handleIntMultiply(ir::Builder& builder, const Instruction& op) {
+  /* imul and umul can operate either normally on 32-bit values,
+   * or produce an extended 64-bit result.
+   * (dst0) High result bits
+   * (dst1) Low result bits
+   * (src0) First source operand
+   * (src1) Second source operand
+   */
+  const auto& dstHi = op.getDst(0u);
+  const auto& dstLo = op.getDst(1u);
+
+  if (dstHi.getRegisterType() == RegisterType::eNull) {
+    auto scalarType = determineOperandType(dstLo, ir::ScalarType::eU32);
+
+    const auto& srcA = loadSrcModified(builder, op, op.getSrc(0u), dstLo.getWriteMask(), scalarType);
+    const auto& srcB = loadSrcModified(builder, op, op.getSrc(1u), dstLo.getWriteMask(), scalarType);
+
+    auto resultType = makeVectorType(scalarType, dstLo.getWriteMask());
+    auto resultDef = builder.add(ir::Op::IMul(resultType, srcA, srcB));
+
+    return storeDst(builder, op, dstLo, resultDef);
+  } else {
+    auto scalarType = determineOperandType(dstHi, ir::ScalarType::eU32, false);
+
+    /* Scalarize over merged write mask */
+    util::small_vector<ir::SsaDef, 4u> loScalars;
+    util::small_vector<ir::SsaDef, 4u> hiScalars;
+
+    for (auto c : (dstHi.getWriteMask() | dstLo.getWriteMask())) {
+      const auto& srcA = loadSrcModified(builder, op, op.getSrc(0u), c, scalarType);
+      const auto& srcB = loadSrcModified(builder, op, op.getSrc(1u), c, scalarType);
+
+      if (dstHi.getWriteMask() & c) {
+        auto resultType = ir::BasicType(scalarType, 2u);
+        auto resultDef = builder.add(ir::Op::SMulExtended(resultType, srcA, srcB));
+
+        hiScalars.push_back(extractFromVector(builder, resultDef, 1u));
+
+        if (dstLo.getWriteMask() & c)
+          loScalars.push_back(extractFromVector(builder, resultDef, 0u));
+      } else {
+        /* Don't need to use extended mul if we discard the high bits */
+        auto resultDef = builder.add(ir::Op::IMul(scalarType, srcA, srcB));
+        loScalars.push_back(resultDef);
+      }
+    }
+
+    bool success = storeDst(builder, op, dstHi,
+      buildVector(builder, scalarType, hiScalars.size(), hiScalars.data()));
+
+    if (!loScalars.empty()) {
+      success = success && storeDst(builder, op, dstLo,
+        buildVector(builder, scalarType, loScalars.size(), loScalars.data()));
+    }
+
+    return success;
+  }
 }
 
 
