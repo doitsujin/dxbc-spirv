@@ -234,6 +234,8 @@ private:
 
   bool handleRet(ir::Builder& builder, const Instruction& op);
 
+  bool handleDiscard(ir::Builder& builder, const Instruction& op);
+
   bool handleGsEmitCut(ir::Builder& builder, const Instruction& op);
 
   bool handleSync(ir::Builder& builder, const Instruction& op);

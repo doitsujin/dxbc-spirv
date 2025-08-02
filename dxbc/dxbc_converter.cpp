@@ -279,6 +279,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eRetc:
       return handleRet(builder, op);
 
+    case OpCode::eDiscard:
+      return handleDiscard(builder, op);
+
     case OpCode::eCut:
     case OpCode::eCutStream:
     case OpCode::eEmit:
@@ -294,7 +297,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eCallc:
     case OpCode::eDerivRtx:
     case OpCode::eDerivRty:
-    case OpCode::eDiscard:
     case OpCode::eLabel:
     case OpCode::eLd:
     case OpCode::eLdMs:
@@ -1597,6 +1599,26 @@ bool Converter::handleRet(ir::Builder& builder, const Instruction& op) {
     auto condEnd = builder.add(ir::Op::ScopedEndIf(condBlock));
     builder.rewriteOp(condBlock, ir::Op(builder.getOp(condBlock)).setOperand(0u, condEnd));
   }
+
+  return true;
+}
+
+
+bool Converter::handleDiscard(ir::Builder& builder, const Instruction& op) {
+  /* Discard always takes a single operand:
+   * (src0) Conditional that decides whether to discard or now.
+   */
+  auto cond = loadSrcConditional(builder, op, op.getSrc(0u));
+
+  if (!cond)
+    return false;
+
+  auto condBlock = builder.add(ir::Op::ScopedIf(ir::SsaDef(), cond));
+  builder.add(ir::Op::Demote());
+
+  /* End conditional block */
+  auto condEnd = builder.add(ir::Op::ScopedEndIf(condBlock));
+  builder.rewriteOp(condBlock, ir::Op(builder.getOp(condBlock)).setOperand(0u, condEnd));
 
   return true;
 }

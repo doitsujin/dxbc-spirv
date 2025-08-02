@@ -179,6 +179,12 @@ bool ArithmeticPass::canFuseMadOperand(Builder::iterator op, uint32_t operand) c
 SsaDef ArithmeticPass::extractFromVector(SsaDef vector, uint32_t component) {
   const auto& vectorOp = m_builder.getOp(vector);
 
+  if (vectorOp.isConstant()) {
+    auto constant = Op(OpCode::eConstant, vectorOp.getType().getSubType(0u))
+      .addOperand(vectorOp.getOperand(component));
+    return m_builder.add(std::move(constant));
+  }
+
   if (vectorOp.getOpCode() == OpCode::eCompositeConstruct)
     return SsaDef(vectorOp.getOperand(component));
 
