@@ -130,6 +130,10 @@ private:
     const Instruction&            op,
     const Operand&                operand);
 
+  void emitDebugName(
+          ir::Builder&            builder,
+    const ResourceInfo*           info);
+
   static uint32_t computeRawStructuredAlignment(
           ir::Builder&            builder,
     const ResourceInfo&           resource,

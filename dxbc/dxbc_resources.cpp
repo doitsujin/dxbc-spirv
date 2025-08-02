@@ -57,7 +57,9 @@ bool ResourceMap::handleDclConstantBuffer(ir::Builder& builder, const Instructio
   info->kind = ir::ResourceKind::eBufferStructured;
   info->type = ir::Type(ir::ScalarType::eUnknown, 4u).addArrayDimension(arraySize);
   info->resourceDef = builder.add(ir::Op::DclCbv(info->type, m_converter.getEntryPoint(),
-    info->resourceIndex, info->resourceCount, info->regSpace));
+    info->regSpace, info->resourceIndex, info->resourceCount));
+
+  emitDebugName(builder, info);
   return true;
 }
 
@@ -89,12 +91,13 @@ bool ResourceMap::handleDclResourceStructured(ir::Builder& builder, const Instru
 
   if (operand.getRegisterType() == RegisterType::eUav) {
     info->resourceDef = builder.add(ir::Op::DclUav(info->type, m_converter.getEntryPoint(),
-      info->resourceIndex, info->resourceCount, info->regSpace, info->kind, getUavFlags(op)));
+      info->regSpace, info->resourceIndex, info->resourceCount, info->kind, getUavFlags(op)));
   } else {
     info->resourceDef = builder.add(ir::Op::DclSrv(info->type, m_converter.getEntryPoint(),
-      info->resourceIndex, info->resourceCount, info->regSpace, info->kind));
+      info->regSpace, info->resourceIndex, info->resourceCount, info->kind));
   }
 
+  emitDebugName(builder, info);
   return true;
 }
 
@@ -401,6 +404,14 @@ ResourceInfo* ResourceMap::insertResourceInfo(
   }
 
   return &info;
+}
+
+
+void ResourceMap::emitDebugName(ir::Builder& builder, const ResourceInfo* info) {
+  if (m_converter.m_options.includeDebugNames) {
+    auto name = m_converter.makeRegisterDebugName(info->regType, info->regIndex, WriteMask());
+    builder.add(ir::Op::DebugName(info->resourceDef, name.c_str()));
+  }
 }
 
 
