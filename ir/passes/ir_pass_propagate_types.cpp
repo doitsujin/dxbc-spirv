@@ -1,6 +1,3 @@
-#include <iostream>
-#include <queue>
-
 #include "ir_pass_propagate_types.h"
 #include "ir_pass_lower_consume.h"
 
@@ -8,8 +5,8 @@
 
 namespace dxbc_spv::ir {
 
-PropagateTypesPass::PropagateTypesPass(Builder& builder, const Options& options)
-: m_builder(builder), m_options(options) {
+PropagateTypesPass::PropagateTypesPass(Builder& builder)
+: m_builder(builder) {
 
 }
 
@@ -19,18 +16,12 @@ PropagateTypesPass::~PropagateTypesPass() {
 }
 
 
+void PropagateTypesPass::runPass(Builder& builder) {
+  PropagateTypesPass(builder).run();
+}
+
+
 void PropagateTypesPass::run() {
-  resolveUnknownOps();
-  /* TODO handle resources, scratch etc */
-}
-
-
-void PropagateTypesPass::runPass(Builder& builder, const Options& options) {
-  PropagateTypesPass(builder, options).run();
-}
-
-
-void PropagateTypesPass::resolveUnknownOps() {
   /* Gather phi and select instructions that produce an 'Unknown' result. The
    * only other instructions that may produce these are loads, and only stores
    * may consume 'Unknown' values without returning one, and we handle both

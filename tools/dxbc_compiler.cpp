@@ -16,6 +16,7 @@
 #include "../ir/passes/ir_pass_cfg_convert.h"
 #include "../ir/passes/ir_pass_lower_consume.h"
 #include "../ir/passes/ir_pass_lower_min16.h"
+#include "../ir/passes/ir_pass_propagate_resource_types.h"
 #include "../ir/passes/ir_pass_propagate_types.h"
 #include "../ir/passes/ir_pass_remove_unused.h"
 #include "../ir/passes/ir_pass_scalarize.h"
@@ -221,7 +222,8 @@ bool compileShader(util::ByteReader reader, const Options& options) {
          ir::ScalarizePass::runResolveRedundantCompositesPass(builder))
     continue;
 
-  ir::PropagateTypesPass::runPass(builder, ir::PropagateTypesPass::Options());
+  ir::PropagateTypesPass::runPass(builder);
+  ir::PropagateResourceTypesPass::runPass(builder, ir::PropagateResourceTypesPass::Options());
   ir::RemoveUnusedPass::runPass(builder);
   ir::LowerConsumePass::runLowerConsumePass(builder);
 

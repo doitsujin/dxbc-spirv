@@ -1,6 +1,5 @@
 #pragma once
 
-#include <optional>
 #include <utility>
 
 #include "../ir.h"
@@ -31,17 +30,7 @@ class PropagateTypesPass {
 
 public:
 
-  struct Options {
-    /* Whether to allow struct types to be generated for resources,
-     * scratch memory and LDS. */
-    bool allowStructs = false;
-    /* Whether to allow 16-bit or 64-bit data types for scratch arrays
-     * and LDS. If disabled, the underlying type is always going to be
-     * a 32-bit type. */
-    bool allowNon32BitScratchAndLds = false;
-  };
-
-  PropagateTypesPass(Builder& builder, const Options& options);
+  PropagateTypesPass(Builder& builder);
 
   ~PropagateTypesPass();
 
@@ -54,17 +43,13 @@ public:
   void run();
 
   /** Initializes and runs pass on the given builder. */
-  static void runPass(Builder& builder, const Options& options);
+  static void runPass(Builder& builder);
 
 private:
 
   Builder& m_builder;
 
-  Options m_options;
-
   std::vector<SsaDef> m_opsToResolve;
-
-  void resolveUnknownOps();
 
   std::pair<bool, BasicType> resolveUnknownPhiSelect(const Op& op);
 
