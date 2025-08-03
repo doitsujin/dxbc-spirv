@@ -3885,7 +3885,19 @@ uint32_t SpirvBuilder::getIdForType(const ir::Type& type) {
 
 
 uint32_t SpirvBuilder::defType(const ir::Type& type, bool explicitLayout, ir::SsaDef dclOp) {
+  /* Don't re-declare non-aggregate types. We may end up here if a
+   * resource declaration ends up using a plain vector or scalar. */
+  if (type.isBasicType()) {
+    auto e = m_types.find(type);
+
+    if (e != m_types.end())
+      return e->second;
+  }
+
   auto id = allocId();
+
+  if (type.isBasicType())
+    m_types.insert({ type, id });
 
   if (type.isVoidType()) {
     pushOp(m_declarations, spv::OpTypeVoid, id);
