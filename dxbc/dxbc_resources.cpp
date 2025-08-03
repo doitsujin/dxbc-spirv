@@ -64,6 +64,39 @@ bool ResourceMap::handleDclConstantBuffer(ir::Builder& builder, const Instructio
 }
 
 
+bool ResourceMap::handleDclResourceRaw(ir::Builder& builder, const Instruction& op) {
+  /* dcl_resource_structured and dcl_uav_structured have the following operands:
+   * (dst0) The resource or uav register to declare
+   * (imm0) The register space (SM5.1 only)
+   */
+  const auto& operand = op.getDst(0u);
+
+  if (operand.getRegisterType() != RegisterType::eResource &&
+      operand.getRegisterType() != RegisterType::eUav)
+    return m_converter.logOpError(op, "Instruction does not declare a valid resource.");
+
+  auto info = insertResourceInfo(op, operand);
+
+  if (!info)
+    return false;
+
+  info->kind = ir::ResourceKind::eBufferRaw;
+  info->type = ir::Type(ir::ScalarType::eUnknown)
+    .addArrayDimension(0u);
+
+  if (operand.getRegisterType() == RegisterType::eUav) {
+    info->resourceDef = builder.add(ir::Op::DclUav(info->type, m_converter.getEntryPoint(),
+      info->regSpace, info->resourceIndex, info->resourceCount, info->kind, getUavFlags(op)));
+  } else {
+    info->resourceDef = builder.add(ir::Op::DclSrv(info->type, m_converter.getEntryPoint(),
+      info->regSpace, info->resourceIndex, info->resourceCount, info->kind));
+  }
+
+  emitDebugName(builder, info);
+  return true;
+}
+
+
 bool ResourceMap::handleDclResourceStructured(ir::Builder& builder, const Instruction& op) {
   /* dcl_resource_structured and dcl_uav_structured have the following operands:
    * (dst0) The resource or uav register to declare

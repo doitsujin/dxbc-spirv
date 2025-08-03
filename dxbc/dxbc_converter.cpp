@@ -85,6 +85,10 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclConstantBuffer:
       return m_resources.handleDclConstantBuffer(builder, op);
 
+    case OpCode::eDclUavRaw:
+    case OpCode::eDclResourceRaw:
+      return m_resources.handleDclResourceRaw(builder, op);
+
     case OpCode::eDclResourceStructured:
     case OpCode::eDclUavStructured:
       return m_resources.handleDclResourceStructured(builder, op);
@@ -341,8 +345,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclFunctionTable:
     case OpCode::eDclInterface:
     case OpCode::eDclUavTyped:
-    case OpCode::eDclUavRaw:
-    case OpCode::eDclResourceRaw:
     case OpCode::eLdUavTyped:
     case OpCode::eStoreUavTyped:
     case OpCode::eLdRaw:

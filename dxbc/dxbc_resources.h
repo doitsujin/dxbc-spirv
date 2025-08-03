@@ -79,7 +79,10 @@ public:
    *  internal look-up table. */
   bool handleDclConstantBuffer(ir::Builder& builder, const Instruction& op);
 
-  /** Processed a structured resource or UAV declaration. */
+  /** Processes a raw resource or UAV declaration. */
+  bool handleDclResourceRaw(ir::Builder& builder, const Instruction& op);
+
+  /** Processes a structured resource or UAV declaration. */
   bool handleDclResourceStructured(ir::Builder& builder, const Instruction& op);
 
   /** Loads data from a constant buffer using one or more BufferLoad
