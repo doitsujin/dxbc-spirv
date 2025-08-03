@@ -180,6 +180,33 @@ bool ResourceMap::handleDclResourceTyped(ir::Builder& builder, const Instruction
 }
 
 
+bool ResourceMap::handleDclSampler(ir::Builder& builder, const Instruction& op) {
+  /* dcl_sampler takes the following operands:
+   * (dst0) The sampler register to declare.
+   * (imm1) The register space (SM5.1 only)
+   *
+   * The opcode token itself declares the sampler type, but this has no
+   * real relevance to us since depth-compare state is determined by the
+   * opcode rather than the sampler or image types in question.
+   */
+  const auto& operand = op.getDst(0u);
+
+  if (operand.getRegisterType() != RegisterType::eSampler)
+    return m_converter.logOpError(op, "Instruction does not declare a valid sampler.");
+
+  auto info = insertResourceInfo(op, operand);
+
+  if (!info)
+    return false;
+
+  info->resourceDef = builder.add(ir::Op::DclSampler(m_converter.getEntryPoint(),
+    info->regSpace, info->resourceIndex, info->resourceCount));
+
+  emitDebugName(builder, info);
+  return true;
+}
+
+
 ir::SsaDef ResourceMap::emitConstantBufferLoad(
         ir::Builder&            builder,
   const Instruction&            op,

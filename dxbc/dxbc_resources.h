@@ -88,6 +88,9 @@ public:
   /** Handles typed resource or UAV declaration. */
   bool handleDclResourceTyped(ir::Builder& builder, const Instruction& op);
 
+  /** Handles sampler declarations. */
+  bool handleDclSampler(ir::Builder& builder, const Instruction& op);
+
   /** Loads data from a constant buffer using one or more BufferLoad
    *  instruction. If possiblem this will emit a vectorized load. */
   ir::SsaDef emitConstantBufferLoad(
