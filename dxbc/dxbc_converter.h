@@ -214,6 +214,8 @@ private:
 
   bool handleStoreStructured(ir::Builder& builder, const Instruction& op);
 
+  bool handleSample(ir::Builder& builder, const Instruction& op);
+
   bool handleIf(ir::Builder& builder, const Instruction& op);
 
   bool handleElse(ir::Builder& builder, const Instruction& op);

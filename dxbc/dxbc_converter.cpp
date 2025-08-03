@@ -259,6 +259,20 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eStoreStructured:
       return handleStoreStructured(builder, op);
 
+    case OpCode::eSample:
+    case OpCode::eSampleClampS:
+    case OpCode::eSampleC:
+    case OpCode::eSampleCClampS:
+    case OpCode::eSampleClz:
+    case OpCode::eSampleClzS:
+    case OpCode::eSampleL:
+    case OpCode::eSampleLS:
+    case OpCode::eSampleD:
+    case OpCode::eSampleDClampS:
+    case OpCode::eSampleB:
+    case OpCode::eSampleBClampS:
+      return handleSample(builder, op);
+
     case OpCode::eBreak:
     case OpCode::eBreakc:
       return handleBreak(builder, op);
@@ -321,12 +335,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eLdMs:
     case OpCode::eCustomData:
     case OpCode::eResInfo:
-    case OpCode::eSample:
-    case OpCode::eSampleC:
-    case OpCode::eSampleClz:
-    case OpCode::eSampleL:
-    case OpCode::eSampleD:
-    case OpCode::eSampleB:
     case OpCode::eSinCos:
     case OpCode::eUDiv:
     case OpCode::eLod:
@@ -390,12 +398,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eLdS:
     case OpCode::eLdMsS:
     case OpCode::eLdUavTypedS:
-    case OpCode::eSampleLS:
-    case OpCode::eSampleClzS:
-    case OpCode::eSampleClampS:
-    case OpCode::eSampleBClampS:
-    case OpCode::eSampleDClampS:
-    case OpCode::eSampleCClampS:
     case OpCode::eCheckAccessFullyMapped:
       /* TODO implement these */
       break;
@@ -1460,6 +1462,120 @@ bool Converter::handleStoreStructured(ir::Builder& builder, const Instruction& o
     return m_resources.emitRawStructuredStore(builder, op,
       resource, structIndex, structOffset, value);
   }
+}
+
+
+bool Converter::handleSample(ir::Builder& builder, const Instruction& op) {
+  /* Sample operations have the following basic operand layout:
+   * (dst0) Sampled destination value
+   * (dst1) Sparse feedback value (for the _cl_s variants)
+   * (src0) Texture coordinates and array layer
+   * (src1) Texture register with swizzle
+   * (src2) Sampler register
+   * (src3...) Opcode-specific operands (LOD, bias, etc)
+   * (srcMax) LOD clamp (for the _cl_s variants)
+   */
+  auto opCode = op.getOpToken().getOpCode();
+
+  const auto& dst = op.getDst(0u);
+  const auto& address = op.getSrc(0u);
+  const auto& texture = op.getSrc(1u);
+  const auto& sampler = op.getSrc(2u);
+
+  auto textureInfo = m_resources.emitDescriptorLoad(builder, op, texture);
+  auto samplerInfo = m_resources.emitDescriptorLoad(builder, op, sampler);
+
+  if (!textureInfo.descriptor || !samplerInfo.descriptor)
+    return false;
+
+  bool hasSparseFeedback = op.getDstCount() == 2u &&
+    op.getDst(1u).getRegisterType() != RegisterType::eNull;
+
+  /* Load texture coordinates without the array layer first, then
+   * load the layer separately if applicable. */
+  auto coordComponentCount = ir::resourceCoordComponentCount(textureInfo.kind);
+  auto coordComponentMask = makeWriteMaskForComponents(coordComponentCount);
+
+  ir::SsaDef layer = { };
+  ir::SsaDef coord = loadSrcModified(builder, op, address, coordComponentMask, ir::ScalarType::eF32);
+
+  if (ir::resourceIsLayered(textureInfo.kind)) {
+    auto layerComponentMask = componentBit(Component(coordComponentCount));
+    layer = loadSrcModified(builder, op, address, layerComponentMask, ir::ScalarType::eF32);
+  }
+
+  /* Handle immediate offset from the opcode token */
+  ir::SsaDef offset = getImmediateTextureOffset(builder, op, textureInfo.kind);
+
+  /* Handle explicit LOD index. */
+  ir::SsaDef lodIndex = { };
+
+  if (opCode == OpCode::eSampleClz || opCode == OpCode::eSampleClzS)
+    lodIndex = builder.makeConstant(0.0f);
+  else if (opCode == OpCode::eSampleL || opCode == OpCode::eSampleLS)
+    lodIndex = loadSrcModified(builder, op, op.getSrc(3u), ComponentBit::eX, ir::ScalarType::eF32);
+
+  /* Handle LOD bias for instructions that support it. */
+  ir::SsaDef lodBias = { };
+
+  if (opCode == OpCode::eSampleB || opCode == OpCode::eSampleBClampS)
+    lodBias = loadSrcModified(builder, op, op.getSrc(3u), ComponentBit::eX, ir::ScalarType::eF32);
+
+  /* Handle derivatives for instructions that provide them */
+  ir::SsaDef derivX = { };
+  ir::SsaDef derivY = { };
+
+  if (opCode == OpCode::eSampleD || opCode == OpCode::eSampleDClampS) {
+    derivX = loadSrcModified(builder, op, op.getSrc(3u), coordComponentMask, ir::ScalarType::eF32);
+    derivY = loadSrcModified(builder, op, op.getSrc(4u), coordComponentMask, ir::ScalarType::eF32);
+  }
+
+  /* Handle optionally provided LOD clamp for implicit LOD instructions.
+   * This is an optional operand for sparse feedback instructions. */
+  bool hasLodClamp = op.getDstCount() == 2u && !lodIndex &&
+    op.getSrc(op.getSrcCount() - 1u).getRegisterType() != RegisterType::eNull;
+
+  ir::SsaDef lodClamp = { };
+
+  if (hasLodClamp) {
+    lodClamp = loadSrcModified(builder, op, op.getSrc(op.getSrcCount() - 1u),
+      ComponentBit::eX, ir::ScalarType::eF32);
+  }
+
+  /* Handle depth reference for depth-compare operations. */
+  ir::SsaDef depthRef = { };
+
+  bool isDepthCompare = opCode == OpCode::eSampleC ||
+                        opCode == OpCode::eSampleCClampS ||
+                        opCode == OpCode::eSampleClz ||
+                        opCode == OpCode::eSampleClzS;
+
+  if (isDepthCompare)
+    depthRef = loadSrcModified(builder, op, op.getSrc(3u), ComponentBit::eX, ir::ScalarType::eF32);
+
+  /* Determine return type of the sample operation itself. */
+  ir::BasicType texelType(textureInfo.type, isDepthCompare ? 1u : 4u);
+  ir::Type returnType(texelType);
+
+  if (hasSparseFeedback)
+    returnType = makeSparseFeedbackType(texelType);
+
+  /* Set up actual sample op */
+  auto sampleOp = ir::Op::ImageSample(returnType, textureInfo.descriptor, samplerInfo.descriptor,
+    layer, coord, offset, lodIndex, lodBias, lodClamp, derivX, derivY, depthRef);
+
+  if (hasSparseFeedback)
+    sampleOp.setFlags(ir::OpFlag::eSparseFeedback);
+
+  /* Take result apart and write it back to the destination registers */
+  auto [feedback, value] = decomposeResourceReturn(builder, builder.add(std::move(sampleOp)));
+
+  if (hasSparseFeedback) {
+    if (!storeDst(builder, op, op.getDst(1u), feedback))
+      return false;
+  }
+
+  return storeDstModified(builder, op, dst, swizzleVector(builder, value, texture.getSwizzle(), dst.getWriteMask()));
 }
 
 
