@@ -216,6 +216,8 @@ private:
 
   bool handleSample(ir::Builder& builder, const Instruction& op);
 
+  bool handleResInfo(ir::Builder& builder, const Instruction& op);
+
   bool handleIf(ir::Builder& builder, const Instruction& op);
 
   bool handleElse(ir::Builder& builder, const Instruction& op);

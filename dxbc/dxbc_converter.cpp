@@ -273,6 +273,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eSampleBClampS:
       return handleSample(builder, op);
 
+    case OpCode::eResInfo:
+      return handleResInfo(builder, op);
+
     case OpCode::eBreak:
     case OpCode::eBreakc:
       return handleBreak(builder, op);
@@ -334,7 +337,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eLd:
     case OpCode::eLdMs:
     case OpCode::eCustomData:
-    case OpCode::eResInfo:
     case OpCode::eSinCos:
     case OpCode::eUDiv:
     case OpCode::eLod:
@@ -1576,6 +1578,126 @@ bool Converter::handleSample(ir::Builder& builder, const Instruction& op) {
   }
 
   return storeDstModified(builder, op, dst, swizzleVector(builder, value, texture.getSwizzle(), dst.getWriteMask()));
+}
+
+
+bool Converter::handleResInfo(ir::Builder& builder, const Instruction& op) {
+  /* resinfo takes the following operands:
+   * (dst0) Destination value
+   * (src0) Mip level to query
+   * (src1) Image resource to query
+   *
+   * The return vector has the format (w, h, d, mips), where mips will
+   * always be 1 for UAVs. If the resource is arrayed, the array size
+   * will be treated as an extra dimension.
+   *
+   * The return type modifier (_uint, _float, _rcpfloat) determines the
+   * exact return type, with _rcpfloat only applying to the size and not
+   * the array layers and mip count.
+   *
+   * If the mip level is out of bounds, the returned size will be 0,
+   * but the total mip level count is still returned appropriately.
+   */
+  auto returnType = op.getOpToken().getResInfoType();
+
+  const auto& dst = op.getDst(0u);
+  const auto& mip = op.getSrc(0u);
+  const auto& texture = op.getSrc(1u);
+
+  /* Load descriptor and get basic resource type properties */
+  auto textureInfo = m_resources.emitDescriptorLoad(builder, op, texture);
+
+  auto coordDims = ir::resourceDimensions(textureInfo.kind);
+  auto isLayered = ir::resourceIsLayered(textureInfo.kind);
+
+  if (ir::resourceIsBuffer(textureInfo.kind))
+    return logOpError(op, "resinfo instruction not legal on buffers.");
+
+  /* Query actual mip level count, if applicable */
+  bool hasMips = texture.getRegisterType() == RegisterType::eResource &&
+    !ir::resourceIsMultisampled(textureInfo.kind);
+
+  auto mipIndex = loadSrcModified(builder, op, mip, ComponentBit::eX, mip.getInfo().type);
+  auto mipCount = hasMips
+    ? builder.add(ir::Op::ImageQueryMips(ir::ScalarType::eU32, textureInfo.descriptor))
+    : builder.makeConstant(1u);
+
+  auto mipLevelInBounds = builder.add(ir::Op::ULt(ir::ScalarType::eBool, mipIndex, mipCount));
+
+  /* Query resource size and layer count */
+  auto sizeType = ir::Type()
+    .addStructMember(ir::ScalarType::eU32, coordDims) /* size   */
+    .addStructMember(ir::ScalarType::eU32);           /* layers */
+
+  auto sizeInfo = builder.add(ir::Op::ImageQuerySize(sizeType,
+    textureInfo.descriptor, hasMips ? mipIndex : ir::SsaDef()));
+
+  /* Build actual result vector. Note that rcpfloat is indeed supposed to
+   * return infinity in case the resource is unbound or the mip level is
+   * out of bounds. */
+  std::array<ir::SsaDef, 4u> components = { };
+  uint32_t index = 0u;
+
+  for (uint32_t i = 0u; i < coordDims; i++) {
+    auto& scalar = components.at(index++);
+
+    scalar = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eU32, sizeInfo,
+      coordDims > 1u ? builder.makeConstant(0u, i) : builder.makeConstant(0u)));
+
+    scalar = builder.add(ir::Op::Select(ir::ScalarType::eU32,
+      mipLevelInBounds, scalar, builder.makeConstant(0u)));
+
+    if (returnType != ResInfoType::eUint) {
+      scalar = builder.add(ir::Op::ConvertItoF(ir::ScalarType::eF32, scalar));
+
+      if (returnType == ResInfoType::eRcpFloat)
+        scalar = builder.add(ir::Op::FRcp(ir::ScalarType::eF32, scalar));
+    }
+  }
+
+  /* If the resource type is arrayed, append the array size. For cubes,
+   * we implicitly get the cube count. Note that rcpfloat does not apply. */
+  if (isLayered) {
+    auto& scalar = components.at(index++);
+
+    scalar = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eU32,
+      sizeInfo, builder.makeConstant(1u)));
+
+    scalar = builder.add(ir::Op::Select(ir::ScalarType::eU32,
+      mipLevelInBounds, scalar, builder.makeConstant(0u)));
+
+    if (returnType != ResInfoType::eUint)
+      scalar = builder.add(ir::Op::ConvertItoF(ir::ScalarType::eF32, scalar));
+  }
+
+  /* Append zeroes until we reach the second-to-last field */
+  while (index < 3u) {
+    components.at(index++) = (returnType == ResInfoType::eUint)
+      ? builder.makeConstant(0u)
+      : builder.makeConstant(0.0f);
+  }
+
+  /* Convert mip count as necessary, rcpfloat does not apply and
+   * bound-checking mip levels also does not apply. */
+  auto& scalar = components.at(index++);
+  scalar = mipCount;
+
+  if (returnType != ResInfoType::eUint) {
+    scalar = hasMips
+      ? builder.add(ir::Op::ConvertItoF(ir::ScalarType::eF32, scalar))
+      : builder.makeConstant(1.0f);
+  }
+
+  dxbc_spv_assert(index == 4u);
+
+  /* Build and swizzle vector */
+  auto vectorType = (returnType == ResInfoType::eUint)
+    ? makeVectorType(ir::ScalarType::eU32, dst.getWriteMask())
+    : makeVectorType(ir::ScalarType::eF32, dst.getWriteMask());
+
+  auto vector = composite(builder, vectorType, components.data(), texture.getSwizzle(), dst.getWriteMask());
+  storeDstModified(builder, op, dst, vector);
+  return true;
 }
 
 
