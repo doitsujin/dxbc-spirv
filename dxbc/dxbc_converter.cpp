@@ -288,6 +288,16 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eSampleBClampS:
       return handleSample(builder, op);
 
+    case OpCode::eGather4:
+    case OpCode::eGather4S:
+    case OpCode::eGather4C:
+    case OpCode::eGather4CS:
+    case OpCode::eGather4Po:
+    case OpCode::eGather4PoS:
+    case OpCode::eGather4PoC:
+    case OpCode::eGather4PoCS:
+      return handleGather(builder, op);
+
     case OpCode::eResInfo:
       return handleResInfo(builder, op);
 
@@ -353,7 +363,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eSinCos:
     case OpCode::eUDiv:
     case OpCode::eLod:
-    case OpCode::eGather4:
     case OpCode::eSamplePos:
     case OpCode::eSampleInfo:
     case OpCode::eInterfaceCall:
@@ -362,9 +371,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDerivRtxFine:
     case OpCode::eDerivRtyCoarse:
     case OpCode::eDerivRtyFine:
-    case OpCode::eGather4C:
-    case OpCode::eGather4Po:
-    case OpCode::eGather4PoC:
     case OpCode::eF32toF16:
     case OpCode::eF16toF32:
     case OpCode::eUAddc:
@@ -402,10 +408,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eAbort:
     case OpCode::eDebugBreak:
     case OpCode::eMsad:
-    case OpCode::eGather4S:
-    case OpCode::eGather4CS:
-    case OpCode::eGather4PoS:
-    case OpCode::eGather4PoCS:
     case OpCode::eCheckAccessFullyMapped:
       /* TODO implement these */
       break;
@@ -1743,6 +1745,103 @@ bool Converter::handleSample(ir::Builder& builder, const Instruction& op) {
 
   /* Take result apart and write it back to the destination registers */
   auto [feedback, value] = decomposeResourceReturn(builder, builder.add(std::move(sampleOp)));
+
+  if (hasSparseFeedback) {
+    if (!storeDst(builder, op, op.getDst(1u), feedback))
+      return false;
+  }
+
+  return storeDstModified(builder, op, dst, swizzleVector(builder, value, texture.getSwizzle(), dst.getWriteMask()));
+}
+
+
+bool Converter::handleGather(ir::Builder& builder, const Instruction& op) {
+  /* Sample operations have the following basic operand layout:
+   * (dst0) Sampled destination value
+   * (dst1) Sparse feedback value (for the _cl_s variants)
+   * (src0) Texture coordinates and array layer
+   * (src1) Texture register with swizzle
+   * (src2) Sampler register with component selector
+   * (src3) Depth reference, if applicable
+   * (srcMax) LOD clamp (for the _cl_s variants)
+   *
+   * The _po variants have an additional offset parameter
+   * immediately after texture coordinates.
+   */
+  auto opCode = op.getOpToken().getOpCode();
+
+  bool hasProgrammableOffsets = opCode == OpCode::eGather4Po ||
+                                opCode == OpCode::eGather4PoS ||
+                                opCode == OpCode::eGather4PoC ||
+                                opCode == OpCode::eGather4PoCS;
+
+  uint32_t srcOperandOffset = hasProgrammableOffsets ? 1u : 0u;
+
+  const auto& dst = op.getDst(0u);
+  const auto& address = op.getSrc(0u);
+  const auto& texture = op.getSrc(1u + srcOperandOffset);
+  const auto& sampler = op.getSrc(2u + srcOperandOffset);
+
+  auto textureInfo = m_resources.emitDescriptorLoad(builder, op, texture);
+  auto samplerInfo = m_resources.emitDescriptorLoad(builder, op, sampler);
+
+  if (!textureInfo.descriptor || !samplerInfo.descriptor)
+    return false;
+
+  bool hasSparseFeedback = op.getDstCount() == 2u &&
+    op.getDst(1u).getRegisterType() != RegisterType::eNull;
+
+  /* Load texture coordinates and array layer */
+  auto coordComponentCount = ir::resourceCoordComponentCount(textureInfo.kind);
+  auto coordComponentMask = makeWriteMaskForComponents(coordComponentCount);
+
+  ir::SsaDef layer = { };
+  ir::SsaDef coord = loadSrcModified(builder, op, address, coordComponentMask, ir::ScalarType::eF32);
+
+  if (ir::resourceIsLayered(textureInfo.kind)) {
+    auto layerComponentMask = componentBit(Component(coordComponentCount));
+    layer = loadSrcModified(builder, op, address, layerComponentMask, ir::ScalarType::eF32);
+  }
+
+  /* Load offset. The variants with programmable offsets cannot have an
+   * immediate offset, and only the 6 least significant bits are honored. */
+  ir::SsaDef offset = getImmediateTextureOffset(builder, op, textureInfo.kind);
+
+  if (hasProgrammableOffsets) {
+    offset = loadSrcModified(builder, op, op.getSrc(1u), ComponentBit::eX | ComponentBit::eY, ir::ScalarType::eI32);
+    offset = builder.add(ir::Op::SBitExtract(ir::Type(ir::ScalarType::eI32, 2u),
+      offset, builder.makeConstant(0u, 0u), builder.makeConstant(6u, 6u)));
+  }
+
+  /* Load depth reference, if applicable */
+  bool isDepthCompare = opCode == OpCode::eGather4C ||
+                        opCode == OpCode::eGather4CS ||
+                        opCode == OpCode::eGather4PoC ||
+                        opCode == OpCode::eGather4PoCS;
+
+  ir::SsaDef depthRef = { };
+
+  if (isDepthCompare)
+    depthRef = loadSrcModified(builder, op, op.getSrc(3u + srcOperandOffset), ComponentBit::eX, ir::ScalarType::eF32);
+
+  /* Determine return type of the gather operation. */
+  ir::BasicType texelType(textureInfo.type, isDepthCompare ? 1u : 4u);
+  ir::Type returnType(texelType);
+
+  if (hasSparseFeedback)
+    returnType = makeSparseFeedbackType(texelType);
+
+  /* Set up actual gather op */
+  auto component = sampler.getSwizzle().map(Component::eX);
+
+  auto gatherOp = ir::Op::ImageGather(returnType, textureInfo.descriptor,
+    samplerInfo.descriptor, layer, coord, offset, depthRef, uint8_t(component));
+
+  if (hasSparseFeedback)
+    gatherOp.setFlags(ir::OpFlag::eSparseFeedback);
+
+  /* Take result apart and write it back to the destination registers */
+  auto [feedback, value] = decomposeResourceReturn(builder, builder.add(std::move(gatherOp)));
 
   if (hasSparseFeedback) {
     if (!storeDst(builder, op, op.getDst(1u), feedback))

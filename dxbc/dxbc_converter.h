@@ -222,6 +222,8 @@ private:
 
   bool handleSample(ir::Builder& builder, const Instruction& op);
 
+  bool handleGather(ir::Builder& builder, const Instruction& op);
+
   bool handleResInfo(ir::Builder& builder, const Instruction& op);
 
   bool handleIf(ir::Builder& builder, const Instruction& op);
