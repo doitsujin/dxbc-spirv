@@ -341,8 +341,8 @@ std::pair<ir::SsaDef, ir::SsaDef> ResourceMap::emitRawStructuredLoad(
     dxbc_spv_assert(!isSparse || readMask == block);
 
     auto resultType = isSparse
-      ? ir::Type().addStructMember(ir::ScalarType::eU32).addStructMember(blockType)
-      : ir::Type().addStructMember(blockType);
+      ? m_converter.makeSparseFeedbackType(blockType)
+      : ir::Type(blockType);
 
     auto blockAlignment = computeRawStructuredAlignment(builder, *resource, elementOffset, block);
 
@@ -351,12 +351,12 @@ std::pair<ir::SsaDef, ir::SsaDef> ResourceMap::emitRawStructuredLoad(
       : m_converter.computeRawAddress(builder, elementIndex, block);
 
     /* Load buffer data and convert to desired result type */
-    auto result = builder.add(ir::Op::BufferLoad(resultType, descriptor, address, blockAlignment));
+    ir::SsaDef sparseFeedback = { };
+    ir::SsaDef result = builder.add(ir::Op::BufferLoad(resultType, descriptor, address, blockAlignment));
 
     if (isSparse) {
       builder.setOpFlags(result, ir::OpFlag::eSparseFeedback);
-      sparseFeedback = m_converter.extractFromVector(builder, result, 0u);
-      result = m_converter.extractFromVector(builder, result, 1u);
+      std::tie(sparseFeedback, result) = m_converter.decomposeResourceReturn(builder, result);
     }
 
     /* For regular loads, split the vector into scalars */

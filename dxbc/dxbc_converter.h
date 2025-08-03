@@ -276,7 +276,13 @@ private:
 
   ir::SsaDef intToBool(ir::Builder& builder, ir::SsaDef def);
 
+  ir::SsaDef getImmediateTextureOffset(ir::Builder& builder, const Instruction& op, ir::ResourceKind kind);
+
   ir::SsaDef broadcastScalar(ir::Builder& builder, ir::SsaDef def, WriteMask mask);
+
+  ir::SsaDef swizzleVector(ir::Builder& builder, ir::SsaDef value, Swizzle swizzle, WriteMask writeMask);
+
+  std::pair<ir::SsaDef, ir::SsaDef> decomposeResourceReturn(ir::Builder& builder, ir::SsaDef value);
 
   ir::ScalarType determineOperandType(
     const Operand&                operand,
@@ -320,6 +326,10 @@ private:
   static ir::BasicType makeVectorType(ir::ScalarType type, WriteMask mask) {
     uint8_t shift = is64BitType(type) ? 1u : 0u;
     return ir::BasicType(type, util::popcnt(uint8_t(mask)) >> shift);
+  }
+
+  static ir::Type makeSparseFeedbackType(ir::BasicType valueType) {
+    return ir::Type().addStructMember(ir::ScalarType::eU32).addStructMember(valueType);
   }
 
   static WriteMask convertMaskTo32Bit(WriteMask mask);

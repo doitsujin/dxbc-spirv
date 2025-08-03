@@ -2154,6 +2154,39 @@ ir::SsaDef Converter::intToBool(ir::Builder& builder, ir::SsaDef def) {
 }
 
 
+ir::SsaDef Converter::getImmediateTextureOffset(ir::Builder& builder, const Instruction& op, ir::ResourceKind kind) {
+  auto sampleControls = op.getOpToken().getSampleControlToken();
+
+  if (!sampleControls)
+    return ir::SsaDef();
+
+  if (kind == ir::ResourceKind::eImageCube || kind == ir::ResourceKind::eImageCubeArray) {
+    logOpMessage(LogLevel::eWarn, op, "Cube textures cannot support immediate offsets.");
+    return ir::SsaDef();
+  }
+
+  auto componentCount = resourceCoordComponentCount(kind);
+
+  if (componentCount < 1u || componentCount > 3u) {
+    logOpMessage(LogLevel::eWarn, op, "Invalid resource kind for immediate offsets: ", kind);
+    return ir::SsaDef();
+  }
+
+  ir::Op constant(ir::OpCode::eConstant, ir::BasicType(ir::ScalarType::eI32, componentCount));
+
+  if (componentCount >= 1u)
+    constant.addOperand(sampleControls.u());
+
+  if (componentCount >= 2u)
+    constant.addOperand(sampleControls.v());
+
+  if (componentCount >= 3u)
+    constant.addOperand(sampleControls.w());
+
+  return builder.add(std::move(constant));
+}
+
+
 ir::SsaDef Converter::broadcastScalar(ir::Builder& builder, ir::SsaDef def, WriteMask mask) {
   if (mask == mask.first())
     return def;
@@ -2174,6 +2207,42 @@ ir::SsaDef Converter::broadcastScalar(ir::Builder& builder, ir::SsaDef def, Writ
     op.addOperand(def);
 
   return builder.add(std::move(op));
+}
+
+
+ir::SsaDef Converter::swizzleVector(ir::Builder& builder, ir::SsaDef value, Swizzle swizzle, WriteMask writeMask) {
+  const auto& valueOp = builder.getOp(value);
+  dxbc_spv_assert(valueOp.getType().isBasicType());
+
+  auto type = valueOp.getType().getBaseType(0u);
+
+  if (type.isScalar())
+    return broadcastScalar(builder, value, writeMask);
+
+  /* Extract components one by one and then re-assemble vector */
+  util::small_vector<ir::SsaDef, 4u> components;
+
+  for (auto c : writeMask) {
+    uint32_t componentIndex = uint8_t(swizzle.map(c));
+
+    components.push_back(builder.add(ir::Op::CompositeExtract(type.getBaseType(),
+      value, builder.makeConstant(componentIndex))));
+  }
+
+  return buildVector(builder, type.getBaseType(), components.size(), components.data());
+}
+
+
+std::pair<ir::SsaDef, ir::SsaDef> Converter::decomposeResourceReturn(ir::Builder& builder, ir::SsaDef value) {
+  /* Sparse feedback first if applicable, then the value to match the type */
+  const auto& valueOp = builder.getOp(value);
+
+  if (!valueOp.getType().isStructType())
+    return std::make_pair(ir::SsaDef(), valueOp.getDef());
+
+  return std::make_pair(
+    builder.add(ir::Op::CompositeExtract(valueOp.getType().getSubType(0u), value, builder.makeConstant(0u))),
+    builder.add(ir::Op::CompositeExtract(valueOp.getType().getSubType(1u), value, builder.makeConstant(1u))));
 }
 
 
