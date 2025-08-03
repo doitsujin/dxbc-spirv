@@ -204,6 +204,8 @@ private:
 
   bool handleIntCompare(ir::Builder& builder, const Instruction& op);
 
+  bool handleBitExtract(ir::Builder& builder, const Instruction& op);
+
   bool handleBitInsert(ir::Builder& builder, const Instruction& op);
 
   bool handleLdRaw(ir::Builder& builder, const Instruction& op);
@@ -215,6 +217,8 @@ private:
   bool handleStoreRaw(ir::Builder& builder, const Instruction& op);
 
   bool handleStoreStructured(ir::Builder& builder, const Instruction& op);
+
+  bool handleStoreTyped(ir::Builder& builder, const Instruction& op);
 
   bool handleSample(ir::Builder& builder, const Instruction& op);
 

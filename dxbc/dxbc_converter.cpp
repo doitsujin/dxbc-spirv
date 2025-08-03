@@ -229,6 +229,10 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eUShr:
       return handleIntShift(builder, op);
 
+    case OpCode::eUBfe:
+    case OpCode::eIBfe:
+      return handleBitExtract(builder, op);
+
     case OpCode::eBfi:
       return handleBitInsert(builder, op);
 
@@ -266,6 +270,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
 
     case OpCode::eStoreStructured:
       return handleStoreStructured(builder, op);
+
+    case OpCode::eStoreUavTyped:
+      return handleStoreTyped(builder, op);
 
     case OpCode::eSample:
     case OpCode::eSampleClampS:
@@ -366,14 +373,11 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eFirstBitHi:
     case OpCode::eFirstBitLo:
     case OpCode::eFirstBitShi:
-    case OpCode::eUBfe:
-    case OpCode::eIBfe:
     case OpCode::eBfRev:
     case OpCode::eSwapc:
     case OpCode::eDclFunctionBody:
     case OpCode::eDclFunctionTable:
     case OpCode::eDclInterface:
-    case OpCode::eStoreUavTyped:
     case OpCode::eAtomicAnd:
     case OpCode::eAtomicOr:
     case OpCode::eAtomicXor:
@@ -1331,6 +1335,44 @@ bool Converter::handleIntCompare(ir::Builder& builder, const Instruction& op) {
 }
 
 
+bool Converter::handleBitExtract(ir::Builder& builder, const Instruction& op) {
+  /* ubfe takes the following operands:
+   * (dst0) Result value
+   * (src0) Number of bits to extract
+   * (src1) Offset of bits to extract
+   * (src2) Operand to extract from
+   *
+   * Like shift instructions, this only considers the 5 least
+   * significant bits of the count and offset operands.
+   */
+  const auto& dst = op.getDst(0u);
+
+  auto scalarType = determineOperandType(dst, ir::ScalarType::eU32, false);
+
+  auto value = loadSrcModified(builder, op, op.getSrc(2u), dst.getWriteMask(), scalarType);
+  auto offset = loadSrcBitCount(builder, op, op.getSrc(1u), dst.getWriteMask());
+  auto count = loadSrcBitCount(builder, op, op.getSrc(0u), dst.getWriteMask());
+
+  auto opCode = [&op] {
+    switch (op.getOpToken().getOpCode()) {
+      case OpCode::eUBfe: return ir::OpCode::eUBitExtract;
+      case OpCode::eIBfe: return ir::OpCode::eSBitExtract;
+      default:            break;
+    }
+
+    dxbc_spv_unreachable();
+    return ir::OpCode::eUnknown;
+  } ();
+
+  auto resultDef = builder.add(ir::Op(opCode, makeVectorType(scalarType, dst.getWriteMask()))
+    .addOperand(value)
+    .addOperand(offset)
+    .addOperand(count));
+
+  return storeDst(builder, op, dst, resultDef);
+}
+
+
 bool Converter::handleBitInsert(ir::Builder& builder, const Instruction& op) {
   /* bfi takes the following operands:
    * (dst0) Result value
@@ -1338,6 +1380,9 @@ bool Converter::handleBitInsert(ir::Builder& builder, const Instruction& op) {
    * (src1) Offset where to insert the bits
    * (src2) Operand to insert
    * (src3) Base operand
+   *
+   * Like shift instructions, this only considers the 5 least
+   * significant bits of the count and offset operands.
    */
   const auto& dst = op.getDst(0u);
 
@@ -1437,7 +1482,7 @@ bool Converter::handleLdTyped(ir::Builder& builder, const Instruction& op) {
   const auto& address = op.getSrc(0u);
   const auto& resource = op.getSrc(1u);
 
-  /* Load image descriptor and get basic resource properties */
+  /* Load descriptor and get basic resource properties */
   auto resourceInfo = m_resources.emitDescriptorLoad(builder, op, resource);
 
   if (!resourceInfo.descriptor)
@@ -1552,6 +1597,45 @@ bool Converter::handleStoreStructured(ir::Builder& builder, const Instruction& o
     return m_resources.emitRawStructuredStore(builder, op,
       resource, structIndex, structOffset, value);
   }
+}
+
+
+bool Converter::handleStoreTyped(ir::Builder& builder, const Instruction& op) {
+  /* store_uav_typed has the following operands:
+   * (dst0) Target resource
+   * (src0) Texture coordinate or element index
+   * (src1) Value to store
+   */
+  const auto& resource = op.getDst(0u);
+  const auto& address = op.getSrc(0u);
+
+  /* Load resource descriptor */
+  auto resourceInfo = m_resources.emitDescriptorLoad(builder, op, resource);
+
+  if (!resourceInfo.descriptor)
+    return false;
+
+  auto coordComponentCount = ir::resourceCoordComponentCount(resourceInfo.kind);
+  auto coordComponentMask = makeWriteMaskForComponents(coordComponentCount);
+
+  /* Load coordinates as unsigned integers */
+  ir::SsaDef coord = loadSrcModified(builder, op, op.getSrc(0u), coordComponentMask, ir::ScalarType::eU32);
+  ir::SsaDef layer = { };
+
+  if (ir::resourceIsLayered(resourceInfo.kind)) {
+    auto layerComponentMask = componentBit(Component(coordComponentCount));
+    layer = loadSrcModified(builder, op, address, layerComponentMask, ir::ScalarType::eU32);
+  }
+
+  /* Unconditionally load value as a vec4 and emit store */
+  ir::SsaDef value = loadSrcModified(builder, op, op.getSrc(1u), ComponentBit::eAll, resourceInfo.type);
+
+  if (ir::resourceIsBuffer(resourceInfo.kind))
+    builder.add(ir::Op::BufferStore(resourceInfo.descriptor, coord, value, 0u));
+  else
+    builder.add(ir::Op::ImageStore(resourceInfo.descriptor, layer, coord, value));
+
+  return true;
 }
 
 
