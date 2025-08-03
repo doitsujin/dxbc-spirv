@@ -179,8 +179,17 @@ public:
    *  have another ConsumeAs as an operand. */
   void run();
 
+  /** Rewrites partial vector loads, i.e. loads that access multiple vector
+   *  components from a larger vector, to load the full vector and emit a
+   *  swizzle. This is run once as part of the normal pass, but can be run as
+   *  a dedicated pass in case the full type propagation pass is not needed. */
+  void rewritePartialVectorLoads();
+
   /** Initializes and runs pass on the given builder. */
   static void runPass(Builder& builder, const Options& options);
+
+  /** Runs partial vector load fix-up. */
+  static void runPartialVectorLoadRewritePass(Builder& builder);
 
 private:
 
@@ -224,6 +233,10 @@ private:
   void rewriteAccessOps(SsaDef def, const PropagateResourceTypeRewriteInfo& info);
 
   void rewriteDeclaration(SsaDef def, const PropagateResourceTypeRewriteInfo& info);
+
+  void rewritePartialVectorLoad(const Type& type, SsaDef def);
+
+  void rewritePartialVectorLoadsForDescriptor(const Type& type, SsaDef def);
 
   static bool isUntypedDeclaration(const Op& op);
 

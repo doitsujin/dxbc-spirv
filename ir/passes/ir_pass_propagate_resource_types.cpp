@@ -707,6 +707,9 @@ void PropagateResourceTypesPass::run() {
   for (const auto& e : types)
     rewriteDeclaration(e.first, e.second);
 
+  /* Legalize partial vector loads to load full vectors */
+  rewritePartialVectorLoads();
+
   /* Clean up consume chains and composite ops that we created */
   while (true) {
     bool a = ScalarizePass::runResolveRedundantCompositesPass(m_builder);
@@ -718,8 +721,45 @@ void PropagateResourceTypesPass::run() {
 }
 
 
+void PropagateResourceTypesPass::rewritePartialVectorLoads() {
+  auto iter = m_builder.getDeclarations().first;
+
+  while (iter != m_builder.getDeclarations().second) {
+    switch (iter->getOpCode()) {
+      case OpCode::eDclSrv:
+      case OpCode::eDclUav: {
+        auto kind = ResourceKind(iter->getOperand(iter->getFirstLiteralOperandIndex() + 3u));
+
+        if (kind != ResourceKind::eBufferStructured && kind != ResourceKind::eBufferRaw)
+          break;
+      } [[fallthrough]];
+
+      case OpCode::eDclCbv: {
+        util::small_vector<SsaDef, 256u> uses = { };
+        m_builder.getUses(iter->getDef(), uses);
+
+        for (auto use : uses) {
+          if (m_builder.getOp(use).getOpCode() == OpCode::eDescriptorLoad)
+            rewritePartialVectorLoadsForDescriptor(iter->getType(), use);
+        }
+      } break;
+
+      default:
+        break;
+    }
+
+    ++iter;
+  }
+}
+
+
 void PropagateResourceTypesPass::runPass(Builder& builder, const Options& options) {
   PropagateResourceTypesPass(builder, options).run();
+}
+
+
+void PropagateResourceTypesPass::runPartialVectorLoadRewritePass(Builder& builder) {
+  PropagateResourceTypesPass(builder, Options()).rewritePartialVectorLoads();
 }
 
 
@@ -1236,7 +1276,7 @@ void PropagateResourceTypesPass::determineDeclarationType(const Op& op, Propagat
 
 
 void PropagateResourceTypesPass::rewriteAccessOps(SsaDef def, const PropagateResourceTypeRewriteInfo& info) {
-  util::small_vector<SsaDef, 64u> uses;
+  util::small_vector<SsaDef, 256u> uses;
   m_builder.getUses(def, uses);
 
   for (auto use : uses) {
@@ -1272,6 +1312,133 @@ void PropagateResourceTypesPass::rewriteAccessOps(SsaDef def, const PropagateRes
 void PropagateResourceTypesPass::rewriteDeclaration(SsaDef def, const PropagateResourceTypeRewriteInfo& info) {
   rewriteAccessOps(def, info);
   m_builder.setOpType(def, info.newType);
+}
+
+
+void PropagateResourceTypesPass::rewritePartialVectorLoad(const Type& type, SsaDef def) {
+  auto loadOp = m_builder.getOp(def);
+  auto loadType = loadOp.getType();
+
+  /* Sparse feedback is being obnoxious *again* so figure out the
+   * actual type of the load first. */
+  bool hasSparseFeedback = bool(loadOp.getFlags() & OpFlag::eSparseFeedback);
+
+  if (hasSparseFeedback)
+    loadType = loadType.getSubType(1u);
+
+  /* Scalar loads are unconditionally fine */
+  dxbc_spv_assert(loadType.isBasicType());
+
+  if (loadType.isScalarType())
+    return;
+
+  /* Traverse type to see what we're actually loading from. Explicitly
+   * allow the case where we load a vector from a scalar array. */
+  const auto& addressOp = m_builder.getOpForOperand(loadOp, 1u);
+  dxbc_spv_assert(addressOp.getType().isBasicType());
+
+  auto addressComponents = addressOp.getType().getBaseType(0u).getVectorSize();
+  auto arrayDimensions = type.getArrayDimensions();
+
+  if (addressComponents <= arrayDimensions)
+    return;
+
+  auto resourceType = type;
+
+  for (uint32_t i = 0u; i < arrayDimensions; i++)
+    resourceType = resourceType.getSubType(0u);
+
+  if (resourceType.isScalarType()) {
+    dxbc_spv_assert(addressComponents == arrayDimensions);
+    return;
+  }
+
+  /* Traverse structure until the second to last level. If that is a
+   * vector that's being indexed into, we need to rewrite the load. */
+  for (uint32_t i = arrayDimensions; i + 1u < addressComponents; i++) {
+    auto index = extractConstantFromAddress(addressOp.getDef(), i);
+    dxbc_spv_assert(index);
+
+    resourceType = resourceType.getSubType(*index);
+  }
+
+  if (!resourceType.isVectorType()) {
+    dxbc_spv_assert(resourceType.isStructType());
+    return;
+  }
+
+  /* Build new address op, omitting the index into the vector */
+  Op newAddressOp(OpCode::eCompositeConstruct, Type(ScalarType::eU32, addressComponents - 1u));
+
+  for (uint32_t i = 0u; i + 1u < addressComponents; i++)
+    newAddressOp.addOperand(extractIndexFromAddress(addressOp.getDef(), i));
+
+  ir::SsaDef addressDef = { };
+
+  if (newAddressOp.getOperandCount() == 1u)
+    addressDef = SsaDef(newAddressOp.getOperand(0u));
+  else if (newAddressOp.getOperandCount() > 1u)
+    addressDef = m_builder.addBefore(def, std::move(newAddressOp));
+
+  loadOp.setOperand(1u, addressDef);
+
+  /* Determine properties of the actual vector being loaded */
+  auto scalarType = loadType.getBaseType(0u).getBaseType();
+
+  auto desiredCount = loadType.getBaseType(0u).getVectorSize();
+  auto desiredIndex = extractConstantFromAddress(addressOp.getDef(), addressComponents - 1u);
+
+  auto baseVectorSize = resourceType.getBaseType(0u).getVectorSize();
+
+  dxbc_spv_assert(desiredIndex);
+
+  /* If necessary, wrap the whole thing in a sparse feedback struct */
+  BasicType newLoadType(scalarType, baseVectorSize);
+
+  loadOp.setType(hasSparseFeedback
+    ? Type().addStructMember(ScalarType::eU32).addStructMember(newLoadType)
+    : Type().addStructMember(newLoadType));
+
+  /* TODO restore aligment info? */
+  loadOp.setOperand(loadOp.getFirstLiteralOperandIndex(), Operand(byteSize(scalarType)));
+
+  auto loadDef = m_builder.addBefore(def, std::move(loadOp));
+
+  /* Extract requested components only */
+  Op swizzleOp(OpCode::eCompositeConstruct, loadType);
+
+  for (uint32_t i = 0u; i < desiredCount; i++) {
+    swizzleOp.addOperand(m_builder.addBefore(def,
+      Op::CompositeExtract(scalarType, loadDef, hasSparseFeedback
+        ? m_builder.makeConstant(1u, *desiredIndex + i)
+        : m_builder.makeConstant(*desiredIndex + i))));
+  }
+
+  /* If we have sparse feedback, rebuild the feedback struct */
+  if (hasSparseFeedback) {
+    auto feedback = m_builder.addBefore(def, Op::CompositeExtract(
+      ScalarType::eU32, loadDef, m_builder.makeConstant(0u)));
+
+    auto dataDef = m_builder.addBefore(def, std::move(swizzleOp));
+
+    swizzleOp = Op::CompositeConstruct(loadOp.getType(), feedback, dataDef);
+  }
+
+  /* Replace load op with the composite op */
+  m_builder.rewriteOp(def, std::move(swizzleOp));
+}
+
+
+void PropagateResourceTypesPass::rewritePartialVectorLoadsForDescriptor(const Type& type, SsaDef def) {
+  dxbc_spv_assert(m_builder.getOp(def).getOpCode() == OpCode::eDescriptorLoad);
+
+  util::small_vector<SsaDef, 256u> uses;
+  m_builder.getUses(def, uses);
+
+  for (auto use : uses) {
+    if (m_builder.getOp(use).getOpCode() == OpCode::eBufferLoad)
+      rewritePartialVectorLoad(type, use);
+  }
 }
 
 
