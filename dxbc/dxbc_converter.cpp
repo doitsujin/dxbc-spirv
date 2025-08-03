@@ -253,6 +253,14 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eLdStructuredS:
       return handleLdStructured(builder, op);
 
+    case OpCode::eLd:
+    case OpCode::eLdS:
+    case OpCode::eLdMs:
+    case OpCode::eLdMsS:
+    case OpCode::eLdUavTyped:
+    case OpCode::eLdUavTypedS:
+      return handleLdTyped(builder, op);
+
     case OpCode::eStoreRaw:
       return handleStoreRaw(builder, op);
 
@@ -334,8 +342,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDerivRtx:
     case OpCode::eDerivRty:
     case OpCode::eLabel:
-    case OpCode::eLd:
-    case OpCode::eLdMs:
     case OpCode::eCustomData:
     case OpCode::eSinCos:
     case OpCode::eUDiv:
@@ -367,7 +373,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclFunctionBody:
     case OpCode::eDclFunctionTable:
     case OpCode::eDclInterface:
-    case OpCode::eLdUavTyped:
     case OpCode::eStoreUavTyped:
     case OpCode::eAtomicAnd:
     case OpCode::eAtomicOr:
@@ -397,9 +402,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eGather4CS:
     case OpCode::eGather4PoS:
     case OpCode::eGather4PoCS:
-    case OpCode::eLdS:
-    case OpCode::eLdMsS:
-    case OpCode::eLdUavTypedS:
     case OpCode::eCheckAccessFullyMapped:
       /* TODO implement these */
       break;
@@ -1414,6 +1416,92 @@ bool Converter::handleLdStructured(ir::Builder& builder, const Instruction& op) 
 
     return data && storeDstModified(builder, op, dstValue, data);
   }
+}
+
+
+bool Converter::handleLdTyped(ir::Builder& builder, const Instruction& op) {
+  /* ld has the following operands:
+   * (dst0) Result vector
+   * (dst1) Sparse feedback value (scalar, optional)
+   * (src0) Coordinate (element index for typed buffers).
+   *        The .w coordinate provides the mip level if applicable.
+   * (src1) Resource to load from
+   * (src2) Sample index (for the _ms variants)
+   */
+  auto opCode = op.getOpToken().getOpCode();
+
+  bool hasSparseFeedback = op.getDstCount() == 2u &&
+    op.getDst(1u).getRegisterType() != RegisterType::eNull;
+
+  const auto& dst = op.getDst(0u);
+  const auto& address = op.getSrc(0u);
+  const auto& resource = op.getSrc(1u);
+
+  /* Load image descriptor and get basic resource properties */
+  auto resourceInfo = m_resources.emitDescriptorLoad(builder, op, resource);
+
+  if (!resourceInfo.descriptor)
+    return false;
+
+  auto coordComponentCount = ir::resourceCoordComponentCount(resourceInfo.kind);
+  auto coordComponentMask = makeWriteMaskForComponents(coordComponentCount);
+
+  /* Load coordinates as unsigned integers */
+  ir::SsaDef coord = loadSrcModified(builder, op, address, coordComponentMask, ir::ScalarType::eU32);
+  ir::SsaDef layer = { };
+
+  if (ir::resourceIsLayered(resourceInfo.kind)) {
+    auto layerComponentMask = componentBit(Component(coordComponentCount));
+    layer = loadSrcModified(builder, op, address, layerComponentMask, ir::ScalarType::eU32);
+  }
+
+  /* Load mip level index */
+  bool hasMips = resource.getRegisterType() == RegisterType::eResource &&
+    !ir::resourceIsMultisampled(resourceInfo.kind) &&
+    !ir::resourceIsBuffer(resourceInfo.kind);
+
+  ir::SsaDef mipLevel = { };
+
+  if (hasMips)
+    mipLevel = loadSrcModified(builder, op, address, ComponentBit::eW, ir::ScalarType::eU32);
+
+  /* If applicable, load sample index */
+  bool isMultisampledOp = opCode == OpCode::eLdMs || opCode == OpCode::eLdMsS;
+
+  ir::SsaDef sampleIndex = { };
+
+  if (isMultisampledOp && ir::resourceIsMultisampled(resourceInfo.kind))
+    sampleIndex = loadSrcModified(builder, op, op.getSrc(2u), ComponentBit::eX, ir::ScalarType::eU32);
+
+  /* Load immediate offset */
+  ir::SsaDef offset = getImmediateTextureOffset(builder, op, resourceInfo.kind);
+
+  /* Determine return type */
+  ir::BasicType texelType(resourceInfo.type, 4u);
+  ir::Type returnType(texelType);
+
+  if (hasSparseFeedback)
+    returnType = makeSparseFeedbackType(texelType);
+
+  /* Emit actual load */
+  auto loadOp = resourceIsBuffer(resourceInfo.kind)
+    ? ir::Op::BufferLoad(returnType, resourceInfo.descriptor, coord, 0u)
+    : ir::Op::ImageLoad(returnType, resourceInfo.descriptor,
+        mipLevel, layer, coord, sampleIndex, offset);
+
+  if (hasSparseFeedback)
+    loadOp.setFlags(ir::OpFlag::eSparseFeedback);
+
+  /* Take result apart and write it back to the destination registers */
+  auto [feedback, value] = decomposeResourceReturn(builder, builder.add(std::move(loadOp)));
+
+  if (hasSparseFeedback) {
+    if (!storeDst(builder, op, op.getDst(1u), feedback))
+      return false;
+  }
+
+  return storeDstModified(builder, op, dst, swizzleVector(builder, value, resource.getSwizzle(), dst.getWriteMask()));
+
 }
 
 

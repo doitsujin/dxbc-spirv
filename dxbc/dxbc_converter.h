@@ -210,6 +210,8 @@ private:
 
   bool handleLdStructured(ir::Builder& builder, const Instruction& op);
 
+  bool handleLdTyped(ir::Builder& builder, const Instruction& op);
+
   bool handleStoreRaw(ir::Builder& builder, const Instruction& op);
 
   bool handleStoreStructured(ir::Builder& builder, const Instruction& op);
