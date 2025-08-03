@@ -93,6 +93,10 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclUavStructured:
       return m_resources.handleDclResourceStructured(builder, op);
 
+    case OpCode::eDclResource:
+    case OpCode::eDclUavTyped:
+      return m_resources.handleDclResourceTyped(builder, op);
+
     case OpCode::eHsDecls:
     case OpCode::eHsControlPointPhase:
     case OpCode::eHsForkPhase:
@@ -322,7 +326,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eSampleB:
     case OpCode::eSinCos:
     case OpCode::eUDiv:
-    case OpCode::eDclResource:
     case OpCode::eDclSampler:
     case OpCode::eLod:
     case OpCode::eGather4:
@@ -352,7 +355,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclFunctionBody:
     case OpCode::eDclFunctionTable:
     case OpCode::eDclInterface:
-    case OpCode::eDclUavTyped:
     case OpCode::eLdUavTyped:
     case OpCode::eStoreUavTyped:
     case OpCode::eAtomicAnd:

@@ -135,6 +135,51 @@ bool ResourceMap::handleDclResourceStructured(ir::Builder& builder, const Instru
 }
 
 
+bool ResourceMap::handleDclResourceTyped(ir::Builder& builder, const Instruction& op) {
+  /* dcl_resource_typed takes the following operands:
+   * (dst0) The resource or uav register to declare
+   * (imm0) Resource return type token as a dedicated immediate.
+   *        Declarations do not use the resource type field of the opcode.
+   * (imm1) The register space (SM5.1 only)
+   */
+  const auto& operand = op.getDst(0u);
+
+  if (operand.getRegisterType() != RegisterType::eResource &&
+      operand.getRegisterType() != RegisterType::eUav)
+    return m_converter.logOpError(op, "Instruction does not declare a valid resource.");
+
+  auto info = insertResourceInfo(op, operand);
+
+  if (!info)
+    return false;
+
+  auto resourceKind = resolveResourceDim(op.getOpToken().getResourceDim());
+
+  if (!resourceKind)
+    return m_converter.logOpError(op, "Invalid resource dimension: ", op.getOpToken().getResourceDim());
+
+  /* Parse resource type. For typed resources, we declare a scalar type only */
+  ResourceTypeToken returnType(op.getImm(0u).getImmediate<uint32_t>(0u));
+
+  info->kind = *resourceKind;
+  info->type = resolveSampledType(returnType.x());
+
+  if (info->type == ir::ScalarType::eUnknown)
+    return m_converter.logOpError(op, "Invalid resource return type: ", returnType.x());
+
+  if (operand.getRegisterType() == RegisterType::eUav) {
+    info->resourceDef = builder.add(ir::Op::DclUav(info->type, m_converter.getEntryPoint(),
+      info->regSpace, info->resourceIndex, info->resourceCount, info->kind, getUavFlags(op)));
+  } else {
+    info->resourceDef = builder.add(ir::Op::DclSrv(info->type, m_converter.getEntryPoint(),
+      info->regSpace, info->resourceIndex, info->resourceCount, info->kind));
+  }
+
+  emitDebugName(builder, info);
+  return true;
+}
+
+
 ir::SsaDef ResourceMap::emitConstantBufferLoad(
         ir::Builder&            builder,
   const Instruction&            op,
