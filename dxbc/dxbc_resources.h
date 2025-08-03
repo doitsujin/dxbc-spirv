@@ -51,6 +51,19 @@ struct ResourceInfo {
 };
 
 
+/** Retrieved typed resource parameters */
+struct ResourceProperties {
+  /* Resource kind */
+  ir::ResourceKind kind = { };
+
+  /* Scalar sampled type */
+  ir::ScalarType type = { };
+
+  /* Loaded descriptor */
+  ir::SsaDef descriptor = { };
+};
+
+
 /** Resource look-up structure */
 struct ResourceKey {
   RegisterType  regType  = { };
@@ -90,6 +103,13 @@ public:
 
   /** Handles sampler declarations. */
   bool handleDclSampler(ir::Builder& builder, const Instruction& op);
+
+  /** Loads a resource or sampler descriptor and retrieves basic
+   *  properties required to perform any operations on typed resources. */
+  ResourceProperties emitDescriptorLoad(
+          ir::Builder&            builder,
+    const Instruction&            op,
+    const Operand&                operand);
 
   /** Loads data from a constant buffer using one or more BufferLoad
    *  instruction. If possiblem this will emit a vectorized load. */

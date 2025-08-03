@@ -207,6 +207,30 @@ bool ResourceMap::handleDclSampler(ir::Builder& builder, const Instruction& op) 
 }
 
 
+ResourceProperties ResourceMap::emitDescriptorLoad(
+        ir::Builder&            builder,
+  const Instruction&            op,
+  const Operand&                operand) {
+  auto [descriptor, info] = loadDescriptor(builder, op, operand);
+
+  if (!info)
+    return ResourceProperties();
+
+  ResourceProperties result = { };
+
+  if (info->regType != RegisterType::eSampler) {
+    result.kind = info->kind;
+
+    if (result.kind != ir::ResourceKind::eBufferRaw &&
+        result.kind != ir::ResourceKind::eBufferStructured)
+      result.type = info->type.getBaseType(0u).getBaseType();
+  }
+
+  result.descriptor = descriptor;
+  return result;
+}
+
+
 ir::SsaDef ResourceMap::emitConstantBufferLoad(
         ir::Builder&            builder,
   const Instruction&            op,
