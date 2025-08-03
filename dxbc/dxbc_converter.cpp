@@ -238,8 +238,16 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eEvalCentroid:
       return m_ioMap.handleEval(builder, op);
 
+    case OpCode::eLdRaw:
+    case OpCode::eLdRawS:
+      return handleLdRaw(builder, op);
+
     case OpCode::eLdStructured:
+    case OpCode::eLdStructuredS:
       return handleLdStructured(builder, op);
+
+    case OpCode::eStoreRaw:
+      return handleStoreRaw(builder, op);
 
     case OpCode::eStoreStructured:
       return handleStoreStructured(builder, op);
@@ -347,8 +355,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclUavTyped:
     case OpCode::eLdUavTyped:
     case OpCode::eStoreUavTyped:
-    case OpCode::eLdRaw:
-    case OpCode::eStoreRaw:
     case OpCode::eAtomicAnd:
     case OpCode::eAtomicOr:
     case OpCode::eAtomicXor:
@@ -380,8 +386,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eLdS:
     case OpCode::eLdMsS:
     case OpCode::eLdUavTypedS:
-    case OpCode::eLdRawS:
-    case OpCode::eLdStructuredS:
     case OpCode::eSampleLS:
     case OpCode::eSampleClzS:
     case OpCode::eSampleClampS:
@@ -1343,6 +1347,35 @@ bool Converter::handleBitInsert(ir::Builder& builder, const Instruction& op) {
 }
 
 
+bool Converter::handleLdRaw(ir::Builder& builder, const Instruction& op) {
+  /* ld_structured has the following operands:
+   * (dst0) Result vector
+   * (dst1) Sparse feedback value (scalar, optional)
+   * (src0) Byte offset
+   * (src1) Resource register (u# / t# / g#)
+   */
+  const auto& dstValue = op.getDst(0u);
+  const auto& resource = op.getSrc(1u);
+
+  auto byteOffset = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX, ir::ScalarType::eU32);
+  auto dstType = determineOperandType(dstValue, ir::ScalarType::eUnknown);
+
+  if (resource.getRegisterType() == RegisterType::eTgsm) {
+    auto data = m_regFile.emitTgsmLoad(builder, op, resource,
+      byteOffset, ir::SsaDef(), dstValue.getWriteMask(), dstType);
+    return data && storeDstModified(builder, op, dstValue, data);
+  } else {
+    auto [data, feedback] = m_resources.emitRawStructuredLoad(builder, op,
+      resource, byteOffset, ir::SsaDef(), dstValue.getWriteMask(), dstType);
+
+    if (feedback && !storeDstModified(builder, op, op.getDst(1u), feedback))
+      return false;
+
+    return data && storeDstModified(builder, op, dstValue, data);
+  }
+}
+
+
 bool Converter::handleLdStructured(ir::Builder& builder, const Instruction& op) {
   /* ld_structured has the following operands:
    * (dst0) Result vector
@@ -1372,6 +1405,29 @@ bool Converter::handleLdStructured(ir::Builder& builder, const Instruction& op) 
       return false;
 
     return data && storeDstModified(builder, op, dstValue, data);
+  }
+}
+
+
+bool Converter::handleStoreRaw(ir::Builder& builder, const Instruction& op) {
+  /* store_raw has the following operands:
+   * (dst0) Target resource
+   * (src0) Byte address
+   * (src1) Data to store
+   */
+  const auto& resource = op.getDst(0u);
+  const auto& srcData = op.getSrc(1u);
+  auto srcType = determineOperandType(srcData, ir::ScalarType::eUnknown);
+
+  auto byteOffset = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX, ir::ScalarType::eU32);
+  auto value = loadSrcModified(builder, op, srcData, resource.getWriteMask(), srcType);
+
+  if (resource.getRegisterType() == RegisterType::eTgsm) {
+    return m_regFile.emitTgsmStore(builder, op,
+      resource, byteOffset, ir::SsaDef(), value);
+  } else {
+    return m_resources.emitRawStructuredStore(builder, op,
+      resource, byteOffset, ir::SsaDef(), value);
   }
 }
 
