@@ -131,6 +131,9 @@ public:
 
   /** Queries component count. */
   uint32_t getVectorSize() const {
+    if (isVoidType())
+      return 0u;
+
     return m_components + 1u;
   }
 
