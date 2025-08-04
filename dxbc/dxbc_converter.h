@@ -300,6 +300,9 @@ private:
 
   ir::SsaDef computeAtomicBufferAddress(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::ResourceKind kind);
 
+  std::pair<ir::SsaDef, ir::SsaDef> computeTypedCoordLayer(ir::Builder& builder, const Instruction& op,
+    const Operand& operand, ir::ResourceKind kind, ir::ScalarType type);
+
   ir::SsaDef boolToInt(ir::Builder& builder, ir::SsaDef def);
 
   ir::SsaDef intToBool(ir::Builder& builder, ir::SsaDef def);

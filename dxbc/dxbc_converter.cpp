@@ -1695,17 +1695,9 @@ bool Converter::handleLdTyped(ir::Builder& builder, const Instruction& op) {
   if (!resourceInfo.descriptor)
     return false;
 
-  auto coordComponentCount = ir::resourceCoordComponentCount(resourceInfo.kind);
-  auto coordComponentMask = makeWriteMaskForComponents(coordComponentCount);
-
   /* Load coordinates as unsigned integers */
-  ir::SsaDef coord = loadSrcModified(builder, op, address, coordComponentMask, ir::ScalarType::eU32);
-  ir::SsaDef layer = { };
-
-  if (ir::resourceIsLayered(resourceInfo.kind)) {
-    auto layerComponentMask = componentBit(Component(coordComponentCount));
-    layer = loadSrcModified(builder, op, address, layerComponentMask, ir::ScalarType::eU32);
-  }
+  auto [coord, layer] = computeTypedCoordLayer(builder, op,
+    address, resourceInfo.kind, ir::ScalarType::eU32);
 
   /* Load mip level index */
   bool hasMips = resource.getRegisterType() == RegisterType::eResource &&
@@ -1822,17 +1814,9 @@ bool Converter::handleStoreTyped(ir::Builder& builder, const Instruction& op) {
   if (!resourceInfo.descriptor)
     return false;
 
-  auto coordComponentCount = ir::resourceCoordComponentCount(resourceInfo.kind);
-  auto coordComponentMask = makeWriteMaskForComponents(coordComponentCount);
-
   /* Load coordinates as unsigned integers */
-  ir::SsaDef coord = loadSrcModified(builder, op, op.getSrc(0u), coordComponentMask, ir::ScalarType::eU32);
-  ir::SsaDef layer = { };
-
-  if (ir::resourceIsLayered(resourceInfo.kind)) {
-    auto layerComponentMask = componentBit(Component(coordComponentCount));
-    layer = loadSrcModified(builder, op, address, layerComponentMask, ir::ScalarType::eU32);
-  }
+  auto [coord, layer] = computeTypedCoordLayer(builder, op,
+    address, resourceInfo.kind, ir::ScalarType::eU32);
 
   /* Unconditionally load value as a vec4 and emit store */
   ir::SsaDef value = loadSrcModified(builder, op, op.getSrc(1u), ComponentBit::eAll, resourceInfo.type);
@@ -1942,16 +1926,8 @@ bool Converter::handleAtomic(ir::Builder& builder, const Instruction& op) {
     atomicOp.addOperand(resource.descriptor);
 
     if (ir::resourceIsTyped(resource.kind)) {
-      auto coordComponentCount = ir::resourceCoordComponentCount(resource.kind);
-      auto coordComponentMask = makeWriteMaskForComponents(coordComponentCount);
-
-      ir::SsaDef coord = loadSrcModified(builder, op, address, coordComponentMask, ir::ScalarType::eU32);
-      ir::SsaDef layer = { };
-
-      if (ir::resourceIsLayered(resource.kind)) {
-        auto layerComponentMask = componentBit(Component(coordComponentCount));
-        layer = loadSrcModified(builder, op, address, layerComponentMask, ir::ScalarType::eU32);
-      }
+      auto [coord, layer] = computeTypedCoordLayer(builder, op,
+        address, resource.kind, ir::ScalarType::eU32);
 
       if (!ir::resourceIsBuffer(resource.kind))
         atomicOp.addOperand(layer);
@@ -2045,16 +2021,8 @@ bool Converter::handleSample(ir::Builder& builder, const Instruction& op) {
 
   /* Load texture coordinates without the array layer first, then
    * load the layer separately if applicable. */
-  auto coordComponentCount = ir::resourceCoordComponentCount(textureInfo.kind);
-  auto coordComponentMask = makeWriteMaskForComponents(coordComponentCount);
-
-  ir::SsaDef layer = { };
-  ir::SsaDef coord = loadSrcModified(builder, op, address, coordComponentMask, ir::ScalarType::eF32);
-
-  if (ir::resourceIsLayered(textureInfo.kind)) {
-    auto layerComponentMask = componentBit(Component(coordComponentCount));
-    layer = loadSrcModified(builder, op, address, layerComponentMask, ir::ScalarType::eF32);
-  }
+  auto [coord, layer] = computeTypedCoordLayer(builder, op,
+    address, textureInfo.kind, ir::ScalarType::eF32);
 
   /* Handle immediate offset from the opcode token */
   ir::SsaDef offset = getImmediateTextureOffset(builder, op, textureInfo.kind);
@@ -2078,6 +2046,9 @@ bool Converter::handleSample(ir::Builder& builder, const Instruction& op) {
   ir::SsaDef derivY = { };
 
   if (opCode == OpCode::eSampleD || opCode == OpCode::eSampleDClampS) {
+    auto coordComponentMask = makeWriteMaskForComponents(
+      ir::resourceCoordComponentCount(textureInfo.kind));
+
     derivX = loadSrcModified(builder, op, op.getSrc(3u), coordComponentMask, ir::ScalarType::eF32);
     derivY = loadSrcModified(builder, op, op.getSrc(4u), coordComponentMask, ir::ScalarType::eF32);
   }
@@ -2168,16 +2139,8 @@ bool Converter::handleGather(ir::Builder& builder, const Instruction& op) {
     op.getDst(1u).getRegisterType() != RegisterType::eNull;
 
   /* Load texture coordinates and array layer */
-  auto coordComponentCount = ir::resourceCoordComponentCount(textureInfo.kind);
-  auto coordComponentMask = makeWriteMaskForComponents(coordComponentCount);
-
-  ir::SsaDef layer = { };
-  ir::SsaDef coord = loadSrcModified(builder, op, address, coordComponentMask, ir::ScalarType::eF32);
-
-  if (ir::resourceIsLayered(textureInfo.kind)) {
-    auto layerComponentMask = componentBit(Component(coordComponentCount));
-    layer = loadSrcModified(builder, op, address, layerComponentMask, ir::ScalarType::eF32);
-  }
+  auto [coord, layer] = computeTypedCoordLayer(builder, op,
+    address, textureInfo.kind, ir::ScalarType::eF32);
 
   /* Load offset. The variants with programmable offsets cannot have an
    * immediate offset, and only the 6 least significant bits are honored. */
@@ -3050,6 +3013,23 @@ ir::SsaDef Converter::computeAtomicBufferAddress(ir::Builder& builder, const Ins
 
   ir::SsaDef elementOffset = loadSrcModified(builder, op, operand, ComponentBit::eY, ir::ScalarType::eU32);
   return computeStructuredAddress(builder, elementIndex, elementOffset, ComponentBit::eX);
+}
+
+
+std::pair<ir::SsaDef, ir::SsaDef> Converter::computeTypedCoordLayer(ir::Builder& builder, const Instruction& op,
+    const Operand& operand, ir::ResourceKind kind, ir::ScalarType type) {
+  auto coordComponentCount = ir::resourceCoordComponentCount(kind);
+  auto coordComponentMask = makeWriteMaskForComponents(coordComponentCount);
+
+  ir::SsaDef coord = loadSrcModified(builder, op, operand, coordComponentMask, type);
+  ir::SsaDef layer = { };
+
+  if (ir::resourceIsLayered(kind)) {
+    auto layerComponentMask = componentBit(Component(coordComponentCount));
+    layer = loadSrcModified(builder, op, operand, layerComponentMask, type);
+  }
+
+  return std::make_pair(coord, layer);
 }
 
 
