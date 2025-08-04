@@ -255,6 +255,12 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eBfRev:
       return handleBitOp(builder, op);
 
+    case OpCode::eF32toF16:
+      return handleF32toF16(builder, op);
+
+    case OpCode::eF16toF32:
+      return handleF16toF32(builder, op);
+
     case OpCode::eIEq:
     case OpCode::eIGe:
     case OpCode::eILt:
@@ -416,8 +422,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eSamplePos:
     case OpCode::eSampleInfo:
     case OpCode::eInterfaceCall:
-    case OpCode::eF32toF16:
-    case OpCode::eF16toF32:
     case OpCode::eUAddc:
     case OpCode::eUSubb:
     case OpCode::eDclFunctionBody:
@@ -1652,6 +1656,58 @@ bool Converter::handleBitOp(ir::Builder& builder, const Instruction& op) {
   }
 
   return storeDstModified(builder, op, dst, result);
+}
+
+
+bool Converter::handleF16toF32(ir::Builder& builder, const Instruction& op) {
+  /* Performs a legacy F16 to F32 conversion one component at a time */
+  const auto& dst = op.getDst(0u);
+  const auto& src = op.getSrc(0u);
+
+  auto dstType = determineOperandType(dst, ir::ScalarType::eF32);
+  auto srcType = determineOperandType(src, ir::ScalarType::eU32);
+
+  util::small_vector<ir::SsaDef, 4u> scalars = { };
+
+  for (auto c : dst.getWriteMask()) {
+    auto value = loadSrcModified(builder, op, src, c, srcType);
+    value = builder.add(ir::Op::ConvertPackedF16toF32(ir::BasicType(dstType, 2u), value));
+    value = builder.add(ir::Op::CompositeExtract(dstType, value, builder.makeConstant(0u)));
+    scalars.push_back(value);
+  }
+
+  auto vector = buildVector(builder, dstType, scalars.size(), scalars.data());
+  return storeDstModified(builder, op, dst, vector);
+}
+
+
+bool Converter::handleF32toF16(ir::Builder& builder, const Instruction& op) {
+  /* Performs a legacy F32 to F16 conversion one component at a time
+   *
+   * Subsequent passes need to ensure round-to-zero behaviour, and may try
+   * to merge packed conversions. Allow min-precision types on either side
+   * of the operation, which may get lowered.
+   */
+  const auto& dst = op.getDst(0u);
+  const auto& src = op.getSrc(0u);
+
+  auto dstType = determineOperandType(dst, ir::ScalarType::eU32);
+  auto srcType = determineOperandType(src, ir::ScalarType::eF32);
+
+  util::small_vector<ir::SsaDef, 4u> scalars = { };
+
+  for (auto c : dst.getWriteMask()) {
+    auto value = loadSrcModified(builder, op, src, c, srcType);
+
+    value = builder.add(ir::Op::CompositeConstruct(ir::BasicType(srcType, 2u),
+      value, makeTypedConstant(builder, srcType, 0.0f)));
+
+    value = builder.add(ir::Op::ConvertF32toPackedF16(dstType, value));
+    scalars.push_back(value);
+  }
+
+  auto vector = buildVector(builder, dstType, scalars.size(), scalars.data());
+  return storeDstModified(builder, op, dst, vector);
 }
 
 

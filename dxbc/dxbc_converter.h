@@ -220,6 +220,10 @@ private:
 
   bool handleBitOp(ir::Builder& builder, const Instruction& op);
 
+  bool handleF32toF16(ir::Builder& builder, const Instruction& op);
+
+  bool handleF16toF32(ir::Builder& builder, const Instruction& op);
+
   bool handleDerivatives(ir::Builder& builder, const Instruction& op);
 
   bool handleLdRaw(ir::Builder& builder, const Instruction& op);
