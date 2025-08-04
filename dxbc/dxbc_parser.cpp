@@ -682,17 +682,17 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   }} },
   /* FirstBitHi */
   { 2u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eU32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eU32    },
+    { OperandKind::eDstReg, ir::ScalarType::eI32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* FirstBitLo */
   { 2u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eU32 },
+    { OperandKind::eDstReg, ir::ScalarType::eI32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* FirstBitShi */
   { 2u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eU32 },
+    { OperandKind::eDstReg, ir::ScalarType::eI32 },
     { OperandKind::eSrcReg, ir::ScalarType::eI32 },
   }} },
   /* UBfe */

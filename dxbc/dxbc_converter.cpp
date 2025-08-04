@@ -239,6 +239,13 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eBfi:
       return handleBitInsert(builder, op);
 
+    case OpCode::eCountBits:
+    case OpCode::eFirstBitHi:
+    case OpCode::eFirstBitLo:
+    case OpCode::eFirstBitShi:
+    case OpCode::eBfRev:
+      return handleBitOp(builder, op);
+
     case OpCode::eIEq:
     case OpCode::eIGe:
     case OpCode::eILt:
@@ -381,11 +388,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eF16toF32:
     case OpCode::eUAddc:
     case OpCode::eUSubb:
-    case OpCode::eCountBits:
-    case OpCode::eFirstBitHi:
-    case OpCode::eFirstBitLo:
-    case OpCode::eFirstBitShi:
-    case OpCode::eBfRev:
     case OpCode::eSwapc:
     case OpCode::eDclFunctionBody:
     case OpCode::eDclFunctionTable:
@@ -1448,6 +1450,68 @@ bool Converter::handleBitInsert(ir::Builder& builder, const Instruction& op) {
     base, value, offset, count));
 
   return storeDst(builder, op, dst, resultDef);
+}
+
+
+bool Converter::handleBitOp(ir::Builder& builder, const Instruction& op) {
+  /* All operations have a single integer destination and source operand.
+   *
+   * FirstBitHi counts bits from the MSB rather than the LSB and functions
+   * more like a leading zero / one count. FirstBit operations return -1 if
+   * the input is zero.
+   */
+  auto opCode = op.getOpToken().getOpCode();
+
+  const auto& dst = op.getDst(0u);
+  const auto& src = op.getSrc(0u);
+
+  /* These pretty much need to run on 32-bit operands */
+  auto dstType = determineOperandType(dst, ir::ScalarType::eI32, false);
+  auto srcType = determineOperandType(src, ir::ScalarType::eU32, false);
+
+  auto srcValue = loadSrcModified(builder, op, src, dst.getWriteMask(), srcType);
+
+  auto dstVectorType = makeVectorType(dstType, dst.getWriteMask());
+  auto srcVectorType = makeVectorType(srcType, dst.getWriteMask());
+
+  auto result = [&] {
+    switch (opCode) {
+      case OpCode::eCountBits:
+        return builder.add(ir::Op::IBitCount(dstVectorType, srcValue));
+
+      case OpCode::eBfRev:
+        return builder.add(ir::Op::IBitReverse(dstVectorType, srcValue));
+
+      case OpCode::eFirstBitLo:
+        return builder.add(ir::Op::IFindLsb(dstVectorType, srcValue));
+
+      case OpCode::eFirstBitHi:
+        return builder.add(ir::Op::UFindMsb(dstVectorType, srcValue));
+
+      case OpCode::eFirstBitShi:
+        return builder.add(ir::Op::SFindMsb(dstVectorType, srcValue));
+
+      default:
+        break;
+    }
+
+    dxbc_spv_unreachable();
+    return ir::SsaDef();
+  } ();
+
+  /* Fix up findmsb results for zero inputs */
+  if (opCode == OpCode::eFirstBitHi || opCode == OpCode::eFirstBitShi) {
+    auto condType = makeVectorType(ir::ScalarType::eBool, dst.getWriteMask());
+
+    auto zero = makeTypedConstant(builder, srcVectorType, 0u);
+    auto neg1 = makeTypedConstant(builder, dstVectorType, -1);
+
+    result = builder.add(ir::Op::Select(dstVectorType,
+      builder.add(ir::Op::INe(condType, srcValue, zero)),
+      result, neg1));
+  }
+
+  return storeDstModified(builder, op, dst, result);
 }
 
 
