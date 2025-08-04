@@ -72,6 +72,8 @@ private:
 
   uint32_t      m_instructionCount = 0u;
 
+  ir::SsaDef    m_icb = { };
+
   /* Entry point definition and function definitions. The main function
    * will point to the control point function for hull shaders. */
   struct {
@@ -154,6 +156,8 @@ private:
 
   bool emitGsStateSetup(ir::Builder& builder);
 
+  bool handleCustomData(ir::Builder& builder, const Instruction& op);
+
   bool handleDclGlobalFlags(ir::Builder& builder, const Instruction& op);
 
   bool handleHsPhase(ir::Builder& builder, const Instruction& op);
@@ -185,6 +189,8 @@ private:
   bool handleMov(ir::Builder& builder, const Instruction& op);
 
   bool handleMovc(ir::Builder& builder, const Instruction& op);
+
+  bool handleSwapc(ir::Builder& builder, const Instruction& op);
 
   bool handleFloatArithmetic(ir::Builder& builder, const Instruction& op);
 

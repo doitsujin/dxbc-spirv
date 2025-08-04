@@ -1043,6 +1043,12 @@ public:
   bool write(util::ByteWriter& writer, const ShaderInfo& info) const;
 
 
+  /** Retrieves custom data range as a sequence of dwords. */
+  std::pair<const uint32_t*, size_t> getCustomData() const {
+    return std::make_pair(m_customData.data(), m_customData.size());
+  }
+
+
   /** Checks whether instruction is valid */
   explicit operator bool () const {
     return bool(m_token);
@@ -1061,6 +1067,8 @@ private:
   std::array<uint8_t, 4u> m_immOperands = { };
 
   util::small_vector<Operand, 16u> m_operands = { };
+
+  std::vector<uint32_t> m_customData = { };
 
   void resetOnError();
 

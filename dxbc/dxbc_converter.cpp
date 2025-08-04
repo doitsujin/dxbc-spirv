@@ -51,6 +51,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eNop:
       return true;
 
+    case OpCode::eCustomData:
+      return handleCustomData(builder, op);
+
     case OpCode::eDclTemps:
       /* Some applications with custom DXBC code do not honor the declared
        * temp limit, so ignore it and declare them on the fly. */
@@ -409,7 +412,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eCall:
     case OpCode::eCallc:
     case OpCode::eLabel:
-    case OpCode::eCustomData:
     case OpCode::eLod:
     case OpCode::eSamplePos:
     case OpCode::eSampleInfo:
@@ -575,6 +577,33 @@ bool Converter::emitGsStateSetup(ir::Builder& builder) {
   builder.add(ir::Op::SetGsInputPrimitive(getEntryPoint(), *inputPrimitive));
   builder.add(ir::Op::SetGsOutputPrimitive(getEntryPoint(), *outputTopology, m_gs.streamMask));
   builder.add(ir::Op::SetGsOutputVertices(getEntryPoint(), m_gs.outputVertices));
+  return true;
+}
+
+
+bool Converter::handleCustomData(ir::Builder& builder, const Instruction& op) {
+  if (op.getOpToken().getCustomDataType() != CustomDataType::eDclIcb)
+    return logOpMessage(LogLevel::eDebug, op, "Skipping custom data block of type ", uint32_t(op.getOpToken().getCustomDataType()));
+
+  /* We can only have one icb per shader module */
+  if (m_icb)
+    return logOpError(op, "Immediate constant buffer already declared.");
+
+  /* ICB is always declared as a vec4 array, we can get rid of
+   * unused vector components later. */
+  auto [data, size] = op.getCustomData();
+
+  auto type = ir::Type(ir::ScalarType::eUnknown, 4u).addArrayDimension(size / 4u);
+  ir::Op constant(ir::OpCode::eConstant, type);
+
+  for (size_t i = 0u; i < size; i++)
+    constant.addOperand(data[i]);
+
+  m_icb = builder.add(std::move(constant));
+
+  if (m_options.includeDebugNames)
+    builder.add(ir::Op::DebugName(m_icb, "icb"));
+
   return true;
 }
 

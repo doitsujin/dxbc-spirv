@@ -1725,8 +1725,19 @@ Instruction::Instruction(util::ByteReader& reader, const ShaderInfo& info) {
     addOperand(operand);
   }
 
+  /* Copy custom data to local memory */
+  if (m_token.isCustomData()) {
+    m_customData.resize(tokenReader.getRemaining() / sizeof(uint32_t));
+
+    for (auto& t : m_customData) {
+      if (!tokenReader.read(t))
+        Logger::err("Failed to read custom data blob.");
+    }
+
+  }
+
   /* There shouldn't be any bytes left in the reader */
-  if (!m_token.isCustomData() && tokenReader.getRemaining())
+  if (tokenReader.getRemaining())
     Logger::err("Instruction ", token.getOpCode(), " has unhandled operands.");
 }
 
