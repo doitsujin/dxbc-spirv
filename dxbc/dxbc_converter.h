@@ -196,6 +196,8 @@ private:
 
   bool handleFloatConvert(ir::Builder& builder, const Instruction& op);
 
+  bool handleFloatSinCos(ir::Builder& builder, const Instruction& op);
+
   bool handleIntArithmetic(ir::Builder& builder, const Instruction& op);
 
   bool handleIntMultiply(ir::Builder& builder, const Instruction& op);

@@ -206,6 +206,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eFtoD:
       return handleFloatConvert(builder, op);
 
+    case OpCode::eSinCos:
+      return handleFloatSinCos(builder, op);
+
     case OpCode::eAnd:
     case OpCode::eIAdd:
     case OpCode::eIMad:
@@ -369,7 +372,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eCallc:
     case OpCode::eLabel:
     case OpCode::eCustomData:
-    case OpCode::eSinCos:
     case OpCode::eUDiv:
     case OpCode::eLod:
     case OpCode::eSamplePos:
@@ -1149,6 +1151,47 @@ bool Converter::handleFloatConvert(ir::Builder& builder, const Instruction& op) 
     result.setFlags(ir::OpFlag::ePrecise);
 
   return storeDst(builder, op, dst, builder.add(std::move(result)));
+}
+
+
+bool Converter::handleFloatSinCos(ir::Builder& builder, const Instruction& op) {
+  /* sincos takes the following operands:
+   * (dst0) Sin result
+   * (dst1) Cos result
+   * (src0) Source operand
+   */
+  const auto& dstSin = op.getDst(0u);
+  const auto& dstCos = op.getDst(1u);
+
+  util::small_vector<ir::SsaDef, 4u> sinScalars;
+  util::small_vector<ir::SsaDef, 4u> cosScalars;
+
+  auto scalarType = ir::ScalarType::eF32;
+
+  for (auto c : (dstSin.getWriteMask() | dstCos.getWriteMask())) {
+    auto srcValue = loadSrcModified(builder, op, op.getSrc(0u), c, scalarType);
+
+    if (dstSin.getWriteMask() & c) {
+      sinScalars.push_back(builder.add(ir::Op::FSin(scalarType, srcValue)));
+
+      if (op.getOpToken().getPreciseMask() & c)
+        builder.setOpFlags(sinScalars.back(), ir::OpFlag::ePrecise);
+    }
+
+    if (dstCos.getWriteMask() & c) {
+      cosScalars.push_back(builder.add(ir::Op::FCos(scalarType, srcValue)));
+
+      if (op.getOpToken().getPreciseMask() & c)
+        builder.setOpFlags(cosScalars.back(), ir::OpFlag::ePrecise);
+    }
+  }
+
+  /* Either result operand may be null, only store the ones that are defined. */
+  auto sinVector = buildVector(builder, scalarType, sinScalars.size(), sinScalars.data());
+  auto cosVector = buildVector(builder, scalarType, cosScalars.size(), cosScalars.data());
+
+  return (!sinVector || storeDstModified(builder, op, dstSin, sinVector)) &&
+         (!cosVector || storeDstModified(builder, op, dstCos, cosVector));
 }
 
 
