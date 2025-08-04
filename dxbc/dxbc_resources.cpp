@@ -211,7 +211,7 @@ ResourceProperties ResourceMap::emitDescriptorLoad(
         ir::Builder&            builder,
   const Instruction&            op,
   const Operand&                operand) {
-  auto [descriptor, info] = loadDescriptor(builder, op, operand);
+  auto [descriptor, info] = loadDescriptor(builder, op, operand, false);
 
   if (!info)
     return ResourceProperties();
@@ -231,13 +231,26 @@ ResourceProperties ResourceMap::emitDescriptorLoad(
 }
 
 
+ir::SsaDef ResourceMap::emitUavCounterDescriptorLoad(
+        ir::Builder&            builder,
+  const Instruction&            op,
+  const Operand&                operand) {
+  auto [descriptor, info] = loadDescriptor(builder, op, operand, true);
+
+  if (!info)
+    return ir::SsaDef();
+
+  return descriptor;
+}
+
+
 ir::SsaDef ResourceMap::emitConstantBufferLoad(
         ir::Builder&            builder,
   const Instruction&            op,
   const Operand&                operand,
         WriteMask               componentMask,
         ir::ScalarType          scalarType) {
-  auto [descriptor, resource] = loadDescriptor(builder, op, operand);
+  auto [descriptor, resource] = loadDescriptor(builder, op, operand, false);
 
   if (!resource)
     return ir::SsaDef();
@@ -307,7 +320,7 @@ std::pair<ir::SsaDef, ir::SsaDef> ResourceMap::emitRawStructuredLoad(
         ir::SsaDef              elementOffset,
         WriteMask               componentMask,
         ir::ScalarType          scalarType) {
-  auto [descriptor, resource] = loadDescriptor(builder, op, operand);
+  auto [descriptor, resource] = loadDescriptor(builder, op, operand, false);
 
   if (!resource)
     return std::make_pair(ir::SsaDef(), ir::SsaDef());
@@ -387,7 +400,7 @@ bool ResourceMap::emitRawStructuredStore(
         ir::SsaDef              elementIndex,
         ir::SsaDef              elementOffset,
         ir::SsaDef              data) {
-  auto [descriptor, resource] = loadDescriptor(builder, op, operand);
+  auto [descriptor, resource] = loadDescriptor(builder, op, operand, false);
 
   if (!resource)
     return false;
@@ -434,7 +447,8 @@ bool ResourceMap::emitRawStructuredStore(
 std::pair<ir::SsaDef, const ResourceInfo*> ResourceMap::loadDescriptor(
         ir::Builder&            builder,
   const Instruction&            op,
-  const Operand&                operand) {
+  const Operand&                operand,
+        bool                    uavCounter) {
   ResourceKey key = { };
   key.regType = operand.getRegisterType();
   key.regIndex = operand.getIndex(0u);
@@ -447,13 +461,22 @@ std::pair<ir::SsaDef, const ResourceInfo*> ResourceMap::loadDescriptor(
     return std::make_pair(ir::SsaDef(), nullptr);
   }
 
-  auto descriptorType = [&key] {
+  auto descriptorType = [&key, uavCounter] {
     switch (key.regType) {
-      case RegisterType::eSampler:  return ir::ScalarType::eSampler;
-      case RegisterType::eCbv:      return ir::ScalarType::eCbv;
-      case RegisterType::eResource: return ir::ScalarType::eSrv;
-      case RegisterType::eUav:      return ir::ScalarType::eUav;
-      default:                      break;
+      case RegisterType::eSampler:
+        return ir::ScalarType::eSampler;
+
+      case RegisterType::eCbv:
+        return ir::ScalarType::eCbv;
+
+      case RegisterType::eResource:
+        return ir::ScalarType::eSrv;
+
+      case RegisterType::eUav:
+        return uavCounter ? ir::ScalarType::eUavCounter : ir::ScalarType::eUav;
+
+      default:
+        break;
     }
 
     dxbc_spv_unreachable();
@@ -486,8 +509,13 @@ std::pair<ir::SsaDef, const ResourceInfo*> ResourceMap::loadDescriptor(
     descriptorIndex = builder.makeConstant(0u);
   }
 
-  auto def = builder.add(ir::Op::DescriptorLoad(descriptorType,
-    entry->second.resourceDef, descriptorIndex));
+  /* Retrieve resource definition. If necessary, declare the UAV counter. */
+  auto baseDef = entry->second.resourceDef;
+
+  if (uavCounter)
+    baseDef = declareUavCounter(builder, entry->second);
+
+  auto def = builder.add(ir::Op::DescriptorLoad(descriptorType, baseDef, descriptorIndex));
 
   /* Apply non-uniform modifier to the descriptor load */
   if (operand.getModifiers().isNonUniform())
@@ -533,6 +561,23 @@ ResourceInfo* ResourceMap::insertResourceInfo(
   }
 
   return &info;
+}
+
+
+ir::SsaDef ResourceMap::declareUavCounter(
+        ir::Builder&            builder,
+        ResourceInfo&           resource) {
+  if (resource.counterDef)
+    return resource.counterDef;
+
+  resource.counterDef = builder.add(ir::Op::DclUavCounter(m_converter.getEntryPoint(), resource.resourceDef));
+
+  if (m_converter.m_options.includeDebugNames) {
+    auto name = m_converter.makeRegisterDebugName(resource.regType, resource.regIndex, WriteMask()) + "_ctr";
+    builder.add(ir::Op::DebugName(resource.counterDef, name.c_str()));
+  }
+
+  return resource.counterDef;
 }
 
 

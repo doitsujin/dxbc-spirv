@@ -111,6 +111,12 @@ public:
     const Instruction&            op,
     const Operand&                operand);
 
+  /** Declares and loads UAV counter descriptor for the given UAV. */
+  ir::SsaDef emitUavCounterDescriptorLoad(
+          ir::Builder&            builder,
+    const Instruction&            op,
+    const Operand&                operand);
+
   /** Loads data from a constant buffer using one or more BufferLoad
    *  instruction. If possiblem this will emit a vectorized load. */
   ir::SsaDef emitConstantBufferLoad(
@@ -153,11 +159,16 @@ private:
   std::pair<ir::SsaDef, const ResourceInfo*> loadDescriptor(
           ir::Builder&            builder,
     const Instruction&            op,
-    const Operand&                operand);
+    const Operand&                operand,
+          bool                    uavCounter);
 
   ResourceInfo* insertResourceInfo(
     const Instruction&            op,
     const Operand&                operand);
+
+  ir::SsaDef declareUavCounter(
+          ir::Builder&            builder,
+          ResourceInfo&           resource);
 
   void emitDebugName(
           ir::Builder&            builder,
