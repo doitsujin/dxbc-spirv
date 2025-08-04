@@ -152,6 +152,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDMovc:
       return handleMovc(builder, op);
 
+    case OpCode::eSwapc:
+      return handleSwapc(builder, op);
+
     case OpCode::eAdd:
     case OpCode::eDiv:
     case OpCode::eExp:
@@ -415,7 +418,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eF16toF32:
     case OpCode::eUAddc:
     case OpCode::eUSubb:
-    case OpCode::eSwapc:
     case OpCode::eDclFunctionBody:
     case OpCode::eDclFunctionTable:
     case OpCode::eDclInterface:
@@ -842,6 +844,56 @@ bool Converter::handleMovc(ir::Builder& builder, const Instruction& op) {
 
   auto value = builder.add(ir::Op::Select(vectorType, cond, valueTrue, valueFalse));
   return storeDstModified(builder, op, dst, value);
+}
+
+
+bool Converter::handleSwapc(ir::Builder& builder, const Instruction& op) {
+  /* swapc takes the following operands:
+   * (dst0) First destination, basically cond ? src2 : src1
+   * (dst1) Second destination, basically cond ? src1 : src2
+   * (src0) Condition, considered true if any bit is set per component
+   * (src1) First source
+   * (src2) Second source
+   */
+  const auto& dstA = op.getDst(0u);
+  const auto& dstB = op.getDst(1u);
+
+  const auto& srcCond = op.getSrc(0u);
+
+  const auto& srcA = op.getSrc(1u);
+  const auto& srcB = op.getSrc(2u);
+
+  /* Not sure if modifiers are supposed to be supported here */
+  bool hasModifiers = op.getOpToken().isSaturated() ||
+    hasAbsNegModifiers(srcA) || hasAbsNegModifiers(srcB);
+
+  auto scalarType = hasModifiers
+    ? ir::ScalarType::eF32
+    : ir::ScalarType::eUnknown;
+
+  /* Write masks for both operands can differ, so just do a component-wise swap */
+  util::small_vector<ir::SsaDef, 4u> aScalars;
+  util::small_vector<ir::SsaDef, 4u> bScalars;
+
+  for (auto c : dstA.getWriteMask() | dstB.getWriteMask()) {
+    auto cond = loadSrcModified(builder, op, srcCond, c, ir::ScalarType::eBool);
+
+    auto a = loadSrcModified(builder, op, srcA, c, scalarType);
+    auto b = loadSrcModified(builder, op, srcB, c, scalarType);
+
+    if (dstA.getWriteMask() & c)
+      aScalars.push_back(builder.add(ir::Op::Select(scalarType, cond, b, a)));
+
+    if (dstB.getWriteMask() & c)
+      bScalars.push_back(builder.add(ir::Op::Select(scalarType, cond, a, b)));
+  }
+
+  /* Write back result vectors */
+  auto aVector = buildVector(builder, scalarType, aScalars.size(), aScalars.data());
+  auto bVector = buildVector(builder, scalarType, bScalars.size(), bScalars.data());
+
+  return (!aVector || storeDstModified(builder, op, dstA, aVector)) &&
+         (!bVector || storeDstModified(builder, op, dstB, bVector));
 }
 
 
