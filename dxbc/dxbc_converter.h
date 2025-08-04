@@ -228,6 +228,8 @@ private:
 
   bool handleStoreTyped(ir::Builder& builder, const Instruction& op);
 
+  bool handleAtomicCounter(ir::Builder& builder, const Instruction& op);
+
   bool handleSample(ir::Builder& builder, const Instruction& op);
 
   bool handleGather(ir::Builder& builder, const Instruction& op);

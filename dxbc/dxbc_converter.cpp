@@ -295,6 +295,10 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eStoreUavTyped:
       return handleStoreTyped(builder, op);
 
+    case OpCode::eImmAtomicAlloc:
+    case OpCode::eImmAtomicConsume:
+      return handleAtomicCounter(builder, op);
+
     case OpCode::eSample:
     case OpCode::eSampleClampS:
     case OpCode::eSampleC:
@@ -403,8 +407,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eAtomicIMin:
     case OpCode::eAtomicUMax:
     case OpCode::eAtomicUMin:
-    case OpCode::eImmAtomicAlloc:
-    case OpCode::eImmAtomicConsume:
     case OpCode::eImmAtomicIAdd:
     case OpCode::eImmAtomicAnd:
     case OpCode::eImmAtomicOr:
@@ -1839,6 +1841,46 @@ bool Converter::handleStoreTyped(ir::Builder& builder, const Instruction& op) {
     builder.add(ir::Op::ImageStore(resourceInfo.descriptor, layer, coord, value));
 
   return true;
+}
+
+
+bool Converter::handleAtomicCounter(ir::Builder& builder, const Instruction& op) {
+  /* imm_atomic_{alloc,consume} take the following operands:
+   * (dst0) Returned value. For alloc, this is the old value, for consume,
+   *        this returns the new value instead. The IR mirrors this.
+   * (dst1) UAV resource
+   */
+  auto opCode = op.getOpToken().getOpCode();
+
+  const auto& dst = op.getDst(0u);
+  const auto& resource = op.getDst(1u);
+
+  if (resource.getRegisterType() != RegisterType::eUav)
+    return logOpError(op, "Resource must be a UAV.");
+
+  auto descriptor = m_resources.emitUavCounterDescriptorLoad(builder, op, resource);
+
+  if (!descriptor)
+    return false;
+
+  /* Emit atomic op */
+  auto dstType = ir::ScalarType::eU32;
+
+  auto atomicOp = [opCode] {
+    switch (opCode) {
+      case OpCode::eImmAtomicAlloc:   return ir::AtomicOp::eInc;
+      case OpCode::eImmAtomicConsume: return ir::AtomicOp::eDec;
+      default: break;
+    }
+
+    dxbc_spv_unreachable();
+    return ir::AtomicOp::eLoad;
+  } ();
+
+  auto value = builder.add(ir::Op::CounterAtomic(atomicOp, dstType, descriptor));
+
+  value = broadcastScalar(builder, value, dst.getWriteMask());
+  return storeDstModified(builder, op, dst, value);
 }
 
 
