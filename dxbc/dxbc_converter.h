@@ -228,6 +228,8 @@ private:
 
   bool handleStoreTyped(ir::Builder& builder, const Instruction& op);
 
+  bool handleAtomic(ir::Builder& builder, const Instruction& op);
+
   bool handleAtomicCounter(ir::Builder& builder, const Instruction& op);
 
   bool handleSample(ir::Builder& builder, const Instruction& op);
@@ -295,6 +297,8 @@ private:
   ir::SsaDef computeRawAddress(ir::Builder& builder, ir::SsaDef byteAddress, WriteMask componentMask);
 
   ir::SsaDef computeStructuredAddress(ir::Builder& builder, ir::SsaDef elementIndex, ir::SsaDef elementOffset, WriteMask componentMask);
+
+  ir::SsaDef computeAtomicBufferAddress(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::ResourceKind kind);
 
   ir::SsaDef boolToInt(ir::Builder& builder, ir::SsaDef def);
 

@@ -270,6 +270,26 @@ bool RegisterFile::emitTgsmStore(
 }
 
 
+std::pair<ir::SsaDef, ir::SsaDef> RegisterFile::computeTgsmAddress(
+        ir::Builder&            builder,
+  const Instruction&            op,
+  const Operand&                operand,
+  const Operand&                address) {
+  auto tgsmReg = getTgsmRegister(op, operand);
+
+  if (!tgsmReg)
+    return std::make_pair(ir::SsaDef(), ir::SsaDef());
+
+  const auto& tgsmType = builder.getOp(tgsmReg).getType();
+  bool isStructured = !tgsmType.getSubType(0u).isScalarType();
+
+  auto result = m_converter.computeAtomicBufferAddress(builder, op, address,
+    isStructured ? ir::ResourceKind::eBufferStructured : ir::ResourceKind::eBufferRaw);
+
+  return std::make_pair(tgsmReg, result);
+}
+
+
 ir::SsaDef RegisterFile::loadArrayIndex(ir::Builder& builder, const Instruction& op, const Operand& operand) {
   if (operand.getRegisterType() != RegisterType::eIndexableTemp)
     return ir::SsaDef();

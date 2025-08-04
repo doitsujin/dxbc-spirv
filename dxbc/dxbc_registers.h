@@ -68,6 +68,13 @@ public:
           ir::SsaDef              elementOffset,
           ir::SsaDef              data);
 
+  /** Emits address calculation for TGSM atomics */
+  std::pair<ir::SsaDef, ir::SsaDef> computeTgsmAddress(
+          ir::Builder&            builder,
+    const Instruction&            op,
+    const Operand&                operand,
+    const Operand&                address);
+
 private:
 
   Converter& m_converter;

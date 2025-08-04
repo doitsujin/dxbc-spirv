@@ -295,6 +295,27 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eStoreUavTyped:
       return handleStoreTyped(builder, op);
 
+    case OpCode::eAtomicAnd:
+    case OpCode::eAtomicOr:
+    case OpCode::eAtomicXor:
+    case OpCode::eAtomicCmpStore:
+    case OpCode::eAtomicIAdd:
+    case OpCode::eAtomicIMax:
+    case OpCode::eAtomicIMin:
+    case OpCode::eAtomicUMax:
+    case OpCode::eAtomicUMin:
+    case OpCode::eImmAtomicIAdd:
+    case OpCode::eImmAtomicAnd:
+    case OpCode::eImmAtomicOr:
+    case OpCode::eImmAtomicXor:
+    case OpCode::eImmAtomicExch:
+    case OpCode::eImmAtomicCmpExch:
+    case OpCode::eImmAtomicIMax:
+    case OpCode::eImmAtomicIMin:
+    case OpCode::eImmAtomicUMax:
+    case OpCode::eImmAtomicUMin:
+      return handleAtomic(builder, op);
+
     case OpCode::eImmAtomicAlloc:
     case OpCode::eImmAtomicConsume:
       return handleAtomicCounter(builder, op);
@@ -398,25 +419,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclFunctionBody:
     case OpCode::eDclFunctionTable:
     case OpCode::eDclInterface:
-    case OpCode::eAtomicAnd:
-    case OpCode::eAtomicOr:
-    case OpCode::eAtomicXor:
-    case OpCode::eAtomicCmpStore:
-    case OpCode::eAtomicIAdd:
-    case OpCode::eAtomicIMax:
-    case OpCode::eAtomicIMin:
-    case OpCode::eAtomicUMax:
-    case OpCode::eAtomicUMin:
-    case OpCode::eImmAtomicIAdd:
-    case OpCode::eImmAtomicAnd:
-    case OpCode::eImmAtomicOr:
-    case OpCode::eImmAtomicXor:
-    case OpCode::eImmAtomicExch:
-    case OpCode::eImmAtomicCmpExch:
-    case OpCode::eImmAtomicIMax:
-    case OpCode::eImmAtomicIMin:
-    case OpCode::eImmAtomicUMax:
-    case OpCode::eImmAtomicUMin:
     case OpCode::eAbort:
     case OpCode::eDebugBreak:
     case OpCode::eMsad:
@@ -1844,6 +1846,137 @@ bool Converter::handleStoreTyped(ir::Builder& builder, const Instruction& op) {
 }
 
 
+bool Converter::handleAtomic(ir::Builder& builder, const Instruction& op) {
+  /* Atomic instructions have the following layout:
+   * (dst0) Return value, for the imm_* variants. Omitted otherwise.
+   * (dst1) UAV or TGSM register to perform the atomic on.
+   * (src0) Address into the UAV or TGSM register.
+   * (src1..n) Scalar operands.
+   *
+   * For images and typed buffers, we assume the type of the atomic operation
+   * to be the same as the declared resource type, otherwise U32 is used.
+   */
+  auto opCode = op.getOpToken().getOpCode();
+
+  /* Get target format and, if applicable, load resource descriptor. */
+  const auto& target = op.getDst(op.getDstCount() - 1u);
+  const auto& address = op.getSrc(0u);
+
+  if (target.getRegisterType() != RegisterType::eUav &&
+      target.getRegisterType() != RegisterType::eTgsm)
+    return logOpError(op, "Invalid target register for atomic instruction.");
+
+  ResourceProperties resource = { };
+  resource.type = ir::ScalarType::eU32;
+
+  if (target.getRegisterType() == RegisterType::eUav) {
+    resource = m_resources.emitDescriptorLoad(builder, op, target);
+
+    if (!resource.descriptor)
+      return false;
+
+    if (!ir::resourceIsTyped(resource.kind))
+      resource.type = ir::ScalarType::eU32;
+  }
+
+  bool hasReturnValue = op.getDstCount() == 2u;
+  auto returnType = hasReturnValue ? resource.type : ir::ScalarType::eVoid;
+
+  /* Load operands and stick them into a vector as necessary */
+  util::small_vector<ir::SsaDef, 2u> operandScalars;
+
+  for (uint32_t i = 1u; i < op.getSrcCount(); i++)
+    operandScalars.push_back(loadSrcModified(builder, op, op.getSrc(i), ComponentBit::eX, resource.type));
+
+  auto operandVector = buildVector(builder, resource.type,
+    operandScalars.size(), operandScalars.data());
+
+  /* Determine atomic op to use based on the incoming opcode */
+  auto atomicOpType = [opCode] {
+    switch (opCode) {
+      case OpCode::eAtomicAnd:
+      case OpCode::eImmAtomicAnd:     return ir::AtomicOp::eAnd;
+      case OpCode::eAtomicOr:
+      case OpCode::eImmAtomicOr:      return ir::AtomicOp::eOr;
+      case OpCode::eAtomicXor:
+      case OpCode::eImmAtomicXor:     return ir::AtomicOp::eXor;
+      case OpCode::eAtomicCmpStore:
+      case OpCode::eImmAtomicCmpExch: return ir::AtomicOp::eCompareExchange;
+      case OpCode::eImmAtomicExch:    return ir::AtomicOp::eExchange;
+      case OpCode::eAtomicIAdd:
+      case OpCode::eImmAtomicIAdd:    return ir::AtomicOp::eAdd;
+      case OpCode::eAtomicIMin:
+      case OpCode::eImmAtomicIMin:    return ir::AtomicOp::eSMin;
+      case OpCode::eAtomicIMax:
+      case OpCode::eImmAtomicIMax:    return ir::AtomicOp::eSMax;
+      case OpCode::eAtomicUMin:
+      case OpCode::eImmAtomicUMin:    return ir::AtomicOp::eUMin;
+      case OpCode::eAtomicUMax:
+      case OpCode::eImmAtomicUMax:    return ir::AtomicOp::eUMax;
+      default:                        break;
+    }
+
+    dxbc_spv_unreachable();
+    return ir::AtomicOp::eLoad;
+  } ();
+
+  /* Prepare atomic op. Address calculation is very annoying here since it
+   * heavily depends on the resource type, and does not follow the regular
+   * ld/store patterns for structured buffers. */
+  ir::OpCode atomicOpCode = ir::OpCode::eLdsAtomic;
+
+  if (target.getRegisterType() == RegisterType::eUav) {
+    atomicOpCode = ir::resourceIsBuffer(resource.kind)
+      ? ir::OpCode::eBufferAtomic
+      : ir::OpCode::eImageAtomic;
+  }
+
+  ir::Op atomicOp(atomicOpCode, returnType);
+
+  if (target.getRegisterType() == RegisterType::eTgsm) {
+    auto [base, index] = m_regFile.computeTgsmAddress(builder, op, target, address);
+
+    atomicOp.addOperand(base);
+    atomicOp.addOperand(index);
+  } else {
+    atomicOp.addOperand(resource.descriptor);
+
+    if (ir::resourceIsTyped(resource.kind)) {
+      auto coordComponentCount = ir::resourceCoordComponentCount(resource.kind);
+      auto coordComponentMask = makeWriteMaskForComponents(coordComponentCount);
+
+      ir::SsaDef coord = loadSrcModified(builder, op, address, coordComponentMask, ir::ScalarType::eU32);
+      ir::SsaDef layer = { };
+
+      if (ir::resourceIsLayered(resource.kind)) {
+        auto layerComponentMask = componentBit(Component(coordComponentCount));
+        layer = loadSrcModified(builder, op, address, layerComponentMask, ir::ScalarType::eU32);
+      }
+
+      if (!ir::resourceIsBuffer(resource.kind))
+        atomicOp.addOperand(layer);
+
+      atomicOp.addOperand(coord);
+    } else {
+      atomicOp.addOperand(computeAtomicBufferAddress(builder, op, address, resource.kind));
+    }
+  }
+
+  atomicOp.addOperand(operandVector);
+  atomicOp.addOperand(atomicOpType);
+
+  auto atomicDef = builder.add(std::move(atomicOp));
+
+  if (!hasReturnValue)
+    return true;
+
+  /* Write back result if requested */
+  const auto& dst = op.getDst(0u);
+  atomicDef = broadcastScalar(builder, atomicDef, dst.getWriteMask());
+  return storeDstModified(builder, op, dst, atomicDef);
+}
+
+
 bool Converter::handleAtomicCounter(ir::Builder& builder, const Instruction& op) {
   /* imm_atomic_{alloc,consume} take the following operands:
    * (dst0) Returned value. For alloc, this is the old value, for consume,
@@ -2906,6 +3039,17 @@ ir::SsaDef Converter::computeStructuredAddress(ir::Builder& builder, ir::SsaDef 
   elementOffset = computeRawAddress(builder, elementOffset, componentMask);
 
   return builder.add(ir::Op::CompositeConstruct(type, elementIndex, elementOffset));
+}
+
+
+ir::SsaDef Converter::computeAtomicBufferAddress(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::ResourceKind kind) {
+  ir::SsaDef elementIndex = loadSrcModified(builder, op, operand, ComponentBit::eX, ir::ScalarType::eU32);
+
+  if (kind == ir::ResourceKind::eBufferRaw)
+    return computeRawAddress(builder, elementIndex, ComponentBit::eX);
+
+  ir::SsaDef elementOffset = loadSrcModified(builder, op, operand, ComponentBit::eY, ir::ScalarType::eU32);
+  return computeStructuredAddress(builder, elementIndex, elementOffset, ComponentBit::eX);
 }
 
 
