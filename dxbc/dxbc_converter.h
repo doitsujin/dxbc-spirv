@@ -202,6 +202,8 @@ private:
 
   bool handleIntMultiply(ir::Builder& builder, const Instruction& op);
 
+  bool handleIntDivide(ir::Builder& builder, const Instruction& op);
+
   bool handleIntShift(ir::Builder& builder, const Instruction& op);
 
   bool handleIntCompare(ir::Builder& builder, const Instruction& op);

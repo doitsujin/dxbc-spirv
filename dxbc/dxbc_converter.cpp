@@ -227,6 +227,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eUMul:
       return handleIntMultiply(builder, op);
 
+    case OpCode::eUDiv:
+      return handleIntDivide(builder, op);
+
     case OpCode::eIShl:
     case OpCode::eIShr:
     case OpCode::eUShr:
@@ -379,7 +382,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eCallc:
     case OpCode::eLabel:
     case OpCode::eCustomData:
-    case OpCode::eUDiv:
     case OpCode::eLod:
     case OpCode::eSamplePos:
     case OpCode::eSampleInfo:
@@ -1301,6 +1303,57 @@ bool Converter::handleIntMultiply(ir::Builder& builder, const Instruction& op) {
 
     return success;
   }
+}
+
+
+bool Converter::handleIntDivide(ir::Builder& builder, const Instruction& op) {
+  /* udiv has the following operands:
+   * (dst0) Quotient
+   * (dst1) Remainder
+   * (src0) Number to divide
+   * (src1) Divisor
+   *
+   * Division by zero returns -1 in both operands.
+   */
+  const auto& dstDiv = op.getDst(0u);
+  const auto& dstMod = op.getDst(1u);
+
+  auto scalarType = dstDiv.getRegisterType() != RegisterType::eNull
+    ? determineOperandType(dstDiv, ir::ScalarType::eU32)
+    : determineOperandType(dstMod, ir::ScalarType::eU32);
+
+  /* Process division one component at a time */
+  auto zero = makeTypedConstant(builder, scalarType,  0u);
+  auto neg1 = makeTypedConstant(builder, scalarType, -1u);
+
+  util::small_vector<ir::SsaDef, 4u> divScalars;
+  util::small_vector<ir::SsaDef, 4u> modScalars;
+
+  for (auto c : (dstDiv.getWriteMask() | dstMod.getWriteMask())) {
+    const auto& num = loadSrcModified(builder, op, op.getSrc(0u), c, scalarType);
+    const auto& den = loadSrcModified(builder, op, op.getSrc(1u), c, scalarType);
+
+    auto cond = builder.add(ir::Op::INe(ir::ScalarType::eBool, den, zero));
+
+    if (dstDiv.getWriteMask() & c) {
+      auto& scalar = divScalars.emplace_back();
+      scalar = builder.add(ir::Op::UDiv(scalarType, num, den));
+      scalar = builder.add(ir::Op::Select(scalarType, cond, scalar, neg1));
+    }
+
+    if (dstMod.getWriteMask() & c) {
+      auto& scalar = modScalars.emplace_back();
+      scalar = builder.add(ir::Op::UMod(scalarType, num, den));
+      scalar = builder.add(ir::Op::Select(scalarType, cond, scalar, neg1));
+    }
+  }
+
+  /* Either result operand may be null, only store the ones that are defined. */
+  auto divVector = buildVector(builder, scalarType, divScalars.size(), divScalars.data());
+  auto modVector = buildVector(builder, scalarType, modScalars.size(), modScalars.data());
+
+  return (!divVector || storeDstModified(builder, op, dstDiv, divVector)) &&
+         (!modVector || storeDstModified(builder, op, dstMod, modVector));
 }
 
 
