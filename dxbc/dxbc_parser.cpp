@@ -191,8 +191,8 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   }} },
   /* INeg */
   { 2u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eU32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eU32 },
+    { OperandKind::eDstReg, ir::ScalarType::eI32 },
+    { OperandKind::eSrcReg, ir::ScalarType::eI32 },
   }} },
   /* IShl */
   { 3u, {{
