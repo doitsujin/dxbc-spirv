@@ -306,6 +306,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eGather4PoCS:
       return handleGather(builder, op);
 
+    case OpCode::eBufInfo:
+      return handleBufInfo(builder, op);
+
     case OpCode::eResInfo:
       return handleResInfo(builder, op);
 
@@ -372,7 +375,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eSamplePos:
     case OpCode::eSampleInfo:
     case OpCode::eInterfaceCall:
-    case OpCode::eBufInfo:
     case OpCode::eF32toF16:
     case OpCode::eF16toF32:
     case OpCode::eUAddc:
@@ -1888,6 +1890,34 @@ bool Converter::handleGather(ir::Builder& builder, const Instruction& op) {
   }
 
   return storeDstModified(builder, op, dst, swizzleVector(builder, value, texture.getSwizzle(), dst.getWriteMask()));
+}
+
+
+bool Converter::handleBufInfo(ir::Builder& builder, const Instruction& op) {
+  /* resinfo takes the following operands:
+   * (dst0) Destination value (can be a vector)
+   * (src0) Buffer resource to query
+   *
+   * For typed and structured buffers, semantics match that of our IR.
+   * For byte address buffers, we need to return the byte count rather
+   * than the number of elements in the array.
+   */
+  const auto& dst = op.getDst(0u);
+  const auto& resource = op.getSrc(0u);
+
+  /* Load descriptor and get basic resource type properties */
+  auto resourceInfo = m_resources.emitDescriptorLoad(builder, op, resource);
+
+  if (!ir::resourceIsBuffer(resourceInfo.kind))
+    return logOpError(op, "bufinfo instruction not legal on textures.");
+
+  auto value = builder.add(ir::Op::BufferQuerySize(resourceInfo.descriptor));
+
+  if (resourceInfo.kind == ir::ResourceKind::eBufferRaw)
+    value = builder.add(ir::Op::IShl(ir::ScalarType::eU32, value, builder.makeConstant(2u)));
+
+  value = broadcastScalar(builder, value, dst.getWriteMask());
+  return storeDstModified(builder, op, dst, value);
 }
 
 
