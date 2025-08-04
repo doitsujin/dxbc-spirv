@@ -323,6 +323,18 @@ SsaDef ScalarizePass::extractOperandComponents(SsaDef operand, uint32_t first, u
       constant.addOperand(operandOp.getOperand(first + i));
 
     return m_builder.add(std::move(constant));
+  } else if (operandOp.getOpCode() == OpCode::eCompositeConstruct) {
+    /* If the source instruction is a composite construct already, reuse the
+     * scalar operands directly for performance reasons. */
+    if (count == 1u)
+      return SsaDef(operandOp.getOperand(first));
+
+    Op resultOp(OpCode::eCompositeConstruct, BasicType(operandType.getBaseType(), count));
+
+    for (uint32_t i = 0u; i < count; i++)
+      resultOp.addOperand(SsaDef(operandOp.getOperand(first + i)));
+
+    return m_builder.add(std::move(resultOp));
   } else if (count == 1u) {
     /* Simple vector extract if we want a scalar */
     return m_builder.add(Op::CompositeExtract(
