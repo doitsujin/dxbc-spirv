@@ -249,6 +249,14 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eEvalCentroid:
       return m_ioMap.handleEval(builder, op);
 
+    case OpCode::eDerivRtx:
+    case OpCode::eDerivRty:
+    case OpCode::eDerivRtxCoarse:
+    case OpCode::eDerivRtyCoarse:
+    case OpCode::eDerivRtxFine:
+    case OpCode::eDerivRtyFine:
+      return handleDerivatives(builder, op);
+
     case OpCode::eLdRaw:
     case OpCode::eLdRawS:
       return handleLdRaw(builder, op);
@@ -356,8 +364,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
 
     case OpCode::eCall:
     case OpCode::eCallc:
-    case OpCode::eDerivRtx:
-    case OpCode::eDerivRty:
     case OpCode::eLabel:
     case OpCode::eCustomData:
     case OpCode::eSinCos:
@@ -367,10 +373,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eSampleInfo:
     case OpCode::eInterfaceCall:
     case OpCode::eBufInfo:
-    case OpCode::eDerivRtxCoarse:
-    case OpCode::eDerivRtxFine:
-    case OpCode::eDerivRtyCoarse:
-    case OpCode::eDerivRtyFine:
     case OpCode::eF32toF16:
     case OpCode::eF16toF32:
     case OpCode::eUAddc:
@@ -1401,6 +1403,43 @@ bool Converter::handleBitInsert(ir::Builder& builder, const Instruction& op) {
     base, value, offset, count));
 
   return storeDst(builder, op, dst, resultDef);
+}
+
+
+bool Converter::handleDerivatives(ir::Builder& builder, const Instruction& op) {
+  /* deriv_rt[xy] take the following operands:
+   * (dst0) Result value
+   * (src0) Source value to compute derivative of
+   */
+  const auto& dst = op.getDst(0u);
+  const auto& src = op.getSrc(0u);
+
+  auto scalarType = determineOperandType(dst, ir::ScalarType::eF32, false);
+
+  auto [opCode, mode] = [&op] {
+    switch (op.getOpToken().getOpCode()) {
+      case OpCode::eDerivRtx:       return std::make_pair(ir::OpCode::eDerivX, ir::DerivativeMode::eDefault);
+      case OpCode::eDerivRty:       return std::make_pair(ir::OpCode::eDerivY, ir::DerivativeMode::eDefault);
+      case OpCode::eDerivRtxCoarse: return std::make_pair(ir::OpCode::eDerivX, ir::DerivativeMode::eCoarse);
+      case OpCode::eDerivRtyCoarse: return std::make_pair(ir::OpCode::eDerivY, ir::DerivativeMode::eCoarse);
+      case OpCode::eDerivRtxFine:   return std::make_pair(ir::OpCode::eDerivX, ir::DerivativeMode::eFine);
+      case OpCode::eDerivRtyFine:   return std::make_pair(ir::OpCode::eDerivY, ir::DerivativeMode::eFine);
+      default:                      break;
+    }
+
+    dxbc_spv_unreachable();
+    return std::make_pair(ir::OpCode::eUnknown, ir::DerivativeMode::eDefault);
+  } ();
+
+  auto value = loadSrcModified(builder, op, src, dst.getWriteMask(), scalarType);
+
+  value = builder.add(ir::Op(opCode, makeVectorType(scalarType, dst.getWriteMask()))
+    .addOperand(value).addOperand(mode));
+
+  if (op.getOpToken().getPreciseMask())
+    builder.setOpFlags(value, ir::OpFlag::ePrecise);
+
+  return storeDstModified(builder, op, dst, value);
 }
 
 

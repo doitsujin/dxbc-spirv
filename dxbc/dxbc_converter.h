@@ -208,6 +208,8 @@ private:
 
   bool handleBitInsert(ir::Builder& builder, const Instruction& op);
 
+  bool handleDerivatives(ir::Builder& builder, const Instruction& op);
+
   bool handleLdRaw(ir::Builder& builder, const Instruction& op);
 
   bool handleLdStructured(ir::Builder& builder, const Instruction& op);

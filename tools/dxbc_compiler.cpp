@@ -57,7 +57,7 @@ struct Timers {
 };
 
 void printDuration(const char* type, std::chrono::high_resolution_clock::duration dur) {
-  std::cout << type << ": " << std::setprecision(1) <<
+  std::cout << type << ": " << std::setprecision(3) <<
     double(std::chrono::duration_cast<std::chrono::microseconds>(dur).count()) / 1000.0 << " ms" << std::endl;
 }
 
@@ -142,7 +142,7 @@ bool writeSpirvBinary(const ir::Builder& builder, const Options& options, Timers
 
   spirv::SpirvBuilder::Options spirvOptions = { };
   spirvOptions.includeDebugNames = !options.noDebug;
-  spirvOptions.floatControls2 = true;
+  spirvOptions.floatControls2 = false;
 
   spirvOptions.supportedRoundModesF16 =
   spirvOptions.supportedRoundModesF32 =
