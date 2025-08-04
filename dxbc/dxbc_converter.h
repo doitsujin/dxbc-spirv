@@ -284,6 +284,8 @@ private:
 
   ir::SsaDef loadImmediate(ir::Builder& builder, const Operand& operand, WriteMask mask, ir::ScalarType type);
 
+  ir::SsaDef loadIcb(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, ir::ScalarType type);
+
   ir::SsaDef loadPhaseInstanceId(ir::Builder& builder, WriteMask mask, ir::ScalarType type);
 
   ir::SsaDef loadSrc(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, ir::ScalarType type);

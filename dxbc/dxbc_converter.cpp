@@ -2852,6 +2852,28 @@ ir::SsaDef Converter::loadImmediate(ir::Builder& builder, const Operand& operand
 }
 
 
+ir::SsaDef Converter::loadIcb(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, ir::ScalarType type) {
+  util::small_vector<ir::SsaDef, 4u> scalars;
+
+  auto index = loadOperandIndex(builder, op, operand, 0u);
+
+  /* Don't bother deduplicating anything here since it's just going
+   * to be a local variable or constant buffer load anyway. */
+  for (auto c : mask) {
+    uint32_t componentIndex = uint8_t(operand.getSwizzle().map(c));
+
+    auto address = builder.add(ir::Op::CompositeConstruct(
+      ir::Type(ir::ScalarType::eU32, 2u), index, builder.makeConstant(componentIndex)));
+
+    auto scalar = builder.add(ir::Op::ConstantLoad(ir::ScalarType::eUnknown, m_icb, address));
+    scalar = builder.add(ir::Op::ConsumeAs(type, scalar));
+    scalars.push_back(scalar);
+  }
+
+  return buildVector(builder, type, scalars.size(), scalars.data());
+}
+
+
 ir::SsaDef Converter::loadPhaseInstanceId(ir::Builder& builder, WriteMask mask, ir::ScalarType type) {
   auto def = builder.add(ir::Op::ParamLoad(ir::ScalarType::eU32, m_hs.phaseFunction, m_hs.phaseInstanceId));
 
@@ -2902,9 +2924,8 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
       break;
 
     case RegisterType::eIcb:
-      /* TODO implement */
-      dxbc_spv_unreachable();
-      return ir::SsaDef();
+      loadDef = loadIcb(builder, op, operand, mask, loadType);
+      break;
 
     case RegisterType::eInput:
     case RegisterType::eOutput:
