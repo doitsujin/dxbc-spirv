@@ -312,6 +312,8 @@ private:
 
   void emitLoadGsVertexCountBuiltIn(const ir::Op& op);
 
+  void emitLoadSamplePositionBuiltIn(const ir::Op& op);
+
   void emitLoadVariable(const ir::Op& op);
 
   void emitStoreVariable(const ir::Op& op);

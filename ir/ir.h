@@ -671,7 +671,9 @@ enum class BuiltIn : uint32_t {
    *  unsigned integer. Its use will trigger sample rate shading. */
   eSampleId           = 16u,
   /** Sample position in fragment shader. Must be declared as a scalar
-   *  unsigned integer. Its use will trigger sample rate shading. */
+   *  unsigned integer. Its use will trigger sample rate shading. Note
+   *  that this follows D3D semantics, i.e. values are relative to the
+   *  pixel center and range from -0.5 to 0.5. */
   eSamplePosition     = 17u,
   /** Sample mask in fragment shader. Must be declared as a scalar unsigned
    *  integer to follow D3D semantics. Can be used as input and output. */

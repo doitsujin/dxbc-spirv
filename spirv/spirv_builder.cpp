@@ -3083,28 +3083,83 @@ void SpirvBuilder::emitLoadGsVertexCountBuiltIn(const ir::Op& op) {
 }
 
 
+void SpirvBuilder::emitLoadSamplePositionBuiltIn(const ir::Op& op) {
+  /* Load requested components */
+  auto type = op.getType().getBaseType(0u);
+  auto typeId = getIdForType(op.getType());
+
+  auto accessChainId = emitAccessChain(
+    getVariableStorageClass(op),
+    ir::SsaDef(op.getOperand(0u)),
+    ir::SsaDef(op.getOperand(1u)),
+    false);
+
+  auto loadId = allocId();
+  pushOp(m_code, spv::OpLoad, typeId, loadId, accessChainId);
+
+  /* Build offset to subtract */
+  static const float constantOffset = 0.5f;
+
+  SpirvConstant constant = { };
+  constant.op = spv::OpConstant;
+  constant.typeId = getIdForType(type.getBaseType());
+  std::memcpy(&constant.constituents[0u], &constantOffset, sizeof(constantOffset));
+
+  uint32_t offsetId = getIdForConstant(constant, 1u);
+
+  if (type.isVector()) {
+    constant.op = spv::OpConstantComposite;
+    constant.typeId = typeId;
+
+    for (uint32_t i = 0u; i < type.getVectorSize(); i++)
+      constant.constituents[i] = offsetId;
+
+    offsetId = getIdForConstant(constant, type.getVectorSize());
+  }
+
+  /* In Vulkan, the built-in returns sample positions insde the
+   * [0..1] pixel grid, but we need to offset it to [-0.5..0.5]. */
+  auto id = getIdForDef(op.getDef());
+  pushOp(m_code, spv::OpFSub, typeId, id, loadId, offsetId);
+
+  emitFpMode(op, id);
+  emitDebugName(op.getDef(), id);
+}
+
+
 void SpirvBuilder::emitLoadVariable(const ir::Op& op) {
   auto typeId = getIdForType(op.getType());
 
   /* Whether to index into a wrapper array */
   bool hasWrapperArray = false;
 
-  /* Loading draw parameter built-ins requires special care */
+  /* Loading certain built-ins requires special care */
   if (op.getOpCode() == ir::OpCode::eInputLoad) {
     const auto& inputDcl = m_builder.getOpForOperand(op, 0u);
 
     if (inputDcl.getOpCode() == ir::OpCode::eDclInputBuiltIn) {
       auto builtIn = ir::BuiltIn(inputDcl.getOperand(1u));
-      hasWrapperArray = builtIn == ir::BuiltIn::eSampleMask;
 
-      if (builtIn == ir::BuiltIn::eVertexId || builtIn == ir::BuiltIn::eInstanceId) {
-        emitLoadDrawParameterBuiltIn(op, builtIn);
-        return;
-      }
+      switch (builtIn) {
+        case ir::BuiltIn::eVertexId:
+        case ir::BuiltIn::eInstanceId:
+          emitLoadDrawParameterBuiltIn(op, builtIn);
+          return;
 
-      if (builtIn == ir::BuiltIn::eGsVertexCountIn) {
-        emitLoadGsVertexCountBuiltIn(op);
-        return;
+        case ir::BuiltIn::eGsVertexCountIn:
+          emitLoadGsVertexCountBuiltIn(op);
+          return;
+
+        case ir::BuiltIn::eSamplePosition:
+          emitLoadSamplePositionBuiltIn(op);
+          return;
+
+        case ir::BuiltIn::eSampleMask:
+          hasWrapperArray = true;
+          break;
+
+        default:
+          break;
       }
     }
   }
