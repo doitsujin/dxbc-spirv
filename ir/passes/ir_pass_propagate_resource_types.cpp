@@ -1207,6 +1207,7 @@ void PropagateResourceTypesPass::determineElementTypeForUses(const Op& op, Propa
       case OpCode::eLdsLoad:
       case OpCode::eBufferLoad:
       case OpCode::eScratchLoad:
+      case OpCode::eConstantLoad:
         determineElementTypeForAccess(*iter, info,
           determineAccessTypeForLoad(*iter));
         break;
@@ -1255,6 +1256,10 @@ void PropagateResourceTypesPass::determineDeclarationType(const Op& op, Propagat
       info.processLocalLayout(m_options.flattenLds, m_options.allowSubDwordScratchAndLds);
     } break;
 
+    case OpCode::eConstant: {
+      info.processLocalLayout(false, true);
+    } break;
+
     case OpCode::eDclScratch: {
       info.processLocalLayout(m_options.flattenScratch, m_options.allowSubDwordScratchAndLds);
     } break;
@@ -1284,6 +1289,7 @@ void PropagateResourceTypesPass::rewriteAccessOps(SsaDef def, const PropagateRes
       case OpCode::eLdsLoad:
       case OpCode::eBufferLoad:
       case OpCode::eScratchLoad:
+      case OpCode::eConstantLoad:
         rewriteLoad(use, info);
         break;
 
@@ -1311,7 +1317,32 @@ void PropagateResourceTypesPass::rewriteAccessOps(SsaDef def, const PropagateRes
 
 void PropagateResourceTypesPass::rewriteDeclaration(SsaDef def, const PropagateResourceTypeRewriteInfo& info) {
   rewriteAccessOps(def, info);
-  m_builder.setOpType(def, info.newType);
+
+  const auto& op = m_builder.getOp(def);
+
+  if (op.isConstant()) {
+    /* For constants, each incoming dword corresponds to one constant
+     * operand. Simply copy used operands over and replace the op. */
+    Op constant(OpCode::eConstant, info.newType);
+
+    uint32_t scalarCount = info.elements.size();
+    uint32_t flattenedArraySize = 1u;
+
+    for (uint32_t i = 0u; i < info.newOuterArrayDims; i++)
+      flattenedArraySize *= info.newType.getArraySize(i);
+
+    for (uint32_t i = 0u; i < flattenedArraySize; i++) {
+      for (uint32_t j = 0u; j < scalarCount; j++) {
+        if (info.elements[j].isUsed())
+          constant.addOperand(op.getOperand(scalarCount * i + j));
+      }
+    }
+
+    m_builder.rewriteDef(def, m_builder.add(std::move(constant)));
+  } else {
+    /* Simply change the type */
+    m_builder.setOpType(def, info.newType);
+  }
 }
 
 
@@ -1446,6 +1477,11 @@ bool PropagateResourceTypesPass::isUntypedDeclaration(const Op& op) {
   auto type = op.getType();
 
   switch (op.getOpCode()) {
+    case OpCode::eConstant: {
+      /* If we're here, the constant must be dynamically indexed */
+      return type.isArrayType() && type.getBaseType(0u).isUnknownType();
+    }
+
     case OpCode::eDclSrv:
     case OpCode::eDclUav: {
       auto kind = ResourceKind(op.getOperand(op.getFirstLiteralOperandIndex() + 3u));
