@@ -1882,13 +1882,13 @@ public:
       .addOperand(value);
   }
 
-  static Op ConvertF32toPackedF16(SsaDef value) {
-    return Op(OpCode::eConvertF32toPackedF16, ScalarType::eU32)
+  static Op ConvertF32toPackedF16(Type type, SsaDef value) {
+    return Op(OpCode::eConvertF32toPackedF16, type)
       .addOperand(value);
   }
 
-  static Op ConvertPackedF16toF32(SsaDef value) {
-    return Op(OpCode::eConvertPackedF16toF32, BasicType(ScalarType::eF32, 2u))
+  static Op ConvertPackedF16toF32(Type type, SsaDef value) {
+    return Op(OpCode::eConvertPackedF16toF32, type)
       .addOperand(value);
   }
 

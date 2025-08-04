@@ -331,8 +331,8 @@ Builder test_arithmetic_fp16_packing_legacy() {
 
   auto vec2Type = BasicType(ScalarType::eF32, 2u);
 
-  auto vec0Def = builder.add(Op::ConvertPackedF16toF32(load0Def));
-  auto vec1Def = builder.add(Op::ConvertPackedF16toF32(load1Def));
+  auto vec0Def = builder.add(Op::ConvertPackedF16toF32(BasicType(ScalarType::eF32, 2u), load0Def));
+  auto vec1Def = builder.add(Op::ConvertPackedF16toF32(BasicType(ScalarType::eF32, 2u), load1Def));
 
   std::array<SsaDef, 2u> scalars = { };
 
@@ -343,7 +343,7 @@ Builder test_arithmetic_fp16_packing_legacy() {
   }
 
   auto resultDef = builder.add(Op::CompositeConstruct(vec2Type, scalars.at(0), scalars.at(1u)));
-  resultDef = builder.add(Op::ConvertF32toPackedF16(resultDef));
+  resultDef = builder.add(Op::ConvertF32toPackedF16(ScalarType::eU32, resultDef));
 
   builder.add(Op::BufferStore(uavDescriptor, builder.makeConstant(0u, 0u), resultDef, 4u));
   builder.add(Op::Return());
