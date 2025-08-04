@@ -246,6 +246,8 @@ private:
 
   bool handleGather(ir::Builder& builder, const Instruction& op);
 
+  bool handleQueryLod(ir::Builder& builder, const Instruction& op);
+
   bool handleBufInfo(ir::Builder& builder, const Instruction& op);
 
   bool handleResInfo(ir::Builder& builder, const Instruction& op);

@@ -356,6 +356,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eGather4PoCS:
       return handleGather(builder, op);
 
+    case OpCode::eLod:
+      return handleQueryLod(builder, op);
+
     case OpCode::eBufInfo:
       return handleBufInfo(builder, op);
 
@@ -418,7 +421,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eCall:
     case OpCode::eCallc:
     case OpCode::eLabel:
-    case OpCode::eLod:
     case OpCode::eSamplePos:
     case OpCode::eSampleInfo:
     case OpCode::eInterfaceCall:
@@ -2346,6 +2348,43 @@ bool Converter::handleGather(ir::Builder& builder, const Instruction& op) {
 }
 
 
+bool Converter::handleQueryLod(ir::Builder& builder, const Instruction& op) {
+  /* lod takes the following operands:
+   * (dst0) Destination value (.xy take the clamped/unclamped lod, .zw are 0)
+   * (src0) Texture coordinate
+   * (src1) Texture register
+   * (src2) Sampler register
+   */
+  const auto& dst = op.getDst(0u);
+  const auto& address = op.getSrc(0u);
+  const auto& texture = op.getSrc(1u);
+  const auto& sampler = op.getSrc(2u);
+
+  /* Load descriptors and resource info */
+  auto textureInfo = m_resources.emitDescriptorLoad(builder, op, texture);
+  auto samplerInfo = m_resources.emitDescriptorLoad(builder, op, sampler);
+
+  if (!textureInfo.descriptor || !samplerInfo.descriptor)
+    return false;
+
+  /* Load coord and compute the actual LOD range */
+  auto coord = computeTypedCoordLayer(builder, op, address, textureInfo.kind, ir::ScalarType::eF32).first;
+
+  auto lodRange = builder.add(ir::Op::ImageComputeLod(ir::BasicType(ir::ScalarType::eF32, 2u),
+    textureInfo.descriptor, samplerInfo.descriptor, coord));
+
+  util::small_vector<ir::SsaDef, 4u> components;
+  components.push_back(builder.add(ir::Op::CompositeExtract(ir::ScalarType::eF32, lodRange, builder.makeConstant(0u))));
+  components.push_back(builder.add(ir::Op::CompositeExtract(ir::ScalarType::eF32, lodRange, builder.makeConstant(1u))));
+  components.push_back(builder.makeConstant(0.0f));
+  components.push_back(builder.makeConstant(0.0f));
+
+  auto vectorType = makeVectorType(ir::ScalarType::eF32, dst.getWriteMask());
+  auto vector = composite(builder, vectorType, components.data(), texture.getSwizzle(), dst.getWriteMask());
+  return storeDstModified(builder, op, dst, vector);
+}
+
+
 bool Converter::handleBufInfo(ir::Builder& builder, const Instruction& op) {
   /* resinfo takes the following operands:
    * (dst0) Destination value (can be a vector)
@@ -2489,8 +2528,7 @@ bool Converter::handleResInfo(ir::Builder& builder, const Instruction& op) {
     : makeVectorType(ir::ScalarType::eF32, dst.getWriteMask());
 
   auto vector = composite(builder, vectorType, components.data(), texture.getSwizzle(), dst.getWriteMask());
-  storeDstModified(builder, op, dst, vector);
-  return true;
+  return storeDstModified(builder, op, dst, vector);
 }
 
 
