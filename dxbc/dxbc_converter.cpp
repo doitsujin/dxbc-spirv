@@ -475,6 +475,8 @@ bool Converter::initialize(ir::Builder& builder) {
 
 
 bool Converter::finalize(ir::Builder& builder) {
+  m_resources.normalizeUavFlags(builder);
+
   emitFloatModes(builder);
 
   if (m_parser.getShaderInfo().getType() == ShaderType::eHull) {
@@ -1714,6 +1716,9 @@ bool Converter::handleLdRaw(ir::Builder& builder, const Instruction& op) {
     if (feedback && !storeDstModified(builder, op, op.getDst(1u), feedback))
       return false;
 
+    if (resource.getRegisterType() == RegisterType::eUav)
+      m_resources.setUavFlagsForLoad(builder, resource);
+
     return data && storeDstModified(builder, op, dstValue, data);
   }
 }
@@ -1746,6 +1751,9 @@ bool Converter::handleLdStructured(ir::Builder& builder, const Instruction& op) 
 
     if (feedback && !storeDstModified(builder, op, op.getDst(1u), feedback))
       return false;
+
+    if (resource.getRegisterType() == RegisterType::eUav)
+      m_resources.setUavFlagsForLoad(builder, resource);
 
     return data && storeDstModified(builder, op, dstValue, data);
   }
@@ -1825,6 +1833,9 @@ bool Converter::handleLdTyped(ir::Builder& builder, const Instruction& op) {
       return false;
   }
 
+  if (resource.getRegisterType() == RegisterType::eUav)
+    m_resources.setUavFlagsForLoad(builder, resource);
+
   return storeDstModified(builder, op, dst, swizzleVector(builder, value, resource.getSwizzle(), dst.getWriteMask()));
 
 }
@@ -1847,6 +1858,8 @@ bool Converter::handleStoreRaw(ir::Builder& builder, const Instruction& op) {
     return m_regFile.emitTgsmStore(builder, op,
       resource, byteOffset, ir::SsaDef(), value);
   } else {
+    m_resources.setUavFlagsForStore(builder, resource);
+
     return m_resources.emitRawStructuredStore(builder, op,
       resource, byteOffset, ir::SsaDef(), value);
   }
@@ -1874,6 +1887,8 @@ bool Converter::handleStoreStructured(ir::Builder& builder, const Instruction& o
     return m_regFile.emitTgsmStore(builder, op,
       resource, structIndex, structOffset, value);
   } else {
+    m_resources.setUavFlagsForStore(builder, resource);
+
     return m_resources.emitRawStructuredStore(builder, op,
       resource, structIndex, structOffset, value);
   }
@@ -1907,6 +1922,7 @@ bool Converter::handleStoreTyped(ir::Builder& builder, const Instruction& op) {
   else
     builder.add(ir::Op::ImageStore(resourceInfo.descriptor, layer, coord, value));
 
+  m_resources.setUavFlagsForStore(builder, resource);
   return true;
 }
 
@@ -2014,6 +2030,8 @@ bool Converter::handleAtomic(ir::Builder& builder, const Instruction& op) {
         atomicOp.addOperand(layer);
 
       atomicOp.addOperand(coord);
+
+      m_resources.setUavFlagsForAtomic(builder, target);
     } else {
       atomicOp.addOperand(computeAtomicBufferAddress(builder, op, address, resource.kind));
     }

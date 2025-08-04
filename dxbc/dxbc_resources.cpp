@@ -86,7 +86,7 @@ bool ResourceMap::handleDclResourceRaw(ir::Builder& builder, const Instruction& 
 
   if (operand.getRegisterType() == RegisterType::eUav) {
     info->resourceDef = builder.add(ir::Op::DclUav(info->type, m_converter.getEntryPoint(),
-      info->regSpace, info->resourceIndex, info->resourceCount, info->kind, getUavFlags(op)));
+      info->regSpace, info->resourceIndex, info->resourceCount, info->kind, getInitialUavFlags(op)));
   } else {
     info->resourceDef = builder.add(ir::Op::DclSrv(info->type, m_converter.getEntryPoint(),
       info->regSpace, info->resourceIndex, info->resourceCount, info->kind));
@@ -124,7 +124,7 @@ bool ResourceMap::handleDclResourceStructured(ir::Builder& builder, const Instru
 
   if (operand.getRegisterType() == RegisterType::eUav) {
     info->resourceDef = builder.add(ir::Op::DclUav(info->type, m_converter.getEntryPoint(),
-      info->regSpace, info->resourceIndex, info->resourceCount, info->kind, getUavFlags(op)));
+      info->regSpace, info->resourceIndex, info->resourceCount, info->kind, getInitialUavFlags(op)));
   } else {
     info->resourceDef = builder.add(ir::Op::DclSrv(info->type, m_converter.getEntryPoint(),
       info->regSpace, info->resourceIndex, info->resourceCount, info->kind));
@@ -169,7 +169,7 @@ bool ResourceMap::handleDclResourceTyped(ir::Builder& builder, const Instruction
 
   if (operand.getRegisterType() == RegisterType::eUav) {
     info->resourceDef = builder.add(ir::Op::DclUav(info->type, m_converter.getEntryPoint(),
-      info->regSpace, info->resourceIndex, info->resourceCount, info->kind, getUavFlags(op)));
+      info->regSpace, info->resourceIndex, info->resourceCount, info->kind, getInitialUavFlags(op)));
   } else {
     info->resourceDef = builder.add(ir::Op::DclSrv(info->type, m_converter.getEntryPoint(),
       info->regSpace, info->resourceIndex, info->resourceCount, info->kind));
@@ -204,6 +204,60 @@ bool ResourceMap::handleDclSampler(ir::Builder& builder, const Instruction& op) 
 
   emitDebugName(builder, info);
   return true;
+}
+
+
+void ResourceMap::setUavFlagsForLoad(ir::Builder& builder, const Operand& operand) {
+  auto resource = findResource(operand);
+
+  dxbc_spv_assert(resource && resource->regType == RegisterType::eUav);
+
+  auto flags = getUavFlags(builder, *resource);
+  flags -= ir::UavFlag::eWriteOnly;
+
+  setUavFlags(builder, *resource, flags);
+}
+
+
+void ResourceMap::setUavFlagsForStore(ir::Builder& builder, const Operand& operand) {
+  auto resource = findResource(operand);
+
+  dxbc_spv_assert(resource && resource->regType == RegisterType::eUav);
+
+  auto flags = getUavFlags(builder, *resource);
+  flags -= ir::UavFlag::eReadOnly;
+
+  setUavFlags(builder, *resource, flags);
+}
+
+
+void ResourceMap::setUavFlagsForAtomic(ir::Builder& builder, const Operand& operand) {
+  auto resource = findResource(operand);
+
+  dxbc_spv_assert(resource && resource->regType == RegisterType::eUav);
+
+  auto flags = getUavFlags(builder, *resource);
+  flags -= ir::UavFlag::eReadOnly | ir::UavFlag::eWriteOnly;
+
+  if (ir::resourceIsTyped(resource->kind))
+    flags |= ir::UavFlag::eFixedFormat;
+
+  setUavFlags(builder, *resource, flags);
+}
+
+
+void ResourceMap::normalizeUavFlags(ir::Builder& builder) {
+  /* In some cases, a UAV might only be used inside resource queries, and we
+   * would set both ReadOnly and WriteOnly. This does not make any sense, so
+   * treat such a UAV as read-only. */
+  for (const auto& e : m_resources) {
+    if (e.second.regType == RegisterType::eUav) {
+      auto flags = getUavFlags(builder, e.second);
+
+      if ((flags & ir::UavFlag::eReadOnly) && (flags & ir::UavFlag::eWriteOnly))
+        setUavFlags(builder, e.second, flags - ir::UavFlag::eWriteOnly);
+    }
+  }
 }
 
 
@@ -449,20 +503,13 @@ std::pair<ir::SsaDef, const ResourceInfo*> ResourceMap::loadDescriptor(
   const Instruction&            op,
   const Operand&                operand,
         bool                    uavCounter) {
-  ResourceKey key = { };
-  key.regType = operand.getRegisterType();
-  key.regIndex = operand.getIndex(0u);
+  auto resourceInfo = findResource(operand);
 
-  auto entry = m_resources.find(key);
+  if (!resourceInfo)
+    return std::make_pair(ir::SsaDef(), resourceInfo);
 
-  if (entry == m_resources.end()) {
-    auto name = m_converter.makeRegisterDebugName(key.regType, key.regIndex, WriteMask());
-    m_converter.logOpError(op, "Resource ", name, " not declared.");
-    return std::make_pair(ir::SsaDef(), nullptr);
-  }
-
-  auto descriptorType = [&key, uavCounter] {
-    switch (key.regType) {
+  auto descriptorType = [resourceInfo, uavCounter] {
+    switch (resourceInfo->regType) {
       case RegisterType::eSampler:
         return ir::ScalarType::eSampler;
 
@@ -489,7 +536,7 @@ std::pair<ir::SsaDef, const ResourceInfo*> ResourceMap::loadDescriptor(
     /* Second index contains the actual index, but as an absolute register
      * index. Deal with it the same way we do for I/O registers and split
      * the index into its absolute and relative parts. */
-    uint32_t absIndex = operand.getIndex(1u) - entry->second.resourceIndex;
+    uint32_t absIndex = operand.getIndex(1u) - resourceInfo->resourceIndex;
 
     if (hasRelativeIndexing(operand.getIndexType(1u))) {
       descriptorIndex = m_converter.loadSrcModified(builder, op,
@@ -510,10 +557,10 @@ std::pair<ir::SsaDef, const ResourceInfo*> ResourceMap::loadDescriptor(
   }
 
   /* Retrieve resource definition. If necessary, declare the UAV counter. */
-  auto baseDef = entry->second.resourceDef;
+  auto baseDef = resourceInfo->resourceDef;
 
   if (uavCounter)
-    baseDef = declareUavCounter(builder, entry->second);
+    baseDef = declareUavCounter(builder, *resourceInfo);
 
   auto def = builder.add(ir::Op::DescriptorLoad(descriptorType, baseDef, descriptorIndex));
 
@@ -521,7 +568,7 @@ std::pair<ir::SsaDef, const ResourceInfo*> ResourceMap::loadDescriptor(
   if (operand.getModifiers().isNonUniform())
     builder.setOpFlags(def, ir::OpFlag::eNonUniform);
 
-  return std::make_pair(def, &entry->second);
+  return std::make_pair(def, resourceInfo);
 }
 
 
@@ -589,6 +636,43 @@ void ResourceMap::emitDebugName(ir::Builder& builder, const ResourceInfo* info) 
 }
 
 
+ResourceInfo* ResourceMap::findResource(
+  const Operand&                operand) {
+  ResourceKey key = { };
+  key.regType = operand.getRegisterType();
+  key.regIndex = operand.getIndex(0u);
+
+  auto entry = m_resources.find(key);
+
+  if (entry == m_resources.end()) {
+    auto name = m_converter.makeRegisterDebugName(key.regType, key.regIndex, WriteMask());
+    Logger::err("Resource ", name, " not declared.");
+    return nullptr;
+  }
+
+  return &entry->second;
+}
+
+
+ir::UavFlags ResourceMap::getUavFlags(
+        ir::Builder&            builder,
+  const ResourceInfo&           info) {
+  const auto& op = builder.getOp(info.resourceDef);
+  return ir::UavFlags(op.getOperand(5u));
+}
+
+
+void ResourceMap::setUavFlags(
+        ir::Builder&            builder,
+  const ResourceInfo&           info,
+        ir::UavFlags            flags) {
+  auto op = builder.getOp(info.resourceDef);
+  op.setOperand(5u, flags);
+
+  builder.rewriteOp(info.resourceDef, std::move(op));
+}
+
+
 uint32_t ResourceMap::computeRawStructuredAlignment(
         ir::Builder&            builder,
   const ResourceInfo&           resource,
@@ -620,11 +704,14 @@ uint32_t ResourceMap::computeRawStructuredAlignment(
 }
 
 
-ir::UavFlags ResourceMap::getUavFlags(
+ir::UavFlags ResourceMap::getInitialUavFlags(
   const Instruction&            op) {
   auto flags = op.getOpToken().getUavFlags();
 
-  ir::UavFlags result = 0u;
+  /* We'll delete the read-only and write-only flags
+   * based on actual resource usage afterwards */
+  ir::UavFlags result = ir::UavFlag::eReadOnly |
+                        ir::UavFlag::eWriteOnly;
 
   if (flags & UavFlag::eGloballyCoherent)
     result |= ir::UavFlag::eCoherent;

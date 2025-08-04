@@ -104,6 +104,13 @@ public:
   /** Handles sampler declarations. */
   bool handleDclSampler(ir::Builder& builder, const Instruction& op);
 
+  /** Adjusts UAV flags for the given UAV based on usage. */
+  void setUavFlagsForLoad(ir::Builder& builder, const Operand& operand);
+  void setUavFlagsForStore(ir::Builder& builder, const Operand& operand);
+  void setUavFlagsForAtomic(ir::Builder& builder, const Operand& operand);
+
+  void normalizeUavFlags(ir::Builder& builder);
+
   /** Loads a resource or sampler descriptor and retrieves basic
    *  properties required to perform any operations on typed resources. */
   ResourceProperties emitDescriptorLoad(
@@ -174,13 +181,25 @@ private:
           ir::Builder&            builder,
     const ResourceInfo*           info);
 
+  ResourceInfo* findResource(
+    const Operand&                operand);
+
+  static ir::UavFlags getUavFlags(
+          ir::Builder&            builder,
+    const ResourceInfo&           info);
+
+  static void setUavFlags(
+          ir::Builder&            builder,
+    const ResourceInfo&           info,
+          ir::UavFlags            flags);
+
   static uint32_t computeRawStructuredAlignment(
           ir::Builder&            builder,
     const ResourceInfo&           resource,
           ir::SsaDef              elementOffset,
           WriteMask               components);
 
-  static ir::UavFlags getUavFlags(
+  static ir::UavFlags getInitialUavFlags(
     const Instruction&            op);
 
 };
