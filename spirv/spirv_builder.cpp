@@ -1540,6 +1540,8 @@ void SpirvBuilder::emitBufferAtomic(const ir::Op& op) {
   auto addressDef = ir::SsaDef(op.getOperand(1u));
   auto operandDef = ir::SsaDef(op.getOperand(2u));
 
+  auto id = getIdForDef(op.getDef());
+
   if (declaresPlainBufferResource(dclOp)) {
     auto type = traverseType(dclOp.getType(), addressDef);
 
@@ -1554,7 +1556,7 @@ void SpirvBuilder::emitBufferAtomic(const ir::Op& op) {
     if (descriptorOp.getFlags() & ir::OpFlag::eNonUniform)
       pushOp(m_decorations, spv::OpDecorate, accessChainId, spv::DecorationNonUniform);
 
-    emitAtomic(op, type, operandDef, accessChainId, spv::ScopeQueueFamily,
+    emitAtomic(op, type, id, operandDef, accessChainId, spv::ScopeQueueFamily,
       spv::MemorySemanticsUniformMemoryMask);
   } else {
     /* OpImageTexelPointer is annoying and takes a pointer to an image descriptor,
@@ -1573,7 +1575,7 @@ void SpirvBuilder::emitBufferAtomic(const ir::Op& op) {
     if (descriptorOp.getFlags() & ir::OpFlag::eNonUniform)
       pushOp(m_decorations, spv::OpDecorate, ptrId, spv::DecorationNonUniform);
 
-    emitAtomic(op, type, operandDef, ptrId, spv::ScopeQueueFamily,
+    emitAtomic(op, type, id, operandDef, ptrId, spv::ScopeQueueFamily,
       spv::MemorySemanticsImageMemoryMask);
   }
 }
@@ -1658,7 +1660,7 @@ void SpirvBuilder::emitMemoryAtomic(const ir::Op& op) {
     ptrOp.getType(), getIdForDef(ptrOp.getDef()), addressDef, 0u, hasWrapperStruct);
 
   /* Emit atomic */
-  emitAtomic(op, type, operandDef, accessChainId,
+  emitAtomic(op, type, getIdForDef(op.getDef()), operandDef, accessChainId,
     spv::ScopeQueueFamily, spv::MemorySemanticsUniformMemoryMask);
 }
 
@@ -1673,8 +1675,17 @@ void SpirvBuilder::emitCounterAtomic(const ir::Op& op) {
   if (descriptorOp.getFlags() & ir::OpFlag::eNonUniform)
     pushOp(m_decorations, spv::OpDecorate, accessChainId, spv::DecorationNonUniform);
 
-  emitAtomic(op, dclOp.getType(), ir::SsaDef(), accessChainId, spv::ScopeQueueFamily,
-    spv::MemorySemanticsUniformMemoryMask);
+  auto id = getIdForDef(op.getDef());
+
+  auto atomicOp = ir::AtomicOp(op.getOperand(op.getFirstLiteralOperandIndex()));
+  auto atomicId = atomicOp == ir::AtomicOp::eDec ? allocId() : id;
+
+  emitAtomic(op, dclOp.getType(), atomicId, ir::SsaDef(), accessChainId,
+    spv::ScopeQueueFamily, spv::MemorySemanticsUniformMemoryMask);
+
+  /* For counter decrement, we need to return the new value */
+  if (atomicOp == ir::AtomicOp::eDec)
+    pushOp(m_code, spv::OpISub, getIdForType(op.getType()), id, atomicId, makeConstU32(1u));
 }
 
 
@@ -1690,8 +1701,8 @@ void SpirvBuilder::emitLdsAtomic(const ir::Op& op) {
   auto ptrId = emitAccessChain(spv::StorageClassWorkgroup,
     dclOp.getType(), getIdForDef(dclOp.getDef()), addressDef, 0u, false);
 
-  emitAtomic(op, type, operandDef, ptrId, spv::ScopeWorkgroup,
-    spv::MemorySemanticsWorkgroupMemoryMask);
+  emitAtomic(op, type, getIdForDef(op.getDef()), operandDef, ptrId,
+    spv::ScopeWorkgroup, spv::MemorySemanticsWorkgroupMemoryMask);
 }
 
 
@@ -1850,8 +1861,8 @@ void SpirvBuilder::emitImageAtomic(const ir::Op& op) {
   if (descriptorOp.getFlags() & ir::OpFlag::eNonUniform)
     pushOp(m_decorations, spv::OpDecorate, ptrId, spv::DecorationNonUniform);
 
-  emitAtomic(op, type, operandDef, ptrId, spv::ScopeQueueFamily,
-    spv::MemorySemanticsImageMemoryMask);
+  emitAtomic(op, type, getIdForDef(op.getDef()), operandDef, ptrId,
+    spv::ScopeQueueFamily, spv::MemorySemanticsImageMemoryMask);
 }
 
 
@@ -2283,11 +2294,9 @@ void SpirvBuilder::emitDerivative(const ir::Op& op) {
 }
 
 
-void SpirvBuilder::emitAtomic(const ir::Op& op, const ir::Type& type, ir::SsaDef operandDef,
-    uint32_t ptrId, spv::Scope scope, spv::MemorySemanticsMask memoryTypes) {
+void SpirvBuilder::emitAtomic(const ir::Op& op, const ir::Type& type, uint32_t id,
+    ir::SsaDef operandDef, uint32_t ptrId, spv::Scope scope, spv::MemorySemanticsMask memoryTypes) {
   dxbc_spv_assert(op.getType().isVoidType() || op.getType() == type);
-
-  auto id = getIdForDef(op.getDef());
 
   /* Work out SPIR-V op code and argument count based on atomic op literal */
   auto atomicOp = ir::AtomicOp(op.getOperand(op.getFirstLiteralOperandIndex()));
