@@ -108,8 +108,12 @@ void Builder::rewriteOp(SsaDef def, Op op) {
   for (uint32_t i = 0u; i < dstOp.getFirstLiteralOperandIndex(); i++)
     removeUse(SsaDef(dstOp.getOperand(i)), def);
 
-  for (uint32_t i = 0u; i < op.getFirstLiteralOperandIndex(); i++)
-    addUse(SsaDef(op.getOperand(i)), def);
+  for (uint32_t i = 0u; i < op.getFirstLiteralOperandIndex(); i++) {
+    auto target = SsaDef(op.getOperand(i));
+    dxbc_spv_assert(!target || getOp(target));
+
+    addUse(target, def);
+  }
 
   dstOp = op;
   dstOp.setSsaDef(def);
@@ -120,15 +124,19 @@ SsaDef Builder::rewriteDef(SsaDef oldDef, SsaDef newDef) {
   auto& oldMetadata = m_ops.at(oldDef);
   dxbc_spv_assert(oldDef != newDef);
 
-  for (auto u : oldMetadata.uses) {
-    auto& op = m_ops.at(u).op;
+  if (newDef) {
+    dxbc_spv_assert(getOp(newDef));
 
-    for (uint32_t i = 0u; i < op.getFirstLiteralOperandIndex(); i++) {
-      if (SsaDef(op.getOperand(i)) == SsaDef(oldDef))
-        op.setOperand(i, Operand(SsaDef(newDef)));
+    for (auto u : oldMetadata.uses) {
+      auto& op = m_ops.at(u).op;
+
+      for (uint32_t i = 0u; i < op.getFirstLiteralOperandIndex(); i++) {
+        if (SsaDef(op.getOperand(i)) == SsaDef(oldDef))
+          op.setOperand(i, Operand(SsaDef(newDef)));
+      }
+
+      addUse(newDef, u);
     }
-
-    addUse(newDef, u);
   }
 
   oldMetadata.uses.clear();
@@ -201,8 +209,12 @@ std::pair<SsaDef, bool> Builder::writeOp(Op&& op) {
   dstOp = std::move(op);
   dstOp.setSsaDef(def);
 
-  for (uint32_t i = 0u; i < dstOp.getFirstLiteralOperandIndex(); i++)
-    addUse(SsaDef(dstOp.getOperand(i)), def);
+  for (uint32_t i = 0u; i < dstOp.getFirstLiteralOperandIndex(); i++) {
+    auto target = SsaDef(dstOp.getOperand(i));
+    dxbc_spv_assert(!target || getOp(target));
+
+    addUse(target, def);
+  }
 
   if (dstOp.isConstant() || dstOp.isUndef())
     m_constants.insert(dstOp);

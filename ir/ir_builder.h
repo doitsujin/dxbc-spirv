@@ -267,12 +267,14 @@ public:
   /** Changes the type of the given operation without having
    *  to rewrite the entire operation. */
   void setOpType(SsaDef def, const Type& type) {
+    dxbc_spv_assert(def);
     m_ops.at(def).op.setType(type);
   }
 
   /** Changes flags of the given operation without having
    *  to rewrite the entire operation. */
   void setOpFlags(SsaDef def, OpFlags flags) {
+    dxbc_spv_assert(def);
     m_ops.at(def).op.setFlags(flags);
   }
 
