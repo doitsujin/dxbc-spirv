@@ -230,6 +230,7 @@ bool compileShader(util::ByteReader reader, const Options& options) {
   ir::ArithmeticPass::runLoweringPasses(builder, ir::ArithmeticPass::Options());
 
   ir::RemoveUnusedPass::runPass(builder);
+  ir::SsaConstructionPass::runResolveTrivialPhiPass(builder);
 
 
 
