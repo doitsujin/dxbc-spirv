@@ -293,11 +293,15 @@ private:
 
   bool handleRet(ir::Builder& builder, const Instruction& op);
 
+  bool handleCall(ir::Builder& builder, const Instruction& op);
+
   bool handleDiscard(ir::Builder& builder, const Instruction& op);
 
   bool handleGsEmitCut(ir::Builder& builder, const Instruction& op);
 
   bool handleSync(ir::Builder& builder, const Instruction& op);
+
+  bool handleLabel(ir::Builder& builder, const Instruction& op);
 
   void applyNonUniform(ir::Builder& builder, ir::SsaDef def);
 

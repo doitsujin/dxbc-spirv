@@ -92,6 +92,44 @@ bool RegisterFile::handleDclTgsmStructured(ir::Builder& builder, const Instructi
 }
 
 
+ir::SsaDef RegisterFile::getFunctionForLabel(
+        ir::Builder&            builder,
+  const Instruction&            op,
+  const Operand&                operand) {
+  /* It is unclear how labels are supposed to interact with the per-phase
+   * register spaces in hull shaders. Since there currently are no known
+   * uses of this in the wild, don't bother supporting this for now. */
+  if (m_converter.m_parser.getShaderInfo().getType() == ShaderType::eHull) {
+    m_converter.logOpError(op, "Subroutines not supported in hull shaders.");
+    return ir::SsaDef();
+  }
+
+  auto labelIndex = operand.getIndex(0u);
+
+  if (operand.getRegisterType() != RegisterType::eLabel) {
+    auto name = m_converter.makeRegisterDebugName(operand.getRegisterType(), labelIndex, WriteMask());
+    m_converter.logOpError(op, "Operand ", name, " is not a valid label.");
+    return ir::SsaDef();
+  }
+
+  if (labelIndex >= m_labels.size())
+    m_labels.resize(labelIndex + 1u);
+
+  if (!m_labels.at(labelIndex)) {
+    auto code = builder.getCode().first;
+
+    /* Declare new function at the top of the code section and immediately
+     * end it. We will emit code to it once the label is actually declared. */
+    m_labels.at(labelIndex) = builder.addBefore(
+      code->getDef(), ir::Op::Function(ir::ScalarType::eVoid));
+
+    builder.addBefore(code->getDef(), ir::Op::FunctionEnd());
+  }
+
+  return m_labels.at(labelIndex);
+}
+
+
 ir::SsaDef RegisterFile::emitLoad(
         ir::Builder&            builder,
   const Instruction&            op,

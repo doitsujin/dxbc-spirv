@@ -34,6 +34,14 @@ public:
   bool handleDclTgsmRaw(ir::Builder& builder, const Instruction& op);
   bool handleDclTgsmStructured(ir::Builder& builder, const Instruction& op);
 
+  /* Reserves and declares function for label. Labels occur last in the
+   * DXBC binary, so their declarations are not known at the time the
+   * calls are made from the entry point function. */
+  ir::SsaDef getFunctionForLabel(
+          ir::Builder&            builder,
+    const Instruction&            op,
+    const Operand&                operand);
+
   /** Loads temporary register. */
   ir::SsaDef emitLoad(
           ir::Builder&            builder,
@@ -82,6 +90,7 @@ private:
   util::small_vector<ir::SsaDef, 256u> m_rRegs;
   util::small_vector<ir::SsaDef,  16u> m_xRegs;
   util::small_vector<ir::SsaDef,  16u> m_gRegs;
+  util::small_vector<ir::SsaDef,  16u> m_labels;
 
   ir::SsaDef loadArrayIndex(ir::Builder& builder, const Instruction& op, const Operand& operand);
 

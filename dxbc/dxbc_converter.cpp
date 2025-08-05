@@ -420,6 +420,10 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eRetc:
       return handleRet(builder, op);
 
+    case OpCode::eCall:
+    case OpCode::eCallc:
+      return handleCall(builder, op);
+
     case OpCode::eDiscard:
       return handleDiscard(builder, op);
 
@@ -434,21 +438,19 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eSync:
       return handleSync(builder, op);
 
-    case OpCode::eCall:
-    case OpCode::eCallc:
     case OpCode::eLabel:
+      return handleLabel(builder, op);
+
     case OpCode::eInterfaceCall:
     case OpCode::eDclFunctionBody:
     case OpCode::eDclFunctionTable:
     case OpCode::eDclInterface:
     case OpCode::eAbort:
     case OpCode::eDebugBreak:
-      /* TODO implement these */
       break;
   }
 
-  /* TODO fix */
-  return logOpError(op, "Unhandled opcode.") || true;
+  return logOpError(op, "Unhandled opcode.");
 }
 
 
@@ -2929,6 +2931,35 @@ bool Converter::handleRet(ir::Builder& builder, const Instruction& op) {
 }
 
 
+bool Converter::handleCall(ir::Builder& builder, const Instruction& op) {
+  auto opCode = op.getOpToken().getOpCode();
+
+  /* Begin conditional block */
+  ir::SsaDef condBlock = { };
+
+  if (opCode == OpCode::eCallc) {
+    auto cond = loadSrcConditional(builder, op, op.getSrc(0u));
+
+    if (!cond)
+      return false;
+
+    condBlock = builder.add(ir::Op::ScopedIf(ir::SsaDef(), cond));
+  }
+
+  /* Insert function call instruction */
+  auto function = m_regFile.getFunctionForLabel(builder, op, op.getSrc(op.getSrcCount() - 1u));
+  builder.add(ir::Op::FunctionCall(ir::ScalarType::eVoid, function));
+
+  /* End conditional block */
+  if (condBlock) {
+    auto condEnd = builder.add(ir::Op::ScopedEndIf(condBlock));
+    builder.rewriteOp(condBlock, ir::Op(builder.getOp(condBlock)).setOperand(0u, condEnd));
+  }
+
+  return true;
+}
+
+
 bool Converter::handleDiscard(ir::Builder& builder, const Instruction& op) {
   /* Discard always takes a single operand:
    * (src0) Conditional that decides whether to discard or now.
@@ -3024,6 +3055,19 @@ bool Converter::handleSync(ir::Builder& builder, const Instruction& op) {
   if (execScope != ir::Scope::eThread || memScope != ir::Scope::eThread)
     builder.add(ir::Op::Barrier(execScope, memScope, memTypes));
 
+  return true;
+}
+
+
+bool Converter::handleLabel(ir::Builder& builder, const Instruction& op) {
+  /* We (probably) already declared the function in question, just need
+   * to start inserting instructions at the correct location. */
+  auto function = m_regFile.getFunctionForLabel(builder, op, op.getDst(0u));
+
+  if (!function)
+    return false;
+
+  builder.setCursor(function);
   return true;
 }
 
