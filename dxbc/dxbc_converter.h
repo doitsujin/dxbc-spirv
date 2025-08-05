@@ -229,6 +229,8 @@ private:
 
   bool handleBitOp(ir::Builder& builder, const Instruction& op);
 
+  bool handleMsad(ir::Builder& builder, const Instruction& op);
+
   bool handleF32toF16(ir::Builder& builder, const Instruction& op);
 
   bool handleF16toF32(ir::Builder& builder, const Instruction& op);

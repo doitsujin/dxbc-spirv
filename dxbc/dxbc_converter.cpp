@@ -259,6 +259,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eBfRev:
       return handleBitOp(builder, op);
 
+    case OpCode::eMsad:
+      return handleMsad(builder, op);
+
     case OpCode::eF32toF16:
       return handleF32toF16(builder, op);
 
@@ -440,7 +443,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclInterface:
     case OpCode::eAbort:
     case OpCode::eDebugBreak:
-    case OpCode::eMsad:
       /* TODO implement these */
       break;
   }
@@ -1719,6 +1721,30 @@ bool Converter::handleBitOp(ir::Builder& builder, const Instruction& op) {
       builder.add(ir::Op::INe(condType, srcValue, zero)),
       result, neg1));
   }
+
+  return storeDstModified(builder, op, dst, result);
+}
+
+
+bool Converter::handleMsad(ir::Builder& builder, const Instruction& op) {
+  /* msad takes the following operands:
+   * (dst0) Accumulated result
+   * (src0) Reference value (4x 8 bit)
+   * (src1) Source value (4x 8 bit)
+   * (src2) Accumulator
+   */
+  const auto& dst = op.getDst(0u);
+
+  auto resultType = determineOperandType(dst, ir::ScalarType::eU32);
+
+  /* Always load ref and source as 32-bit */
+  auto ref = loadSrcModified(builder, op, op.getSrc(0u), dst.getWriteMask(), ir::ScalarType::eU32);
+  auto src = loadSrcModified(builder, op, op.getSrc(1u), dst.getWriteMask(), ir::ScalarType::eU32);
+
+  auto accum = loadSrcModified(builder, op, op.getSrc(2u), dst.getWriteMask(), resultType);
+
+  auto vectorType = makeVectorType(resultType, dst.getWriteMask());
+  auto result = builder.add(ir::Op::UMSad(vectorType, ref, src, accum));
 
   return storeDstModified(builder, op, dst, result);
 }
