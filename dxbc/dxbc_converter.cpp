@@ -368,6 +368,12 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eResInfo:
       return handleResInfo(builder, op);
 
+    case OpCode::eSampleInfo:
+      return handleSampleInfo(builder, op);
+
+    case OpCode::eSamplePos:
+      return handleSamplePos(builder, op);
+
     case OpCode::eBreak:
     case OpCode::eBreakc:
       return handleBreak(builder, op);
@@ -424,8 +430,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eCall:
     case OpCode::eCallc:
     case OpCode::eLabel:
-    case OpCode::eSamplePos:
-    case OpCode::eSampleInfo:
     case OpCode::eInterfaceCall:
     case OpCode::eUAddc:
     case OpCode::eUSubb:
@@ -2412,7 +2416,7 @@ bool Converter::handleCheckSparseAccess(ir::Builder& builder, const Instruction&
 
 
 bool Converter::handleBufInfo(ir::Builder& builder, const Instruction& op) {
-  /* resinfo takes the following operands:
+  /* bufinfo takes the following operands:
    * (dst0) Destination value (can be a vector)
    * (src0) Buffer resource to query
    *
@@ -2554,6 +2558,87 @@ bool Converter::handleResInfo(ir::Builder& builder, const Instruction& op) {
     : makeVectorType(ir::ScalarType::eF32, dst.getWriteMask());
 
   auto vector = composite(builder, vectorType, components.data(), texture.getSwizzle(), dst.getWriteMask());
+  return storeDstModified(builder, op, dst, vector);
+}
+
+
+bool Converter::handleSampleInfo(ir::Builder& builder, const Instruction& op) {
+  /* sampleinfo takes the following operands:
+   * (dst0) Destination value
+   * (src0) Resource to query.
+   *
+   * Like resinfo, it can return the result as either a
+   * floating point number or an unsigned integer.
+   */
+  auto returnType = op.getOpToken().getReturnType();
+
+  const auto& dst = op.getDst(0u);
+  const auto& resource = op.getSrc(0u);
+
+  /* Apparently this is one of those instructions that pad the result
+   * vector with zeroes before swizzling the result */
+  std::array<ir::SsaDef, 4u> scalars = { };
+
+  auto& sampleCount = scalars.at(0u);
+  sampleCount = getSampleCount(builder, op, resource);
+
+  if (!sampleCount)
+    return false;
+
+  if (returnType == ReturnType::eFloat)
+    sampleCount = builder.add(ir::Op::ConvertItoF(ir::ScalarType::eF32, sampleCount));
+
+  for (uint32_t i = 1u; i < scalars.size(); i++) {
+    scalars.at(i) = returnType == ReturnType::eFloat
+      ? builder.makeConstant(0.0f)
+      : builder.makeConstant(0u);
+  }
+
+  /* Store result vector */
+  auto vectorType = (returnType == ReturnType::eFloat)
+    ? makeVectorType(ir::ScalarType::eF32, dst.getWriteMask())
+    : makeVectorType(ir::ScalarType::eU32, dst.getWriteMask());
+
+  auto vector = composite(builder, vectorType, scalars.data(), resource.getSwizzle(), dst.getWriteMask());
+  return storeDstModified(builder, op, dst, vector);
+}
+
+
+bool Converter::handleSamplePos(ir::Builder& builder, const Instruction& op) {
+  /* sampleinfo takes the following operands:
+   * (dst0) Destination value
+   * (src0) Resource to query
+   * (src1) Sample index (as a scalar)
+   */
+  const auto& dst = op.getDst(0u);
+  const auto& resource = op.getSrc(0u);
+
+  /* The return vector is (x, y, 0, 0). If the provided sample index is
+   * invalid, this will return a null vector, which we can implicitly
+   * achieve by reading the first element of the look-up table. */
+  auto sampleCount = getSampleCount(builder, op, resource);
+  auto sampleIndex = loadSrcModified(builder, op, op.getSrc(1u), ComponentBit::eX, ir::ScalarType::eU32);
+
+  auto cond = builder.add(ir::Op::ULt(ir::ScalarType::eBool, sampleIndex, sampleCount));
+  auto lookupIndex = builder.add(ir::Op::IAdd(ir::ScalarType::eU32, sampleCount, sampleIndex));
+  lookupIndex = builder.add(ir::Op::Select(ir::ScalarType::eU32, cond, lookupIndex, builder.makeConstant(0u)));
+
+  auto lookupTable = declareSamplePositionLut(builder);
+  auto samplePos = builder.add(ir::Op::ConstantLoad(ir::BasicType(ir::ScalarType::eF32, 2u), lookupTable, lookupIndex));
+
+  /* Assemble result vector and store */
+  std::array<ir::SsaDef, 4u> scalars = { };
+
+  for (uint32_t i = 0u; i < 2u; i++) {
+    scalars.at(i) = builder.add(ir::Op::CompositeExtract(
+      ir::ScalarType::eF32, samplePos, builder.makeConstant(i)));
+  }
+
+  for (uint32_t i = 2u; i < scalars.size(); i++)
+    scalars.at(i) = builder.makeConstant(0.0f);
+
+  auto vectorType = makeVectorType(ir::ScalarType::eF32, dst.getWriteMask());
+  auto vector = composite(builder, vectorType, scalars.data(), resource.getSwizzle(), dst.getWriteMask());
   return storeDstModified(builder, op, dst, vector);
 }
 
@@ -3256,6 +3341,29 @@ ir::SsaDef Converter::computeAtomicBufferAddress(ir::Builder& builder, const Ins
 }
 
 
+ir::SsaDef Converter::getSampleCount(ir::Builder& builder, const Instruction& op, const Operand& operand) {
+  if (operand.getRegisterType() == RegisterType::eRasterizer) {
+    return builder.add(ir::Op::InputLoad(ir::ScalarType::eU32,
+      declareRasterizerSampleCount(builder), ir::SsaDef()));
+  } else {
+    /* We can might actually get a non-multisampled resource declaration
+     * here, just return a sample count of 1 in that case. */
+    auto textureInfo = m_resources.emitDescriptorLoad(builder, op, operand);
+
+    if (ir::resourceIsBuffer(textureInfo.kind)) {
+      logOpError(op, "Cannot query sample count of a buffer resource.");
+      return ir::SsaDef();
+    }
+
+    if (!ir::resourceIsMultisampled(textureInfo.kind))
+      return builder.makeConstant(1u);
+
+    return builder.add(ir::Op::ImageQuerySamples(
+      ir::ScalarType::eU32, textureInfo.descriptor));
+  }
+}
+
+
 std::pair<ir::SsaDef, ir::SsaDef> Converter::computeTypedCoordLayer(ir::Builder& builder, const Instruction& op,
     const Operand& operand, ir::ResourceKind kind, ir::ScalarType type) {
   auto coordComponentCount = ir::resourceCoordComponentCount(kind);
@@ -3519,6 +3627,80 @@ ir::SsaDef Converter::makeTypedConstant(ir::Builder& builder, ir::BasicType type
     op.addOperand(scalar);
 
   return builder.add(std::move(op));
+}
+
+
+ir::SsaDef Converter::declareRasterizerSampleCount(ir::Builder& builder) {
+  if (m_ps.sampleCount)
+    return m_ps.sampleCount;
+
+  m_ps.sampleCount = builder.add(ir::Op::DclInputBuiltIn(
+    ir::ScalarType::eU32, getEntryPoint(), ir::BuiltIn::eSampleCount, ir::InterpolationMode::eFlat));
+
+  if (m_options.includeDebugNames)
+    builder.add(ir::Op::DebugName(m_ps.sampleCount, "vRasterizer"));
+
+  return m_ps.sampleCount;
+}
+
+
+ir::SsaDef Converter::declareSamplePositionLut(ir::Builder& builder) {
+  static const std::array<std::pair<float, float>, 32> s_samplePositions = {{
+    /* Unbound resource */
+    { 0.0f, 0.0f },
+    /* 1 samples */
+    { 0.0f, 0.0f },
+    /* 2 samples */
+    {  0.25f,  0.25f },
+    { -0.25f, -0.25f },
+    /* 4 samples */
+    { -0.125f, -0.375f },
+    {  0.375f, -0.125f },
+    { -0.375f,  0.125f },
+    {  0.125f,  0.375f },
+    /* 8 samples */
+    {  0.0625f, -0.1875f },
+    { -0.0625f,  0.1875f },
+    {  0.3125f,  0.0625f },
+    { -0.1875f, -0.3125f },
+    { -0.3125f,  0.3125f },
+    { -0.4375f, -0.0625f },
+    {  0.1875f,  0.4375f },
+    {  0.4375f, -0.4375f },
+    /* 16 samples */
+    {  0.0625f,  0.0625f },
+    { -0.0625f, -0.1875f },
+    { -0.1875f,  0.1250f },
+    {  0.2500f, -0.0625f },
+    { -0.3125f, -0.1250f },
+    {  0.1250f,  0.3125f },
+    {  0.3125f,  0.1875f },
+    {  0.1875f, -0.3125f },
+    { -0.1250f,  0.3750f },
+    {  0.0000f, -0.4375f },
+    { -0.2500f, -0.3750f },
+    { -0.3750f,  0.2500f },
+    { -0.5000f,  0.0000f },
+    {  0.4375f, -0.2500f },
+    {  0.3750f,  0.4375f },
+    { -0.4375f, -0.5000f },
+  }};
+
+  if (m_ps.samplePosArray)
+    return m_ps.samplePosArray;
+
+  auto type = ir::Type(ir::ScalarType::eF32, 2u).addArrayDimension(s_samplePositions.size());
+  auto constant = ir::Op(ir::OpCode::eConstant, type);
+
+  for (const auto& e : s_samplePositions)
+    constant.addOperands(e.first, e.second);
+
+  m_ps.samplePosArray = builder.add(std::move(constant));
+
+  if (m_options.includeDebugNames)
+    builder.add(ir::Op::DebugName(m_ps.samplePosArray, "samplePos"));
+
+  return m_ps.samplePosArray;
 }
 
 

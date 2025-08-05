@@ -134,6 +134,13 @@ private:
   } m_gs;
 
 
+  /* Pixel shader state */
+  struct {
+    ir::SsaDef sampleCount = { };
+    ir::SsaDef samplePosArray = { };
+  } m_ps;
+
+
   /* Compute shader state */
   struct {
     uint32_t workgroupSizeX = 0u;
@@ -254,6 +261,10 @@ private:
 
   bool handleResInfo(ir::Builder& builder, const Instruction& op);
 
+  bool handleSampleInfo(ir::Builder& builder, const Instruction& op);
+
+  bool handleSamplePos(ir::Builder& builder, const Instruction& op);
+
   bool handleIf(ir::Builder& builder, const Instruction& op);
 
   bool handleElse(ir::Builder& builder, const Instruction& op);
@@ -316,6 +327,8 @@ private:
 
   ir::SsaDef computeAtomicBufferAddress(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::ResourceKind kind);
 
+  ir::SsaDef getSampleCount(ir::Builder& builder, const Instruction& op, const Operand& operand);
+
   std::pair<ir::SsaDef, ir::SsaDef> computeTypedCoordLayer(ir::Builder& builder, const Instruction& op,
     const Operand& operand, ir::ResourceKind kind, ir::ScalarType type);
 
@@ -345,6 +358,10 @@ private:
 
   template<typename T>
   ir::SsaDef makeTypedConstant(ir::Builder& builder, ir::BasicType type, T value);
+
+  ir::SsaDef declareRasterizerSampleCount(ir::Builder& builder);
+
+  ir::SsaDef declareSamplePositionLut(ir::Builder& builder);
 
   std::string makeRegisterDebugName(RegisterType type, uint32_t index, WriteMask mask) const;
 
