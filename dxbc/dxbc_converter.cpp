@@ -359,6 +359,9 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eLod:
       return handleQueryLod(builder, op);
 
+    case OpCode::eCheckAccessFullyMapped:
+      return handleCheckSparseAccess(builder, op);
+
     case OpCode::eBufInfo:
       return handleBufInfo(builder, op);
 
@@ -432,7 +435,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eAbort:
     case OpCode::eDebugBreak:
     case OpCode::eMsad:
-    case OpCode::eCheckAccessFullyMapped:
       /* TODO implement these */
       break;
   }
@@ -2381,6 +2383,30 @@ bool Converter::handleQueryLod(ir::Builder& builder, const Instruction& op) {
 
   auto vectorType = makeVectorType(ir::ScalarType::eF32, dst.getWriteMask());
   auto vector = composite(builder, vectorType, components.data(), texture.getSwizzle(), dst.getWriteMask());
+  return storeDstModified(builder, op, dst, vector);
+}
+
+
+bool Converter::handleCheckSparseAccess(ir::Builder& builder, const Instruction& op) {
+  /* check_access_mapped operates on scalar operands.
+   * (dst0) Destination value, treated as a boolean
+   * (src0) Opaque sparse feedback value
+   */
+  const auto& dst = op.getDst(0u);
+  const auto& src = op.getSrc(0u);
+
+  /* Docs vaguely suggest that this instruction is supposed to be scalar,
+   * but docs also forget to mention that this even has a dst parameter.
+   * Be conservative and support vector operation anyway. */
+  util::small_vector<ir::SsaDef, 4u> scalars = { };
+
+  for (auto c : dst.getWriteMask()) {
+    auto value = loadSrcModified(builder, op, src, c, ir::ScalarType::eU32);
+    value = builder.add(ir::Op::CheckSparseAccess(value));
+    scalars.push_back(boolToInt(builder, value));
+  }
+
+  auto vector = buildVector(builder, ir::ScalarType::eU32, scalars.size(), scalars.data());
   return storeDstModified(builder, op, dst, vector);
 }
 

@@ -250,6 +250,8 @@ private:
 
   bool handleBufInfo(ir::Builder& builder, const Instruction& op);
 
+  bool handleCheckSparseAccess(ir::Builder& builder, const Instruction& op);
+
   bool handleResInfo(ir::Builder& builder, const Instruction& op);
 
   bool handleIf(ir::Builder& builder, const Instruction& op);
