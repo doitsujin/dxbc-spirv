@@ -236,6 +236,10 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eUDiv:
       return handleIntDivide(builder, op);
 
+    case OpCode::eUAddc:
+    case OpCode::eUSubb:
+      return handleIntExtended(builder, op);
+
     case OpCode::eIShl:
     case OpCode::eIShr:
     case OpCode::eUShr:
@@ -431,8 +435,6 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eCallc:
     case OpCode::eLabel:
     case OpCode::eInterfaceCall:
-    case OpCode::eUAddc:
-    case OpCode::eUSubb:
     case OpCode::eDclFunctionBody:
     case OpCode::eDclFunctionTable:
     case OpCode::eDclInterface:
@@ -1453,6 +1455,61 @@ bool Converter::handleIntDivide(ir::Builder& builder, const Instruction& op) {
 
   return (!divVector || storeDstModified(builder, op, dstDiv, divVector)) &&
          (!modVector || storeDstModified(builder, op, dstMod, modVector));
+}
+
+
+bool Converter::handleIntExtended(ir::Builder& builder, const Instruction& op) {
+  /* uaddc and usubb have the following operands:
+   * (dst0) Lower bits of the addition.
+   * (dst1) Caarry or borrow bit (1 or 0).
+   * (src0) First source operand
+   * (src1) Second source operand
+   */
+  const auto& dstLo = op.getDst(0u);
+  const auto& dstHi = op.getDst(1u);
+
+  const auto& srcA = op.getSrc(0u);
+  const auto& srcB = op.getSrc(1u);
+
+  auto [extOp, baseOp] = [&op] {
+    switch (op.getOpToken().getOpCode()) {
+      case OpCode::eUAddc: return std::make_pair(ir::OpCode::eIAddCarry,  ir::OpCode::eIAdd);
+      case OpCode::eUSubb: return std::make_pair(ir::OpCode::eISubBorrow, ir::OpCode::eISub);
+      default:             break;
+    }
+
+    dxbc_spv_unreachable();
+    return std::make_pair(ir::OpCode::eUnknown, ir::OpCode::eUnknown);
+  } ();
+
+  /* Scalarize since our IR will return vec2<u32>. */
+  auto scalarType = ir::ScalarType::eU32;
+
+  util::small_vector<ir::SsaDef, 4u> loScalars;
+  util::small_vector<ir::SsaDef, 4u> hiScalars;
+
+  for (auto c : (dstLo.getWriteMask() | dstHi.getWriteMask())) {
+    auto a = loadSrcModified(builder, op, srcA, c, scalarType);
+    auto b = loadSrcModified(builder, op, srcB, c, scalarType);
+
+    if (dstHi.getWriteMask() & c) {
+      auto result = builder.add(ir::Op(extOp, ir::BasicType(scalarType, 2u)).addOperands(a, b));
+      hiScalars.push_back(builder.add(ir::Op::CompositeExtract(scalarType, result, builder.makeConstant(1u))));
+
+      if (dstLo.getWriteMask() & c)
+        loScalars.push_back(builder.add(ir::Op::CompositeExtract(scalarType, result, builder.makeConstant(0u))));
+    } else {
+      /* Use a simple add / sub if we don't need the carry bit */
+      loScalars.push_back(builder.add(ir::Op(baseOp, scalarType).addOperands(a, b)));
+    }
+  }
+
+  /* Write back results. */
+  auto loVector = buildVector(builder, scalarType, loScalars.size(), loScalars.data());
+  auto hiVector = buildVector(builder, scalarType, hiScalars.size(), hiScalars.data());
+
+  return (!loVector || storeDstModified(builder, op, dstLo, loVector)) &&
+         (!hiVector || storeDstModified(builder, op, dstHi, hiVector));
 }
 
 
