@@ -107,7 +107,7 @@ Builder::iterator LowerMin16Pass::handleMinMaxValue(Builder::iterator op) {
   auto range = resolveRange(op->getType().getBaseType(0u).getBaseType());
   auto value = op->getOpCode() == OpCode::eMinValue ? range.first : range.second;
 
-  auto constant = m_builder.add(Op(OpCode::eConstant, op->getType()).addOperand(value));
+  auto constant = m_builder.add(Op(OpCode::eConstant, resolveType(op->getType())).addOperand(value));
   return m_builder.iter(m_builder.rewriteDef(op->getDef(), constant));
 }
 
