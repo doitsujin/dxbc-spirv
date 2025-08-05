@@ -386,7 +386,7 @@ private:
 
   void emitSemanticName(ir::Builder& builder, ir::SsaDef def, const SignatureEntry& entry) const;
 
-  void emitDebugName(ir::Builder& builder, ir::SsaDef def, RegisterType type, uint32_t index, WriteMask mask) const;
+  void emitDebugName(ir::Builder& builder, ir::SsaDef def, RegisterType type, uint32_t index, WriteMask mask, const SignatureEntry* sigEntry) const;
 
   Sysval determineSysval(const Instruction& op) const;
 

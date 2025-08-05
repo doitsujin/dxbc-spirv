@@ -596,7 +596,7 @@ bool IoMap::declareIoSignatureVars(
     mapping.baseIndex = type.getBaseType(0u).isVector() ? 0 : -1;
 
     emitSemanticName(builder, mapping.baseDef, *e);
-    emitDebugName(builder, mapping.baseDef, regType, regIndex, mapping.componentMask);
+    emitDebugName(builder, mapping.baseDef, regType, regIndex, mapping.componentMask, &(*e));
 
     componentMask -= mapping.componentMask;
   }
@@ -633,7 +633,7 @@ bool IoMap::declareIoSignatureVars(
       mapping.baseDef = builder.add(std::move(declaration));
       mapping.baseIndex = -1;
 
-      emitDebugName(builder, mapping.baseDef, regType, regIndex, mapping.componentMask);
+      emitDebugName(builder, mapping.baseDef, regType, regIndex, mapping.componentMask, nullptr);
 
       componentMask -= nextMask;
     }
@@ -785,7 +785,7 @@ bool IoMap::declareSimpleBuiltIn(
   if (signatureEntry)
     emitSemanticName(builder, mapping.baseDef, *signatureEntry);
 
-  emitDebugName(builder, mapping.baseDef, regType, regIndex, componentMask);
+  emitDebugName(builder, mapping.baseDef, regType, regIndex, componentMask, signatureEntry);
   return true;
 }
 
@@ -824,7 +824,7 @@ bool IoMap::declareDedicatedBuiltIn(
   if (semanticName)
     builder.add(ir::Op::Semantic(mapping.baseDef, 0u, semanticName));
 
-  emitDebugName(builder, mapping.baseDef, regType, 0u, mapping.componentMask);
+  emitDebugName(builder, mapping.baseDef, regType, 0u, mapping.componentMask, nullptr);
   return true;
 }
 
@@ -905,7 +905,7 @@ bool IoMap::declareClipCullDistance(
     if (entries != signature->end())
       emitSemanticName(builder, def, *entries);
 
-    emitDebugName(builder, def, regType, regIndex, componentMask);
+    emitDebugName(builder, def, regType, regIndex, componentMask, nullptr);
   }
 
   /* Create mapping entries. We actually need to create one entry for each
@@ -993,7 +993,7 @@ bool IoMap::declareTessFactor(
     if (signatureEntry)
       emitSemanticName(builder, def, *signatureEntry);
 
-    emitDebugName(builder, def, regType, regIndex, componentMask);
+    emitDebugName(builder, def, regType, regIndex, componentMask, signatureEntry);
   }
 
   /* Add mapping */
@@ -1826,11 +1826,19 @@ bool IoMap::handleGsOutputStreams(ir::Builder& builder) {
 }
 
 
-void IoMap::emitDebugName(ir::Builder& builder, ir::SsaDef def, RegisterType type, uint32_t index, WriteMask mask) const {
+void IoMap::emitDebugName(ir::Builder& builder, ir::SsaDef def, RegisterType type, uint32_t index, WriteMask mask, const SignatureEntry* sigEntry) const {
   if (!m_converter.m_options.includeDebugNames)
     return;
 
-  auto name = m_converter.makeRegisterDebugName(type, index, mask);
+  std::string name = m_converter.makeRegisterDebugName(type, index, mask);
+
+  if (sigEntry) {
+    name = sigEntry->getSemanticName();
+
+    if (sigEntry->getSemanticIndex())
+      name += std::to_string(sigEntry->getSemanticIndex());
+  }
+
   builder.add(ir::Op::DebugName(def, name.c_str()));
 }
 
