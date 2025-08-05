@@ -929,7 +929,7 @@ std::ostream& operator << (std::ostream& os, MinPrecision precision) {
     case MinPrecision::eMin16Float: return os << "min16f";
     case MinPrecision::eMin10Float: return os << "min2_8f";
     case MinPrecision::eMin16Uint:  return os << "min16u";
-    case MinPrecision::eMin16Sint:  return os << "min10i";
+    case MinPrecision::eMin16Sint:  return os << "min16i";
   }
 
   return os << "MinPrecision(" << uint32_t(precision) << ")";
