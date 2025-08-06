@@ -22,6 +22,7 @@
 #include "../ir/passes/ir_pass_scalarize.h"
 #include "../ir/passes/ir_pass_ssa.h"
 
+#include "../dxbc/dxbc_api.h"
 #include "../dxbc/dxbc_container.h"
 #include "../dxbc/dxbc_converter.h"
 #include "../dxbc/dxbc_disasm.h"
@@ -212,29 +213,10 @@ bool compileShader(util::ByteReader reader, const Options& options) {
 
   timers.tConvertEnd = std::chrono::high_resolution_clock::now();
 
-  ir::ConvertControlFlowPass::runPass(builder);
-  ir::CleanupControlFlowPass::runPass(builder);
-  ir::SsaConstructionPass::runPass(builder);
-  ir::LowerMin16Pass::runPass(builder, ir::LowerMin16Pass::Options());
-  ir::ScalarizePass::runPass(builder, ir::ScalarizePass::Options());
-
-  while (ir::LowerConsumePass::runResolveCastChainsPass(builder) ||
-         ir::ScalarizePass::runResolveRedundantCompositesPass(builder))
-    continue;
-
-  ir::PropagateTypesPass::runPass(builder);
-  ir::PropagateResourceTypesPass::runPass(builder, ir::PropagateResourceTypesPass::Options());
-  ir::RemoveUnusedPass::runPass(builder);
-  ir::LowerConsumePass::runLowerConsumePass(builder);
-
-  ir::ArithmeticPass::runLoweringPasses(builder, ir::ArithmeticPass::Options());
-
-  ir::RemoveUnusedPass::runPass(builder);
-  ir::SsaConstructionPass::runResolveTrivialPhiPass(builder);
-
-
-
-  timers.tAfterPasses = std::chrono::high_resolution_clock::now();
+  if (!options.convertOnly) {
+    dxbc::legalizeIr(builder, dxbc::CompileOptions());
+    timers.tAfterPasses = std::chrono::high_resolution_clock::now();
+  }
 
   /* Output results */
   if (options.printIrAsm)
