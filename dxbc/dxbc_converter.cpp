@@ -2899,7 +2899,7 @@ bool Converter::handleContinue(ir::Builder& builder, const Instruction& op) {
   /* Begin conditional block */
   ir::SsaDef condBlock = { };
 
-  if (op.getOpToken().getOpCode() == OpCode::eBreakc) {
+  if (op.getOpToken().getOpCode() == OpCode::eContinuec) {
     auto cond = loadSrcConditional(builder, op, op.getSrc(0u));
 
     if (!cond)
