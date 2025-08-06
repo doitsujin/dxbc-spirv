@@ -2,7 +2,7 @@
 
 #include "../ir.h"
 
-#include "../util/util_hash.h"
+#include "../../util/util_hash.h"
 
 namespace dxbc_spv::ir {
 

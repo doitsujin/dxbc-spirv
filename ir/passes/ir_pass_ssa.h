@@ -10,7 +10,7 @@
 #include "../ir_builder.h"
 #include "../ir_utils.h"
 
-#include "../util/util_hash.h"
+#include "../../util/util_hash.h"
 
 namespace dxbc_spv::ir {
 

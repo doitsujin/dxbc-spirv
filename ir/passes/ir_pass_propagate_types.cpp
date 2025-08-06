@@ -1,7 +1,7 @@
 #include "ir_pass_propagate_types.h"
 #include "ir_pass_lower_consume.h"
 
-#include "../util/util_log.h"
+#include "../../util/util_log.h"
 
 namespace dxbc_spv::ir {
 
