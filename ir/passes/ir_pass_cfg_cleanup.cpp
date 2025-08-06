@@ -114,8 +114,13 @@ Builder::iterator CleanupControlFlowPass::handleBranchConditional(Builder::itera
 
 
 void CleanupControlFlowPass::removeUnusedFunctions() {
-  while (!m_unusedFunctions.empty())
-    removeFunction(m_unusedFunctions.back());
+  while (!m_unusedFunctions.empty()) {
+    auto function = m_unusedFunctions.back();
+    m_unusedFunctions.pop_back();
+
+    if (m_builder.getOp(function))
+      removeFunction(function);
+  }
 }
 
 
@@ -174,8 +179,13 @@ SsaDef CleanupControlFlowPass::removeFunctionCall(SsaDef call) {
 
 
 void CleanupControlFlowPass::removeUnusedBlocks() {
-  while (!m_unusedBlocks.empty())
-    removeBlock(m_unusedBlocks.back());
+  while (!m_unusedBlocks.empty()) {
+    auto block = m_unusedBlocks.back();
+    m_unusedBlocks.pop_back();
+
+    if (m_builder.getOp(block))
+      removeBlock(block);
+  }
 }
 
 
