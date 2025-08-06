@@ -1736,7 +1736,9 @@ bool Converter::handleBitOp(ir::Builder& builder, const Instruction& op) {
 
     auto zero = makeTypedConstant(builder, srcVectorType, 0u);
     auto neg1 = makeTypedConstant(builder, dstVectorType, -1);
+    auto maxBit = makeTypedConstant(builder, dstVectorType, 31);
 
+    result = builder.add(ir::Op::ISub(dstVectorType, maxBit, result));
     result = builder.add(ir::Op::Select(dstVectorType,
       builder.add(ir::Op::INe(condType, srcValue, zero)),
       result, neg1));
