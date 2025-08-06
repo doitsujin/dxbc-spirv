@@ -4,6 +4,7 @@ project('dxbc-spirv', ['cpp'],
   default_options : [ 'cpp_std=c++17', 'warning_level=2', 'cpp_eh=none' ])
 
 dxbc_spv_files = files([
+  'dxbc/dxbc_api.cpp',
   'dxbc/dxbc_container.cpp',
   'dxbc/dxbc_converter.cpp',
   'dxbc/dxbc_disasm.cpp',
