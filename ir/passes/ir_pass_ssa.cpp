@@ -24,7 +24,7 @@ void SsaConstructionPass::runPass() {
 }
 
 
-void SsaConstructionPass::resolveTrivialPhi() {
+bool SsaConstructionPass::resolveTrivialPhi() {
   std::vector<SsaDef> queue;
 
   /* Gather trivial phi */
@@ -38,6 +38,8 @@ void SsaConstructionPass::resolveTrivialPhi() {
   }
 
   /* Recursively check and eliminate phi */
+  bool progress = false;
+
   while (!queue.empty()) {
     auto phi = queue.back();
     queue.pop_back();
@@ -61,7 +63,10 @@ void SsaConstructionPass::resolveTrivialPhi() {
     }
 
     m_builder.rewriteDef(phi, def);
+    progress = true;
   }
+
+  return progress;
 }
 
 
@@ -132,9 +137,9 @@ void SsaConstructionPass::runPass(Builder& builder) {
 }
 
 
-void SsaConstructionPass::runResolveTrivialPhiPass(Builder& builder) {
+bool SsaConstructionPass::runResolveTrivialPhiPass(Builder& builder) {
   SsaConstructionPass pass(builder);
-  pass.resolveTrivialPhi();
+  return pass.resolveTrivialPhi();
 }
 
 

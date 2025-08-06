@@ -33,8 +33,9 @@ public:
   /** Runs pass. */
   void runPass();
 
-  /** Runs trivial phi elimination pass */
-  void resolveTrivialPhi();
+  /** Runs trivial phi elimination pass. While this will ensure that no
+   *  trivial phis remain, this returns true if any phis were removed. */
+  bool resolveTrivialPhi();
 
   /** Validates pre-conditions of the pass, specifically that control flow
    *  is valid and all tempooraries are used in exactly one function. */
@@ -53,7 +54,7 @@ public:
    *  once when running the regular SSA construction pass, but may be
    *  required after passes that change control flow or merge arithmetic
    *  operations as well. */
-  static void runResolveTrivialPhiPass(Builder& builder);
+  static bool runResolveTrivialPhiPass(Builder& builder);
 
 private:
 
