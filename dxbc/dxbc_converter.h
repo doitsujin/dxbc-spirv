@@ -161,6 +161,8 @@ private:
 
   void emitHsPatchConstantFunction(ir::Builder& builder);
 
+  bool emitDsStateSetup(ir::Builder& builder);
+
   bool emitGsStateSetup(ir::Builder& builder);
 
   bool handleCustomData(ir::Builder& builder, const Instruction& op);

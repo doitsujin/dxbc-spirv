@@ -511,6 +511,11 @@ bool Converter::finalize(ir::Builder& builder) {
     }
   }
 
+  if (m_parser.getShaderInfo().getType() == ShaderType::eDomain) {
+    if (!emitDsStateSetup(builder))
+      return false;
+  }
+
   if (m_parser.getShaderInfo().getType() == ShaderType::eGeometry) {
     if (!emitGsStateSetup(builder))
       return false;
@@ -576,6 +581,19 @@ void Converter::emitHsPatchConstantFunction(ir::Builder& builder) {
     for (uint32_t i = 0u; i < e.second; i++)
       builder.add(ir::Op::FunctionCall(ir::Type(), e.first).addParam(builder.makeConstant(i)));
   }
+}
+
+
+bool Converter::emitDsStateSetup(ir::Builder& builder) {
+  auto domain = resolveTessDomain(m_hs.domain);
+
+  if (!domain) {
+    Logger::err("Tessellator domain ", m_hs.domain, " not valid.");
+    return false;
+  }
+
+  builder.add(ir::Op::SetTessDomain(getEntryPoint(), *domain));
+  return true;
 }
 
 
