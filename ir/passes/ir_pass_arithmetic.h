@@ -34,8 +34,14 @@ public:
   ArithmeticPass             (const ArithmeticPass&) = delete;
   ArithmeticPass& operator = (const ArithmeticPass&) = delete;
 
+  /** Runs arithmetic pass */
+  bool runPass();
+
   /** Runs one-time lowering passes and one-time transforms. */
   void runLowering();
+
+  /** Initializes and runs optimization pass on the given builder. */
+  static bool runPass(Builder& builder, const Options& options);
 
   /** Initializes and runs lowering passes on the given builder. */
   static void runLoweringPasses(Builder& builder, const Options& options);
@@ -52,19 +58,9 @@ private:
 
   void lowerInstructions();
 
-  void performInitialTransforms();
-
   Builder::iterator lowerDot(Builder::iterator op);
 
-  Builder::iterator fuseMad(Builder::iterator op);
-
-  Builder::iterator fuseMadOperand(Builder::iterator op, uint32_t operand);
-
-  bool canFuseMadOperand(Builder::iterator op, uint32_t operand) const;
-
   SsaDef extractFromVector(SsaDef vector, uint32_t component);
-
-  OpFlags getFpFlags(const Op& op) const;
 
 };
 
