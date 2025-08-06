@@ -10,6 +10,7 @@ test_files = files([
   'ir/test_ir_op.cpp',
   'ir/test_ir_serialize.cpp',
   'ir/test_ir_type.cpp',
+  'ir/test_ir_type_propagation.cpp',
 
   'util/test_util_small_vector.cpp',
   'util/test_util_vle.cpp',
