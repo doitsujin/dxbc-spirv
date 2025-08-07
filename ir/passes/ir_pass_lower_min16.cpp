@@ -15,8 +15,8 @@ std::pair<Operand, Operand> getRange() {
 template<>
 std::pair<Operand, Operand> getRange<float16_t>() {
   return std::make_pair(
-    Operand(float16_t::fromRaw(0xfbffu)),
-    Operand(float16_t::fromRaw(0x7bffu)));
+    Operand(float16_t::minValue()),
+    Operand(float16_t::maxValue()));
 }
 
 

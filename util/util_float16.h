@@ -38,6 +38,9 @@ struct float16_t {
     return result;
   }
 
+  static float16_t minValue() { return fromRaw(0xfbffu); }
+  static float16_t maxValue() { return fromRaw(0x7bffu); }
+
   uint16_t data;
 };
 

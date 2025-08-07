@@ -62,6 +62,27 @@ private:
 
   SsaDef extractFromVector(SsaDef vector, uint32_t component);
 
+  std::pair<bool, Builder::iterator> constantFoldArithmeticOp(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> constantFoldBoolOp(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> constantFoldCompare(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> constantFoldSelect(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> constantFoldOp(Builder::iterator op);
+
+  bool allOperandsConstant(const Op& op) const;
+
+  uint64_t getConstantAsUint(const Op& op, uint32_t index) const;
+
+  int64_t getConstantAsSint(const Op& op, uint32_t index) const;
+
+  double getConstantAsFloat(const Op& op, uint32_t index) const;
+
+  template<typename T>
+  static Operand makeScalarOperand(const Type& type, T value);
+
 };
 
 }
