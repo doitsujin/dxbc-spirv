@@ -2432,7 +2432,7 @@ bool Converter::handleGather(ir::Builder& builder, const Instruction& op) {
     depthRef = loadSrcModified(builder, op, op.getSrc(3u + srcOperandOffset), ComponentBit::eX, ir::ScalarType::eF32);
 
   /* Determine return type of the gather operation. */
-  ir::BasicType texelType(textureInfo.type, isDepthCompare ? 1u : 4u);
+  ir::BasicType texelType(textureInfo.type, 4u);
   ir::Type returnType(texelType);
 
   if (hasSparseFeedback)
