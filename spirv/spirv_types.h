@@ -1,5 +1,5 @@
-#include <spirv/unified1/spirv.hpp>
-#include <spirv/unified1/GLSL.std.450.h>
+#include "../submodules/spirv_headers/include/spirv/unified1/spirv.hpp"
+#include "../submodules/spirv_headers/include/spirv/unified1/GLSL.std.450.h"
 
 #include "../ir/ir.h"
 #include "../ir/ir_builder.h"

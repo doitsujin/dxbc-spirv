@@ -41,8 +41,7 @@ dxbc_spv_files = files([
   'spirv/spirv_mapping.cpp',
 ])
 
-lib_dxbc_spv = static_library('dxbc_spv', dxbc_spv_files,
-  include_directories : [ 'submodules/spirv_headers/include' ])
+lib_dxbc_spv = static_library('dxbc_spv', dxbc_spv_files)
 
 if get_option('enable_tests')
   subdir('tests')
