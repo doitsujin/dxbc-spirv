@@ -1810,14 +1810,17 @@ bool IoMap::handleGsOutputStreams(ir::Builder& builder) {
       auto* tmp = IoMap::findIoVar(m_variables, var.regType, var.regIndex, -1, c);
 
       if (!tmp) {
-        auto& mapping = m_variables.emplace_back();
-        mapping.regType = var.regType;
-        mapping.regIndex = var.regIndex;
-        mapping.regCount = var.regCount;
-        mapping.gsStream = -1;
-        mapping.componentMask = c;
-        mapping.baseType = var.baseType;
-        mapping.baseDef = builder.add(ir::Op::DclTmp(mapping.baseType, m_converter.getEntryPoint()));
+        for (uint32_t i = 0u; i < var.regCount; i++) {
+          auto& mapping = m_variables.emplace_back();
+          mapping.regType = var.regType;
+          mapping.regIndex = var.regIndex;
+          mapping.regCount = 1u;
+          mapping.gsStream = -1;
+          mapping.componentMask = c;
+          mapping.baseType = m_converter.makeVectorType(var.baseType.getBaseType(0u).getBaseType(), c);
+          mapping.baseDef = builder.add(ir::Op::DclTmp(mapping.baseType, m_converter.getEntryPoint()));
+          mapping.baseIndex = -1;
+        }
       }
     }
   }
