@@ -568,37 +568,52 @@ bool IoMap::declareIoSignatureVars(
   });
 
   for (auto e = entries; e != signature->end(); e++) {
-    /* Create declaration instructio */
-    ir::Type type = e->getVectorType();
+    auto sv = *resolveSignatureSysval(e->getSystemValue(), e->getSemanticIndex());
 
-    if (arraySize)
-      type.addArrayDimension(arraySize);
+    if (sv == Sysval::eNone || sysvalNeedsMirror(regType, sv)) {
+      /* Create declaration instructio */
+      ir::Type type = e->getVectorType();
 
-    auto declaration = ir::Op(opCode, type)
-      .addOperand(m_converter.getEntryPoint())
-      .addOperand(locationIndex)
-      .addOperand(e->computeComponentIndex());
+      if (arraySize)
+        type.addArrayDimension(arraySize);
 
-    if (!type.getBaseType(0u).isFloatType())
-      interpolation = ir::InterpolationMode::eFlat;
+      auto declaration = ir::Op(opCode, type)
+        .addOperand(m_converter.getEntryPoint())
+        .addOperand(locationIndex)
+        .addOperand(e->computeComponentIndex());
 
-    addDeclarationArgs(declaration, regType, interpolation);
+      if (!type.getBaseType(0u).isFloatType())
+        interpolation = ir::InterpolationMode::eFlat;
 
-    /* Add mapping entry to the look-up table */
-    auto& mapping = m_variables.emplace_back();
-    mapping.regType = regType;
-    mapping.regIndex = regIndex;
-    mapping.regCount = 1u;
-    mapping.sv = Sysval::eNone;
-    mapping.componentMask = e->getComponentMask();
-    mapping.baseType = declaration.getType();
-    mapping.baseDef = builder.add(std::move(declaration));
-    mapping.baseIndex = type.getBaseType(0u).isVector() ? 0 : -1;
+      addDeclarationArgs(declaration, regType, interpolation);
 
-    emitSemanticName(builder, mapping.baseDef, *e);
-    emitDebugName(builder, mapping.baseDef, regType, regIndex, mapping.componentMask, &(*e));
+      /* Add mapping entry to the look-up table */
+      auto& mapping = m_variables.emplace_back();
+      mapping.regType = regType;
+      mapping.regIndex = regIndex;
+      mapping.regCount = 1u;
+      mapping.sv = Sysval::eNone;
+      mapping.componentMask = e->getComponentMask();
+      mapping.baseType = declaration.getType();
+      mapping.baseDef = builder.add(std::move(declaration));
+      mapping.baseIndex = type.getBaseType(0u).isVector() ? 0 : -1;
 
-    componentMask -= mapping.componentMask;
+      emitSemanticName(builder, mapping.baseDef, *e);
+      emitDebugName(builder, mapping.baseDef, regType, regIndex, mapping.componentMask, &(*e));
+
+      componentMask -= mapping.componentMask;
+    } else if (sv != Sysval::eNone && sysvalNeedsBuiltIn(regType, sv)) {
+      /* We only expect this to happen for certain inputs. FXC will not declare
+       * clip/cull distance inputs with the actual system value if used in a
+       * geometry shader, so we need to check the signature. */
+      bool success = declareIoSysval(builder, signature, regType, regIndex,
+        arraySize, e->getComponentMask(), sv, interpolation);
+
+      if (!success)
+        return false;
+
+      componentMask -= e->getComponentMask();
+    }
   }
 
   if (componentMask) {
