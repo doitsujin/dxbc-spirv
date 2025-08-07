@@ -127,7 +127,7 @@ bool IoMap::handleDclIndexRange(ir::Builder& builder, const Instruction& op) {
 bool IoMap::handleEmitVertex(ir::Builder& builder, uint32_t stream) {
   /* Copy from temporary registers to the actual outputs */
   for (const auto& v : m_variables) {
-    if (v.gsStream != int32_t(stream))
+    if (v.gsStream != int32_t(stream) || v.regType != RegisterType::eOutput)
       continue;
 
     auto value = loadIoRegister(builder, ir::ScalarType::eUnknown, v.regType,
@@ -875,8 +875,8 @@ bool IoMap::declareClipCullDistance(
 
   /* Declare actual built-in variable as necessary */
   auto& def = (sv == Sysval::eClipDistance)
-    ? m_clipDistance
-    : m_cullDistance;
+    ? (regType == RegisterType::eInput ? m_clipDistanceIn : m_clipDistanceOut)
+    : (regType == RegisterType::eInput ? m_cullDistanceIn : m_cullDistanceOut);
 
   if (!def) {
     auto type = ir::Type(ir::ScalarType::eF32)

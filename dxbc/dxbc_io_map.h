@@ -166,8 +166,11 @@ private:
 
   uint32_t        m_gsConvertedCount = 0u;
 
-  ir::SsaDef      m_clipDistance = { };
-  ir::SsaDef      m_cullDistance = { };
+  ir::SsaDef      m_clipDistanceIn = { };
+  ir::SsaDef      m_clipDistanceOut = { };
+
+  ir::SsaDef      m_cullDistanceIn = { };
+  ir::SsaDef      m_cullDistanceOut = { };
 
   ir::SsaDef      m_tessFactorInner = { };
   ir::SsaDef      m_tessFactorOuter = { };
