@@ -51,3 +51,8 @@ endif
 if get_option('enable_tools')
   subdir('tools')
 endif
+
+dxbc_spv_inc = include_directories('.')
+dxbc_spv_dep = declare_dependency(
+  include_directories : dxbc_spv_inc,
+  link_with           : lib_dxbc_spv)
