@@ -59,7 +59,8 @@ bool RemoveUnusedPass::canRemoveOp(const Op& op) const {
 
   for (auto use = a; use != b; use++) {
     if (use->getOpCode() != OpCode::eDebugName &&
-        use->getOpCode() != OpCode::eDebugMemberName)
+        use->getOpCode() != OpCode::eDebugMemberName &&
+        use->getOpCode() != OpCode::eSemantic)
       return false;
   }
 
@@ -73,7 +74,8 @@ void RemoveUnusedPass::removeOp(SsaDef def) {
 
   for (auto use : uses) {
     dxbc_spv_assert(m_builder.getOp(use).getOpCode() == OpCode::eDebugName ||
-                    m_builder.getOp(use).getOpCode() == OpCode::eDebugMemberName);
+                    m_builder.getOp(use).getOpCode() == OpCode::eDebugMemberName ||
+                    m_builder.getOp(use).getOpCode() == OpCode::eSemantic);
 
     m_builder.remove(use);
   }
@@ -110,8 +112,6 @@ bool RemoveUnusedPass::hasSideEffect(OpCode opCode) {
     case OpCode::eSetTessDomain:
     case OpCode::eSetTessControlPoints:
     case OpCode::eSetFpMode:
-    case OpCode::eDclInput:
-    case OpCode::eDclInputBuiltIn:
     case OpCode::eDclOutput:
     case OpCode::eDclOutputBuiltIn:
     case OpCode::eDclXfb:
@@ -181,6 +181,8 @@ bool RemoveUnusedPass::hasSideEffect(OpCode opCode) {
     /* Declarations that can be removed if unused */
     case OpCode::eUndef:
     case OpCode::eConstant:
+    case OpCode::eDclInput:
+    case OpCode::eDclInputBuiltIn:
     case OpCode::eDclSpecConstant:
     case OpCode::eDclPushData:
     case OpCode::eDclSampler:
