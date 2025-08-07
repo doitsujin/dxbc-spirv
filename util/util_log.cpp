@@ -33,7 +33,7 @@ LogLevel Logger::minSeverity() {
 
 void Logger::log(LogLevel severity, const char* message) {
   if (s_logger) {
-    s_logger->log(severity, message);
+    s_logger->message(severity, message);
     return;
   }
 
