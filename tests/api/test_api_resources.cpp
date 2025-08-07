@@ -322,6 +322,9 @@ Builder make_test_buffer_atomic(ResourceKind kind, bool indexed) {
   def = builder.add(Op::BufferAtomic(AtomicOp::eDec, ScalarType::eU32, descriptor, index, SsaDef()));
   builder.add(Op::BufferAtomic(AtomicOp::eStore, Type(), descriptor, index, def));
 
+  builder.add(Op::BufferAtomic(AtomicOp::eAdd, ScalarType::eVoid, descriptor, index, builder.makeConstant(1u)));
+  builder.add(Op::BufferAtomic(AtomicOp::eSub, ScalarType::eVoid, descriptor, index, builder.makeConstant(2u)));
+
   builder.add(Op::Return());
   return builder;
 }
