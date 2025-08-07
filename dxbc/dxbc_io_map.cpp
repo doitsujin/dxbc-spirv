@@ -917,10 +917,12 @@ bool IoMap::declareClipCullDistance(
 
     def = builder.add(std::move(declaration));
 
-    if (entries != signature->end())
+    if (entries != signature->end()) {
       emitSemanticName(builder, def, *entries);
-
-    emitDebugName(builder, def, regType, regIndex, componentMask, nullptr);
+      emitDebugName(builder, def, regType, regIndex, componentMask, &(*entries));
+    } else {
+      emitDebugName(builder, def, regType, regIndex, componentMask, nullptr);
+    }
   }
 
   /* Create mapping entries. We actually need to create one entry for each
