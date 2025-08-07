@@ -230,7 +230,7 @@ Builder test_misc_lds_atomic() {
 
   auto dataDef = builder.add(Op::BufferLoad(ScalarType::eI32, srvDescriptor,
     builder.add(Op::CompositeConstruct(BasicType(ScalarType::eU32, 2u), gid, builder.makeConstant(0u))), 4u));
-  builder.add(Op::LdsAtomic(AtomicOp::eAdd, ScalarType::eI32, ldsDef, builder.makeConstant(0u), dataDef));
+  builder.add(Op::LdsAtomic(AtomicOp::eAdd, ScalarType::eVoid, ldsDef, builder.makeConstant(0u), dataDef));
   auto resultDef = builder.add(Op::LdsAtomic(AtomicOp::eXor, ScalarType::eI32, ldsDef, builder.makeConstant(0u), dataDef));
 
   builder.add(Op::BufferStore(uavDescriptor,
