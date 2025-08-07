@@ -701,8 +701,16 @@ Builder make_test_image_query(ResourceKind kind, bool uav, bool indexed) {
 
   auto sizeAndLayers = builder.add(Op::ImageQuerySize(queryType, descriptor, mip));
 
-  builder.add(Op::OutputStore(outSize, SsaDef(),
-    builder.add(Op::CompositeExtract(coordType, sizeAndLayers, builder.makeConstant(0u)))));
+  for (uint32_t i = 0u; i < coordCount; i++) {
+    auto index = builder.makeConstant(0u);
+
+    if (coordType.isVector())
+      index = builder.makeConstant(0u, i);
+
+    builder.add(Op::OutputStore(outSize, coordType.isVector() ? builder.makeConstant(i) : ir::SsaDef(),
+      builder.add(Op::CompositeExtract(ScalarType::eU32, sizeAndLayers, index))));
+  }
+
   builder.add(Op::OutputStore(outLayers, SsaDef(),
     builder.add(Op::CompositeExtract(ScalarType::eU32, sizeAndLayers, builder.makeConstant(1u)))));
 
