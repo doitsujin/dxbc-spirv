@@ -822,6 +822,8 @@ void PropagateResourceTypesPass::rewriteAtomic(SsaDef def, const PropagateResour
    * must already match the scalar type at the given address. */
   auto atomicOp = m_builder.getOp(def);
 
+  m_builder.setCursor(m_builder.getPrev(def));
+
   atomicOp.setOperand(1u, rewriteAddress(info,
     m_builder.getOpForOperand(atomicOp, 1u).getDef(), 1u));
 
