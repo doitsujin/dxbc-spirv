@@ -49,6 +49,9 @@ bool ArithmeticPass::runPass() {
     if (!status)
       std::tie(status, next) = resolveIdentityOp(iter);
 
+    if (!status)
+      std::tie(status, next) = selectOp(iter);
+
     if (status) {
       progress = true;
       iter = next;
@@ -312,6 +315,207 @@ Builder::iterator ArithmeticPass::tryFuseMad(Builder::iterator op) {
 
   m_builder.rewriteOp(op->getDef(), Op::FMad(op->getType(), a, b, c).setFlags(op->getFlags()));
   return ++op;
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::selectCompare(Builder::iterator op) {
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+  const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+  if (!op->getType().isScalarType())
+    return std::make_pair(false, ++op);
+
+  /* Clean up common boolean patterns. This assumes that comparisons have already
+   * been reordered in such a way that constant operands are on the right, and that
+   * the select operands differ. */
+  if (!isConstantSelect(a) || !b.isConstant())
+    return std::make_pair(false, ++op);
+
+  /* select(cond, a, b) == a -> cond
+   * select(cond, a, b) != a -> !cond
+   * select(cond, a, b) == b -> !cond
+   * select(cond, a, b) != b -> cond
+   * select(cond, a, b) == c -> false
+   * select(cond, a, b) != c -> true */
+  bool negate = op->getOpCode() == OpCode::eINe;
+
+  auto condDef = SsaDef(a.getOperand(0u));
+  auto trueDef = SsaDef(a.getOperand(1u));
+  auto falseDef = SsaDef(a.getOperand(2u));
+
+  if (b.getDef() != trueDef && b.getDef() != falseDef) {
+    auto next = m_builder.rewriteDef(op->getDef(), m_builder.makeConstant(negate));
+    return std::make_pair(true, m_builder.iter(next));
+  }
+
+  if (b.getDef() == falseDef)
+    negate = !negate;
+
+  if (!negate) {
+    auto next = m_builder.rewriteDef(op->getDef(), condDef);
+    return std::make_pair(true, m_builder.iter(next));
+  } else {
+    m_builder.rewriteOp(op->getDef(), Op::BNot(op->getType(), condDef));
+    return std::make_pair(true, op);
+  }
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::selectBitOp(Builder::iterator op) {
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+  if (!op->getType().isScalarType() || !isConstantSelect(a))
+    return std::make_pair(false, ++op);
+
+  switch (op->getOpCode()) {
+    case OpCode::eCast:
+    case OpCode::eIAbs:
+    case OpCode::eINot:
+    case OpCode::eINeg: {
+      if (!isOnlyUse(m_builder, a.getDef(), op->getDef()))
+        break;
+
+      /* Fold op into select operands */
+      auto trueDef = m_builder.addBefore(op->getDef(),
+        Op(op->getOpCode(), op->getType()).addOperand(SsaDef(a.getOperand(1u))));
+      auto falseDef = m_builder.addBefore(op->getDef(),
+        Op(op->getOpCode(), op->getType()).addOperand(SsaDef(a.getOperand(2u))));
+
+      m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(),
+        SsaDef(a.getOperand(0u)), trueDef, falseDef).setFlags(a.getFlags()));
+
+      return std::make_pair(true, m_builder.iter(trueDef));
+    }
+
+    case OpCode::eIAnd:
+    case OpCode::eIOr:
+    case OpCode::eIXor: {
+      const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+      if (isConstantSelect(b)) {
+        /* Handle patterns such as:
+         * select(c0, a, 0) & select(c1, a, 0) -> select(c0 && c1, a, 0)
+         * select(c0, a, 0) | select(c1, a, 0) -> select(c0 || c1, a, 0)
+         * select(c0, a, 0) ^ select(c1, a, 0) -> select(c0 != c1, a, 0) */
+        auto at = SsaDef(a.getOperand(1u));
+        auto af = SsaDef(a.getOperand(2u));
+        auto bt = SsaDef(b.getOperand(1u));
+        auto bf = SsaDef(b.getOperand(2u));
+
+        if (((at == bt && af == bf) || (at == bf && af == bt)) &&
+            (isZeroConstant(m_builder.getOp(at)) || isZeroConstant(m_builder.getOp(af)))) {
+          auto ac = SsaDef(a.getOperand(0u));
+          auto bc = SsaDef(b.getOperand(0u));
+
+          auto ref = op->getDef();
+
+          /* Arrange and invert conditions as necessary so hat the zero constant
+           * is last. This is needed for the and pattern to be correct. */
+          if (isConstantValue(m_builder.getOp(at), 0)) {
+            ac = ref = m_builder.addBefore(ref, Op::BNot(ScalarType::eBool, ac));
+            std::swap(at, af);
+          }
+
+          /* Arrange B condition so that the select operands match */
+          if (isConstantValue(m_builder.getOp(bt), 0)) {
+            bc = ref = m_builder.addBefore(ref, Op::BNot(ScalarType::eBool, bc));
+            std::swap(bt, bf);
+          }
+
+          dxbc_spv_assert(at == bt && af == bf);
+
+          /* Make boolean op for the respective conditions */
+          auto condOpCode = [op] {
+            switch (op->getOpCode()) {
+              case OpCode::eIAnd: return OpCode::eBAnd;
+              case OpCode::eIOr:  return OpCode::eBOr;
+              case OpCode::eIXor: return OpCode::eBNe;
+              default: break;
+            }
+
+            dxbc_spv_unreachable();
+            return OpCode::eUnknown;
+          } ();
+
+          auto cond = m_builder.addBefore(op->getDef(),
+            Op(condOpCode, ScalarType::eBool).addOperands(ac, bc));
+
+          m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), cond, at, af));
+          return std::make_pair(true, m_builder.iter(ref));
+        }
+      }
+    } [[fallthrough]];
+
+    case OpCode::eIAdd:
+    case OpCode::eISub:
+    case OpCode::eIMul:
+    case OpCode::eUDiv:
+    case OpCode::eUMod:
+    case OpCode::eSMax:
+    case OpCode::eSMin:
+    case OpCode::eUMax:
+    case OpCode::eUMin:
+    case OpCode::eIShl:
+    case OpCode::eUShr:
+    case OpCode::eSShr: {
+      const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+      if (b.isConstant()) {
+        /* Fold op into select operands and then constant-fold */
+        if (!isOnlyUse(m_builder, a.getDef(), op->getDef()))
+          break;
+
+        auto trueDef = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType())
+          .addOperands(SsaDef(a.getOperand(1u)), b.getDef()));
+        auto falseDef = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType())
+          .addOperands(SsaDef(a.getOperand(2u)), b.getDef()));
+
+        m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(),
+          SsaDef(a.getOperand(0u)), trueDef, falseDef).setFlags(a.getFlags()));
+
+        return std::make_pair(true, m_builder.iter(trueDef));
+      }
+    } break;
+
+    default:
+      dxbc_spv_unreachable();
+      break;
+  }
+
+  return std::make_pair(false, ++op);
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::selectOp(Builder::iterator op) {
+  switch (op->getOpCode()) {
+    case OpCode::eCast:
+    case OpCode::eIAbs:
+    case OpCode::eINeg:
+    case OpCode::eINot:
+    case OpCode::eIAnd:
+    case OpCode::eIOr:
+    case OpCode::eIXor:
+    case OpCode::eIAdd:
+    case OpCode::eISub:
+    case OpCode::eIMul:
+    case OpCode::eUDiv:
+    case OpCode::eUMod:
+    case OpCode::eSMax:
+    case OpCode::eSMin:
+    case OpCode::eUMax:
+    case OpCode::eUMin:
+    case OpCode::eIShl:
+    case OpCode::eUShr:
+    case OpCode::eSShr:
+      return selectBitOp(op);
+
+    case OpCode::eIEq:
+    case OpCode::eINe:
+      return selectCompare(op);
+
+    default:
+      return std::make_pair(false, ++op);
+  }
 }
 
 
@@ -1776,6 +1980,29 @@ double ArithmeticPass::getConstantAsFloat(const Op& op, uint32_t index) const {
       dxbc_spv_unreachable();
       return 0.0;
   }
+}
+
+
+bool ArithmeticPass::isConstantSelect(const Op& op) const {
+  if (op.getOpCode() != OpCode::eSelect)
+    return false;
+
+  return m_builder.getOpForOperand(op, 1u).isConstant() &&
+         m_builder.getOpForOperand(op, 2u).isConstant() &&
+         SsaDef(op.getOperand(1u)) != SsaDef(op.getOperand(2u));
+}
+
+
+bool ArithmeticPass::isZeroConstant(const Op& op) const {
+  if (!op.isConstant())
+    return false;
+
+  for (uint32_t i = 0u; i < op.getOperandCount(); i++) {
+    if (op.getOperand(i) != Operand(0u))
+      return false;
+  }
+
+  return true;
 }
 
 

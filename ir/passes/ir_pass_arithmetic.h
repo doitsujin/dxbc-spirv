@@ -71,6 +71,12 @@ private:
 
   Builder::iterator tryFuseMad(Builder::iterator op);
 
+  std::pair<bool, Builder::iterator> selectCompare(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> selectBitOp(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> selectOp(Builder::iterator op);
+
   std::pair<bool, Builder::iterator> propagateAbsUnary(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> propagateAbsBinary(Builder::iterator op);
@@ -112,6 +118,10 @@ private:
   int64_t getConstantAsSint(const Op& op, uint32_t index) const;
 
   double getConstantAsFloat(const Op& op, uint32_t index) const;
+
+  bool isConstantSelect(const Op& op) const;
+
+  bool isZeroConstant(const Op& op) const;
 
   OpFlags getFpFlags(const Op& op) const;
 
