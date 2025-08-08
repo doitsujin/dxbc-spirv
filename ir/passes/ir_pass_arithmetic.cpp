@@ -901,6 +901,40 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
           return std::make_pair(true, op);
         }
       }
+
+      /* a + -constant = a - constant
+       * a - -constant = a + constant */
+      if (b.isConstant() && b.getType().getBaseType(0u).isIntType()) {
+        Op constant(OpCode::eConstant, b.getType());
+
+        bool isConstantNegative = false;
+        bool isConstantPositive = false;
+
+        for (uint32_t i = 0u; i < b.getOperandCount(); i++) {
+          auto value = getConstantAsSint(b, i);
+
+          isConstantNegative = isConstantNegative || value < 0;
+          isConstantPositive = isConstantPositive || value > 0;
+
+          constant.addOperand(makeScalarOperand(b.getType(), -value));
+        }
+
+        if (isConstantNegative && !isConstantPositive) {
+          auto inverseOp = Op(inverseOpCode, op->getType())
+            .setFlags(op->getFlags())
+            .addOperand(a.getDef())
+            .addOperand(m_builder.add(std::move(constant)));
+
+          m_builder.rewriteOp(op->getDef(), std::move(inverseOp));
+          return std::make_pair(true, op);
+        }
+
+        if (!isConstantNegative && !isConstantPositive) {
+          /* Constant is 0 */
+          auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
+          return std::make_pair(true, m_builder.iter(next));
+        }
+      }
     } break;
 
     case OpCode::eFMul:
