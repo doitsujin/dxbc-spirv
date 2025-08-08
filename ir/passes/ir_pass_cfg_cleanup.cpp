@@ -108,7 +108,14 @@ Builder::iterator CleanupControlFlowPass::handleBranchConditional(Builder::itera
 
   m_builder.rewriteOp(op->getDef(), Op::Branch(branchTarget));
 
-  removeBlock(removeTarget);
+  auto block = findContainingBlock(m_builder, op->getDef());
+  dxbc_spv_assert(block);
+
+  m_builder.rewriteOp(block, Op::Label());
+
+  if (!isBlockReachable(removeTarget))
+    removeBlock(removeTarget);
+
   return ++op;
 }
 
