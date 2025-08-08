@@ -2692,11 +2692,6 @@ public:
       .addOperands(arg, args...);
   }
 
-  template<typename T, typename... Tx>
-  static Op Drain(T arg, Tx... args) {
-    return Op(OpCode::eDrain, Type())
-      .addOperands(arg, args...);
-  }
 
 private:
 
