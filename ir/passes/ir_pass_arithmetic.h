@@ -87,6 +87,8 @@ private:
 
   std::pair<bool, Builder::iterator> propagateAbsSignSelect(Builder::iterator op);
 
+  std::pair<bool, Builder::iterator> propagateAbsSignPhi(Builder::iterator op);
+
   std::pair<bool, Builder::iterator> resolveIdentityArithmeticOp(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> resolveIdentityBoolOp(Builder::iterator op);
