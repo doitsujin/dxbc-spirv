@@ -651,6 +651,43 @@ std::pair<bool, Builder::iterator> ArithmeticPass::propagateAbsSignSelect(Builde
 }
 
 
+std::pair<bool, Builder::iterator> ArithmeticPass::propagateAbsSignPhi(Builder::iterator op) {
+  const auto& first = m_builder.getOpForOperand(*op, 1u);
+
+  if (first.getOpCode() != OpCode::eFAbs && first.getOpCode() != OpCode::eFNeg)
+    return std::make_pair(false, ++op);
+
+  /* Verify that all operands have the same opcodes */
+  auto phi = Op(OpCode::ePhi, op->getType()).setFlags(op->getFlags());
+  bool canPropagate = true;
+
+  forEachPhiOperand(*op, [&] (SsaDef block, SsaDef value) {
+    const auto& valueOp = m_builder.getOp(value);
+
+    if (valueOp.getOpCode() != first.getOpCode())
+      canPropagate = false;
+
+    phi.addOperand(block);
+    phi.addOperand(SsaDef(valueOp.getOperand(0u)));
+  });
+
+  if (!canPropagate)
+    return std::make_pair(false, ++op);
+
+  /* Insert new phi op and put negation or absolute later in the block */
+  auto phiDef = m_builder.addBefore(op->getDef(), std::move(phi));
+  auto ref = phiDef;
+
+  while (m_builder.getOp(ref).getOpCode() == OpCode::ePhi)
+    ref = m_builder.getNext(ref);
+
+  m_builder.rewriteDef(op->getDef(), m_builder.addBefore(ref,
+    Op(first.getOpCode(), first.getType()).setFlags(op->getFlags()).addOperand(phiDef)));
+
+  return std::make_pair(true, m_builder.iter(phiDef));
+}
+
+
 std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(Builder::iterator op) {
   switch (op->getOpCode()) {
     case OpCode::eFAbs:
@@ -1295,6 +1332,9 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityOp(Builder::it
 
     case OpCode::eSelect:
       return resolveIdentitySelect(op);
+
+    case OpCode::ePhi:
+      return propagateAbsSignPhi(op);
 
     default:
       return std::make_pair(false, ++op);
