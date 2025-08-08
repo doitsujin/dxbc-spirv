@@ -634,6 +634,23 @@ std::pair<bool, Builder::iterator> ArithmeticPass::propagateSignBinary(Builder::
 }
 
 
+std::pair<bool, Builder::iterator> ArithmeticPass::propagateAbsSignSelect(Builder::iterator op) {
+  const auto& a = m_builder.getOpForOperand(*op, 1u);
+  const auto& b = m_builder.getOpForOperand(*op, 2u);
+
+  if ((a.getOpCode() != OpCode::eFAbs && a.getOpCode() != OpCode::eFNeg) || b.getOpCode() != a.getOpCode())
+    return std::make_pair(false, ++op);
+
+  auto selectOp = m_builder.addBefore(op->getDef(), Op::Select(op->getType(),
+    SsaDef(op->getOperand(0u)), SsaDef(a.getOperand(0u)), SsaDef(b.getOperand(0u))).setFlags(op->getFlags()));
+
+  m_builder.rewriteOp(op->getDef(), Op(a.getOpCode(), op->getType())
+    .setFlags(op->getFlags()).addOperand(selectOp));
+
+  return std::make_pair(true, m_builder.iter(selectOp));
+}
+
+
 std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(Builder::iterator op) {
   switch (op->getOpCode()) {
     case OpCode::eFAbs:
@@ -1220,7 +1237,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentitySelect(Builder
     return std::make_pair(true, op);
   }
 
-  return std::make_pair(false, ++op);
+  return propagateAbsSignSelect(op);
 }
 
 
