@@ -61,7 +61,7 @@ bool ArithmeticPass::runPass() {
 
 
 void ArithmeticPass::runLowering() {
-  lowerInstructions();
+  lowerInstructionsPreTransform();
 
   /* Some instructions operate on composites but
    * then get scalarized, fix that up immediately. */
@@ -79,7 +79,7 @@ void ArithmeticPass::runLoweringPasses(Builder& builder, const Options& options)
 }
 
 
-void ArithmeticPass::lowerInstructions() {
+void ArithmeticPass::lowerInstructionsPreTransform() {
   auto iter = m_builder.getCode().first;
 
   while (iter != m_builder.end()) {
@@ -91,6 +91,12 @@ void ArithmeticPass::lowerInstructions() {
           continue;
         }
       } break;
+
+      case OpCode::eFClamp:
+      case OpCode::eSClamp:
+      case OpCode::eUClamp: {
+        iter = lowerClamp(iter);
+      } continue;
 
       default:
         break;
@@ -129,6 +135,35 @@ Builder::iterator ArithmeticPass::lowerDot(Builder::iterator op) {
   }
 
   m_builder.rewriteOp(op->getDef(), std::move(result));
+  return ++op;
+}
+
+
+Builder::iterator ArithmeticPass::lowerClamp(Builder::iterator op) {
+  /* Lower clamp to min(max(v, lo), hi) so that transforms can ensure
+   * consistent behaviour. */
+  const auto& v = m_builder.getOpForOperand(*op, 0u);
+  const auto& lo = m_builder.getOpForOperand(*op, 1u);
+  const auto& hi = m_builder.getOpForOperand(*op, 2u);
+
+  auto [minOpCode, maxOpCode] = [op] {
+    switch (op->getOpCode()) {
+      case OpCode::eFClamp: return std::make_pair(OpCode::eFMin, OpCode::eFMax);
+      case OpCode::eSClamp: return std::make_pair(OpCode::eSMin, OpCode::eSMax);
+      case OpCode::eUClamp: return std::make_pair(OpCode::eUMin, OpCode::eUMax);
+      default: break;
+    }
+
+    dxbc_spv_unreachable();
+    return std::make_pair(OpCode::eUnknown, OpCode::eUnknown);
+  } ();
+
+  auto maxOp = Op(maxOpCode, op->getType()).setFlags(op->getFlags()).addOperands(v.getDef(), lo.getDef());
+  auto maxDef = m_builder.addBefore(op->getDef(), std::move(maxOp));
+
+  auto minOp = Op(minOpCode, op->getType()).setFlags(op->getFlags()).addOperands(maxDef, hi.getDef());
+  m_builder.rewriteOp(op->getDef(), std::move(minOp));
+
   return ++op;
 }
 
