@@ -62,6 +62,12 @@ private:
 
   SsaDef extractFromVector(SsaDef vector, uint32_t component);
 
+  std::pair<bool, Builder::iterator> reorderConstantOperandsCompareOp(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> reorderConstantOperandsCommutativeOp(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> reorderConstantOperandsOp(Builder::iterator op);
+
   std::pair<bool, Builder::iterator> constantFoldArithmeticOp(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> constantFoldBoolOp(Builder::iterator op);

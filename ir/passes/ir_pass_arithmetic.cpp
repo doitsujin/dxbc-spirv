@@ -42,6 +42,9 @@ bool ArithmeticPass::runPass() {
     if (!status)
       std::tie(status, next) = constantFoldOp(iter);
 
+    if (!status)
+      std::tie(status, next) = reorderConstantOperandsOp(iter);
+
     if (status) {
       progress = true;
       iter = next;
@@ -145,6 +148,120 @@ SsaDef ArithmeticPass::extractFromVector(SsaDef vector, uint32_t component) {
   return m_builder.addAfter(vector, Op::CompositeExtract(
     vectorOp.getType().getSubType(0u), vector,
     m_builder.makeConstant(component)));
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::reorderConstantOperandsCompareOp(Builder::iterator op) {
+  /* If the op has exactly one constant operand and it is on the left,
+   * flip the operation so that it is on the right. Subsequent passes
+   * will assume that constant operands are always right where applicable. */
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+  const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+  if (!a.isConstant() || b.isConstant())
+    return std::make_pair(false, ++op);
+
+  static const std::array<std::pair<OpCode, OpCode>, 10u> s_opcodePairs = {{
+    { OpCode::eFEq, OpCode::eFEq },
+    { OpCode::eFNe, OpCode::eFNe },
+    { OpCode::eFLt, OpCode::eFGt },
+    { OpCode::eFLe, OpCode::eFGe },
+    { OpCode::eIEq, OpCode::eIEq },
+    { OpCode::eINe, OpCode::eINe },
+    { OpCode::eSLt, OpCode::eSGt },
+    { OpCode::eSLe, OpCode::eSGe },
+    { OpCode::eULt, OpCode::eUGt },
+    { OpCode::eULe, OpCode::eUGe },
+  }};
+
+  auto opCode = [op] {
+    for (const auto& e : s_opcodePairs) {
+      if (op->getOpCode() == e.first)
+        return e.second;
+      if (op->getOpCode() == e.second)
+        return e.first;
+    }
+
+    dxbc_spv_unreachable();
+    return op->getOpCode();
+  } ();
+
+  auto newOp = Op(opCode, op->getType())
+    .setFlags(op->getFlags())
+    .addOperand(b.getDef())
+    .addOperand(a.getDef());
+
+  m_builder.rewriteOp(op->getDef(), std::move(newOp));
+  return std::make_pair(true, op);
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::reorderConstantOperandsCommutativeOp(Builder::iterator op) {
+  /* Only flip the first two operands around, this way we can
+   * handle multiply-add instructions here as well. */
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+  const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+  if (!a.isConstant() || b.isConstant())
+    return std::make_pair(false, ++op);
+
+  auto newOp = *op;
+  newOp.setOperand(0u, b.getDef());
+  newOp.setOperand(1u, a.getDef());
+
+  m_builder.rewriteOp(op->getDef(), std::move(newOp));
+  return std::make_pair(true, op);
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::reorderConstantOperandsOp(Builder::iterator op) {
+  switch (op->getOpCode()) {
+    case OpCode::eFEq:
+    case OpCode::eFNe:
+    case OpCode::eFLt:
+    case OpCode::eFLe:
+    case OpCode::eFGt:
+    case OpCode::eFGe:
+    case OpCode::eIEq:
+    case OpCode::eINe:
+    case OpCode::eSLt:
+    case OpCode::eSLe:
+    case OpCode::eSGt:
+    case OpCode::eSGe:
+    case OpCode::eULt:
+    case OpCode::eULe:
+    case OpCode::eUGt:
+    case OpCode::eUGe:
+      return reorderConstantOperandsCompareOp(op);
+
+    case OpCode::eBAnd:
+    case OpCode::eBOr:
+    case OpCode::eBEq:
+    case OpCode::eBNe:
+    case OpCode::eFAdd:
+    case OpCode::eFMul:
+    case OpCode::eFMulLegacy:
+    case OpCode::eFMad:
+    case OpCode::eFMadLegacy:
+    case OpCode::eFMin:
+    case OpCode::eFMax:
+    case OpCode::eIAnd:
+    case OpCode::eIOr:
+    case OpCode::eIXor:
+    case OpCode::eIAdd:
+    case OpCode::eIAddCarry:
+    case OpCode::eIMul:
+    case OpCode::eSMulExtended:
+    case OpCode::eUMulExtended:
+    case OpCode::eSMin:
+    case OpCode::eSMax:
+    case OpCode::eUMin:
+    case OpCode::eUMax:
+      return reorderConstantOperandsCommutativeOp(op);
+
+    default:
+      return std::make_pair(false, ++op);
+  }
 }
 
 
