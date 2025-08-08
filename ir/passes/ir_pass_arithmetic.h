@@ -56,9 +56,11 @@ private:
   OpFlags m_fp32Flags = 0u;
   OpFlags m_fp64Flags = 0u;
 
-  void lowerInstructions();
+  void lowerInstructionsPreTransform();
 
   Builder::iterator lowerDot(Builder::iterator op);
+
+  Builder::iterator lowerClamp(Builder::iterator op);
 
   SsaDef extractFromVector(SsaDef vector, uint32_t component);
 
