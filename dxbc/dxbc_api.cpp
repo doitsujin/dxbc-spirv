@@ -63,7 +63,7 @@ void legalizeIr(ir::Builder& builder, const CompileOptions& options) {
   ir::LowerConsumePass::runLowerConsumePass(builder);
 
   /* Lower instructions that the target backend does not natively understand */
-  ir::ArithmeticPass::runLoweringPasses(builder, options.arithmeticOptions);
+  ir::ArithmeticPass::runEarlyLoweringPasses(builder, options.arithmeticOptions);
 
   /* Run some basic code transforms */
   while (true) {
@@ -78,6 +78,8 @@ void legalizeIr(ir::Builder& builder, const CompileOptions& options) {
 
     ir::RemoveUnusedPass::runPass(builder);
   }
+
+  ir::ArithmeticPass::runLateLoweringPasses(builder, options.arithmeticOptions);
 }
 
 

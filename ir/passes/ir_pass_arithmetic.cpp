@@ -2,6 +2,7 @@
 #include <cmath>
 
 #include "ir_pass_arithmetic.h"
+#include "ir_pass_remove_unused.h"
 #include "ir_pass_scalarize.h"
 
 #include "../ir_utils.h"
@@ -60,7 +61,7 @@ bool ArithmeticPass::runPass() {
 }
 
 
-void ArithmeticPass::runLowering() {
+void ArithmeticPass::runEarlyLowering() {
   lowerInstructionsPreTransform();
 
   /* Some instructions operate on composites but
@@ -69,13 +70,25 @@ void ArithmeticPass::runLowering() {
 }
 
 
+void ArithmeticPass::runLateLowering() {
+  lowerInstructionsPostTransform();
+
+  RemoveUnusedPass::runPass(m_builder);
+}
+
+
 bool ArithmeticPass::runPass(Builder& builder, const Options& options) {
   return ArithmeticPass(builder, options).runPass();
 }
 
 
-void ArithmeticPass::runLoweringPasses(Builder& builder, const Options& options) {
-  ArithmeticPass(builder, options).runLowering();
+void ArithmeticPass::runEarlyLoweringPasses(Builder& builder, const Options& options) {
+  ArithmeticPass(builder, options).runEarlyLowering();
+}
+
+
+void ArithmeticPass::runLateLoweringPasses(Builder& builder, const Options& options) {
+  ArithmeticPass(builder, options).runLateLowering();
 }
 
 
@@ -96,6 +109,34 @@ void ArithmeticPass::lowerInstructionsPreTransform() {
       case OpCode::eSClamp:
       case OpCode::eUClamp: {
         iter = lowerClamp(iter);
+      } continue;
+
+      default:
+        break;
+    }
+
+    ++iter;
+  }
+}
+
+
+void ArithmeticPass::lowerInstructionsPostTransform() {
+  auto iter = m_builder.getCode().first;
+
+  while (iter != m_builder.end()) {
+    switch (iter->getOpCode()) {
+      case OpCode::eFAdd:
+      case OpCode::eFSub: {
+        if (m_options.fuseMad) {
+          iter = tryFuseMad(iter);
+          continue;
+        }
+      } break;
+
+      case OpCode::eFMin:
+      case OpCode::eSMin:
+      case OpCode::eUMin: {
+        iter = tryFuseClamp(iter);
       } continue;
 
       default:
@@ -186,6 +227,91 @@ SsaDef ArithmeticPass::extractFromVector(SsaDef vector, uint32_t component) {
   return m_builder.addAfter(vector, Op::CompositeExtract(
     vectorOp.getType().getSubType(0u), vector,
     m_builder.makeConstant(component)));
+}
+
+
+Builder::iterator ArithmeticPass::tryFuseClamp(Builder::iterator op) {
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+  const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+  auto [maxOpCode, clampOpCode] = [op] {
+    switch (op->getOpCode()) {
+      case OpCode::eFMin: return std::make_pair(OpCode::eFMax, OpCode::eFClamp);
+      case OpCode::eSMin: return std::make_pair(OpCode::eSMax, OpCode::eSClamp);
+      case OpCode::eUMin: return std::make_pair(OpCode::eUMax, OpCode::eUClamp);
+      default: break;
+    }
+
+    dxbc_spv_unreachable();
+    return std::make_pair(OpCode::eUnknown, OpCode::eUnknown);
+  } ();
+
+  bool aIsMax = a.getOpCode() == maxOpCode;
+  bool bIsMax = b.getOpCode() == maxOpCode;
+
+  if (aIsMax == bIsMax)
+    return ++op;
+
+  const auto& v = m_builder.getOpForOperand(aIsMax ? a : b, 0u);
+  const auto& lo = m_builder.getOpForOperand(aIsMax ? a : b, 1u);
+  const auto& hi = aIsMax ? b : a;
+
+  auto clampOp = Op(clampOpCode, op->getType())
+    .setFlags(op->getFlags() | (aIsMax ? a : b).getFlags())
+    .addOperands(v.getDef(), lo.getDef(), hi.getDef());
+
+  m_builder.rewriteOp(op->getDef(), std::move(clampOp));
+  return ++op;
+}
+
+
+Builder::iterator ArithmeticPass::tryFuseMad(Builder::iterator op) {
+  /* Only fuse if neither the op nor any of the operands involved are
+   * precise, Also, to maintain invariance, only fuse if exactly one
+   * operand is FMul. */
+  if (getFpFlags(*op) & OpFlag::ePrecise)
+    return ++op;
+
+  uint32_t fmulOperand = -1u;
+
+  for (uint32_t i = 0u; i < 2u; i++) {
+    const auto& operand = m_builder.getOpForOperand(*op, i);
+
+    if (operand.getOpCode() == OpCode::eFMul) {
+      if (std::exchange(fmulOperand, i) != -1u)
+        return ++op;
+
+      if (getFpFlags(operand) & OpFlag::ePrecise)
+        return ++op;
+    }
+  }
+
+  if (fmulOperand == -1u)
+    return ++op;
+
+  /* c + a * b -> FMad(a, b, c)
+     a * b + c -> FMad(a, b, c) */
+  auto a = SsaDef(m_builder.getOpForOperand(*op, fmulOperand).getOperand(0u));
+  auto b = SsaDef(m_builder.getOpForOperand(*op, fmulOperand).getOperand(1u));
+  auto c = SsaDef(op->getOperand(1u - fmulOperand));
+
+  if (op->getOpCode() == OpCode::eFSub) {
+    if (!fmulOperand) {
+      /* a * b - c -> a * b + (-c) */
+      c = m_builder.addBefore(op->getDef(), Op::FNeg(m_builder.getOp(c).getType(), c));
+    } else {
+      /* c - a * b -> -a * b + c. Try to eliminate any existing negations. */
+      if (m_builder.getOp(a).getOpCode() == OpCode::eFNeg)
+        a = SsaDef(m_builder.getOp(a).getOperand(0u));
+      else if (m_builder.getOp(b).getOpCode() == OpCode::eFNeg)
+        b = SsaDef(m_builder.getOp(b).getOperand(0u));
+      else
+        a = m_builder.addBefore(op->getDef(), Op::FNeg(m_builder.getOp(a).getType(), a));
+    }
+  }
+
+  m_builder.rewriteOp(op->getDef(), Op::FMad(op->getType(), a, b, c).setFlags(op->getFlags()));
+  return ++op;
 }
 
 
