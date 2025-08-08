@@ -38,13 +38,15 @@ public:
   bool runPass();
 
   /** Runs one-time lowering passes and one-time transforms. */
-  void runLowering();
+  void runEarlyLowering();
+  void runLateLowering();
 
   /** Initializes and runs optimization pass on the given builder. */
   static bool runPass(Builder& builder, const Options& options);
 
   /** Initializes and runs lowering passes on the given builder. */
-  static void runLoweringPasses(Builder& builder, const Options& options);
+  static void runEarlyLoweringPasses(Builder& builder, const Options& options);
+  static void runLateLoweringPasses(Builder& builder, const Options& options);
 
 private:
 
@@ -57,12 +59,17 @@ private:
   OpFlags m_fp64Flags = 0u;
 
   void lowerInstructionsPreTransform();
+  void lowerInstructionsPostTransform();
 
   Builder::iterator lowerDot(Builder::iterator op);
 
   Builder::iterator lowerClamp(Builder::iterator op);
 
   SsaDef extractFromVector(SsaDef vector, uint32_t component);
+
+  Builder::iterator tryFuseClamp(Builder::iterator op);
+
+  Builder::iterator tryFuseMad(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> propagateAbsUnary(Builder::iterator op);
 
