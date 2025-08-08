@@ -15,22 +15,30 @@ CleanupControlFlowPass::~CleanupControlFlowPass() {
 }
 
 
-void CleanupControlFlowPass::run() {
+bool CleanupControlFlowPass::run() {
   auto iter = m_builder.getCode().first;
+
+  bool progress = false;
 
   while (iter != m_builder.end()) {
     switch (iter->getOpCode()) {
-      case OpCode::eFunction:
-        iter = handleFunction(iter);
-        break;
+      case OpCode::eFunction: {
+        auto [status, next] = handleFunction(iter);
+        progress |= status;
+        iter = next;
+      } break;
 
-      case OpCode::eLabel:
-        iter = handleLabel(iter);
-        break;
+      case OpCode::eLabel: {
+        auto [status, next] = handleLabel(iter);
+        progress |= status;
+        iter = next;
+      } break;
 
-      case OpCode::eBranchConditional:
-        iter = handleBranchConditional(iter);
-        break;
+      case OpCode::eBranchConditional: {
+        auto [status, next] = handleBranchConditional(iter);
+        progress |= status;
+        iter = next;
+      } break;
 
       default:
         ++iter;
@@ -40,10 +48,11 @@ void CleanupControlFlowPass::run() {
   /* Remove any blocks that have been additionally marked as unreachable
    * during processing. This may also cause more functions to go unused,
    * so do this first. */
-  removeUnusedBlocks();
+  progress |= removeUnusedBlocks();
 
   /* Remove any functions that may have been removed */
-  removeUnusedFunctions();
+  progress |= removeUnusedFunctions();
+  return progress;
 }
 
 
@@ -70,33 +79,32 @@ void CleanupControlFlowPass::resolveConditionalBranch(SsaDef branch) {
 }
 
 
-void CleanupControlFlowPass::runPass(Builder& builder) {
-  CleanupControlFlowPass pass(builder);
-  pass.run();
+bool CleanupControlFlowPass::runPass(Builder& builder) {
+  return CleanupControlFlowPass(builder).run();
 }
 
 
-Builder::iterator CleanupControlFlowPass::handleFunction(Builder::iterator op) {
+std::pair<bool, Builder::iterator> CleanupControlFlowPass::handleFunction(Builder::iterator op) {
   if (isFunctionUsed(op->getDef()))
-    return ++op;
+    return std::make_pair(false, ++op);
 
-  return m_builder.iter(removeFunction(op->getDef()));
+  return std::make_pair(true, m_builder.iter(removeFunction(op->getDef())));
 }
 
 
-Builder::iterator CleanupControlFlowPass::handleLabel(Builder::iterator op) {
+std::pair<bool, Builder::iterator> CleanupControlFlowPass::handleLabel(Builder::iterator op) {
   if (isBlockUsed(op->getDef()))
-    return ++op;
+    return std::make_pair(false, ++op);
 
-  return m_builder.iter(removeBlock(op->getDef()));
+  return std::make_pair(true, m_builder.iter(removeBlock(op->getDef())));
 }
 
 
-Builder::iterator CleanupControlFlowPass::handleBranchConditional(Builder::iterator op) {
+std::pair<bool, Builder::iterator> CleanupControlFlowPass::handleBranchConditional(Builder::iterator op) {
   const auto& condOp = m_builder.getOp(SsaDef(op->getOperand(0u)));
 
   if (!condOp.isConstant())
-    return ++op;
+    return std::make_pair(false, ++op);
 
   bool cond = bool(condOp.getOperand(0u));
 
@@ -116,18 +124,24 @@ Builder::iterator CleanupControlFlowPass::handleBranchConditional(Builder::itera
   if (!isBlockReachable(removeTarget))
     removeBlock(removeTarget);
 
-  return ++op;
+  return std::make_pair(true, ++op);
 }
 
 
-void CleanupControlFlowPass::removeUnusedFunctions() {
+bool CleanupControlFlowPass::removeUnusedFunctions() {
+  bool progress = false;
+
   while (!m_unusedFunctions.empty()) {
     auto function = m_unusedFunctions.back();
     m_unusedFunctions.pop_back();
 
-    if (m_builder.getOp(function))
+    if (m_builder.getOp(function)) {
       removeFunction(function);
+      progress = true;
+    }
   }
+
+  return progress;
 }
 
 
@@ -185,14 +199,20 @@ SsaDef CleanupControlFlowPass::removeFunctionCall(SsaDef call) {
 }
 
 
-void CleanupControlFlowPass::removeUnusedBlocks() {
+bool CleanupControlFlowPass::removeUnusedBlocks() {
+  bool progress = false;
+
   while (!m_unusedBlocks.empty()) {
     auto block = m_unusedBlocks.back();
     m_unusedBlocks.pop_back();
 
-    if (m_builder.getOp(block))
+    if (m_builder.getOp(block)) {
       removeBlock(block);
+      progress = true;
+    }
   }
+
+  return progress;
 }
 
 
