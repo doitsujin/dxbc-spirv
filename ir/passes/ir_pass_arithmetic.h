@@ -62,6 +62,24 @@ private:
 
   SsaDef extractFromVector(SsaDef vector, uint32_t component);
 
+  std::pair<bool, Builder::iterator> propagateAbsUnary(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> propagateAbsBinary(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> propagateSignUnary(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> propagateSignBinary(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> resolveIdentityArithmeticOp(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> resolveIdentityBoolOp(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> resolveIdentityCompareOp(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> resolveIdentitySelect(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> resolveIdentityOp(Builder::iterator op);
+
   std::pair<bool, Builder::iterator> reorderConstantOperandsCompareOp(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> reorderConstantOperandsCommutativeOp(Builder::iterator op);
@@ -85,6 +103,8 @@ private:
   int64_t getConstantAsSint(const Op& op, uint32_t index) const;
 
   double getConstantAsFloat(const Op& op, uint32_t index) const;
+
+  OpFlags getFpFlags(const Op& op) const;
 
   template<typename T>
   static Operand makeScalarOperand(const Type& type, T value);

@@ -45,6 +45,9 @@ bool ArithmeticPass::runPass() {
     if (!status)
       std::tie(status, next) = reorderConstantOperandsOp(iter);
 
+    if (!status)
+      std::tie(status, next) = resolveIdentityOp(iter);
+
     if (status) {
       progress = true;
       iter = next;
@@ -62,7 +65,7 @@ void ArithmeticPass::runLowering() {
 
   /* Some instructions operate on composites but
    * then get scalarized, fix that up immediately. */
-  ir::ScalarizePass::runResolveRedundantCompositesPass(m_builder);
+  ScalarizePass::runResolveRedundantCompositesPass(m_builder);
 }
 
 
@@ -148,6 +151,772 @@ SsaDef ArithmeticPass::extractFromVector(SsaDef vector, uint32_t component) {
   return m_builder.addAfter(vector, Op::CompositeExtract(
     vectorOp.getType().getSubType(0u), vector,
     m_builder.makeConstant(component)));
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::propagateAbsUnary(Builder::iterator op) {
+  dxbc_spv_assert(op->getOperandCount() == 1u);
+
+  /* op(|a|) -> |op(a)| */
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+  if (a.getOpCode() == OpCode::eFAbs) {
+    auto newOp = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType())
+      .setFlags(op->getFlags())
+      .addOperand(SsaDef(a.getOperand(0u))));
+
+    m_builder.rewriteOp(op->getDef(), Op::FAbs(op->getType(), newOp).setFlags(op->getFlags()));
+    return std::make_pair(true, m_builder.iter(newOp));
+  }
+
+  return std::make_pair(false, ++op);
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::propagateAbsBinary(Builder::iterator op) {
+  dxbc_spv_assert(op->getOperandCount() == 2u);
+
+  /* op(|a|, |b|) -> |op(a, b)| */
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+  const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+  if (a.getOpCode() == OpCode::eFAbs && b.getOpCode() == OpCode::eFAbs) {
+    auto newOp = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType())
+      .setFlags(op->getFlags())
+      .addOperand(SsaDef(a.getOperand(0u)))
+      .addOperand(SsaDef(b.getOperand(0u))));
+
+    m_builder.rewriteOp(op->getDef(), Op::FAbs(op->getType(), newOp).setFlags(op->getFlags()));
+    return std::make_pair(true, m_builder.iter(newOp));
+  }
+
+  return std::make_pair(false, ++op);
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::propagateSignUnary(Builder::iterator op) {
+  dxbc_spv_assert(op->getOperandCount() == 1u);
+
+  /* op(-a) -> -op(a) */
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+  if (a.getOpCode() == OpCode::eFNeg) {
+    auto newOp = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType())
+      .setFlags(op->getFlags())
+      .addOperand(SsaDef(a.getOperand(0u))));
+
+    m_builder.rewriteOp(op->getDef(), Op(a.getOpCode(), op->getType())
+      .setFlags(op->getFlags())
+      .addOperand(newOp));
+
+    return std::make_pair(true, m_builder.iter(newOp));
+  }
+
+  return std::make_pair(false, ++op);
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::propagateSignBinary(Builder::iterator op) {
+  dxbc_spv_assert(op->getOperandCount() == 2u);
+
+  /* Handles instructions that follow multiplication semantics */
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+  const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+  bool aIsNeg = a.getOpCode() == OpCode::eFNeg;
+  bool bIsNeg = b.getOpCode() == OpCode::eFNeg;
+
+  /* op(-a, constant) -> op(a, -constant) */
+  if (aIsNeg && b.isConstant()) {
+    auto constantOp = b;
+    auto signBit = uint64_t(1u) << (8u * byteSize(b.getType().getBaseType(0u).getBaseType()) - 1u);
+
+    for (uint32_t i = 0u; i < constantOp.getOperandCount(); i++) {
+      auto literal = uint64_t(constantOp.getOperand(i));
+      constantOp.setOperand(i, Operand(literal ^ signBit));
+    }
+
+    m_builder.rewriteOp(op->getDef(), Op(op->getOpCode(), op->getType())
+      .setFlags(op->getFlags())
+      .addOperand(SsaDef(a.getOperand(0u)))
+      .addOperand(m_builder.add(std::move(constantOp))));
+
+    return std::make_pair(true, op);
+  }
+
+  /* op(-a, -b) -> op(a, b) */
+  if (aIsNeg && bIsNeg) {
+    m_builder.rewriteOp(op->getDef(), Op(op->getOpCode(), op->getType())
+      .setFlags(op->getFlags())
+      .addOperand(SsaDef(a.getOperand(0u)))
+      .addOperand(SsaDef(b.getOperand(0u))));
+    return std::make_pair(true, op);
+  }
+
+  /* op(-a, b) -> -op(a, b)
+   * op(a, -b) -> -op(a, b) */
+  if (aIsNeg || bIsNeg) {
+    auto newOp = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType())
+      .setFlags(op->getFlags())
+      .addOperand(aIsNeg ? SsaDef(a.getOperand(0u)) : a.getDef())
+      .addOperand(bIsNeg ? SsaDef(b.getOperand(0u)) : b.getDef()));
+
+    m_builder.rewriteOp(op->getDef(), Op::FNeg(op->getType(), newOp).setFlags(op->getFlags()));
+    return std::make_pair(true, m_builder.iter(newOp));
+  }
+
+  return std::make_pair(false, ++op);
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(Builder::iterator op) {
+  switch (op->getOpCode()) {
+    case OpCode::eFAbs:
+    case OpCode::eIAbs: {
+      /* |(|a|)| -> |a|
+       * |-a| -> |a| */
+      auto negOp = op->getOpCode() == OpCode::eFAbs ? OpCode::eFNeg : OpCode::eINeg;
+
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+      if (a.getOpCode() == op->getOpCode()) {
+        auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
+        return std::make_pair(true, m_builder.iter(next));
+      }
+
+      if (a.getOpCode() == negOp) {
+        m_builder.rewriteOp(op->getDef(),
+          Op(op->getOpCode(), op->getType()).setFlags(op->getFlags()).addOperand(SsaDef(a.getOperand(0u))));
+        return std::make_pair(true, op);
+      }
+    } break;
+
+    case OpCode::eFNeg:
+    case OpCode::eINeg: {
+      /* -(-a) -> a */
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+      if (a.getOpCode() == op->getOpCode()) {
+        auto next = m_builder.rewriteDef(op->getDef(), SsaDef(a.getOperand(0u)));
+        return std::make_pair(true, m_builder.iter(next));
+      }
+
+      /* -(a - b) = b - a */
+      if (a.getOpCode() == OpCode::eFSub || a.getOpCode() == OpCode::eISub) {
+        m_builder.rewriteOp(op->getDef(), Op(a.getOpCode(), op->getType())
+          .setFlags(op->getFlags())
+          .addOperand(SsaDef(a.getOperand(1u)))
+          .addOperand(SsaDef(a.getOperand(0u))));
+
+        return std::make_pair(true, op);
+      }
+    } break;
+
+    case OpCode::eFRcp: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+      if (!(getFpFlags(*op) & OpFlag::ePrecise) &&
+          !(getFpFlags(a) & OpFlag::ePrecise)) {
+        /* rcp(rcp(a)) -> a. This pattern commonly occurs with
+         * SV_Position.w reads in fragment shaders. */
+        if (a.getOpCode() == OpCode::eFRcp) {
+          auto next = m_builder.rewriteDef(op->getDef(), SsaDef(a.getOperand(0u)));
+          return std::make_pair(true, m_builder.iter(next));
+        }
+      }
+
+      auto result = propagateSignUnary(op);
+
+      if (!result.first)
+        result = propagateAbsUnary(op);
+
+      return result;
+    }
+
+    case OpCode::eFDiv: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+      const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+      /* 1.0 / a -> rcp(a) */
+      if (!(getFpFlags(*op) & OpFlag::ePrecise)) {
+        if (a.isConstant()) {
+          bool isPosRcp = true;
+          bool isNegRcp = true;
+
+          for (uint32_t i = 0u; i < a.getOperandCount(); i++) {
+            isPosRcp = isPosRcp && getConstantAsFloat(a, i) ==  1.0;
+            isNegRcp = isNegRcp && getConstantAsFloat(a, i) == -1.0;
+          }
+
+          if (isPosRcp) {
+            m_builder.rewriteOp(op->getDef(),
+              Op::FRcp(op->getType(), b.getDef()).setFlags(op->getFlags()));
+            return std::make_pair(true, op);
+          } else if (isNegRcp) {
+            auto rcpDef = m_builder.addBefore(op->getDef(),
+              Op::FRcp(op->getType(), b.getDef()).setFlags(op->getFlags()));
+            m_builder.rewriteOp(op->getDef(), Op::FNeg(op->getType(), rcpDef));
+            return std::make_pair(true, op);
+          }
+        }
+      }
+    } return propagateSignBinary(op);
+
+    case OpCode::eFMin:
+    case OpCode::eSMin:
+    case OpCode::eUMin:
+    case OpCode::eFMax:
+    case OpCode::eSMax:
+    case OpCode::eUMax: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+      const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+      bool isUInt = op->getOpCode() == OpCode::eUMin || op->getOpCode() == OpCode::eUMax;
+      bool isFloat = op->getOpCode() == OpCode::eFMin || op->getOpCode() == OpCode::eFMax;
+
+      auto negOp = isFloat ? OpCode::eFNeg : OpCode::eINeg;
+      auto absOp = isFloat ? OpCode::eFAbs : OpCode::eIAbs;
+
+      /* min(a, a) -> a
+       * max(a, a) -> a */
+      if (a.getDef() == b.getDef()) {
+        auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
+        return std::make_pair(true, m_builder.iter(next));
+      }
+
+      /* min(-a, -b) -> -max(a, b)
+       * max(-a, -b) -> -min(a, b) */
+      if (a.getOpCode() == negOp && b.getOpCode() == negOp && !isUInt) {
+        auto inverseOpCode = [op] {
+          switch (op->getOpCode()) {
+            case OpCode::eFMin: return OpCode::eFMax;
+            case OpCode::eFMax: return OpCode::eFMin;
+            case OpCode::eSMin: return OpCode::eSMax;
+            case OpCode::eSMax: return OpCode::eSMin;
+            default: break;
+          }
+
+          dxbc_spv_unreachable();
+          return OpCode::eUnknown;
+        } ();
+
+        auto inverseOp = m_builder.addBefore(op->getDef(), Op(inverseOpCode, op->getType())
+          .setFlags(op->getFlags())
+          .addOperand(ir::SsaDef(a.getOperand(0u)))
+          .addOperand(ir::SsaDef(b.getOperand(0u))));
+
+        m_builder.rewriteOp(op->getDef(),
+          Op(negOp, op->getType()).setFlags(op->getFlags()).addOperand(inverseOp));
+
+        return std::make_pair(true, m_builder.iter(inverseOp));
+      }
+
+      /* max(-a, a) -> |a|
+       * min(-a, a) -> -|a| */
+      if ((a.getOpCode() == negOp || b.getOpCode() == negOp) && !isUInt) {
+        const auto& aOp = a.getOpCode() == negOp ? m_builder.getOpForOperand(a, 0u) : a;
+        const auto& bOp = b.getOpCode() == negOp ? m_builder.getOpForOperand(b, 0u) : b;
+
+        if (aOp.getDef() == bOp.getDef()) {
+          auto newOp = Op(absOp, op->getType()).setFlags(op->getFlags()).addOperand(aOp.getDef());
+
+          if (op->getOpCode() == OpCode::eFMax || op->getOpCode() == OpCode::eSMax) {
+            m_builder.rewriteOp(op->getDef(), std::move(newOp));
+            return std::make_pair(true, op);
+          } else {
+            auto newDef = m_builder.addBefore(op->getDef(), std::move(newOp));
+
+            m_builder.rewriteOp(op->getDef(),
+              Op(negOp, op->getType()).setFlags(op->getFlags()).addOperand(newDef));
+
+            return std::make_pair(true, m_builder.iter(newDef));
+          }
+        }
+      }
+    } break;
+
+    case OpCode::eFAdd:
+    case OpCode::eIAdd:
+    case OpCode::eFSub:
+    case OpCode::eISub: {
+      bool isInt = op->getOpCode() == OpCode::eIAdd || op->getOpCode() == OpCode::eISub;
+      bool isSub = op->getOpCode() == OpCode::eISub || op->getOpCode() == OpCode::eFSub;
+
+      auto negOpCode = isInt ? OpCode::eINeg : OpCode::eFNeg;
+
+      auto inverseOpCode = isInt
+        ? (op->getOpCode() == OpCode::eIAdd ? OpCode::eISub : OpCode::eIAdd)
+        : (op->getOpCode() == OpCode::eFAdd ? OpCode::eFSub : OpCode::eFAdd);
+
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+      const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+      /* a + (-b) -> a - b
+       * a - (-b) -> a + b */
+      if (b.getOpCode() == negOpCode) {
+        m_builder.rewriteOp(op->getDef(), Op(inverseOpCode, op->getType())
+          .setFlags(op->getFlags())
+          .addOperand(a.getDef())
+          .addOperand(SsaDef(b.getOperand(0u))));
+        return std::make_pair(true, op);
+      }
+
+      /* -a + b -> b - a
+       * -a - b -> -(b + a) */
+      if (a.getOpCode() == negOpCode) {
+        auto inverseOp = Op(inverseOpCode, op->getType())
+          .setFlags(op->getFlags())
+          .addOperand(b.getDef())
+          .addOperand(SsaDef(a.getOperand(0u)));
+
+        if (isSub) {
+          auto inverseDef = m_builder.addBefore(op->getDef(), std::move(inverseOp));
+
+          m_builder.rewriteOp(op->getDef(), Op(negOpCode, op->getType())
+            .setFlags(op->getFlags())
+            .addOperand(inverseDef));
+
+          return std::make_pair(true, m_builder.iter(inverseDef));
+        } else {
+          m_builder.rewriteOp(op->getDef(), std::move(inverseOp));
+          return std::make_pair(true, op);
+        }
+      }
+    } break;
+
+    case OpCode::eFMul:
+    case OpCode::eFMulLegacy: {
+      auto result = propagateSignBinary(op);
+
+      if (!result.first)
+        result = propagateAbsBinary(op);
+
+      return result;
+    }
+
+    case OpCode::eFRound: {
+      auto roundMode = RoundMode(op->getOperand(op->getFirstLiteralOperandIndex()));
+
+      /* rtz(-a) = -rtz(a)
+       * rte(-a) = -rte(a)
+       * ceil(-a) = floor(a)
+       * floor(-a) = ceil(a) */
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+      if (a.getOpCode() == OpCode::eFNeg) {
+        if (roundMode == RoundMode::ePositiveInf)
+          roundMode = RoundMode::eNegativeInf;
+        else if (roundMode == RoundMode::eNegativeInf)
+          roundMode = RoundMode::ePositiveInf;
+
+        auto newOp = m_builder.addBefore(op->getDef(),
+          Op::FRound(op->getType(), SsaDef(a.getOperand(0u)), roundMode).setFlags(op->getFlags()));
+
+        m_builder.rewriteOp(op->getDef(), Op::FNeg(op->getType(), newOp).setFlags(op->getFlags()));
+        return std::make_pair(true, m_builder.iter(newOp));
+      }
+
+      /* rtz(|a|) -> |rtz(a)|
+       * rte(|a|) -> |rte(a)| */
+      if (a.getOpCode() == OpCode::eFAbs && (roundMode == RoundMode::eZero || roundMode == RoundMode::eNearestEven)) {
+        auto newOp = m_builder.addBefore(op->getDef(),
+          Op::FRound(op->getType(), SsaDef(a.getOperand(0u)), roundMode).setFlags(op->getFlags()));
+
+        m_builder.rewriteOp(op->getDef(), Op::FAbs(op->getType(), newOp).setFlags(op->getFlags()));
+        return std::make_pair(true, m_builder.iter(newOp));
+      }
+    } break;
+
+    case OpCode::eFSin:
+      return propagateSignUnary(op);
+
+    case OpCode::eFCos: {
+      /* cos(-a) -> cos(a)
+       * cos(|a|) -> cos(a) */
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+      if (a.getOpCode() == OpCode::eFNeg || a.getOpCode() == OpCode::eFAbs) {
+        m_builder.rewriteOp(op->getDef(), Op::FCos(op->getType(), SsaDef(a.getOperand(0u))).setFlags(op->getFlags()));
+        return std::make_pair(true, op);
+      }
+    } break;
+
+    case OpCode::eINot: {
+      /* ~(~a) -> a */
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+      if (a.getOpCode() == OpCode::eINot) {
+        auto next = m_builder.rewriteDef(op->getDef(), SsaDef(a.getOperand(0u)));
+        return std::make_pair(true, m_builder.iter(next));
+      }
+
+    } break;
+
+    default:
+      break;
+  }
+
+  return std::make_pair(false, ++op);
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityBoolOp(Builder::iterator op) {
+  if (!op->getType().isScalarType())
+    return std::make_pair(false, ++op);
+
+  switch (op->getOpCode()) {
+    case OpCode::eBAnd: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+      const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+      /* a && a -> a */
+      if (a.getDef() == b.getDef()) {
+        auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
+        return std::make_pair(true, m_builder.iter(next));
+      }
+
+      /* a && true -> a; a && false -> false */
+      if (b.isConstant()) {
+        auto value = bool(b.getOperand(0u));
+
+        auto next = m_builder.rewriteDef(op->getDef(),
+          value ? a.getDef() : m_builder.makeConstant(false));
+        return std::make_pair(true, m_builder.iter(next));
+      }
+
+      /* !a && !b -> !(a || b) */
+      if (a.getOpCode() == OpCode::eBNot && b.getOpCode() == OpCode::eBNot) {
+        m_builder.rewriteOp(op->getDef(), Op::BNot(op->getType(),
+          m_builder.addBefore(op->getDef(), Op::BOr(op->getType(),
+            SsaDef(a.getOperand(0u)), SsaDef(b.getOperand(0u))))));
+        return std::make_pair(true, op);
+      }
+    } break;
+
+    case OpCode::eBOr: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+      const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+      /* a || a -> a */
+      if (a.getDef() == b.getDef()) {
+        auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
+        return std::make_pair(true, m_builder.iter(next));
+      }
+
+      /* a || true -> true; a || false -> a */
+      if (b.isConstant()) {
+        auto value = bool(b.getOperand(0u));
+
+        auto next = m_builder.rewriteDef(op->getDef(),
+          value ? m_builder.makeConstant(true) : a.getDef());
+        return std::make_pair(true, m_builder.iter(next));
+      }
+
+      /* !a || !b -> !(a && b) */
+      if (a.getOpCode() == OpCode::eBNot && b.getOpCode() == OpCode::eBNot) {
+        m_builder.rewriteOp(op->getDef(), Op::BNot(op->getType(),
+          m_builder.addBefore(op->getDef(), Op::BAnd(op->getType(),
+            SsaDef(a.getOperand(0u)), SsaDef(b.getOperand(0u))))));
+        return std::make_pair(true, op);
+      }
+    } break;
+
+    case OpCode::eBEq: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+      const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+      /* a == a -> true */
+      if (a.getDef() == b.getDef()) {
+        auto next = m_builder.rewriteDef(op->getDef(), m_builder.makeConstant(true));
+        return std::make_pair(true, m_builder.iter(next));
+      }
+
+      /* a == true -> a; a == false => !a */
+      if (b.isConstant()) {
+        auto value = bool(b.getOperand(0u));
+
+        if (value) {
+          auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
+          return std::make_pair(true, m_builder.iter(next));
+        } else {
+          m_builder.rewriteOp(op->getDef(), Op::BNot(op->getType(), a.getDef()));
+          return std::make_pair(true, op);
+        }
+      }
+
+      /* !a == b -> a != b */
+      if (a.getOpCode() == OpCode::eBNot) {
+        m_builder.rewriteOp(op->getDef(), Op::BNe(ScalarType::eBool,
+          SsaDef(a.getOperand(0u)), b.getDef()));
+        return std::make_pair(true, op);
+      }
+
+      /* a == !b -> a != b */
+      if (b.getOpCode() == OpCode::eBNot) {
+        m_builder.rewriteOp(op->getDef(), Op::BNe(ScalarType::eBool,
+          a.getDef(), SsaDef(b.getOperand(0u))));
+        return std::make_pair(true, op);
+      }
+    } break;
+
+    case OpCode::eBNe: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+      const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+      /* a != a -> false */
+      if (a.getDef() == b.getDef()) {
+        auto next = m_builder.rewriteDef(op->getDef(), m_builder.makeConstant(false));
+        return std::make_pair(true, m_builder.iter(next));
+      }
+
+      /* a != true -> !a; a != false => a */
+      if (b.isConstant()) {
+        auto value = bool(b.getOperand(0u));
+
+        if (!value) {
+          auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
+          return std::make_pair(true, m_builder.iter(next));
+        } else {
+          m_builder.rewriteOp(op->getDef(), Op::BNot(op->getType(), a.getDef()));
+          return std::make_pair(true, op);
+        }
+      }
+
+      /* !a != b -> a == b */
+      if (a.getOpCode() == OpCode::eBNot) {
+        m_builder.rewriteOp(op->getDef(), Op::BEq(ScalarType::eBool,
+          SsaDef(a.getOperand(0u)), b.getDef()));
+        return std::make_pair(true, op);
+      }
+
+      /* a != !b -> a == b */
+      if (b.getOpCode() == OpCode::eBNot) {
+        m_builder.rewriteOp(op->getDef(), Op::BEq(ScalarType::eBool,
+          a.getDef(), SsaDef(b.getOperand(0u))));
+        return std::make_pair(true, op);
+      }
+    } break;
+
+    case OpCode::eBNot: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+      /* !!a -> a */
+      if (a.getOpCode() == OpCode::eBNot) {
+        auto next = m_builder.rewriteDef(op->getDef(), SsaDef(a.getOperand(0u)));
+        return std::make_pair(true, m_builder.iter(next));
+      }
+
+      /* Flip comparison operators, except for floating point ones where
+       * the operands can be NaN since ordering actually matters. */
+      if (!isOnlyUse(m_builder, a.getDef(), op->getDef()))
+        return std::make_pair(false, ++op);
+
+      static const std::array<std::pair<OpCode, OpCode>, 9u> s_opcodePairs = {{
+        { OpCode::eBEq, OpCode::eBNe },
+        { OpCode::eFEq, OpCode::eFNe },
+        { OpCode::eFGt, OpCode::eFLe },
+        { OpCode::eFGe, OpCode::eFLt },
+        { OpCode::eIEq, OpCode::eINe },
+        { OpCode::eSGt, OpCode::eSLe },
+        { OpCode::eSGe, OpCode::eSLt },
+        { OpCode::eUGt, OpCode::eULe },
+        { OpCode::eUGe, OpCode::eULt },
+      }};
+
+      auto opCode = [&a] {
+        for (const auto& e : s_opcodePairs) {
+          if (a.getOpCode() == e.first)
+            return e.second;
+          if (a.getOpCode() == e.second)
+            return e.first;
+        }
+
+        return OpCode::eUnknown;
+      } ();
+
+      if (opCode == OpCode::eUnknown)
+        return std::make_pair(false, ++op);
+
+      /* Ensure that flipping the op is actually legal */
+      const auto& a0 = m_builder.getOpForOperand(a, 0u);
+      const auto& a1 = m_builder.getOpForOperand(a, 1u);
+
+      OpFlags requiredFlags = 0u;
+
+      if (opCode == OpCode::eFLt || opCode == OpCode::eFLe ||
+          opCode == OpCode::eFGt || opCode == OpCode::eFGe)
+        requiredFlags |= OpFlag::eNoNan;
+
+      if ((getFpFlags(a0) & requiredFlags) != requiredFlags ||
+          (getFpFlags(a1) & requiredFlags) != requiredFlags)
+        return std::make_pair(false, ++op);
+
+      Op newOp(opCode, op->getType());
+      newOp.setFlags(op->getFlags());
+
+      for (uint32_t i = 0u; i < a.getOperandCount(); i++)
+        newOp.addOperand(a.getOperand(i));
+
+      m_builder.rewriteOp(op->getDef(), std::move(newOp));
+      return std::make_pair(true, op);
+    } break;
+
+    default:
+      dxbc_spv_unreachable();
+      break;
+  }
+
+  return std::make_pair(false, ++op);
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityCompareOp(Builder::iterator op) {
+  if (!op->getType().isScalarType())
+    return std::make_pair(false, ++op);
+
+  /* Resolve isnan first since it's the only unary op */
+  if (op->getOpCode() == OpCode::eFIsNan) {
+    const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+    if (a.getFlags() & OpFlag::eNoNan) {
+      auto next = m_builder.rewriteDef(op->getDef(), m_builder.makeConstant(false));
+      return std::make_pair(true, m_builder.iter(next));
+    }
+
+    return std::make_pair(false, ++op);
+  }
+
+  /* For comparisons, we can only really do anything
+   * if the operands are the same */
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+  const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+  if (a.getDef() != b.getDef())
+    return std::make_pair(false, ++op);
+
+  switch (op->getOpCode()) {
+    case OpCode::eFEq:
+    case OpCode::eFGe:
+    case OpCode::eFLe: {
+      auto isnan = m_builder.addBefore(op->getDef(),
+        Op::FIsNan(op->getType(), a.getDef()).setFlags(op->getFlags()));
+      m_builder.rewriteOp(op->getDef(), Op::BNot(op->getType(), isnan));
+      return std::make_pair(true, op);
+    }
+
+    case OpCode::eFNe: {
+      m_builder.rewriteOp(op->getDef(),
+        Op::FIsNan(op->getType(), a.getDef()).setFlags(op->getFlags()));
+      return std::make_pair(true, op);
+    }
+
+    case OpCode::eIEq:
+    case OpCode::eSGe:
+    case OpCode::eSLe:
+    case OpCode::eUGe:
+    case OpCode::eULe: {
+      auto next = m_builder.rewriteDef(op->getDef(), m_builder.makeConstant(true));
+      return std::make_pair(true, m_builder.iter(next));
+    }
+
+    case OpCode::eFLt:
+    case OpCode::eFGt:
+    case OpCode::eINe:
+    case OpCode::eSLt:
+    case OpCode::eSGt:
+    case OpCode::eULt:
+    case OpCode::eUGt: {
+      auto next = m_builder.rewriteDef(op->getDef(), m_builder.makeConstant(false));
+      return std::make_pair(true, m_builder.iter(next));
+    }
+
+    default:
+      dxbc_spv_unreachable();
+      return std::make_pair(false, ++op);
+  }
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentitySelect(Builder::iterator op) {
+  const auto& cond = m_builder.getOpForOperand(*op, 0u);
+  const auto& a = m_builder.getOpForOperand(*op, 1u);
+  const auto& b = m_builder.getOpForOperand(*op, 2u);
+
+  /* select(cond, a, a) -> a */
+  if (a.getDef() == b.getDef()) {
+    auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
+    return std::make_pair(true, m_builder.iter(next));
+  }
+
+  /* select(!cond, a, b) -> select(cond, b, a) */
+  if (cond.getOpCode() == OpCode::eBNot) {
+    m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(),
+      SsaDef(cond.getOperand(0u)), b.getDef(), a.getDef()).setFlags(op->getFlags()));
+    return std::make_pair(true, op);
+  }
+
+  return std::make_pair(false, ++op);
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityOp(Builder::iterator op) {
+  switch (op->getOpCode()) {
+    case OpCode::eFAbs:
+    case OpCode::eFNeg:
+    case OpCode::eFAdd:
+    case OpCode::eFSub:
+    case OpCode::eFMul:
+    case OpCode::eFMulLegacy:
+    case OpCode::eFDiv:
+    case OpCode::eFMin:
+    case OpCode::eFMax:
+    case OpCode::eFRcp:
+    case OpCode::eFRound:
+    case OpCode::eFSin:
+    case OpCode::eFCos:
+    case OpCode::eIAbs:
+    case OpCode::eINeg:
+    case OpCode::eIAdd:
+    case OpCode::eISub:
+    case OpCode::eINot:
+    case OpCode::eSMin:
+    case OpCode::eSMax:
+    case OpCode::eUMin:
+    case OpCode::eUMax:
+      return resolveIdentityArithmeticOp(op);
+
+    case OpCode::eFEq:
+    case OpCode::eFNe:
+    case OpCode::eFLt:
+    case OpCode::eFLe:
+    case OpCode::eFGt:
+    case OpCode::eFGe:
+    case OpCode::eFIsNan:
+    case OpCode::eIEq:
+    case OpCode::eINe:
+    case OpCode::eSLt:
+    case OpCode::eSLe:
+    case OpCode::eSGt:
+    case OpCode::eSGe:
+    case OpCode::eULt:
+    case OpCode::eULe:
+    case OpCode::eUGt:
+    case OpCode::eUGe:
+      return resolveIdentityCompareOp(op);
+
+    case OpCode::eBAnd:
+    case OpCode::eBOr:
+    case OpCode::eBEq:
+    case OpCode::eBNe:
+    case OpCode::eBNot:
+      return resolveIdentityBoolOp(op);
+
+    case OpCode::eSelect:
+      return resolveIdentitySelect(op);
+
+    default:
+      return std::make_pair(false, ++op);
+  }
 }
 
 
@@ -673,7 +1442,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::constantFoldSelect(Builder::i
 
   /* Check condition and replace select op with appropriate operand */
   auto cond = bool(condOp.getOperand(0u));
-  auto operand = ir::SsaDef(op->getOperand(cond ? 1u : 2u));
+  auto operand = SsaDef(op->getOperand(cond ? 1u : 2u));
 
   return std::make_pair(true, m_builder.iter(m_builder.rewriteDef(op->getDef(), operand)));
 }
@@ -845,6 +1614,19 @@ double ArithmeticPass::getConstantAsFloat(const Op& op, uint32_t index) const {
     default:
       dxbc_spv_unreachable();
       return 0.0;
+  }
+}
+
+
+OpFlags ArithmeticPass::getFpFlags(const Op& op) const {
+  auto type = op.getType().getBaseType(0u).getBaseType();
+  auto flags = op.getFlags();
+
+  switch (type) {
+    case ScalarType::eF16: return flags | m_fp16Flags;
+    case ScalarType::eF32: return flags | m_fp32Flags;
+    case ScalarType::eF64: return flags | m_fp64Flags;
+    default: return flags;
   }
 }
 
