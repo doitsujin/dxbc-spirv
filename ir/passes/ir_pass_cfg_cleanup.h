@@ -32,7 +32,7 @@ public:
    *
    * If the incoming IR was produced by the control flow conversion
    * pass, the resulting IR from this pass will be legal. */
-  void run();
+  bool run();
 
   /** Scans the given list of functions and recursively removes any
    *  functions that are unused. This does not otherwise touch control
@@ -44,7 +44,7 @@ public:
   void resolveConditionalBranch(SsaDef branch);
 
   /** Initializes and runs pass on the given builder. */
-  static void runPass(Builder& builder);
+  static bool runPass(Builder& builder);
 
 private:
 
@@ -54,13 +54,13 @@ private:
   util::small_vector<SsaDef,  16u> m_unusedFunctions;
   util::small_vector<SsaDef, 256u> m_unusedBlocks;
 
-  Builder::iterator handleFunction(Builder::iterator op);
+  std::pair<bool, Builder::iterator> handleFunction(Builder::iterator op);
 
-  Builder::iterator handleLabel(Builder::iterator op);
+  std::pair<bool, Builder::iterator> handleLabel(Builder::iterator op);
 
-  Builder::iterator handleBranchConditional(Builder::iterator op);
+  std::pair<bool, Builder::iterator> handleBranchConditional(Builder::iterator op);
 
-  void removeUnusedFunctions();
+  bool removeUnusedFunctions();
 
   SsaDef removeFunction(SsaDef function);
 
@@ -68,7 +68,7 @@ private:
 
   bool isFunctionUsed(SsaDef function) const;
 
-  void removeUnusedBlocks();
+  bool removeUnusedBlocks();
 
   SsaDef removeBlock(SsaDef block);
 
