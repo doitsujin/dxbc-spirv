@@ -277,8 +277,6 @@ void ScalarizePass::scalarizeVectorOps() {
       case OpCode::eRovScopedLockEnd:
       case OpCode::eFDot:
       case OpCode::eFDotLegacy:
-      case OpCode::eMinValue:
-      case OpCode::eMaxValue:
       case OpCode::eDrain:
         break;
 

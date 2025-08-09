@@ -47,8 +47,6 @@ private:
 
   Builder::iterator handleOp(Builder::iterator op);
 
-  Builder::iterator handleMinMaxValue(Builder::iterator op);
-
   Operand convertScalarConstant(Operand srcValue, ScalarType srcType) const;
 
   Type resolveType(Type type) const;
@@ -56,8 +54,6 @@ private:
   BasicType resolveBasicType(BasicType type) const;
 
   ScalarType resolveScalarType(ScalarType type) const;
-
-  std::pair<Operand, Operand> resolveRange(ScalarType type) const;
 
 };
 
