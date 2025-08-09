@@ -96,8 +96,11 @@ std::pair<bool, Builder::iterator> LowerConsumePass::handleCastChain(Builder::it
   if (valueOp.isConstant() && op->getType().isBasicType()) {
     auto dstType = op->getType().getBaseType(0u);
 
-    auto next = m_builder.rewriteDef(op->getDef(),
-      m_builder.add(consumeConstant(valueOp, dstType)));
+    auto constant = op->getOpCode() == OpCode::eConsumeAs
+      ? consumeConstant(valueOp, dstType)
+      : castConstant(valueOp, dstType);
+
+    auto next = m_builder.rewriteDef(op->getDef(), m_builder.add(constant));
     return std::make_pair(true, m_builder.iter(next));
   }
 
