@@ -326,9 +326,6 @@ bool RemoveUnusedPass::hasSideEffect(OpCode opCode) {
     case OpCode::eUMax:
     case OpCode::eUClamp:
     case OpCode::eUMSad:
-
-    case OpCode::eMinValue:
-    case OpCode::eMaxValue:
       return false;
   }
 
