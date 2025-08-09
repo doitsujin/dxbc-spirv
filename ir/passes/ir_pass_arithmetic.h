@@ -111,6 +111,8 @@ private:
 
   std::pair<bool, Builder::iterator> resolveIdentitySelect(Builder::iterator op);
 
+  std::pair<bool, Builder::iterator> resolveIsNanCheck(Builder::iterator op);
+
   std::pair<bool, Builder::iterator> resolveIdentityOp(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> reorderConstantOperandsCompareOp(Builder::iterator op);

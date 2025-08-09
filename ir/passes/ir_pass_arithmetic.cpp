@@ -1202,7 +1202,9 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityBoolOp(Builder
             SsaDef(a.getOperand(0u)), SsaDef(b.getOperand(0u))))));
         return std::make_pair(true, op);
       }
-    } break;
+
+      return resolveIsNanCheck(op);
+    }
 
     case OpCode::eBEq: {
       const auto& a = m_builder.getOpForOperand(*op, 0u);
@@ -1439,6 +1441,65 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentitySelect(Builder
   }
 
   return propagateAbsSignSelect(op);
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::resolveIsNanCheck(Builder::iterator op) {
+  /* Look for a pattern that goes a < b || a == b || a > b, which is equivalent to
+   * !(isnan(a) || isnan(b)). b will usually be a constant, so we can constant-fold. */
+  if (op->getOpCode() != OpCode::eBOr)
+    return std::make_pair(false, ++op);
+
+  /* Find which operand is the 'or' */
+  uint32_t orOperand = -1u;
+
+  for (uint32_t i = 0u; i < 2u; i++) {
+    if (m_builder.getOpForOperand(*op, i).getOpCode() == OpCode::eBOr) {
+      if (orOperand != -1u)
+        return std::make_pair(false, ++op);
+
+      orOperand = i;
+    }
+  }
+
+  if (orOperand == -1u)
+    return std::make_pair(false, ++op);
+
+  /* Ensure that all operands are the same */
+  const auto& orOp = m_builder.getOpForOperand(*op, orOperand);
+
+  const auto& v0 = m_builder.getOpForOperand(*op, 1u - orOperand);
+  const auto& v1 = m_builder.getOpForOperand(orOp, 0u);
+  const auto& v2 = m_builder.getOpForOperand(orOp, 1u);
+
+  for (uint32_t i = 0u; i < 2u; i++) {
+    if (v0.getOperand(i) != v1.getOperand(i) || v0.getOperand(i) != v2.getOperand(i))
+      return std::make_pair(false, ++op);
+  }
+
+  /* Ensure that one of each op FEq, FLt and FGt are present */
+  std::array<OpCode, 3> ops = { v0.getOpCode(), v1.getOpCode(), v2.getOpCode() };
+
+  bool hasEq = false;
+  bool hasLt = false;
+  bool hasGt = false;
+
+  for (auto op : ops) {
+    hasEq = hasEq || op == OpCode::eFEq;
+    hasLt = hasLt || op == OpCode::eFLt;
+    hasGt = hasGt || op == OpCode::eFGt;
+  }
+
+  if (!hasEq || !hasLt || !hasGt)
+    return std::make_pair(false, ++op);
+
+  /* Rewrite op as nan check */
+  auto aIsNan = m_builder.addBefore(op->getDef(), Op::FIsNan(op->getType(), SsaDef(v0.getOperand(0u))));
+  auto bIsNan = m_builder.addBefore(op->getDef(), Op::FIsNan(op->getType(), SsaDef(v0.getOperand(1u))));
+  auto anyNan = m_builder.addBefore(op->getDef(), Op::BOr(op->getType(), aIsNan, bIsNan));
+
+  m_builder.rewriteOp(op->getDef(), Op::BNot(op->getType(), anyNan));
+  return std::make_pair(false, op);
 }
 
 
@@ -2045,7 +2106,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::constantFoldOp(Builder::itera
     case OpCode::eSBitExtract:
     case OpCode::eIShl:
     case OpCode::eSShr:
-  case OpCode::eUShr:
+    case OpCode::eUShr:
     case OpCode::eIAdd:
     case OpCode::eISub:
     case OpCode::eIAbs:
