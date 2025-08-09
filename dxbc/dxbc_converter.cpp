@@ -1238,17 +1238,6 @@ bool Converter::handleFloatConvert(ir::Builder& builder, const Instruction& op) 
   if (!value)
     return false;
 
-  if (srcIsFloat && !dstIsFloat) {
-    auto lowerBound = builder.add(ir::Op::ConvertItoF(srcType.getBaseType(),
-      builder.add(ir::Op::MinValue(dstType.getBaseType()))));
-    auto upperBound = builder.add(ir::Op::ConvertItoF(srcType.getBaseType(),
-      builder.add(ir::Op::MaxValue(dstType.getBaseType()))));
-
-    value = builder.add(ir::Op::FClamp(srcType, value,
-      broadcastScalar(builder, lowerBound, srcMask),
-      broadcastScalar(builder, upperBound, srcMask)));
-  }
-
   ir::Op result = [opCode, dstType, value, &builder] {
     switch (opCode) {
       case OpCode::eFtoI:
