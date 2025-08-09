@@ -886,7 +886,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
       const auto& a = m_builder.getOpForOperand(*op, 0u);
       const auto& b = m_builder.getOpForOperand(*op, 1u);
 
-      /* 1.0 / a -> rcp(a) */
+      /* +/- 1.0 / a -> rcp(a) */
       if (!(getFpFlags(*op) & OpFlag::ePrecise)) {
         if (a.isConstant()) {
           bool isPosRcp = true;

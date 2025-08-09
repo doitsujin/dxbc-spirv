@@ -2,6 +2,7 @@
 #include "test_api_arithmetic.h"
 #include "test_api_io.h"
 #include "test_api_misc.h"
+#include "test_api_pass_arithmetic.h"
 #include "test_api_pass_scalarize.h"
 #include "test_api_resources.h"
 #include "test_api_spirv.h"
@@ -352,6 +353,19 @@ void enumeratePassesTests(std::vector<NamedTest>& result, const char* category, 
   ADD_TEST(test_pass_scalarize_8_vec2_as_vec4);
   ADD_TEST(test_pass_scalarize_8_vec3_as_vec4);
   ADD_TEST(test_pass_scalarize_8_vec4_as_vec4);
+
+  ADD_TEST(test_pass_arithmetic_constant_fold_int32);
+  ADD_TEST(test_pass_arithmetic_constant_fold_int16);
+  ADD_TEST(test_pass_arithmetic_constant_fold_int16_vec2);
+  ADD_TEST(test_pass_arithmetic_constant_fold_bool);
+  ADD_TEST(test_pass_arithmetic_constant_fold_compare);
+  ADD_TEST(test_pass_arithmetic_constant_fold_select);
+
+  ADD_TEST(test_pass_arithmetic_identities_bool);
+  ADD_TEST(test_pass_arithmetic_identities_compare);
+  ADD_TEST(test_pass_arithmetic_identities_select);
+  ADD_TEST(test_pass_arithmetic_propagate_sign);
+  ADD_TEST(test_pass_arithmetic_fuse_mad);
 }
 
 
