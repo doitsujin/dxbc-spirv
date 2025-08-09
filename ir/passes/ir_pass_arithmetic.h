@@ -25,6 +25,10 @@ public:
     /** Whether to lower packed f32tof16 to a custom function
      *  in order to get more correct round-to-zero behaviour. */
     bool lowerF32toF16 = true;
+    /** Whether to lower float-to-int conversions to a custom
+     *  function that clamps the representable range of the
+     *  target integer type. */
+    bool lowerConvertFtoI = true;
   };
 
   ArithmeticPass(Builder& builder, const Options& options);
@@ -50,6 +54,12 @@ public:
 
 private:
 
+  struct ConvertFunc {
+    ScalarType dstType = ScalarType::eVoid;
+    ScalarType srcType = ScalarType::eVoid;
+    SsaDef function = { };
+  };
+
   Builder& m_builder;
 
   Options m_options;
@@ -58,12 +68,16 @@ private:
   OpFlags m_fp32Flags = 0u;
   OpFlags m_fp64Flags = 0u;
 
+  util::small_vector<ConvertFunc, 8u> m_convertFunctions;
+
   void lowerInstructionsPreTransform();
   void lowerInstructionsPostTransform();
 
   Builder::iterator lowerDot(Builder::iterator op);
 
   Builder::iterator lowerClamp(Builder::iterator op);
+
+  Builder::iterator lowerConvertFtoI(Builder::iterator op);
 
   SsaDef extractFromVector(SsaDef vector, uint32_t component);
 
