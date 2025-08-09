@@ -1568,13 +1568,10 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityOp(Builder::it
 
 
 std::pair<bool, Builder::iterator> ArithmeticPass::reorderConstantOperandsCompareOp(Builder::iterator op) {
-  /* If the op has exactly one constant operand and it is on the left,
-   * flip the operation so that it is on the right. Subsequent passes
-   * will assume that constant operands are always right where applicable. */
   const auto& a = m_builder.getOpForOperand(*op, 0u);
   const auto& b = m_builder.getOpForOperand(*op, 1u);
 
-  if (!a.isConstant() || b.isConstant())
+  if (!shouldFlipOperands(*op))
     return std::make_pair(false, ++op);
 
   static const std::array<std::pair<OpCode, OpCode>, 10u> s_opcodePairs = {{
@@ -1618,7 +1615,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::reorderConstantOperandsCommut
   const auto& a = m_builder.getOpForOperand(*op, 0u);
   const auto& b = m_builder.getOpForOperand(*op, 1u);
 
-  if (!a.isConstant() || b.isConstant())
+  if (!shouldFlipOperands(*op))
     return std::make_pair(false, ++op);
 
   auto newOp = *op;
@@ -2285,6 +2282,22 @@ bool ArithmeticPass::isZeroConstant(const Op& op) const {
   }
 
   return true;
+}
+
+
+bool ArithmeticPass::shouldFlipOperands(const Op& op) const {
+  dxbc_spv_assert(op.getOperandCount() >= 2u);
+
+  const auto& a = m_builder.getOpForOperand(op, 0u);
+  const auto& b = m_builder.getOpForOperand(op, 1u);
+
+  if (a.isConstant() && !b.isConstant())
+    return true;
+
+  if (a.isConstant() == b.isConstant())
+    return a.getDef() > b.getDef();
+
+  return false;
 }
 
 

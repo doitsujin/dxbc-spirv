@@ -143,6 +143,8 @@ private:
 
   bool isZeroConstant(const Op& op) const;
 
+  bool shouldFlipOperands(const Op& op) const;
+
   OpFlags getFpFlags(const Op& op) const;
 
   template<typename T>
