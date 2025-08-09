@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cmath>
 
 namespace dxbc_spv::util {
 
@@ -158,5 +159,38 @@ T binsert(T op, T v, uint32_t first, uint32_t count) {
   T mask = ((T(2) << (count - 1)) - T(1)) << first;
   return (op & ~mask) | ((v << first) & mask);
 }
+
+
+/** Convert unsigned integer to float using round-to-zero semantics */
+template<typename T, uint32_t ExpBits, uint32_t MantissaBits>
+T convertUintToFloatRtz(uint64_t v) {
+  if (!v)
+    return T(0u);
+
+  T msb = findmsb(v);
+
+  /* Compute exponent based on msb */
+  T expBias = (T(1u) << (ExpBits - 1u)) - 1u;
+  T expValue = expBias + msb;
+
+  /* Extract mantissa and discard leading one */
+  T mantissa = T((v << (64u - msb)) >> (64u - MantissaBits));
+
+  return T(mantissa | (expValue << MantissaBits));
+}
+
+
+/** Convert signed integer to float using round-to-zero semantics */
+template<typename T, uint32_t ExpBits, uint32_t MantissaBits>
+T convertSintToFloatRtz(int64_t v) {
+  T result = convertUintToFloatRtz<T, ExpBits, MantissaBits>(std::abs(v));
+
+  if (v < 0)
+    result |= T(1u) << (ExpBits + MantissaBits);
+
+  return result;
+}
+
+
 
 }
