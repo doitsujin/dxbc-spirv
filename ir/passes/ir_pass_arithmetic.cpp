@@ -142,6 +142,13 @@ void ArithmeticPass::lowerInstructionsPostTransform() {
         iter = tryFuseClamp(iter);
       } continue;
 
+      case OpCode::eConvertFtoI: {
+        if (m_options.lowerConvertFtoI) {
+          iter = lowerConvertFtoI(iter);
+          continue;
+        }
+      } break;
+
       default:
         break;
     }
@@ -208,6 +215,129 @@ Builder::iterator ArithmeticPass::lowerClamp(Builder::iterator op) {
   auto minOp = Op(minOpCode, op->getType()).setFlags(op->getFlags()).addOperands(maxDef, hi.getDef());
   m_builder.rewriteOp(op->getDef(), std::move(minOp));
 
+  return ++op;
+}
+
+
+Builder::iterator ArithmeticPass::lowerConvertFtoI(Builder::iterator op) {
+  const auto& src = m_builder.getOpForOperand(*op, 0u);
+
+  /* Look up existing function for float-to-int conversion */
+  auto srcType = src.getType().getBaseType(0u).getBaseType();
+  auto dstType = op->getType().getBaseType(0u).getBaseType();
+
+  auto e = std::find_if(m_convertFunctions.begin(), m_convertFunctions.end(),
+    [dstType, srcType] (const ConvertFunc& fn) {
+      return fn.dstType == dstType &&
+             fn.srcType == srcType;
+    });
+
+  if (e == m_convertFunctions.end()) {
+    ConvertFunc fn = m_convertFunctions.emplace_back();
+    fn.dstType = dstType;
+    fn.srcType = srcType;
+
+    /* Declare actual conversion function */
+    auto param = m_builder.add(Op::DclParam(srcType));
+    m_builder.add(Op::DebugName(param, "v"));
+
+    fn.function = m_builder.addBefore(m_builder.getCode().first->getDef(),
+      Op::Function(dstType).addParam(param));
+
+    std::stringstream debugName;
+    debugName << "cvt_" << srcType << "_" << dstType;
+
+    m_builder.add(Op::DebugName(fn.function, debugName.str().c_str()));
+
+    m_builder.setCursor(fn.function);
+    m_builder.add(Op::Label());
+
+    bool isUnsigned = BasicType(dstType).isUnsignedIntType();
+    auto bits = BasicType(dstType).byteSize() * 8u;
+
+    /* Determine integer range of values that the destination type supports */
+    Operand minValueDst = Operand(isUnsigned ? uint64_t(0u) : uint64_t(-1) << (bits - 1u));
+    Operand maxValueDst = Operand((uint64_t(isUnsigned ? 2u : 1u) << (bits - 1u)) - 1u);
+
+    /* Determine corresponding bounds as floating point values */
+    Operand minValueSrc = { };
+    Operand maxValueSrc = { };
+
+    switch (srcType) {
+      case ScalarType::eF16: {
+        /* F16 is special because it is the only floating point
+         * type with a lower dynamic range than integer types */
+        if (isUnsigned) {
+          minValueSrc = Operand(float16_t(0.0f));
+          maxValueSrc = Operand(float16_t::maxValue());
+        } else if (dstType == ScalarType::eI16) {
+          minValueSrc = Operand(float16_t::fromRaw(util::convertSintToFloatRtz<uint16_t, 5u, 10u>(int64_t(minValueDst))));
+          maxValueSrc = Operand(float16_t::fromRaw(util::convertSintToFloatRtz<uint16_t, 5u, 10u>(int64_t(maxValueDst))));
+        } else {
+          minValueSrc = Operand(float16_t::minValue());
+          maxValueSrc = Operand(float16_t::maxValue());
+        }
+      } break;
+
+      case ScalarType::eF32: {
+        minValueSrc = Operand(isUnsigned
+          ? util::convertUintToFloatRtz<uint32_t, 8u, 23u>(uint64_t(minValueDst))
+          : util::convertSintToFloatRtz<uint32_t, 8u, 23u>(int64_t(minValueDst)));
+        maxValueSrc = Operand(isUnsigned
+          ? util::convertUintToFloatRtz<uint32_t, 8u, 23u>(uint64_t(maxValueDst))
+          : util::convertSintToFloatRtz<uint32_t, 8u, 23u>(int64_t(maxValueDst)));
+      } break;
+
+      case ScalarType::eF64: {
+        minValueSrc = Operand(isUnsigned
+          ? util::convertUintToFloatRtz<uint64_t, 11u, 52u>(uint64_t(minValueDst))
+          : util::convertSintToFloatRtz<uint64_t, 11u, 52u>(int64_t(minValueDst)));
+        maxValueSrc = Operand(isUnsigned
+          ? util::convertUintToFloatRtz<uint64_t, 11u, 52u>(uint64_t(maxValueDst))
+          : util::convertSintToFloatRtz<uint64_t, 11u, 52u>(int64_t(maxValueDst)));
+      } break;
+
+      default:
+        dxbc_spv_unreachable();
+        break;
+    }
+
+    /* Load parameter and perform basic range checking Ü*/
+    auto v = m_builder.add(Op::ParamLoad(srcType, fn.function, param));
+
+    auto hiCond = m_builder.add(Op::FGt(ScalarType::eBool, v,
+      m_builder.add(Op(OpCode::eConstant, srcType).addOperand(maxValueSrc))));
+
+    if (BasicType(dstType).isUnsignedIntType()) {
+      /* Max will implicitly flush nan to 0 */
+      v = m_builder.add(Op::FMax(srcType, v,
+        m_builder.add(Op(OpCode::eConstant, srcType).addOperand(0u))));
+      v = m_builder.add(Op::ConvertFtoI(dstType, v));
+      v = m_builder.add(Op::Select(dstType, hiCond,
+        m_builder.add(Op(OpCode::eConstant, dstType).addOperand(maxValueDst)), v));
+    } else {
+      /* Need to handle every possible case separately */
+      auto loCond = m_builder.add(Op::FLt(ScalarType::eBool, v,
+        m_builder.add(Op(OpCode::eConstant, srcType).addOperand(minValueSrc))));
+      auto nanCond = m_builder.add(Op::FIsNan(ScalarType::eBool, v));
+
+      v = m_builder.add(Op::ConvertFtoI(dstType, v));
+      v = m_builder.add(Op::Select(dstType, hiCond,
+        m_builder.add(Op(OpCode::eConstant, dstType).addOperand(maxValueDst)), v));
+      v = m_builder.add(Op::Select(dstType, loCond,
+        m_builder.add(Op(OpCode::eConstant, dstType).addOperand(minValueDst)), v));
+      v = m_builder.add(Op::Select(dstType, nanCond,
+        m_builder.add(Op(OpCode::eConstant, dstType).addOperand(0u)), v));
+    }
+
+    m_builder.add(Op::Return(dstType, v));
+    m_builder.add(Op::FunctionEnd());
+
+    e = m_convertFunctions.insert(m_convertFunctions.end(), fn);
+  }
+
+  m_builder.rewriteOp(op->getDef(),
+    Op::FunctionCall(dstType, e->function).addParam(src.getDef()));
   return ++op;
 }
 
