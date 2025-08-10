@@ -491,37 +491,43 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectCompare(Builder::iterat
 
 
 std::pair<bool, Builder::iterator> ArithmeticPass::selectBitOp(Builder::iterator op) {
-  const auto& a = m_builder.getOpForOperand(*op, 0u);
-
-  if (!op->getType().isScalarType() || !isConstantSelect(a))
+  if (!op->getType().isScalarType())
     return std::make_pair(false, ++op);
 
   switch (op->getOpCode()) {
-    case OpCode::eCast:
     case OpCode::eIAbs:
     case OpCode::eINot:
     case OpCode::eINeg: {
-      if (!isOnlyUse(m_builder, a.getDef(), op->getDef()))
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+      if (!isConstantSelect(a))
         break;
+    } [[fallthrough]];
+
+    case OpCode::eCast: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
 
       /* Fold op into select operands */
-      auto trueDef = m_builder.addBefore(op->getDef(),
-        Op(op->getOpCode(), op->getType()).addOperand(SsaDef(a.getOperand(1u))));
-      auto falseDef = m_builder.addBefore(op->getDef(),
-        Op(op->getOpCode(), op->getType()).addOperand(SsaDef(a.getOperand(2u))));
+      if (a.getOpCode() == OpCode::eSelect) {
+        auto trueDef = m_builder.addBefore(op->getDef(),
+          Op(op->getOpCode(), op->getType()).addOperand(SsaDef(a.getOperand(1u))));
+        auto falseDef = m_builder.addBefore(op->getDef(),
+          Op(op->getOpCode(), op->getType()).addOperand(SsaDef(a.getOperand(2u))));
 
-      m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(),
-        SsaDef(a.getOperand(0u)), trueDef, falseDef).setFlags(a.getFlags()));
+        m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(),
+          SsaDef(a.getOperand(0u)), trueDef, falseDef).setFlags(a.getFlags()));
 
-      return std::make_pair(true, m_builder.iter(trueDef));
-    }
+        return std::make_pair(true, m_builder.iter(trueDef));
+      }
+    } break;
 
     case OpCode::eIAnd:
     case OpCode::eIOr:
     case OpCode::eIXor: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
       const auto& b = m_builder.getOpForOperand(*op, 1u);
 
-      if (isConstantSelect(b)) {
+      if (isConstantSelect(a) && isConstantSelect(b)) {
         /* Handle patterns such as:
          * select(c0, a, 0) & select(c1, a, 0) -> select(c0 && c1, a, 0)
          * select(c0, a, 0) | select(c1, a, 0) -> select(c0 || c1, a, 0)
@@ -574,7 +580,26 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectBitOp(Builder::iterator
           return std::make_pair(true, m_builder.iter(ref));
         }
       }
-    } [[fallthrough]];
+
+      /* Aggressively fold these specific ops into constant select to resolve cases
+       * where a single condition is used to produce multiple non-boolean values. */
+      for (uint32_t i = 0u; i < op->getOperandCount(); i++) {
+        const auto& a = m_builder.getOpForOperand(*op, i);
+        const auto& b = m_builder.getOpForOperand(*op, i ^ 1u);
+
+        if (isConstantSelect(a)) {
+          auto trueDef = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType())
+            .addOperands(SsaDef(a.getOperand(1u)), b.getDef()));
+          auto falseDef = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType())
+            .addOperands(SsaDef(a.getOperand(2u)), b.getDef()));
+
+          m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(),
+            SsaDef(a.getOperand(0u)), trueDef, falseDef).setFlags(a.getFlags()));
+
+          return std::make_pair(true, m_builder.iter(trueDef));
+        }
+      }
+    } break;
 
     case OpCode::eIAdd:
     case OpCode::eISub:
@@ -588,13 +613,10 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectBitOp(Builder::iterator
     case OpCode::eIShl:
     case OpCode::eUShr:
     case OpCode::eSShr: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
       const auto& b = m_builder.getOpForOperand(*op, 1u);
 
-      if (b.isConstant()) {
-        /* Fold op into select operands and then constant-fold */
-        if (!isOnlyUse(m_builder, a.getDef(), op->getDef()))
-          break;
-
+      if (isConstantSelect(a) && b.isConstant()) {
         auto trueDef = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType())
           .addOperands(SsaDef(a.getOperand(1u)), b.getDef()));
         auto falseDef = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType())
