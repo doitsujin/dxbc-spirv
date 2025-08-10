@@ -141,7 +141,7 @@ private:
 
   bool isConstantSelect(const Op& op) const;
 
-  bool isZeroConstant(const Op& op) const;
+  bool isConstantValue(const Op& op, int64_t value) const;
 
   bool shouldFlipOperands(const Op& op) const;
 

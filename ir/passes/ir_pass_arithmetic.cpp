@@ -532,7 +532,8 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectBitOp(Builder::iterator
         auto bf = SsaDef(b.getOperand(2u));
 
         if (((at == bt && af == bf) || (at == bf && af == bt)) &&
-            (isZeroConstant(m_builder.getOp(at)) || isZeroConstant(m_builder.getOp(af)))) {
+            (isConstantValue(m_builder.getOp(at), 0) ||
+             isConstantValue(m_builder.getOp(af), 0))) {
           auto ac = SsaDef(a.getOperand(0u));
           auto bc = SsaDef(b.getOperand(0u));
 
@@ -2279,12 +2280,12 @@ bool ArithmeticPass::isConstantSelect(const Op& op) const {
 }
 
 
-bool ArithmeticPass::isZeroConstant(const Op& op) const {
+bool ArithmeticPass::isConstantValue(const Op& op, int64_t value) const {
   if (!op.isConstant())
     return false;
 
   for (uint32_t i = 0u; i < op.getOperandCount(); i++) {
-    if (op.getOperand(i) != Operand(0u))
+    if (op.getOperand(i) != makeScalarOperand(op.getType(), value))
       return false;
   }
 
