@@ -71,6 +71,7 @@ void legalizeIr(ir::Builder& builder, const CompileOptions& options) {
 
     progress |= ir::ArithmeticPass::runPass(builder, options.arithmeticOptions);
     progress |= ir::LowerConsumePass::runResolveCastChainsPass(builder);
+    progress |= ir::CsePass::runPass(builder);
     progress |= ir::CleanupControlFlowPass::runPass(builder);
     progress |= ir::SsaConstructionPass::runResolveTrivialPhiPass(builder);
 
