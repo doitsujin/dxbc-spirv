@@ -1,13 +1,12 @@
 #include <algorithm>
 #include <cmath>
+#include <sstream>
 
 #include "ir_pass_arithmetic.h"
 #include "ir_pass_remove_unused.h"
 #include "ir_pass_scalarize.h"
 
 #include "../ir_utils.h"
-
-#include "../../util/util_log.h"
 
 namespace dxbc_spv::ir {
 
@@ -1046,7 +1045,15 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
           isConstantNegative = isConstantNegative || value < 0;
           isConstantPositive = isConstantPositive || value > 0;
 
-          constant.addOperand(makeScalarOperand(b.getType(), -value));
+          auto negOperand = makeScalarOperand(b.getType(), -value);
+          auto posOperand = makeScalarOperand(b.getType(), value);
+
+          constant.addOperand(negOperand);
+
+          /* Negating the minimum representable value results in a
+           * negative number again, ensure that we ignore that case. */
+          if (negOperand == posOperand)
+            isConstantPositive = true;
         }
 
         if (isConstantNegative && !isConstantPositive) {
