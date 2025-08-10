@@ -1143,6 +1143,57 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
 
     } break;
 
+    case OpCode::eIAnd: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+      const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+      /* a & 0 -> 0 */
+      if (isConstantValue(b, 0)) {
+        auto next = m_builder.rewriteDef(op->getDef(), b.getDef());
+        return std::make_pair(true, m_builder.iter(next));
+      }
+
+      /* a & -1 -> a */
+      if (isConstantValue(b, -1)) {
+        auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
+        return std::make_pair(true, m_builder.iter(next));
+      }
+    } break;
+
+    case OpCode::eIOr: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+      const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+      /* a | 0 -> a */
+      if (isConstantValue(b, 0)) {
+        auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
+        return std::make_pair(true, m_builder.iter(next));
+      }
+
+      /* a & -1 -> -1 */
+      if (isConstantValue(b, -1)) {
+        auto next = m_builder.rewriteDef(op->getDef(), b.getDef());
+        return std::make_pair(true, m_builder.iter(next));
+      }
+    } break;
+
+    case OpCode::eIXor: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+      const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+      /* a ^ 0 -> a */
+      if (isConstantValue(b, 0)) {
+        auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
+        return std::make_pair(true, m_builder.iter(next));
+      }
+
+      /* a ^ -1 -> ~a */
+      if (isConstantValue(b, -1)) {
+        m_builder.rewriteOp(op->getDef(), Op::INot(op->getType(), a.getDef()));
+        return std::make_pair(true, op);
+      }
+    } break;
+
     default:
       break;
   }
@@ -1526,6 +1577,9 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityOp(Builder::it
     case OpCode::eFRound:
     case OpCode::eFSin:
     case OpCode::eFCos:
+    case OpCode::eIAnd:
+    case OpCode::eIOr:
+    case OpCode::eIXor:
     case OpCode::eIAbs:
     case OpCode::eINeg:
     case OpCode::eIAdd:
