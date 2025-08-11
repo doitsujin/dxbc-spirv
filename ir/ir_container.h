@@ -68,9 +68,12 @@ public:
     return get(def);
   }
 
-  /* Retrieves read-only reference to existing object. This is
-   * equivalent to calling at(). */
+  /* Retrieves read-only reference to existing object. Returns the
+   * reference to the null definition in case of a const context. */
   const T& operator [] (SsaDef def) const {
+    if (def > getMaxValidDef())
+      return get(SsaDef());
+
     return get(def);
   }
 
