@@ -1171,7 +1171,7 @@ bool IoMap::storeIoRegister(
         auto callOp = ir::Op::FunctionCall(ir::Type(), var.baseDef);
 
         for (uint32_t i = 0u; i < addressOp.getType().getBaseType(0u).getVectorSize(); i++)
-          callOp.addParam(m_converter.extractFromVector(builder, value, i));
+          callOp.addParam(m_converter.extractFromVector(builder, addressDef, i));
 
         callOp.addParam(scalar);
 
