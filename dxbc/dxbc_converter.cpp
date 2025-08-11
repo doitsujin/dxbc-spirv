@@ -1118,8 +1118,7 @@ bool Converter::handleFloatDot(ir::Builder& builder, const Instruction& op) {
     builder.setOpFlags(result, ir::OpFlag::ePrecise);
 
   /* Apply result modifiers *before* broadcasting */
-  applyDstModifiers(builder, result, op, dst);
-
+  result = applyDstModifiers(builder, result, op, dst);
   result = broadcastScalar(builder, result, dst.getWriteMask());
   return storeDst(builder, op, dst, result);
 }
