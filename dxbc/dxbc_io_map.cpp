@@ -538,7 +538,7 @@ bool IoMap::declareIoSignatureVars(
 
   /* Omit any overlapping declarations. This is relevant for hull shaders,
    * where partial declarations are common in fork/join phases. */
-  auto stream = m_converter.m_gs.streamIndex;
+  auto stream = getCurrentGsStream();
 
   for (const auto& e : m_variables) {
     if (e.matches(regType, regIndex, stream, componentMask) && e.sv == Sysval::eNone) {
@@ -564,7 +564,7 @@ bool IoMap::declareIoSignatureVars(
   auto entries = signature->filter([=] (const SignatureEntry& e) {
     return (e.getRegisterIndex() == int32_t(regIndex)) &&
            (e.getComponentMask() & componentMask) &&
-           (e.getStreamIndex() == stream);
+           (e.getStreamIndex() == uint32_t(std::max(0, stream)));
   });
 
   for (auto e = entries; e != signature->end(); e++) {
@@ -859,7 +859,7 @@ bool IoMap::declareClipCullDistance(
   uint32_t elementMask = 0u;
   uint32_t elementShift = -1u;
 
-  auto stream = m_converter.m_gs.streamIndex;
+  auto stream = uint32_t(std::max(0, getCurrentGsStream()));
 
   auto entries = signature->filter([sv, stream] (const SignatureEntry& e) {
     auto signatureSv = (sv == Sysval::eClipDistance)
@@ -1816,8 +1816,7 @@ bool IoMap::handleGsOutputStreams(ir::Builder& builder) {
       continue;
 
     /* Assign current stream index to real output */
-    int32_t stream = int32_t(m_converter.m_gs.streamIndex);
-    m_variables.at(m_gsConvertedCount).gsStream = stream;
+    m_variables.at(m_gsConvertedCount).gsStream = getCurrentGsStream();
 
     /* Find or declare temporary variable for each component
      * of the given output */
@@ -2018,7 +2017,7 @@ ir::Op& IoMap::addDeclarationArgs(ir::Op& declaration, RegisterType type, ir::In
   auto isInput = isInputRegister(type);
 
   if (!isInput && m_shaderInfo.getType() == ShaderType::eGeometry)
-    declaration.addOperand(m_converter.m_gs.streamIndex);
+    declaration.addOperand(getCurrentGsStream());
 
   if (isInput && m_shaderInfo.getType() == ShaderType::ePixel)
     declaration.addOperand(interpolation);
@@ -2089,6 +2088,13 @@ uint32_t IoMap::mapLocation(RegisterType regType, uint32_t regIndex) const {
   }
 
   return regIndex;
+}
+
+
+int32_t IoMap::getCurrentGsStream() const {
+  return (m_shaderInfo.getType() == ShaderType::eGeometry)
+    ? int32_t(m_converter.m_gs.streamIndex)
+    : int32_t(-1);
 }
 
 

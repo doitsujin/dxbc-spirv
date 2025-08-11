@@ -411,6 +411,8 @@ private:
 
   uint32_t mapLocation(RegisterType regType, uint32_t regIndex) const;
 
+  int32_t getCurrentGsStream() const;
+
   static bool isRegularIoRegister(RegisterType type);
 
 };
