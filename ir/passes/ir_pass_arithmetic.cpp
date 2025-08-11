@@ -448,45 +448,34 @@ Builder::iterator ArithmeticPass::tryFuseMad(Builder::iterator op) {
 
 
 std::pair<bool, Builder::iterator> ArithmeticPass::selectCompare(Builder::iterator op) {
-  const auto& a = m_builder.getOpForOperand(*op, 0u);
-  const auto& b = m_builder.getOpForOperand(*op, 1u);
-
   if (!op->getType().isScalarType())
     return std::make_pair(false, ++op);
 
-  /* Clean up common boolean patterns. This assumes that comparisons have already
-   * been reordered in such a way that constant operands are on the right, and that
-   * the select operands differ. */
-  if (!isConstantSelect(a) || !b.isConstant())
+  /* Find a select operand */
+  uint32_t selectOperand = -1u;
+
+  for (uint32_t i = 0u; i < op->getOperandCount(); i++) {
+    if (m_builder.getOpForOperand(*op, i).getOpCode() == OpCode::eSelect)
+      selectOperand = i;
+  }
+
+  if (selectOperand == -1u)
     return std::make_pair(false, ++op);
 
-  /* select(cond, a, b) == a -> cond
-   * select(cond, a, b) != a -> !cond
-   * select(cond, a, b) == b -> !cond
-   * select(cond, a, b) != b -> cond
-   * select(cond, a, b) == c -> false
-   * select(cond, a, b) != c -> true */
-  bool negate = op->getOpCode() == OpCode::eINe;
+  const auto& a = m_builder.getOpForOperand(*op, selectOperand);
+  const auto& b = m_builder.getOpForOperand(*op, selectOperand ^ 1u);
 
+  /* select(cond, a, b) == c -> select(cond, a == c, b == c)
+   * select(cond, a, b) != c -> select(cond, a != c, b != c) */
   auto condDef = SsaDef(a.getOperand(0u));
-  auto trueDef = SsaDef(a.getOperand(1u));
-  auto falseDef = SsaDef(a.getOperand(2u));
+  auto tDef = SsaDef(a.getOperand(1u));
+  auto fDef = SsaDef(a.getOperand(2u));
 
-  if (b.getDef() != trueDef && b.getDef() != falseDef) {
-    auto next = m_builder.rewriteDef(op->getDef(), m_builder.makeConstant(negate));
-    return std::make_pair(true, m_builder.iter(next));
-  }
+  tDef = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType()).addOperands(tDef, b.getDef()));
+  fDef = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType()).addOperands(fDef, b.getDef()));
 
-  if (b.getDef() == falseDef)
-    negate = !negate;
-
-  if (!negate) {
-    auto next = m_builder.rewriteDef(op->getDef(), condDef);
-    return std::make_pair(true, m_builder.iter(next));
-  } else {
-    m_builder.rewriteOp(op->getDef(), Op::BNot(op->getType(), condDef));
-    return std::make_pair(true, op);
-  }
+  m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), condDef, tDef, fDef));
+  return std::make_pair(true, m_builder.iter(tDef));
 }
 
 
@@ -1519,6 +1508,16 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentitySelect(Builder
     m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(),
       SsaDef(cond.getOperand(0u)), b.getDef(), a.getDef()).setFlags(op->getFlags()));
     return std::make_pair(true, op);
+  }
+
+  /* boolean select(cond, a, b) -> (cond && a) || (!cond && b) */
+  if (op->getType().getBaseType(0u).isBoolType()) {
+    auto tDef = m_builder.addBefore(op->getDef(), Op::BAnd(op->getType(), cond.getDef(), a.getDef()));
+    auto fDef = m_builder.addBefore(op->getDef(), Op::BAnd(op->getType(),
+      m_builder.addBefore(op->getDef(), Op::BNot(op->getType(), cond.getDef())), b.getDef()));
+
+    m_builder.rewriteOp(op->getDef(), Op::BOr(op->getType(), tDef, fDef));
+    return std::make_pair(true, m_builder.iter(tDef));
   }
 
   return propagateAbsSignSelect(op);
