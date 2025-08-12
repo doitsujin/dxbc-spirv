@@ -1618,6 +1618,64 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentitySelect(Builder
     return std::make_pair(true, m_builder.iter(tDef));
   }
 
+  if (a.getOpCode() == OpCode::eSelect && b.getOpCode() == OpCode::eSelect) {
+    /* select(c0, select(c1, a, b), select(c2, a, b)) -> select(select(c0, c1, c2), a, b)
+     * select(c0, select(c1, a, b), select(c2, b, a)) -> select(select(c0, c1, !c2), a, b) */
+    auto at = SsaDef(a.getOperand(1u));
+    auto bt = SsaDef(b.getOperand(1u));
+    auto af = SsaDef(a.getOperand(2u));
+    auto bf = SsaDef(b.getOperand(2u));
+
+    if ((at == bt && af == bf) || (at == bf && af == bt)) {
+      auto ac = SsaDef(a.getOperand(0u));
+      auto bc = SsaDef(b.getOperand(0u));
+
+      /* Invert b condition if operands are flipped */
+      if (at != bt)
+        bc = m_builder.addBefore(op->getDef(), Op::BNot(m_builder.getOp(bc).getType(), bc));
+
+      auto condSel = m_builder.addBefore(op->getDef(),
+        Op::Select(m_builder.getOp(ac).getType(), cond.getDef(), ac, bc));
+
+      m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), condSel, at, af));
+      return std::make_pair(true, m_builder.iter(condSel));
+    }
+  } else if (a.getOpCode() == OpCode::eSelect) {
+    /* select(c0, select(c1, a, b), b) -> select(c0 && c1, a, b)
+     * select(c0, select(c1, b, a), b) -> select(c0 && !c1, a, b) */
+    auto ac = SsaDef(a.getOperand(0u));
+    auto at = SsaDef(a.getOperand(1u));
+    auto af = SsaDef(a.getOperand(2u));
+
+    if (at == b.getDef() || af == b.getDef()) {
+      bool invert = at == b.getDef();
+
+      if (invert)
+        ac = m_builder.addBefore(op->getDef(), Op::BNot(cond.getType(), ac));
+
+      ac = m_builder.addBefore(op->getDef(), Op::BAnd(cond.getType(), cond.getDef(), ac));
+      m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), ac, invert ? af : at, b.getDef()));
+      return std::make_pair(true, m_builder.iter(ac));
+    }
+  } else if (b.getOpCode() == OpCode::eSelect) {
+    /* select(c0, a, select(c1, a, b)) -> select(c0 || c1, a, b)
+     * select(c0, a, select(c1, b, a)) -> select(c0 || !c1, a, b) */
+    auto bc = SsaDef(b.getOperand(0u));
+    auto bt = SsaDef(b.getOperand(1u));
+    auto bf = SsaDef(b.getOperand(2u));
+
+    if (bt == a.getDef() || bf == a.getDef()) {
+      bool invert = bf == a.getDef();
+
+      if (invert)
+        bc = m_builder.addBefore(op->getDef(), Op::BNot(cond.getType(), bc));
+
+      bc = m_builder.addBefore(op->getDef(), Op::BOr(cond.getType(), cond.getDef(), bc));
+      m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), bc, a.getDef(), invert ? bt : bf));
+      return std::make_pair(true, m_builder.iter(bc));
+    }
+  }
+
   return propagateAbsSignSelect(op);
 }
 
