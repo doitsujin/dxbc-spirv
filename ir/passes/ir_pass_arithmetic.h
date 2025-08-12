@@ -89,6 +89,8 @@ private:
 
   std::pair<bool, Builder::iterator> selectBitOp(Builder::iterator op);
 
+  std::pair<bool, Builder::iterator> selectPhi(Builder::iterator op);
+
   std::pair<bool, Builder::iterator> selectOp(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> propagateAbsUnary(Builder::iterator op);

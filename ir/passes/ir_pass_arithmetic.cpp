@@ -627,6 +627,101 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectBitOp(Builder::iterator
 }
 
 
+std::pair<bool, Builder::iterator> ArithmeticPass::selectPhi(Builder::iterator op) {
+  /* Boolean phis already are in the format that we want */
+  if (!op->getType().isBasicType() || op->getType().getBaseType(0u).isBoolType())
+    return std::make_pair(false, ++op);
+
+  /* Determine whether a phi can only return one of two different constant values.
+   * This is common for simple conditional boolean assignments in DXBC. */
+  util::small_vector<SsaDef, 2u> constants;
+
+  for (uint32_t i = 1u; i < op->getOperandCount(); i += 2u) {
+    const auto& arg = m_builder.getOpForOperand(*op, i);
+    util::small_vector<SsaDef, 2u> incoming;
+
+    if (arg.isConstant()) {
+      /* Add operand itself */
+      incoming.push_back(arg.getDef());
+    } else if (arg.getOpCode() == OpCode::eSelect) {
+      /* Select condition must be scalar */
+      if (!m_builder.getOpForOperand(arg, 0u).getType().isScalarType())
+        return std::make_pair(false, ++op);
+
+      /* Add true and false operands */
+      incoming.push_back(SsaDef(arg.getOperand(1u)));
+      incoming.push_back(SsaDef(arg.getOperand(2u)));
+    } else {
+      /* Unsupported op */
+      return std::make_pair(false, ++op);
+    }
+
+    for (auto candidate : incoming) {
+      if (!m_builder.getOp(candidate).isConstant())
+        return std::make_pair(false, ++op);
+
+      bool found = false;
+
+      for (auto constant : constants)
+        found = found || constant == candidate;
+
+      if (!found && constants.size() == 2u)
+        return std::make_pair(false, ++op);
+
+      if (!found)
+        constants.push_back(candidate);
+    }
+  }
+
+  if (constants.size() != 2u)
+    return std::make_pair(false, ++op);
+
+  /* Iterate over phi operands again and build new boolean phi */
+  Op newPhi(OpCode::ePhi, ScalarType::eBool);
+
+  forEachPhiOperand(*op, [&] (SsaDef block, SsaDef value) {
+    const auto& arg = m_builder.getOp(value);
+
+    if (arg.isConstant()) {
+      /* Select will assume the first constant is the 'true' condition */
+      newPhi.addPhi(block, m_builder.makeConstant(value == constants.at(0u)));
+    } else {
+      dxbc_spv_assert(arg.getOpCode() == OpCode::eSelect);
+
+      auto condDef = SsaDef(arg.getOperand(0u));
+      auto tDef = SsaDef(arg.getOperand(1u));
+      auto fDef = SsaDef(arg.getOperand(2u));
+
+      if (tDef == constants.at(0u)) {
+        dxbc_spv_assert(fDef == constants.at(1u));
+        newPhi.addPhi(block, condDef);
+      } else if (fDef == constants.at(0u)) {
+        dxbc_spv_assert(tDef == constants.at(1u));
+
+        /* Need to invert the condition */
+        condDef = m_builder.addAfter(value, Op::BNot(ScalarType::eBool, condDef));
+        newPhi.addPhi(block, condDef);
+      } else {
+        dxbc_spv_unreachable();
+      }
+    }
+  });
+
+  auto selectCond = m_builder.addAfter(op->getDef(), std::move(newPhi));
+
+  /* Insert Select op at the end of the phi block */
+  auto ref = selectCond;
+
+  while (m_builder.getOp(ref).getOpCode() == OpCode::ePhi)
+    ref = m_builder.getNext(ref);
+
+  auto next = m_builder.rewriteDef(op->getDef(), m_builder.addBefore(ref,
+    Op::Select(op->getType(), selectCond, constants.at(0u), constants.at(1u))));
+
+  return std::make_pair(true, m_builder.iter(next));
+}
+
+
 std::pair<bool, Builder::iterator> ArithmeticPass::selectOp(Builder::iterator op) {
   switch (op->getOpCode()) {
     case OpCode::eCast:
@@ -653,6 +748,9 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectOp(Builder::iterator op
     case OpCode::eIEq:
     case OpCode::eINe:
       return selectCompare(op);
+
+    case OpCode::ePhi:
+      return selectPhi(op);
 
     default:
       return std::make_pair(false, ++op);
