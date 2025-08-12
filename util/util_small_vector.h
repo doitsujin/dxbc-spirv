@@ -190,8 +190,14 @@ public:
       object->~T();
     }
 
-    if (!is_embedded())
+    if (!is_embedded()) {
+      /* GCC warns about m_ptr potentially being uninitialized, which cannot
+       * be true since we set it up when exceeding embedded capacityl */
+      #pragma GCC diagnostic push
+      #pragma GCC diagnostic ignored "-Wuninitialized"
       m_state.getAllocator().deallocate(u.m_ptr, capacity());
+      #pragma GCC diagnostic pop
+    }
 
     m_state.capacity = n;
     u.m_ptr = data;
