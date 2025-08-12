@@ -113,7 +113,11 @@ private:
 
   std::pair<bool, Builder::iterator> resolveIdentitySelect(Builder::iterator op);
 
+  std::pair<bool, Builder::iterator> resolveIdentityF16toF32(Builder::iterator op);
+
   std::pair<bool, Builder::iterator> resolveIsNanCheck(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> resolveCompositeExtract(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> resolveIdentityOp(Builder::iterator op);
 

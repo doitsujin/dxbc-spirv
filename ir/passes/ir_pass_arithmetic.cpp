@@ -1680,6 +1680,51 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentitySelect(Builder
 }
 
 
+std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityF16toF32(Builder::iterator op) {
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+  /* f16tof32(iand(x, 0xffff)) -> vec2(f16tof32(x).x, 0)
+   * f16tof32(ubfe(x, 0, 16)) -> vec2(f16tof32(x).x, 0)
+   * f16tof32(ushr(x, 16)) -> vec2(f16tof32(x).y, 0)
+   * f16tof32(ubfe(x, 16, 16)) -> vec2(f16tof32(x).y, 0) */
+  bool extractsLo = false;
+  bool extractsHi = false;
+
+  if (a.getOpCode() == OpCode::eIAnd)
+    extractsLo = isConstantValue(m_builder.getOpForOperand(a, 1u), 0xffff);
+
+  if (a.getOpCode() == OpCode::eUShr)
+    extractsHi = isConstantValue(m_builder.getOpForOperand(a, 1u), 16);
+
+  if (a.getOpCode() == OpCode::eUBitExtract) {
+    if (isConstantValue(m_builder.getOpForOperand(a, 2u), 16)) {
+      extractsLo = isConstantValue(m_builder.getOpForOperand(a, 1u), 0);
+      extractsHi = isConstantValue(m_builder.getOpForOperand(a, 1u), 16);
+    }
+  }
+
+  if (!extractsLo && !extractsHi)
+    return std::make_pair(false, ++op);
+
+  /* Use orginal operand for the conversion */
+  auto conversion = m_builder.addBefore(op->getDef(),
+    Op(op->getOpCode(), op->getType()).setFlags(op->getFlags())
+      .addOperand(SsaDef(a.getOperand(0u))));
+
+  /* Extract high or low component, depending on what we're using */
+  auto scalarType = op->getType().getSubType(0u);
+
+  auto component = m_builder.addBefore(op->getDef(),
+    Op::CompositeExtract(scalarType, conversion, m_builder.makeConstant(extractsHi ? 1u : 0u)));
+
+  /* Build vector with the high component being 0 */
+  m_builder.rewriteOp(op->getDef(), Op::CompositeConstruct(op->getType(), component,
+    m_builder.add(Op(OpCode::eConstant, scalarType).addOperand(Operand()))));
+
+  return std::make_pair(true, op);
+}
+
+
 std::pair<bool, Builder::iterator> ArithmeticPass::resolveIsNanCheck(Builder::iterator op) {
   /* Look for a pattern that goes a < b || a == b || a > b, which is equivalent to
    * !(isnan(a) || isnan(b)). b will usually be a constant, so we can constant-fold. */
@@ -1735,7 +1780,21 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIsNanCheck(Builder::it
   auto anyNan = m_builder.addBefore(op->getDef(), Op::BOr(op->getType(), aIsNan, bIsNan));
 
   m_builder.rewriteOp(op->getDef(), Op::BNot(op->getType(), anyNan));
-  return std::make_pair(false, op);
+  return std::make_pair(true, op);
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::resolveCompositeExtract(Builder::iterator op) {
+  /* Only handle composite constructs that we may generate during passes. */
+  const auto& composite = m_builder.getOpForOperand(*op, 0u);
+  const auto& component = m_builder.getOpForOperand(*op, 1u);
+
+  if (composite.getOpCode() != OpCode::eCompositeConstruct)
+    return std::make_pair(false, ++op);
+
+  auto index = getConstantAsUint(component, 0u);
+  auto next = m_builder.rewriteDef(op->getDef(), SsaDef(composite.getOperand(index)));
+  return std::make_pair(true, m_builder.iter(next));
 }
 
 
@@ -1797,8 +1856,14 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityOp(Builder::it
     case OpCode::eSelect:
       return resolveIdentitySelect(op);
 
+    case OpCode::eConvertPackedF16toF32:
+      return resolveIdentityF16toF32(op);
+
     case OpCode::ePhi:
       return propagateAbsSignPhi(op);
+
+    case OpCode::eCompositeExtract:
+      return resolveCompositeExtract(op);
 
     default:
       return std::make_pair(false, ++op);
