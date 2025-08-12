@@ -51,6 +51,9 @@ bool ArithmeticPass::runPass() {
     if (!status)
       std::tie(status, next) = selectOp(iter);
 
+    if (!status)
+      std::tie(status, next) = vectorizeF32toF16(iter);
+
     if (status) {
       progress = true;
       iter = next;
@@ -1868,6 +1871,103 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityOp(Builder::it
     default:
       return std::make_pair(false, ++op);
   }
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::vectorizeF32toF16(Builder::iterator op) {
+  SsaDef lo = { };
+  SsaDef hi = { };
+
+  if (!op->getType().isScalarType())
+    return std::make_pair(false, ++op);
+
+  switch (op->getOpCode()) {
+    case OpCode::eIAdd:
+    case OpCode::eIOr: {
+      /* a | (b << 16), a + (b * 65536), or any combination thereof */
+      for (uint32_t i = 0u; i < op->getOperandCount(); i++) {
+        const auto& arg = m_builder.getOpForOperand(*op, i);
+
+        switch (arg.getOpCode()) {
+          case OpCode::eIShl: {
+            if (isConstantValue(m_builder.getOpForOperand(arg, 1u), 16))
+              hi = SsaDef(arg.getOperand(0u));
+          } break;
+
+          case OpCode::eIMul: {
+            if (isConstantValue(m_builder.getOpForOperand(arg, 1u), 65536))
+              hi = SsaDef(arg.getOperand(0u));
+          } break;
+
+          default:
+            lo = arg.getDef();
+        }
+      }
+    } break;
+
+    case OpCode::eIBitInsert: {
+      /* bfi(a, b, 16, 16) */
+      const auto& offset = m_builder.getOpForOperand(*op, 2u);
+      const auto& count = m_builder.getOpForOperand(*op, 3u);
+
+      if (!isConstantValue(offset, 16) || !isConstantValue(count, 16))
+        return std::make_pair(false, ++op);
+
+      lo = SsaDef(op->getOperand(0u));
+      hi = SsaDef(op->getOperand(1u));
+    } break;
+
+    default:
+      return std::make_pair(false, ++op);
+  }
+
+  if (!lo || !hi)
+    return std::make_pair(false, ++op);
+
+  /* Some games are a little bit speshul and apply masking
+   * to the intermediate results before merging */
+  SsaDef loMask = m_builder.makeConstant(-1u);
+  SsaDef hiMask = m_builder.makeConstant(-1u);
+
+  if (lo && m_builder.getOp(lo).getOpCode() == OpCode::eIAnd && m_builder.getOpForOperand(lo, 1u).isConstant()) {
+    loMask = m_builder.getOpForOperand(lo, 1u).getDef();
+    lo = m_builder.getOpForOperand(lo, 0u).getDef();
+  }
+
+  if (hi && m_builder.getOp(hi).getOpCode() == OpCode::eIAnd && m_builder.getOpForOperand(hi, 1u).isConstant()) {
+    hiMask = m_builder.getOpForOperand(hi, 1u).getDef();
+    hi = m_builder.getOpForOperand(hi, 0u).getDef();
+  }
+
+  /* Ensure that both operands are actually valid in this context */
+  if (m_builder.getOp(lo).getOpCode() != OpCode::eConvertF32toPackedF16 ||
+      m_builder.getOp(hi).getOpCode() != OpCode::eConvertF32toPackedF16)
+    return std::make_pair(false, ++op);
+
+  /* Statically prove that the low part is actually a 16-bit result */
+  auto loArg = m_builder.getOpForOperand(lo, 0u);
+  auto hiArg = m_builder.getOpForOperand(hi, 0u);
+
+  if (loArg.getType() != hiArg.getType())
+    return std::make_pair(false, ++op);
+
+  if (loArg.getOpCode() != OpCode::eCompositeConstruct ||
+      !isConstantValue(m_builder.getOpForOperand(loArg, 1u), 0u))
+    return std::make_pair(false, ++op);
+
+  /* Build input vector and perform conversion */
+  auto loValue = m_builder.addBefore(op->getDef(), Op::CompositeExtract(loArg.getType().getSubType(0u), loArg.getDef(), m_builder.makeConstant(0u)));
+  auto hiValue = m_builder.addBefore(op->getDef(), Op::CompositeExtract(hiArg.getType().getSubType(0u), hiArg.getDef(), m_builder.makeConstant(0u)));
+
+  auto vector = m_builder.addBefore(op->getDef(), Op::CompositeConstruct(loArg.getType(), loValue, hiValue));
+  auto result = m_builder.addBefore(op->getDef(), Op::ConvertF32toPackedF16(op->getType(), vector));
+
+  /* Build and apply mask, constant-fold later if possible */
+  auto mask = m_builder.addBefore(op->getDef(), Op::IBitInsert(op->getType(),
+    loMask, hiMask, m_builder.makeConstant(16u), m_builder.makeConstant(16u)));
+
+  m_builder.rewriteOp(op->getDef(), Op::IAnd(op->getType(), result, mask));
+  return std::make_pair(true, m_builder.iter(loValue));
 }
 
 

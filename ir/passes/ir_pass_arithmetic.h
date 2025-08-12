@@ -121,6 +121,8 @@ private:
 
   std::pair<bool, Builder::iterator> resolveIdentityOp(Builder::iterator op);
 
+  std::pair<bool, Builder::iterator> vectorizeF32toF16(Builder::iterator op);
+
   std::pair<bool, Builder::iterator> reorderConstantOperandsCompareOp(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> reorderConstantOperandsCommutativeOp(Builder::iterator op);
