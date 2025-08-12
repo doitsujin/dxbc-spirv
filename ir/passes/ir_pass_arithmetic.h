@@ -60,6 +60,13 @@ private:
     SsaDef function = { };
   };
 
+  struct DotFunc {
+    OpCode opCode = { };
+    BasicType vectorType = { };
+    ScalarType resultType = { };
+    SsaDef function = { };
+  };
+
   Builder& m_builder;
 
   Options m_options;
@@ -69,6 +76,7 @@ private:
   OpFlags m_fp64Flags = 0u;
 
   util::small_vector<ConvertFunc, 8u> m_convertFunctions;
+  util::small_vector<DotFunc, 8u> m_dotFunctions;
 
   void lowerInstructionsPreTransform();
   void lowerInstructionsPostTransform();
@@ -78,8 +86,6 @@ private:
   Builder::iterator lowerClamp(Builder::iterator op);
 
   Builder::iterator lowerConvertFtoI(Builder::iterator op);
-
-  SsaDef extractFromVector(SsaDef vector, uint32_t component);
 
   Builder::iterator tryFuseClamp(Builder::iterator op);
 

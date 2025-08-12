@@ -166,28 +166,79 @@ Builder::iterator ArithmeticPass::lowerDot(Builder::iterator op) {
 
   dxbc_spv_assert(srcA.getType() == srcB.getType());
 
-  /* Determine which opcodes to use */
-  bool isLegacy = op->getOpCode() == OpCode::eFDotLegacy;
+  /* Look up existing dot function */
+  auto vectorType = srcA.getType().getBaseType(0u);
+  auto resultType = op->getType().getBaseType(0u).getBaseType();
 
-  auto mulOp = isLegacy ? OpCode::eFMulLegacy : OpCode::eFMul;
-  auto madOp = isLegacy ? OpCode::eFMadLegacy : OpCode::eFMad;
+  auto e = std::find_if(m_dotFunctions.begin(), m_dotFunctions.end(), [
+    cOpCode     = op->getOpCode(),
+    cVectorType = vectorType,
+    cResultType = resultType
+  ] (const DotFunc& fn) {
+    return fn.opCode      == cOpCode &&
+           fn.vectorType  == cVectorType &&
+           fn.resultType  == cResultType;
+  });
 
-  /* Mark the multiply-add chain as precise so that compilers don't screw around with
-   * it, otherwise we run into rendering issues in e.g. Trails through Daybreak. */
-  auto opFlags = op->getFlags() | OpFlag::ePrecise;
+  if (e == m_dotFunctions.end()) {
+    DotFunc fn = { };
+    fn.opCode = op->getOpCode();
+    fn.vectorType = srcA.getType().getBaseType(0u);
+    fn.resultType = resultType;
 
-  Op result = Op(mulOp, op->getType()).setFlags(opFlags)
-    .addOperand(extractFromVector(srcA.getDef(), 0u))
-    .addOperand(extractFromVector(srcB.getDef(), 0u));
+    /* Declare actual conversion function */
+    auto paramA = m_builder.add(Op::DclParam(vectorType));
+    auto paramB = m_builder.add(Op::DclParam(vectorType));
 
-  for (uint32_t i = 1u; i < srcA.getType().getBaseType(0u).getVectorSize(); i++) {
-    result = Op(madOp, op->getType()).setFlags(opFlags)
-      .addOperand(extractFromVector(srcA.getDef(), i))
-      .addOperand(extractFromVector(srcB.getDef(), i))
-      .addOperand(m_builder.addBefore(op->getDef(), std::move(result)));
+    m_builder.add(Op::DebugName(paramA, "a"));
+    m_builder.add(Op::DebugName(paramB, "b"));
+
+    fn.function = m_builder.addBefore(m_builder.getCode().first->getDef(),
+      Op::Function(op->getType()).addParam(paramA).addParam(paramB));
+
+    std::stringstream debugName;
+    debugName << "dp" << vectorType.getVectorSize() << "_" << resultType;
+
+    if (resultType != vectorType.getBaseType())
+      debugName << "_" << vectorType.getBaseType();
+
+    m_builder.add(Op::DebugName(fn.function, debugName.str().c_str()));
+
+    m_builder.setCursor(fn.function);
+    m_builder.add(Op::Label());
+
+    auto vectorA = m_builder.add(Op::ParamLoad(vectorType, fn.function, paramA));
+    auto vectorB = m_builder.add(Op::ParamLoad(vectorType, fn.function, paramB));
+
+    /* Determine which opcodes to use */
+    bool isLegacy = op->getOpCode() == OpCode::eFDotLegacy;
+
+    auto mulOp = isLegacy ? OpCode::eFMulLegacy : OpCode::eFMul;
+    auto madOp = isLegacy ? OpCode::eFMadLegacy : OpCode::eFMad;
+
+    /* Mark the multiply-add chain as precise so that compilers don't screw around with
+    * it, otherwise we run into rendering issues in e.g. Trails through Daybreak. */
+    auto opFlags = op->getFlags() | OpFlag::ePrecise;
+
+    auto result = m_builder.add(Op(mulOp, op->getType()).setFlags(opFlags)
+      .addOperand(m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorA, m_builder.makeConstant(0u))))
+      .addOperand(m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorB, m_builder.makeConstant(0u)))));
+
+    for (uint32_t i = 1u; i < srcA.getType().getBaseType(0u).getVectorSize(); i++) {
+      result = m_builder.add(Op(madOp, op->getType()).setFlags(opFlags)
+        .addOperand(m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorA, m_builder.makeConstant(i))))
+        .addOperand(m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorB, m_builder.makeConstant(i))))
+        .addOperand(result));
+    }
+
+    m_builder.add(Op::Return(op->getType(), result));
+    m_builder.add(Op::FunctionEnd());
+
+    e = m_dotFunctions.insert(m_dotFunctions.end(), fn);
   }
 
-  m_builder.rewriteOp(op->getDef(), std::move(result));
+  m_builder.rewriteOp(op->getDef(), Op::FunctionCall(op->getType(), e->function)
+    .addParam(srcA.getDef()).addParam(srcB.getDef()));
   return ++op;
 }
 
@@ -235,7 +286,7 @@ Builder::iterator ArithmeticPass::lowerConvertFtoI(Builder::iterator op) {
     });
 
   if (e == m_convertFunctions.end()) {
-    ConvertFunc fn = m_convertFunctions.emplace_back();
+    ConvertFunc fn = { };
     fn.dstType = dstType;
     fn.srcType = srcType;
 
@@ -341,27 +392,6 @@ Builder::iterator ArithmeticPass::lowerConvertFtoI(Builder::iterator op) {
   m_builder.rewriteOp(op->getDef(),
     Op::FunctionCall(dstType, e->function).addParam(src.getDef()));
   return ++op;
-}
-
-
-SsaDef ArithmeticPass::extractFromVector(SsaDef vector, uint32_t component) {
-  const auto& vectorOp = m_builder.getOp(vector);
-
-  if (vectorOp.isUndef())
-    return m_builder.makeUndef(vectorOp.getType().getSubType(component));
-
-  if (vectorOp.isConstant()) {
-    auto constant = Op(OpCode::eConstant, vectorOp.getType().getSubType(component))
-      .addOperand(vectorOp.getOperand(component));
-    return m_builder.add(std::move(constant));
-  }
-
-  if (vectorOp.getOpCode() == OpCode::eCompositeConstruct)
-    return SsaDef(vectorOp.getOperand(component));
-
-  return m_builder.addAfter(vector, Op::CompositeExtract(
-    vectorOp.getType().getSubType(0u), vector,
-    m_builder.makeConstant(component)));
 }
 
 
