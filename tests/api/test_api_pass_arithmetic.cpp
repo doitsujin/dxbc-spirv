@@ -910,7 +910,7 @@ Builder test_pass_arithmetic_identities_select() {
   uint32_t test = 0u;
 
   /* cast(and(x, select(cond, -1, 0))) -> select(cond, x, 0) */
-  auto v0 = emit_load(b, srv, 2u * test + 0u, ScalarType::eBool);
+  auto v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eBool);
 
   auto a = b.add(Op::Select(ScalarType::eU32, v0, b.makeConstant(-1u), b.makeConstant(0u)));
   a = b.add(Op::IAnd(ScalarType::eU32, a, b.makeConstant(0x40200000u)));
@@ -919,23 +919,23 @@ Builder test_pass_arithmetic_identities_select() {
   emit_store(b, uav, test++, a);
 
   /* select(!x, a, b) -> select(x, b, a) */
-  v0 = emit_load(b, srv, 2u * test + 0u, ScalarType::eBool);
+  v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eBool);
 
-  a = b.add(Op::BNot(ScalarType::eBool, a));
+  a = b.add(Op::BNot(ScalarType::eBool, v0));
   a = b.add(Op::Select(ScalarType::eU32, a, b.makeConstant(-1u), b.makeConstant(0u)));
 
   emit_store(b, uav, test++, a);
 
   /* select(x, a, a) -> a */
-  v0 = emit_load(b, srv, 2u * test + 0u, ScalarType::eBool);
+  v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eBool);
   auto v1 = emit_load(b, srv, 2u * test + 1u, ScalarType::eI32);
 
   a = b.add(Op::Select(ScalarType::eI32, v0, v1, v1));
   emit_store(b, uav, test++, a);
 
   /* and(select(x, -1, 0), select(y, -1, 0)) -> select(x && y, -1, 0) */
-  v0 = emit_load(b, srv, 2u * test + 0u, ScalarType::eBool);
-  v1 = emit_load(b, srv, 2u * test + 1u, ScalarType::eBool);
+  v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eBool);
+  v1 = emit_load(b, srv, 3u * test + 1u, ScalarType::eBool);
 
   a = b.add(Op::IAnd(ScalarType::eI32,
     b.add(Op::Select(ScalarType::eI32, v0, b.makeConstant(-1), b.makeConstant(0))),
@@ -943,8 +943,8 @@ Builder test_pass_arithmetic_identities_select() {
   emit_store(b, uav, test++, a);
 
   /* and(select(x, -1, 0), select(y, 0, -1)) -> select(x && !y, -1, 0) */
-  v0 = emit_load(b, srv, 2u * test + 0u, ScalarType::eBool);
-  v1 = emit_load(b, srv, 2u * test + 1u, ScalarType::eBool);
+  v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eBool);
+  v1 = emit_load(b, srv, 3u * test + 1u, ScalarType::eBool);
 
   a = b.add(Op::IAnd(ScalarType::eI32,
     b.add(Op::Select(ScalarType::eI32, v0, b.makeConstant(-1), b.makeConstant(0))),
@@ -952,8 +952,8 @@ Builder test_pass_arithmetic_identities_select() {
   emit_store(b, uav, test++, a);
 
   /* or(select(x, -1, 0), select(y, -1, 0)) -> select(x || y, -1, 0) */
-  v0 = emit_load(b, srv, 2u * test + 0u, ScalarType::eBool);
-  v1 = emit_load(b, srv, 2u * test + 1u, ScalarType::eBool);
+  v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eBool);
+  v1 = emit_load(b, srv, 3u * test + 1u, ScalarType::eBool);
 
   a = b.add(Op::IOr(ScalarType::eI32,
     b.add(Op::Select(ScalarType::eI32, v0, b.makeConstant(-1), b.makeConstant(0))),
@@ -961,26 +961,26 @@ Builder test_pass_arithmetic_identities_select() {
   emit_store(b, uav, test++, a);
 
   /* xor(select(x, -1, 0), select(y, -1, 0)) -> select(x != y, -1, 0) */
-  v0 = emit_load(b, srv, 2u * test + 0u, ScalarType::eBool);
-  v1 = emit_load(b, srv, 2u * test + 1u, ScalarType::eBool);
+  v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eBool);
+  v1 = emit_load(b, srv, 3u * test + 1u, ScalarType::eBool);
 
   a = b.add(Op::IXor(ScalarType::eI32,
     b.add(Op::Select(ScalarType::eI32, v0, b.makeConstant(-1), b.makeConstant(0))),
     b.add(Op::Select(ScalarType::eI32, v1, b.makeConstant(-1), b.makeConstant(0)))));
   emit_store(b, uav, test++, a);
 
-  /* xor(select(x, 0, 1), select(y, 1, 0)) -> select(x != y, 0, 1) */
-  v0 = emit_load(b, srv, 2u * test + 0u, ScalarType::eBool);
-  v1 = emit_load(b, srv, 2u * test + 1u, ScalarType::eBool);
+  /* xor(select(x, 0, 1), select(y, 1, 0)) -> select(x == y, 0, 1) */
+  v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eBool);
+  v1 = emit_load(b, srv, 3u * test + 1u, ScalarType::eBool);
 
   a = b.add(Op::IXor(ScalarType::eI32,
     b.add(Op::Select(ScalarType::eI32, v0, b.makeConstant(0), b.makeConstant(1))),
-    b.add(Op::Select(ScalarType::eI32, v1, b.makeConstant(0), b.makeConstant(1)))));
+    b.add(Op::Select(ScalarType::eI32, v1, b.makeConstant(1), b.makeConstant(0)))));
   emit_store(b, uav, test++, a);
 
-  /* Can't generally merge select without a zero operand */
-  v0 = emit_load(b, srv, 2u * test + 0u, ScalarType::eBool);
-  v1 = emit_load(b, srv, 2u * test + 1u, ScalarType::eBool);
+  /* Cursed constant folded merge pattern */
+  v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eBool);
+  v1 = emit_load(b, srv, 3u * test + 1u, ScalarType::eBool);
 
   a = b.add(Op::IOr(ScalarType::eI32,
     b.add(Op::Select(ScalarType::eI32, v0, b.makeConstant(1), b.makeConstant(2))),
@@ -988,31 +988,85 @@ Builder test_pass_arithmetic_identities_select() {
   emit_store(b, uav, test++, a);
 
   /* select(x, a, b) == a -> x */
-  v0 = emit_load(b, srv, 2u * test + 0u, ScalarType::eBool);
+  v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eBool);
 
   a = b.add(Op::IEq(ScalarType::eBool, b.makeConstant(-1),
     b.add(Op::Select(ScalarType::eI32, v0, b.makeConstant(-1), b.makeConstant(0)))));
   emit_store(b, uav, test++, a);
 
   /* select(x, a, b) == b -> !x */
-  v0 = emit_load(b, srv, 2u * test + 0u, ScalarType::eBool);
+  v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eBool);
 
   a = b.add(Op::IEq(ScalarType::eBool, b.makeConstant(0),
     b.add(Op::Select(ScalarType::eI32, v0, b.makeConstant(-1), b.makeConstant(0)))));
   emit_store(b, uav, test++, a);
 
   /* select(x, a, b) != a -> !x */
-  v0 = emit_load(b, srv, 2u * test + 0u, ScalarType::eBool);
+  v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eBool);
 
   a = b.add(Op::INe(ScalarType::eBool, b.makeConstant(-1),
     b.add(Op::Select(ScalarType::eI32, v0, b.makeConstant(-1), b.makeConstant(0)))));
   emit_store(b, uav, test++, a);
 
   /* select(x, a, b) != b -> x */
-  v0 = emit_load(b, srv, 2u * test + 0u, ScalarType::eBool);
+  v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eBool);
 
   a = b.add(Op::INe(ScalarType::eBool, b.makeConstant(0),
     b.add(Op::Select(ScalarType::eI32, v0, b.makeConstant(-1), b.makeConstant(0)))));
+  emit_store(b, uav, test++, a);
+
+  /* select(c1, select(c2, a, b), select(c3, a, b)) -> select(c1 && c2 || !c1 && c3, a, b) */
+  v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eBool);
+  v1 = emit_load(b, srv, 3u * test + 1u, ScalarType::eBool);
+  auto v2 = emit_load(b, srv, 3u * test + 2u, ScalarType::eBool);
+
+  a = b.add(Op::Select(ScalarType::eI32, v0,
+    b.add(Op::Select(ScalarType::eI32, v1, b.makeConstant(-1), b.makeConstant(0))),
+    b.add(Op::Select(ScalarType::eI32, v2, b.makeConstant(-1), b.makeConstant(0)))));
+  emit_store(b, uav, test++, a);
+
+  /* select(c1, select(c2, a, b), select(!c3, a, b)) -> select(c1 && c2 || !(c1 || c3), a, b) */
+  v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eBool);
+  v1 = emit_load(b, srv, 3u * test + 1u, ScalarType::eBool);
+  v2 = emit_load(b, srv, 3u * test + 2u, ScalarType::eBool);
+
+  a = b.add(Op::Select(ScalarType::eI32, v0,
+    b.add(Op::Select(ScalarType::eI32, v1, b.makeConstant(-1), b.makeConstant(0))),
+    b.add(Op::Select(ScalarType::eI32, v2, b.makeConstant(0), b.makeConstant(-1)))));
+  emit_store(b, uav, test++, a);
+
+  /* select(c1, select(c2, a, b), b) -> select(c1 && c2, a, b) */
+  v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eBool);
+  v1 = emit_load(b, srv, 3u * test + 1u, ScalarType::eBool);
+
+  a = b.add(Op::Select(ScalarType::eI32, v0,
+    b.add(Op::Select(ScalarType::eI32, v1, b.makeConstant(-1), b.makeConstant(0))),
+    b.makeConstant(0)));
+  emit_store(b, uav, test++, a);
+
+  /* select(c1, select(c2, b, a), b) -> select(c1 && !c2, a, b) */
+  v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eBool);
+  v1 = emit_load(b, srv, 3u * test + 1u, ScalarType::eBool);
+
+  a = b.add(Op::Select(ScalarType::eI32, v0,
+    b.add(Op::Select(ScalarType::eI32, v1, b.makeConstant(0), b.makeConstant(-1))),
+    b.makeConstant(0)));
+  emit_store(b, uav, test++, a);
+
+  /* select(c1, a, select(c2, a, b)) -> select(c1 || c2, a, b) */
+  v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eBool);
+  v1 = emit_load(b, srv, 3u * test + 1u, ScalarType::eBool);
+
+  a = b.add(Op::Select(ScalarType::eI32, v0, b.makeConstant(-1),
+    b.add(Op::Select(ScalarType::eI32, v1, b.makeConstant(-1), b.makeConstant(0)))));
+  emit_store(b, uav, test++, a);
+
+  /* select(c1, a, select(c2, b, a)) -> select(c1 || !c2, a, b) */
+  v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eBool);
+  v1 = emit_load(b, srv, 3u * test + 1u, ScalarType::eBool);
+
+  a = b.add(Op::Select(ScalarType::eI32, v0, b.makeConstant(-1),
+    b.add(Op::Select(ScalarType::eI32, v1, b.makeConstant(0), b.makeConstant(-1)))));
   emit_store(b, uav, test++, a);
 
   return run_passes(b);
