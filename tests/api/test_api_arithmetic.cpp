@@ -86,7 +86,8 @@ Builder make_test_float_arithmetic(BasicType type, bool precise) {
 
         srvOffset++;
 
-        operand = components.front();
+        /* Silence a GCC warning */
+        operand = components.empty() ? SsaDef() : components.front();
 
         if (type.isVector()) {
           Op buildVectorOp(OpCode::eCompositeConstruct, type);
