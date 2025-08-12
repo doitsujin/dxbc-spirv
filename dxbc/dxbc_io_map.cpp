@@ -556,9 +556,6 @@ bool IoMap::declareIoSignatureVars(
     ? ir::OpCode::eDclInput
     : ir::OpCode::eDclOutput;
 
-  /* Determine I/O location */
-  uint32_t locationIndex = mapLocation(regType, regIndex);
-
   /* Find and declare variables for all signature entries matching the given
    * declaration. If no signature entry is present, assume a float vec4. */
   auto entries = signature->filter([=] (const SignatureEntry& e) {
@@ -579,7 +576,7 @@ bool IoMap::declareIoSignatureVars(
 
       auto declaration = ir::Op(opCode, type)
         .addOperand(m_converter.getEntryPoint())
-        .addOperand(locationIndex)
+        .addOperand(regIndex)
         .addOperand(e->computeComponentIndex());
 
       if (!type.getBaseType(0u).isFloatType())
@@ -632,7 +629,7 @@ bool IoMap::declareIoSignatureVars(
 
       auto declaration = ir::Op(opCode, type)
         .addOperand(m_converter.getEntryPoint())
-        .addOperand(locationIndex)
+        .addOperand(regIndex)
         .addOperand(util::tzcnt(uint8_t(nextMask)));
 
       addDeclarationArgs(declaration, regType, interpolation);
@@ -2067,27 +2064,6 @@ const Signature* IoMap::selectSignature(RegisterType type) const {
     default:
       return nullptr;
   }
-}
-
-
-uint32_t IoMap::mapLocation(RegisterType regType, uint32_t regIndex) const {
-  if (!m_converter.m_options.uniqueIoLocations)
-    return regIndex;
-
-  if (regType == RegisterType::ePatchConstant) {
-    const auto& signature = m_shaderInfo.getType() == ShaderType::eHull
-      ? m_osgn
-      : m_isgn;
-
-    uint32_t index = 0u;
-
-    for (const auto& e : signature)
-      index = std::max(e.getRegisterIndex() + 1u, index);
-
-    return index + regIndex;
-  }
-
-  return regIndex;
 }
 
 

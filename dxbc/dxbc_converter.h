@@ -39,10 +39,6 @@ public:
      *  includes resources, scratch and shared variables, as well as
      *  semantic names for I/O variables. */
     bool includeDebugNames = false;
-    /** Whether to ensure that locations for patch constants and geometry
-     *  streams are unique and do not conflict with control point locations
-     *  or other streams, respectively. Required for SPIR-V lowering. */
-    bool uniqueIoLocations = true;
     /** Maximum tessellation factor override. Shaders may specify a
      *  different value, but any higher values will be ignored. */
     float maxTessFactor = 0.0f;
