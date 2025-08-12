@@ -389,7 +389,7 @@ std::pair<ir::SsaDef, ir::SsaDef> ResourceMap::emitRawStructuredLoad(
   auto readMask = operand.getSwizzle().getReadMask(componentMask);
 
   if (isSparse) {
-    auto hiMask = 0x7fu >> util::lzcnt8(uint8_t(readMask));
+    auto hiMask = 0xffu >> util::lzcnt8(uint8_t(readMask));
     auto loMask = 0xffu << util::tzcnt(uint8_t(readMask));
 
     readMask = WriteMask(hiMask & loMask);
