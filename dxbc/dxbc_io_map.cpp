@@ -1506,7 +1506,7 @@ std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicStoreFunction(
 
   if (paramComponentIndex) {
     auto component = builder.add(ir::Op::ParamLoad(ir::ScalarType::eU32, function, paramComponentIndex));
-    regIndex = builder.add(ir::Op::IMul(ir::ScalarType::eU32, regIndex, builder.makeConstant(componentCount)));
+    regIndex = builder.add(ir::Op::IMul(ir::ScalarType::eU32, regIndex, builder.makeConstant(uint32_t(componentCount))));
     regIndex = builder.add(ir::Op::IAdd(ir::ScalarType::eU32, regIndex, component));
   }
 
