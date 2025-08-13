@@ -1,2 +1,2 @@
-option('enable_tests', type : 'boolean', value : true, description: 'Build tests')
-option('enable_tools', type : 'boolean', value : true, description: 'Build utility programs')
+option('enable_tests', type : 'boolean', value : false, description: 'Build tests')
+option('enable_tools', type : 'boolean', value : false, description: 'Build utility programs')
