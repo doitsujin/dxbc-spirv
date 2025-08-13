@@ -5,6 +5,7 @@
 #include "dxbc_converter.h"
 
 #include "../ir/passes/ir_pass_arithmetic.h"
+#include "../ir/passes/ir_pass_buffer_kind.h"
 #include "../ir/passes/ir_pass_cfg_cleanup.h"
 #include "../ir/passes/ir_pass_cfg_convert.h"
 #include "../ir/passes/ir_pass_cse.h"
@@ -37,6 +38,8 @@ struct CompileOptions {
    * buffers, LDS variables, scratch variables, and the
    * immediate constant buffer. */
   ir::PropagateResourceTypesPass::Options resourceOptions = { };
+  /* Options for when to use typed vs raw and structured buffers. */
+  ir::ConvertBufferKindPass::Options bufferOptions = { };
   /* Scalarization options. Can be used to toggle between
    * full scalarization and maintaining vec2 for min16 code. */
   ir::ScalarizePass::Options scalarizeOptions = { };
