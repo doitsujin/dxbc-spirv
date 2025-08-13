@@ -71,7 +71,11 @@ public:
 
   /** Initialize small vector with allocator */
   explicit small_vector(const Allocator& alloc)
-  : m_state(N, alloc) { }
+  : m_state(N, alloc) {
+    /* Somewhat nonsensical since we will first populat the,
+     * internal array anyway, but hides a GCC warning */
+    u.m_ptr = nullptr;
+  }
 
   /** Initialize small vector with size and default element value */
   explicit small_vector(size_t size, T value = T(), const Allocator& alloc = Allocator())
@@ -190,14 +194,8 @@ public:
       object->~T();
     }
 
-    if (!is_embedded()) {
-      /* GCC warns about m_ptr potentially being uninitialized, which cannot
-       * be true since we set it up when exceeding embedded capacityl */
-      #pragma GCC diagnostic push
-      #pragma GCC diagnostic ignored "-Wuninitialized"
+    if (!is_embedded())
       m_state.getAllocator().deallocate(u.m_ptr, capacity());
-      #pragma GCC diagnostic pop
-    }
 
     m_state.capacity = n;
     u.m_ptr = data;
