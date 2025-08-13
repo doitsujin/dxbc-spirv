@@ -872,15 +872,15 @@ Builder test_pass_arithmetic_identities_compare() {
   emit_store(b, uav, test++, a);
 
   /* float not a < a must stay as-is */
-  v0 = emit_load(b, srv, 2u * test + 0u, ScalarType::eI32);
-  v1 = emit_load(b, srv, 2u * test + 1u, ScalarType::eI32);
+  v0 = emit_load(b, srv, 2u * test + 0u, ScalarType::eF32);
+  v1 = emit_load(b, srv, 2u * test + 1u, ScalarType::eF32);
 
   a = b.add(Op::BNot(ScalarType::eBool, b.add(Op::FLt(ScalarType::eBool, v0, v1))));
   emit_store(b, uav, test++, a);
 
   /* a < b || a == b || a > b !isnan a && !isnan b */
-  v0 = emit_load(b, srv, 2u * test + 0u, ScalarType::eI32);
-  v1 = emit_load(b, srv, 2u * test + 1u, ScalarType::eI32);
+  v0 = emit_load(b, srv, 2u * test + 0u, ScalarType::eF32);
+  v1 = emit_load(b, srv, 2u * test + 1u, ScalarType::eF32);
 
   a = b.add(Op::BOr(ScalarType::eBool,
     b.add(Op::BOr(ScalarType::eBool,
@@ -890,7 +890,7 @@ Builder test_pass_arithmetic_identities_compare() {
   emit_store(b, uav, test++, a);
 
   /* same thing again but with a constant */
-  v0 = emit_load(b, srv, 2u * test + 0u, ScalarType::eI32);
+  v0 = emit_load(b, srv, 2u * test + 0u, ScalarType::eF32);
   v1 = b.makeConstant(0.0f);
 
   a = b.add(Op::BOr(ScalarType::eBool,
