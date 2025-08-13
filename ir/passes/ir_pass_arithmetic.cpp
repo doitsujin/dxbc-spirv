@@ -1165,7 +1165,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
 
           /* Negating the minimum representable value results in a
            * negative number again, ensure that we ignore that case. */
-          if (negOperand == posOperand)
+          if (value && negOperand == posOperand)
             isConstantPositive = true;
         }
 
