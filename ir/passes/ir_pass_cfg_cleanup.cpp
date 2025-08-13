@@ -286,7 +286,7 @@ void CleanupControlFlowPass::removeBlockFromPhiUses(SsaDef block) {
         for (uint32_t i = 0u; i < use.getOperandCount(); i += 2u) {
           auto phiBlock = SsaDef(use.getOperand(i));
 
-          if (phiBlock == block) {
+          if (phiBlock != block) {
             auto phiValue = SsaDef(use.getOperand(i + 1u));
             m_builder.rewriteDef(use.getDef(), phiValue);
             break;
