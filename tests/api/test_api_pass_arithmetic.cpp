@@ -7,7 +7,7 @@
 
 namespace dxbc_spv::test_api {
 
-Builder& run_passes(Builder& b) {
+static Builder& run_passes(Builder& b) {
   ir::ArithmeticPass::Options arithmeticOptions = { };
 
   while (true) {
@@ -28,7 +28,7 @@ Builder& run_passes(Builder& b) {
 }
 
 
-std::tuple<Builder, SsaDef, SsaDef> setup_builder() {
+static std::tuple<Builder, SsaDef, SsaDef> setup_builder() {
   Builder builder;
 
   auto entryPoint = setupTestFunction(builder, ShaderStage::eCompute);

@@ -3,6 +3,7 @@
 #include "test_api_io.h"
 #include "test_api_misc.h"
 #include "test_api_pass_arithmetic.h"
+#include "test_api_pass_buffer_kind.h"
 #include "test_api_pass_scalarize.h"
 #include "test_api_resources.h"
 #include "test_api_spirv.h"
@@ -367,6 +368,14 @@ void enumeratePassesTests(std::vector<NamedTest>& result, const char* category, 
   ADD_TEST(test_pass_arithmetic_identities_select);
   ADD_TEST(test_pass_arithmetic_propagate_sign);
   ADD_TEST(test_pass_arithmetic_fuse_mad);
+
+  ADD_TEST(test_pass_buffer_kind_typed_uav_to_raw);
+  ADD_TEST(test_pass_buffer_kind_raw_srv_to_typed);
+  ADD_TEST(test_pass_buffer_kind_raw_srv_to_typed_sparse);
+  ADD_TEST(test_pass_buffer_kind_raw_uav_to_typed);
+  ADD_TEST(test_pass_buffer_kind_structured_srv_to_typed);
+  ADD_TEST(test_pass_buffer_kind_structured_srv_to_typed_sparse);
+  ADD_TEST(test_pass_buffer_kind_structured_uav_to_typed);
 }
 
 
