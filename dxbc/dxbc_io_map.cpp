@@ -1324,7 +1324,10 @@ std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicLoadFunction(
   const IoVarInfo&              var,
         uint32_t                vertexCount) {
   auto codeLocation = getCurrentFunction();
-  auto scalarType = getIndexedBaseType(var);
+
+  /* Declare scratch as unknown so that type propagation can flatten
+   * it, since this may otherwise produce multi-dimensional arrays. */
+  auto scalarType = ir::ScalarType::eUnknown;
 
   /* Declare scratch array */
   auto vectorType = m_converter.makeVectorType(scalarType, var.componentMask);
