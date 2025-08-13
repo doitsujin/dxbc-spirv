@@ -13,6 +13,7 @@ Builder test_misc_ps_early_z();
 Builder test_misc_function();
 Builder test_misc_function_with_args();
 Builder test_misc_function_with_return();
+Builder test_misc_function_with_undef();
 
 Builder test_cfg_if();
 Builder test_cfg_if_else();

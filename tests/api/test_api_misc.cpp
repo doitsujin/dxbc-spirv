@@ -477,6 +477,59 @@ Builder test_misc_function_with_return() {
   return builder;
 }
 
+Builder test_misc_function_with_undef() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+  auto mainFunc = ir::SsaDef(builder.getOp(entryPoint).getOperand(0u));
+
+  auto inDef = builder.add(Op::DclInput(ScalarType::eF32, entryPoint, 0u, 0u, InterpolationModes()));
+  builder.add(Op::Semantic(inDef, 0u, "INPUT"));
+
+  auto outDef = builder.add(Op::DclOutput(ScalarType::eF32, entryPoint, 0u, 0u));
+  builder.add(Op::Semantic(outDef, 0u, "SV_TARGET"));
+
+  /* Emit function */
+  builder.setCursor(SsaDef());
+
+  auto paramA = builder.add(Op::DclParam(ScalarType::eF32));
+  builder.add(Op::DebugName(paramA, "a"));
+
+  auto func = builder.add(Op::Function(ScalarType::eF32).addParam(paramA));
+
+  auto mainBlock = builder.add(Op::Label());
+  auto a = builder.add(Op::ParamLoad(ScalarType::eF32, func, paramA));
+  auto cond = builder.add(Op::FGe(ScalarType::eBool, a, builder.makeConstant(0.0f)));
+
+  auto ifBlock = builder.add(Op::Label());
+  auto b = builder.add(Op::FSqrt(ScalarType::eF32, a));
+
+  auto mergeBlock = builder.add(Op::Label());
+  builder.addBefore(mergeBlock, Op::Branch(mergeBlock));
+  builder.addBefore(ifBlock, Op::BranchConditional(cond, ifBlock, mergeBlock));
+  builder.rewriteOp(mainBlock, Op::LabelSelection(mergeBlock));
+
+  auto returnValue = builder.add(Op::Phi(ScalarType::eF32)
+    .addPhi(mainBlock, builder.makeUndef(ScalarType::eF32))
+    .addPhi(ifBlock, b));
+
+  builder.add(Op::Return(ScalarType::eF32, returnValue));
+  auto funcEnd = builder.add(Op::FunctionEnd());
+
+  /* Emit function call */
+  builder.setCursor(mainFunc);
+  builder.add(Op::Label());
+
+  auto v = builder.add(Op::InputLoad(ScalarType::eF32, inDef, SsaDef()));
+  cond = builder.add(Op::FGe(ScalarType::eBool, v, builder.makeConstant(0.0f)));
+  v = builder.add(Op::FunctionCall(ScalarType::eF32, func).addParam(v));
+  v = builder.add(Op::Select(ScalarType::eF32, cond, v, builder.makeUndef(ScalarType::eF32)));
+  builder.add(Op::OutputStore(outDef, SsaDef(), v));
+  builder.add(Op::Return());
+
+  /* Move function to correct spot */
+  builder.reorderBefore(mainFunc, func, funcEnd);
+  return builder;
+}
 
 Builder test_cfg_if() {
   Builder builder;

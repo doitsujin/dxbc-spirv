@@ -307,6 +307,7 @@ void enumerateLoweringTests(std::vector<NamedTest>& result, const char* category
   ADD_TEST(test_misc_function);
   ADD_TEST(test_misc_function_with_args);
   ADD_TEST(test_misc_function_with_return);
+  ADD_TEST(test_misc_function_with_undef);
 
   ADD_TEST(test_cfg_if);
   ADD_TEST(test_cfg_if_else);
