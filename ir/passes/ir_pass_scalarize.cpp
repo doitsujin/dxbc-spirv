@@ -718,7 +718,7 @@ std::pair<bool, Builder::iterator> ScalarizePass::resolveCompositeExtractFromCon
       newAddressOp.addOperand(addressOp.getOperand(i));
 
     m_builder.rewriteOp(op->getDef(), Op::CompositeExtract(op->getType(),
-      valueOp.getDef(), m_builder.add(std::move(newAddressOp))));
+      value, m_builder.add(std::move(newAddressOp))));
 
     /* Re-evaluate instruction that we just added */
     removeIfUnused(m_builder, valueOp.getDef());

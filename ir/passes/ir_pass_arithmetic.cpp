@@ -1792,7 +1792,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveCompositeExtract(Build
   const auto& composite = m_builder.getOpForOperand(*op, 0u);
   const auto& component = m_builder.getOpForOperand(*op, 1u);
 
-  if (composite.getOpCode() != OpCode::eCompositeConstruct)
+  if (composite.getOpCode() != OpCode::eCompositeConstruct || !component.getType().isScalarType())
     return std::make_pair(false, ++op);
 
   auto index = getConstantAsUint(component, 0u);
