@@ -189,6 +189,10 @@ void Disassembler::disassembleOperandLiteral(std::ostream& stream, const Op& op,
 
   if (op.getOpCode() == OpCode::eConstant) {
     auto state = scopedColor(stream, util::ConsoleState::FgRed);
+
+    if (op.getType().isVoidType())
+      return;
+
     ScalarType type = op.getType().resolveFlattenedType(index);
 
     switch (type) {
