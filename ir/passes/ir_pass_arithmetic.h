@@ -77,6 +77,7 @@ private:
 
   util::small_vector<ConvertFunc, 8u> m_convertFunctions;
   util::small_vector<DotFunc, 8u> m_dotFunctions;
+  SsaDef m_f32tof16Function = { };
 
   void lowerInstructionsPreTransform();
   void lowerInstructionsPostTransform();
@@ -86,6 +87,12 @@ private:
   Builder::iterator lowerClamp(Builder::iterator op);
 
   Builder::iterator lowerConvertFtoI(Builder::iterator op);
+
+  Builder::iterator lowerF32toF16(Builder::iterator op);
+
+  Builder::iterator lowerF16toF32(Builder::iterator op);
+
+  SsaDef buildF32toF16Func();
 
   Builder::iterator tryFuseClamp(Builder::iterator op);
 
@@ -120,6 +127,8 @@ private:
   std::pair<bool, Builder::iterator> resolveIdentitySelect(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> resolveIdentityF16toF32(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> resolveIdentityConvertFtoF(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> resolveIsNanCheck(Builder::iterator op);
 

@@ -68,15 +68,15 @@ bool ArithmeticPass::runPass() {
 
 void ArithmeticPass::runEarlyLowering() {
   lowerInstructionsPreTransform();
-
-  /* Some instructions operate on composites but
-   * then get scalarized, fix that up immediately. */
-  ScalarizePass::runResolveRedundantCompositesPass(m_builder);
 }
 
 
 void ArithmeticPass::runLateLowering() {
   lowerInstructionsPostTransform();
+
+  /* Some instructions operate on composites but
+   * then get scalarized, fix that up immediately. */
+  ScalarizePass::runResolveRedundantCompositesPass(m_builder);
 
   RemoveUnusedPass::runPass(m_builder);
 }
@@ -102,14 +102,6 @@ void ArithmeticPass::lowerInstructionsPreTransform() {
 
   while (iter != m_builder.end()) {
     switch (iter->getOpCode()) {
-      case OpCode::eFDot:
-      case OpCode::eFDotLegacy: {
-        if (m_options.lowerDot) {
-          iter = lowerDot(iter);
-          continue;
-        }
-      } break;
-
       case OpCode::eFClamp:
       case OpCode::eSClamp:
       case OpCode::eUClamp: {
@@ -144,11 +136,27 @@ void ArithmeticPass::lowerInstructionsPostTransform() {
         iter = tryFuseClamp(iter);
       } continue;
 
+      case OpCode::eFDot:
+      case OpCode::eFDotLegacy: {
+        if (m_options.lowerDot) {
+          iter = lowerDot(iter);
+          continue;
+        }
+      } break;
+
       case OpCode::eConvertFtoI: {
         if (m_options.lowerConvertFtoI) {
           iter = lowerConvertFtoI(iter);
           continue;
         }
+      } break;
+
+      case OpCode::eConvertF32toPackedF16: {
+        iter = lowerF32toF16(iter);
+      } break;
+
+      case OpCode::eConvertPackedF16toF32: {
+        iter = lowerF16toF32(iter);
       } break;
 
       default:
@@ -392,6 +400,123 @@ Builder::iterator ArithmeticPass::lowerConvertFtoI(Builder::iterator op) {
   m_builder.rewriteOp(op->getDef(),
     Op::FunctionCall(dstType, e->function).addParam(src.getDef()));
   return ++op;
+}
+
+
+Builder::iterator ArithmeticPass::lowerF32toF16(Builder::iterator op) {
+  /* There are a number of different patterns here since we allow min
+   * precision. In particular, we have to deal with f16 inputs here
+   * regardless of the lowering option. */
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+  dxbc_spv_assert(a.getType().isVectorType() && op->getType().isScalarType());
+
+  auto srcType = a.getType().getBaseType(0u).getBaseType();
+  dxbc_spv_assert(a.getType() == BasicType(srcType, 2u));
+
+  auto dstType = op->getType().getBaseType(0u).getBaseType();
+  dxbc_spv_assert(dstType == ScalarType::eU32 || dstType == ScalarType::eU16);
+
+  if (srcType == ScalarType::eF16) {
+    if (dstType == ScalarType::eU32) {
+      /* Input is already f16, bitcast input vector to u32. */
+      m_builder.rewriteOp(op->getDef(), Op::Cast(dstType, a.getDef()));
+    } else {
+      /* Extract first component and cast to u16. */
+      auto component = m_builder.addBefore(op->getDef(),
+        Op::CompositeExtract(srcType, a.getDef(), m_builder.makeConstant(0u)));
+
+      m_builder.rewriteOp(op->getDef(), Op::Cast(dstType, component));
+    }
+
+    return ++op;
+  } else {
+    dxbc_spv_assert(srcType == ScalarType::eF32);
+
+    Op newOp = *op;
+
+    if (m_options.lowerF32toF16)
+      newOp = Op::FunctionCall(ScalarType::eU32, buildF32toF16Func()).addParam(a.getDef());
+
+    /* If necessary, insert an integer conversion */
+    if (dstType != ScalarType::eU32) {
+      auto result = m_builder.addBefore(op->getDef(),
+        std::move(newOp.setType(ScalarType::eU32)));
+      newOp = Op::ConvertItoI(dstType, result);
+    }
+
+    m_builder.rewriteOp(op->getDef(), std::move(newOp));
+    return ++op;
+  }
+}
+
+
+Builder::iterator ArithmeticPass::lowerF16toF32(Builder::iterator op) {
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+  dxbc_spv_assert(a.getType().isScalarType() && op->getType().isVectorType());
+
+  auto srcType = a.getType().getBaseType(0u).getBaseType();
+  dxbc_spv_assert(srcType == ScalarType::eU32 || srcType == ScalarType::eU16);
+
+  auto dstType = op->getType().getBaseType(0u).getBaseType();
+  dxbc_spv_assert(op->getType() == BasicType(dstType, 2u));
+
+  /* Normalize input type */
+  auto newOp = *op;
+
+  if (srcType == ScalarType::eU16) {
+    auto input = m_builder.addBefore(op->getDef(), Op::ConvertItoI(ScalarType::eU32, a.getDef()));
+    newOp = Op::ConvertPackedF16toF32(op->getType(), input).setFlags(op->getFlags());
+  }
+
+  /* Rewrite as bitcast if the output type is f16 already */
+  if (dstType == ScalarType::eF16)
+    newOp = Op::Cast(op->getType(), SsaDef(newOp.getOperand(0u)));
+
+  m_builder.rewriteOp(op->getDef(), std::move(newOp));
+  return ++op;
+}
+
+
+SsaDef ArithmeticPass::buildF32toF16Func() {
+  if (!m_f32tof16Function) {
+    auto param = m_builder.add(Op::DclParam(BasicType(ScalarType::eF32, 2u)));
+    m_builder.add(Op::DebugName(param, "v"));
+
+    m_f32tof16Function = m_builder.addBefore(m_builder.getCode().first->getDef(),
+      Op::Function(ScalarType::eU32).addParam(param));
+    m_builder.add(Op::DebugName(m_f32tof16Function, "f32_to_f16"));
+
+    m_builder.setCursor(m_f32tof16Function);
+    m_builder.add(Op::Label());
+
+    /* f32tof16 requires RTZ semantics, but we have no way to guarantee that.
+     * At least ensure that only infinity inputs will result in infinity output. */
+    auto v = m_builder.add(Op::ParamLoad(BasicType(ScalarType::eF32, 2u), m_f32tof16Function, param));
+    auto fltMaxConst = m_builder.makeConstant(std::numeric_limits<float>::max());
+
+    std::array<SsaDef, 2u> components = { };
+
+    for (uint32_t i = 0u; i < 2u; i++) {
+      auto scalar = m_builder.add(Op::CompositeExtract(ScalarType::eF32, v, m_builder.makeConstant(i)));
+
+      /* This check implicitly fails for nan inputs as well */
+      auto isFinite = m_builder.add(Op::FLe(ScalarType::eBool,
+        m_builder.add(Op::FAbs(ScalarType::eF32, scalar)), fltMaxConst));
+
+      auto clamped = m_builder.add(Op::FClamp(ScalarType::eF32, scalar, m_builder.makeConstant(-65504.0f), m_builder.makeConstant(65504.0f)));
+      components.at(i) = m_builder.add(Op::Select(ScalarType::eF32, isFinite, clamped, scalar));
+    }
+
+    /* Build input vector for f32tof16 instruction */
+    auto input = m_builder.add(Op::CompositeConstruct(
+      BasicType(ScalarType::eF32, 2u), components.at(0u), components.at(1u)));
+
+    auto result = m_builder.add(Op::ConvertF32toPackedF16(ScalarType::eU32, input));
+    m_builder.add(Op::Return(ScalarType::eU32, result));
+    m_builder.add(Op::FunctionEnd());
+  }
+
+  return m_f32tof16Function;
 }
 
 
@@ -1758,6 +1883,47 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityF16toF32(Build
 }
 
 
+std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityConvertFtoF(Builder::iterator op) {
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+  /* Eliminate round-trips or double-conversions involving a larger
+   * type in between. Keep smaller conversions since those should
+   * still quantize and affect the result */
+  if (a.getOpCode() == OpCode::eConvertFtoF) {
+    const auto& src = m_builder.getOpForOperand(a, 0u);
+
+    if (a.getType().byteSize() > op->getType().byteSize()) {
+      if (src.getType() == op->getType()) {
+        auto next = m_builder.rewriteDef(op->getDef(), src.getDef());
+        return std::make_pair(true, m_builder.iter(next));
+      } else {
+        m_builder.rewriteOp(op->getDef(), Op::ConvertFtoF(
+          op->getType(), src.getDef()).setFlags(op->getFlags()));
+        return std::make_pair(true, op);
+      }
+    }
+
+    return std::make_pair(false, ++op);
+  }
+
+  /* Similarly, eliminate useless round-trips involving f16tof32 */
+  if (a.getOpCode() == OpCode::eCompositeExtract) {
+    const auto& src = m_builder.getOpForOperand(a, 0u);
+
+    if (src.getOpCode() == OpCode::eConvertPackedF16toF32 &&
+        src.getType() == BasicType(ScalarType::eF32, 2u) &&
+        op->getType() == ScalarType::eF16) {
+      auto conversion = m_builder.addBefore(op->getDef(),
+        Op::ConvertPackedF16toF32(BasicType(ScalarType::eF16, 2u), SsaDef(src.getOperand(0u))));
+      m_builder.rewriteOp(op->getDef(), Op::CompositeExtract(op->getType(), conversion, SsaDef(a.getOperand(1u))));
+      return std::make_pair(true, m_builder.iter(conversion));
+    }
+  }
+
+  return std::make_pair(false, ++op);
+}
+
+
 std::pair<bool, Builder::iterator> ArithmeticPass::resolveIsNanCheck(Builder::iterator op) {
   /* Look for a pattern that goes a < b || a == b || a > b, which is equivalent to
    * !(isnan(a) || isnan(b)). b will usually be a constant, so we can constant-fold. */
@@ -1891,6 +2057,9 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityOp(Builder::it
 
     case OpCode::eConvertPackedF16toF32:
       return resolveIdentityF16toF32(op);
+
+    case OpCode::eConvertFtoF:
+      return resolveIdentityConvertFtoF(op);
 
     case OpCode::ePhi:
       return propagateAbsSignPhi(op);
