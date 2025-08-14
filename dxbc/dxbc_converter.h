@@ -43,6 +43,9 @@ public:
     bool boundCheckScratch = true;
     /** Whether to bound-check the vertex axis of shader I/O. */
     bool boundCheckShaderIo = true;
+    /** Whether to bound-check immediate constant buffer loads.
+     *  Only useful if ICB is not lowered to a constant buffer. */
+    bool boundCheckIcb = true;
     /** Maximum tessellation factor override. Shaders may specify a
      *  different value, but any higher values will be ignored. */
     float maxTessFactor = 0.0f;

@@ -631,11 +631,18 @@ bool Converter::handleCustomData(ir::Builder& builder, const Instruction& op) {
    * unused vector components later. */
   auto [data, size] = op.getCustomData();
 
-  auto type = ir::Type(ir::ScalarType::eUnknown, 4u).addArrayDimension(size / 4u);
+  uint32_t arraySize = size / 4u + (m_options.boundCheckIcb ? 1u : 0u);
+
+  auto type = ir::Type(ir::ScalarType::eUnknown, 4u).addArrayDimension(arraySize);
   ir::Op constant(ir::OpCode::eConstant, type);
 
   for (size_t i = 0u; i < size; i++)
     constant.addOperand(data[i]);
+
+  if (m_options.boundCheckIcb) {
+    for (size_t i = 0u; i < 4u; i++)
+      constant.addOperand(ir::Operand());
+  }
 
   m_icb = builder.add(std::move(constant));
 
@@ -3216,6 +3223,11 @@ ir::SsaDef Converter::loadIcb(ir::Builder& builder, const Instruction& op, const
   util::small_vector<ir::SsaDef, 4u> scalars;
 
   auto index = loadOperandIndex(builder, op, operand, 0u);
+
+  if (m_options.boundCheckIcb) {
+    auto arraySize = builder.getOp(m_icb).getType().getArraySize(0u);
+    index = builder.add(ir::Op::UMin(ir::ScalarType::eU32, index, builder.makeConstant(arraySize - 1u)));
+  }
 
   /* Don't bother deduplicating anything here since it's just going
    * to be a local variable or constant buffer load anyway. */
