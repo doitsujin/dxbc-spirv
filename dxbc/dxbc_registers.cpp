@@ -42,6 +42,11 @@ bool RegisterFile::handleDclIndexableTemp(ir::Builder& builder, const Instructio
     return m_converter.logOpError(op, "Register ", name, " already declared");
   }
 
+  /* If scratch robustness is enabled, add an extra element so we can
+   * use it as a fallback for out-of-bounds reads. */
+  if (m_converter.m_options.boundCheckScratch)
+    arraySize += 1u;
+
   auto scratchType = ir::Type(ir::ScalarType::eUnknown, 4u).addArrayDimension(arraySize);
   m_xRegs[index] = builder.add(ir::Op::DclScratch(scratchType, m_converter.getEntryPoint()));
 
@@ -147,6 +152,24 @@ ir::SsaDef RegisterFile::emitLoad(
   auto regIndex = operand.getIndex(0u);
   auto arrayIndex = loadArrayIndex(builder, op, operand);
 
+  /* Clamp array index to array size - 1 if necessary */
+  if (operand.getRegisterType() == RegisterType::eIndexableTemp) {
+    auto scratchReg = getIndexableTemp(regIndex);
+
+    if (!scratchReg) {
+      m_converter.logOpError(op, "Register not declared.");
+      return ir::SsaDef();
+    }
+
+    if (m_converter.m_options.boundCheckScratch) {
+      uint32_t arraySize = builder.getOp(scratchReg).getType().getArraySize(0u);
+      dxbc_spv_assert(arraySize);
+
+      arrayIndex = builder.add(ir::Op::UMin(ir::ScalarType::eU32,
+        arrayIndex, builder.makeConstant(arraySize - 1u)));
+    }
+  }
+
   /* Scalarize loads to not make things unnecessarily complicated
    * for no reason. Temp regs are scalar anyway. */
   std::array<ir::SsaDef, 4u> components = { };
@@ -158,11 +181,7 @@ ir::SsaDef RegisterFile::emitLoad(
 
     if (operand.getRegisterType() == RegisterType::eIndexableTemp) {
       auto scratchReg = getIndexableTemp(regIndex);
-
-      if (!scratchReg) {
-        m_converter.logOpError(op, "Register not declared.");
-        return ir::SsaDef();
-      }
+      dxbc_spv_assert(scratchReg);
 
       /* Scratch is vec4, so use two indices */
       auto address = builder.add(ir::Op::CompositeConstruct(
@@ -198,6 +217,26 @@ bool RegisterFile::emitStore(
   auto regIndex = operand.getIndex(0u);
   auto arrayIndex = loadArrayIndex(builder, op, operand);
 
+  /* Verify that the array index is in bounds and skip store if not */
+  ir::SsaDef condDef = { };
+  ir::SsaDef condBlock = { };
+
+  if (operand.getRegisterType() == RegisterType::eIndexableTemp) {
+    auto scratchReg = getIndexableTemp(regIndex);
+
+    if (!scratchReg)
+      return m_converter.logOpError(op, "Register not declared.");
+
+    if (m_converter.m_options.boundCheckScratch) {
+      uint32_t arraySize = builder.getOp(scratchReg).getType().getArraySize(0u);
+      dxbc_spv_assert(arraySize);
+
+      condDef = builder.add(ir::Op::ULt(ir::ScalarType::eBool,
+        arrayIndex, builder.makeConstant(arraySize - 1u)));
+      condBlock = builder.add(ir::Op::ScopedIf(ir::SsaDef(), condDef));
+    }
+  }
+
   uint32_t componentIndex = 0u;
 
   for (auto c : operand.getWriteMask()) {
@@ -211,9 +250,7 @@ bool RegisterFile::emitStore(
 
     if (operand.getRegisterType() == RegisterType::eIndexableTemp) {
       auto scratchReg = getIndexableTemp(regIndex);
-
-      if (!scratchReg)
-        return m_converter.logOpError(op, "Register not declared.");
+      dxbc_spv_assert(scratchReg);
 
       /* Scratch is vec4, so use two indices */
       auto address = builder.add(ir::Op::CompositeConstruct(
@@ -223,6 +260,11 @@ bool RegisterFile::emitStore(
       auto tmpReg = getOrDeclareTemp(builder, regIndex, component);
       builder.add(ir::Op::TmpStore(tmpReg, scalar));
     }
+  }
+
+  if (condBlock) {
+    auto condEnd = builder.add(ir::Op::ScopedEndIf(condBlock));
+    builder.rewriteOp(condBlock, ir::Op::ScopedIf(condEnd, condDef));
   }
 
   return true;

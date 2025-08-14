@@ -39,6 +39,8 @@ public:
      *  includes resources, scratch and shared variables, as well as
      *  semantic names for I/O variables. */
     bool includeDebugNames = false;
+    /** Whether to bound-check scratch loads and stores. */
+    bool boundCheckScratch = true;
     /** Maximum tessellation factor override. Shaders may specify a
      *  different value, but any higher values will be ignored. */
     float maxTessFactor = 0.0f;
