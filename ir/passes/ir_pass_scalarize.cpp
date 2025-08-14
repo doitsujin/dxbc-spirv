@@ -521,6 +521,9 @@ Builder::iterator ScalarizePass::handleCastConsume(Builder::iterator op) {
 Builder::iterator ScalarizePass::handleConvert(Builder::iterator op) {
   dxbc_spv_assert(op->getType().isBasicType());
 
+  if (!m_options.subDwordConversions)
+    return handleGenericOp(op, false);
+
   /* Nothing to do if the instruction is scalar already */
   auto dstType = op->getType().getBaseType(0u);
   auto srcType = m_builder.getOpForOperand(*op, 0u).getType().getBaseType(0u);

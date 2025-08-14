@@ -22,6 +22,8 @@ public:
     /* Whether to allow sub-dword arithmetic operations to remain
      * vectorized to the extent that the vector size equals a dword. */
     bool subDwordVectors = true;
+    /* Whether to allow vectorized sub-dword conversions. */
+    bool subDwordConversions = true;
   };
 
   ScalarizePass(Builder& builder, const Options& options);
