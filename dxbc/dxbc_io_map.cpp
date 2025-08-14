@@ -359,6 +359,45 @@ bool IoMap::emitHsControlPointPhasePassthrough(ir::Builder& builder) {
 }
 
 
+bool IoMap::applyMaxTessFactor(ir::Builder& builder) {
+  auto [inner, outer] = [&] {
+    switch (m_converter.m_hs.domain) {
+      case TessDomain::eIsoline:  return std::make_pair(0u, 2u);
+      case TessDomain::eTriangle: return std::make_pair(1u, 3u);
+      case TessDomain::eQuad:     return std::make_pair(2u, 4u);
+      default:                    return std::make_pair(0u, 0u);
+    }
+  } ();
+
+  if (!outer) {
+    Logger::err("Unhandled tessellator domain: ", m_converter.m_hs.domain);
+    return false;
+  }
+
+  if (m_tessFactorOuter) {
+    for (uint32_t i = 0u; i < outer; i++) {
+      auto scalar = builder.add(ir::Op::OutputLoad(ir::ScalarType::eF32,
+        m_tessFactorOuter, builder.makeConstant(i)));
+      scalar = builder.add(ir::Op::FClamp(ir::ScalarType::eF32, scalar,
+        builder.makeConstant(0.0f), builder.makeConstant(m_converter.m_hs.maxTessFactor)));
+      builder.add(ir::Op::OutputStore(m_tessFactorOuter, builder.makeConstant(i), scalar));
+    }
+  }
+
+  if (m_tessFactorInner) {
+    for (uint32_t i = 0u; i < inner; i++) {
+      auto scalar = builder.add(ir::Op::OutputLoad(ir::ScalarType::eF32,
+        m_tessFactorInner, builder.makeConstant(i)));
+      scalar = builder.add(ir::Op::FClamp(ir::ScalarType::eF32, scalar,
+        builder.makeConstant(0.0f), builder.makeConstant(m_converter.m_hs.maxTessFactor)));
+      builder.add(ir::Op::OutputStore(m_tessFactorInner, builder.makeConstant(i), scalar));
+    }
+  }
+
+  return true;
+}
+
+
 bool IoMap::declareIoBuiltIn(ir::Builder& builder, RegisterType regType) {
   switch (regType) {
     case RegisterType::ePrimitiveId: {

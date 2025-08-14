@@ -581,6 +581,8 @@ void Converter::emitHsPatchConstantFunction(ir::Builder& builder) {
     for (uint32_t i = 0u; i < e.second; i++)
       builder.add(ir::Op::FunctionCall(ir::Type(), e.first).addParam(builder.makeConstant(i)));
   }
+
+  m_ioMap.applyMaxTessFactor(builder);
 }
 
 

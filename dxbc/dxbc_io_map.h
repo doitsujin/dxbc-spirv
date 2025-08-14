@@ -155,6 +155,10 @@ public:
    *  shader unmodified. Requires that the signatures match. */
   bool emitHsControlPointPhasePassthrough(ir::Builder& builder);
 
+  /** Clamps exported tess factors to the requested range. This must be the last
+   *  thing done in any given patch constant phase to not disturb output loads. */
+  bool applyMaxTessFactor(ir::Builder& builder);
+
 private:
 
   Converter&      m_converter;
