@@ -29,6 +29,9 @@ public:
      *  function that clamps the representable range of the
      *  target integer type. */
     bool lowerConvertFtoI = true;
+    /** Whether to lower the geometry shader input vertex count
+     *  to a constant based on the declared primitive type. */
+    bool lowerGsVertexCountIn = false;
   };
 
   ArithmeticPass(Builder& builder, const Options& options);
@@ -81,6 +84,8 @@ private:
   SsaDef m_msadFunction = { };
   SsaDef m_sincosFunction = { };
 
+  uint32_t m_gsInputVertexCount = 0u;
+
   void lowerInstructionsPreTransform();
   void lowerInstructionsPostTransform();
 
@@ -97,6 +102,8 @@ private:
   Builder::iterator lowerMsad(Builder::iterator op);
 
   Builder::iterator lowerSinCos(Builder::iterator op);
+
+  Builder::iterator lowerInputBuiltIn(Builder::iterator op);
 
   SsaDef buildF32toF16Func();
 

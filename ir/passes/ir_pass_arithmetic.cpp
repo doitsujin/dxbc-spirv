@@ -98,10 +98,17 @@ void ArithmeticPass::runLateLoweringPasses(Builder& builder, const Options& opti
 
 
 void ArithmeticPass::lowerInstructionsPreTransform() {
-  auto iter = m_builder.getCode().first;
+  auto iter = m_builder.begin();
 
   while (iter != m_builder.end()) {
     switch (iter->getOpCode()) {
+      case OpCode::eSetGsInputPrimitive: {
+        auto primType = PrimitiveType(iter->getOperand(0u));
+        m_gsInputVertexCount = primitiveVertexCount(primType);
+
+        ++iter;
+      } continue;
+
       case OpCode::eFClamp:
       case OpCode::eSClamp:
       case OpCode::eUClamp: {
@@ -115,6 +122,10 @@ void ArithmeticPass::lowerInstructionsPreTransform() {
           continue;
         }
       } break;
+
+      case OpCode::eInputLoad: {
+        iter = lowerInputBuiltIn(iter);
+      } continue;
 
       default:
         break;
@@ -538,6 +549,20 @@ Builder::iterator ArithmeticPass::lowerMsad(Builder::iterator op) {
     .addOperand(SsaDef(op->getOperand(2u)));
 
   m_builder.rewriteOp(op->getDef(), std::move(newOp));
+  return ++op;
+}
+
+
+Builder::iterator ArithmeticPass::lowerInputBuiltIn(Builder::iterator op) {
+  auto builtIn = getBuiltInInput(*op);
+
+  if (builtIn == BuiltIn::eGsVertexCountIn) {
+    dxbc_spv_assert(m_gsInputVertexCount);
+
+    auto next = m_builder.rewriteDef(op->getDef(), m_builder.makeConstant(m_gsInputVertexCount));
+    return m_builder.iter(next);
+  }
+
   return ++op;
 }
 
