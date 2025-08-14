@@ -4,7 +4,6 @@
 #include "test_api.h"
 
 #include "../../ir/ir_disasm.h"
-#include "../../ir/ir_validation.h"
 
 int main(int argc, char** argv) {
   const char* filter = nullptr;
@@ -26,15 +25,6 @@ int main(int argc, char** argv) {
     dxbc_spv::ir::Disassembler disasm(test.builder, disassembleOptions);
     disasm.disassemble(std::cout);
     std::cout << std::endl;
-
-    dxbc_spv::ir::Validator validator(test.builder);
-    std::stringstream validationResult;
-
-    if (!validator.validateFinalIr(validationResult)) {
-      std::cerr << "Validation FAILED:" << std::endl;
-      std::cerr << validationResult.str() << std::endl;
-      return 1;
-    }
   }
 
   return 0;

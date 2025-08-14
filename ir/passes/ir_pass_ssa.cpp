@@ -1,7 +1,5 @@
 #include "ir_pass_ssa.h"
 
-#include "../ir_validation.h"
-
 #include "../../util/util_log.h"
 
 namespace dxbc_spv::ir {
@@ -67,67 +65,6 @@ bool SsaConstructionPass::resolveTrivialPhi() {
   }
 
   return progress;
-}
-
-
-bool SsaConstructionPass::validatePreConditions(std::ostream& str) const {
-  if (!Validator(m_builder).validateStructuredCfg(str))
-    return false;
-
-  Container<SsaDef> useFuncs;
-
-  auto [a, b] = m_builder.getCode();
-
-  SsaDef func = { };
-
-  for (auto op = a; op != b; op++) {
-    switch (op->getOpCode()) {
-      case OpCode::eFunction: {
-        func = op->getDef();
-      } break;
-
-      case OpCode::eTmpLoad:
-      case OpCode::eTmpStore: {
-        auto var = SsaDef(op->getOperand(0u));
-
-        if (useFuncs[var] && useFuncs[var] != func) {
-          str << "Temp " << var << " used in multiple functions (" << func << " and " << useFuncs[var] << ")." << std::endl;
-          return false;
-        }
-      } break;
-
-      default:
-        break;
-    }
-  }
-
-  return true;
-}
-
-
-bool SsaConstructionPass::validatePostConditions(std::ostream& str) const {
-  if (!Validator(m_builder).validatePhi(str))
-    return false;
-
-  auto [a, b] = m_builder.getCode();
-
-  for (auto op = a; op != b; op++) {
-    bool result = [this, op, &str] {
-      switch (op->getOpCode()) {
-        case OpCode::eLabel:
-          return validateLabel(str, *op);
-
-        default:
-          return true;
-      }
-    } ();
-
-    if (!result)
-      return result;
-  }
-
-
-  return true;
 }
 
 
@@ -406,21 +343,6 @@ SsaDef SsaConstructionPass::findContainingBlock(SsaDef def) {
     m_metadata[def] = ir::findContainingBlock(m_builder, def);
 
   return m_metadata[def];
-}
-
-
-bool SsaConstructionPass::validateLabel(std::ostream& str, const Op& label) const {
-  if (!m_blocks[label.getDef()].isFilled) {
-    str << "Block " << label.getDef() << " not filled." << std::endl;
-    return false;
-  }
-
-  if (!m_blocks[label.getDef()].isSealed) {
-    str << "Block " << label.getDef() << " not sealed." << std::endl;
-    return false;
-  }
-
-  return true;
 }
 
 

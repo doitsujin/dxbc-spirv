@@ -21,7 +21,6 @@ dxbc_spv_files = files([
   'ir/ir_dominance.cpp',
   'ir/ir_serialize.cpp',
   'ir/ir_utils.cpp',
-  'ir/ir_validation.cpp',
 
   'ir/passes/ir_pass_arithmetic.cpp',
   'ir/passes/ir_pass_buffer_kind.cpp',

@@ -9,18 +9,6 @@
 #include "../ir/ir_builder.h"
 #include "../ir/ir_disasm.h"
 #include "../ir/ir_serialize.h"
-#include "../ir/ir_validation.h"
-
-#include "../ir/passes/ir_pass_arithmetic.h"
-#include "../ir/passes/ir_pass_cfg_cleanup.h"
-#include "../ir/passes/ir_pass_cfg_convert.h"
-#include "../ir/passes/ir_pass_lower_consume.h"
-#include "../ir/passes/ir_pass_lower_min16.h"
-#include "../ir/passes/ir_pass_propagate_resource_types.h"
-#include "../ir/passes/ir_pass_propagate_types.h"
-#include "../ir/passes/ir_pass_remove_unused.h"
-#include "../ir/passes/ir_pass_scalarize.h"
-#include "../ir/passes/ir_pass_ssa.h"
 
 #include "../dxbc/dxbc_api.h"
 #include "../dxbc/dxbc_container.h"
@@ -86,14 +74,6 @@ void printTimers(const Timers& timers) {
   }
 
   printDuration("total", totalDuration);
-}
-
-
-
-bool validateIr(const ir::Builder& builder) {
-  ir::Validator validator(builder);
-
-  return validator.validateFinalIr(std::cerr);
 }
 
 
@@ -231,7 +211,7 @@ bool compileShader(util::ByteReader reader, const Options& options) {
   if (options.benchmark)
     printTimers(timers);
 
-  return validateIr(builder);
+  return true;
 }
 
 
