@@ -185,6 +185,7 @@ private:
 
   /* Declares and loads built-in for the incoming vertex count.
    * Used in geometry and tessellation shaders. */
+  ir::SsaDef determineActualVertexCount(ir::Builder& builder);
   ir::SsaDef determineIncomingVertexCount(ir::Builder& builder, uint32_t arraySize);
 
   bool declareIoBuiltIn(ir::Builder& builder, RegisterType regType);
@@ -319,6 +320,16 @@ private:
           ir::SsaDef              regIndexRelative,
           uint32_t                regIndexAbsolute,
           WriteMask               component);
+
+
+  /* Bound-check and, if necessary, rewrite scratch address. This is
+   * necessary to avoid GPU hangs with OOB loads. Returns the clamped
+   * address and the new bound check value, in that order. */
+  std::pair<ir::SsaDef, ir::SsaDef> boundCheckScratchAddress(
+          ir::Builder&            builder,
+          ir::SsaDef              address,
+          ir::SsaDef              boundCheck,
+          ir::SsaDef              baseDef);
 
 
   /* Helper function to load dynamically indexed inputs. */

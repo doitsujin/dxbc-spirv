@@ -259,14 +259,7 @@ bool IoMap::emitStore(
 }
 
 
-ir::SsaDef IoMap::determineIncomingVertexCount(ir::Builder& builder, uint32_t maxArraySize) {
-  if (!maxArraySize)
-    return ir::SsaDef();
-
-  /* Otherwise, use the array declaration and if applicable,
-   * the actual incoming vertex count */
-  auto maxCount = builder.makeConstant(maxArraySize);
-
+ir::SsaDef IoMap::determineActualVertexCount(ir::Builder& builder) {
   if (!m_vertexCountIn) {
     auto builtIn = m_shaderInfo.getType() == ShaderType::eGeometry
       ? ir::BuiltIn::eGsVertexCountIn
@@ -278,8 +271,18 @@ ir::SsaDef IoMap::determineIncomingVertexCount(ir::Builder& builder, uint32_t ma
       builder.add(ir::Op::DebugName(m_vertexCountIn, "vVertexCountIn"));
   }
 
-  return builder.add(ir::Op::UMin(ir::ScalarType::eU32, maxCount,
-    builder.add(ir::Op::InputLoad(ir::ScalarType::eU32, m_vertexCountIn, ir::SsaDef()))));;
+  return builder.add(ir::Op::InputLoad(ir::ScalarType::eU32, m_vertexCountIn, ir::SsaDef()));
+}
+
+
+ir::SsaDef IoMap::determineIncomingVertexCount(ir::Builder& builder, uint32_t maxArraySize) {
+  if (!maxArraySize)
+    return ir::SsaDef();
+
+  /* Otherwise, use the array declaration and if applicable,
+   * the actual incoming vertex count */
+  auto maxCount = builder.makeConstant(maxArraySize);
+  return builder.add(ir::Op::UMin(ir::ScalarType::eU32, maxCount, determineActualVertexCount(builder)));
 }
 
 
@@ -1046,6 +1049,13 @@ ir::SsaDef IoMap::loadIoRegister(
         WriteMask               writeMask) {
   auto returnType = m_converter.makeVectorType(scalarType, writeMask);
 
+  /* Bound-check vertex index. Don't bother clamping it since there are
+   * no known instances of out-of-bounds index reads causing trouble. */
+  ir::SsaDef vertexIndexInBounds = { };
+
+  if (vertexIndex && m_converter.m_options.boundCheckShaderIo)
+    vertexIndexInBounds = builder.add(ir::Op::ULt(ir::ScalarType::eBool, vertexIndex, determineActualVertexCount(builder)));
+
   std::array<ir::SsaDef, 4u> components = { };
 
   for (auto c : swizzle.getReadMask(writeMask)) {
@@ -1098,6 +1108,14 @@ ir::SsaDef IoMap::loadIoRegister(
         return ir::SsaDef();
       }
 
+      /* Bound-check array dimensions of scratch loads */
+      ir::SsaDef boundCheck = vertexIndexInBounds;
+
+      if (opCode == ir::OpCode::eScratchLoad && m_converter.m_options.boundCheckShaderIo) {
+        std::tie(addressDef, boundCheck) = boundCheckScratchAddress(
+          builder, addressDef, boundCheck, var->baseDef);
+      }
+
       auto loadOp = ir::Op(opCode, varScalarType).addOperand(var->baseDef);
 
       if (opCode != ir::OpCode::eTmpLoad)
@@ -1108,6 +1126,12 @@ ir::SsaDef IoMap::loadIoRegister(
       /* Fix up pixel shader position.w semantics */
       if (m_shaderInfo.getType() == ShaderType::ePixel && var->sv == Sysval::ePosition && c == ComponentBit::eW)
         scalar = builder.add(ir::Op(ir::OpCode::eFRcp, varScalarType).addOperand(scalar));
+
+      /* If the load was bound-checked, replace with zero if out-of-bounds */
+      if (boundCheck) {
+        scalar = builder.add(ir::Op::Select(varScalarType, boundCheck, scalar,
+          builder.add(ir::Op(ir::OpCode::eConstant, varScalarType).addOperand(ir::Operand()))));
+      }
 
       components[componentIndex] = convertScalar(builder, scalarType, scalar);
     }
@@ -1316,6 +1340,44 @@ ir::SsaDef IoMap::computeRegisterAddress(
   }
 
   return m_converter.buildVector(builder, ir::ScalarType::eU32, address.size(), address.data());
+}
+
+
+std::pair<ir::SsaDef, ir::SsaDef> IoMap::boundCheckScratchAddress(
+        ir::Builder&            builder,
+        ir::SsaDef              address,
+        ir::SsaDef              boundCheck,
+        ir::SsaDef              baseDef) {
+  auto addressType = builder.getOp(address).getType().getBaseType(0u);
+  auto baseType = builder.getOp(baseDef).getType();
+
+  if (!baseType.isArrayType())
+    return std::make_pair(address, boundCheck);
+
+  util::small_vector<ir::SsaDef, 3u> addressScalars = { };
+
+  for (uint32_t i = 0u; i < addressType.getVectorSize(); i++) {
+    auto scalar = m_converter.extractFromVector(builder, address, i);
+
+    if (i < baseType.getArrayDimensions()) {
+      auto inBounds = builder.add(ir::Op::ULt(ir::ScalarType::eBool, scalar,
+        builder.makeConstant(uint32_t(baseType.getArraySize(i)))));
+
+      scalar = builder.add(ir::Op::Select(addressType.getBaseType(),
+        inBounds, scalar, builder.makeConstant(0u)));
+
+      boundCheck = boundCheck
+        ? builder.add(ir::Op::BAnd(ir::ScalarType::eBool, boundCheck, inBounds))
+        : inBounds;
+    }
+
+    addressScalars.push_back(scalar);
+  }
+
+  auto addressVector = m_converter.buildVector(builder,
+    addressType.getBaseType(), addressScalars.size(), addressScalars.data());
+
+  return std::make_pair(addressVector, boundCheck);
 }
 
 

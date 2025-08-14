@@ -41,6 +41,8 @@ public:
     bool includeDebugNames = false;
     /** Whether to bound-check scratch loads and stores. */
     bool boundCheckScratch = true;
+    /** Whether to bound-check the vertex axis of shader I/O. */
+    bool boundCheckShaderIo = true;
     /** Maximum tessellation factor override. Shaders may specify a
      *  different value, but any higher values will be ignored. */
     float maxTessFactor = 0.0f;
