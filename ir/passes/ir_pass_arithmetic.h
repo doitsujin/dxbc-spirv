@@ -78,6 +78,7 @@ private:
   util::small_vector<ConvertFunc, 8u> m_convertFunctions;
   util::small_vector<DotFunc, 8u> m_dotFunctions;
   SsaDef m_f32tof16Function = { };
+  SsaDef m_msadFunction = { };
 
   void lowerInstructionsPreTransform();
   void lowerInstructionsPostTransform();
@@ -91,6 +92,8 @@ private:
   Builder::iterator lowerF32toF16(Builder::iterator op);
 
   Builder::iterator lowerF16toF32(Builder::iterator op);
+
+  Builder::iterator lowerMsad(Builder::iterator op);
 
   SsaDef buildF32toF16Func();
 

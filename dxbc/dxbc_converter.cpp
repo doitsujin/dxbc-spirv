@@ -1745,7 +1745,9 @@ bool Converter::handleMsad(ir::Builder& builder, const Instruction& op) {
    */
   const auto& dst = op.getDst(0u);
 
-  auto resultType = determineOperandType(dst, ir::ScalarType::eU32);
+  /* We could technically support min precision here, but since no real
+   * content seems to use the instruction anyway, don't bother. */
+  auto resultType = determineOperandType(dst, ir::ScalarType::eU32, false);
 
   /* Always load ref and source as 32-bit */
   auto ref = loadSrcModified(builder, op, op.getSrc(0u), dst.getWriteMask(), ir::ScalarType::eU32);

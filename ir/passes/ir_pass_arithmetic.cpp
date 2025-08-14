@@ -153,10 +153,17 @@ void ArithmeticPass::lowerInstructionsPostTransform() {
 
       case OpCode::eConvertF32toPackedF16: {
         iter = lowerF32toF16(iter);
-      } break;
+      } continue;
 
       case OpCode::eConvertPackedF16toF32: {
         iter = lowerF16toF32(iter);
+      } continue;
+
+      case OpCode::eUMSad: {
+        if (m_options.lowerMsad) {
+          iter = lowerMsad(iter);
+          continue;
+        }
       } break;
 
       default:
@@ -471,6 +478,56 @@ Builder::iterator ArithmeticPass::lowerF16toF32(Builder::iterator op) {
   /* Rewrite as bitcast if the output type is f16 already */
   if (dstType == ScalarType::eF16)
     newOp = Op::Cast(op->getType(), SsaDef(newOp.getOperand(0u)));
+
+  m_builder.rewriteOp(op->getDef(), std::move(newOp));
+  return ++op;
+}
+
+
+Builder::iterator ArithmeticPass::lowerMsad(Builder::iterator op) {
+  if (!m_msadFunction) {
+    auto refParam = m_builder.add(Op::DclParam(ScalarType::eU32));
+    auto srcParam = m_builder.add(Op::DclParam(ScalarType::eU32));
+    auto accumParam = m_builder.add(Op::DclParam(ScalarType::eU32));
+
+    m_builder.add(Op::DebugName(refParam, "ref"));
+    m_builder.add(Op::DebugName(srcParam, "src"));
+    m_builder.add(Op::DebugName(accumParam, "accum"));
+
+    m_msadFunction = m_builder.addBefore(m_builder.getCode().first->getDef(),
+      Op::Function(ScalarType::eU32).addParam(refParam).addParam(srcParam).addParam(accumParam));
+    m_builder.add(Op::DebugName(m_msadFunction, "msad"));
+
+    m_builder.setCursor(m_msadFunction);
+    m_builder.add(Op::Label());
+
+    auto ref = m_builder.add(Op::ParamLoad(ScalarType::eU32, m_msadFunction, refParam));
+    auto src = m_builder.add(Op::ParamLoad(ScalarType::eU32, m_msadFunction, srcParam));
+    auto accum = m_builder.add(Op::ParamLoad(ScalarType::eU32, m_msadFunction, accumParam));
+
+    for (uint32_t i = 0u; i < 4u; i++) {
+      auto refByte = m_builder.add(Op::UBitExtract(ScalarType::eU32, ref, m_builder.makeConstant(8u * i), m_builder.makeConstant(8u)));
+      auto srcByte = m_builder.add(Op::UBitExtract(ScalarType::eU32, src, m_builder.makeConstant(8u * i), m_builder.makeConstant(8u)));
+
+      auto absDiff = m_builder.add(Op::ISub(ScalarType::eU32,
+        m_builder.add(Op::UMax(ScalarType::eU32, refByte, srcByte)),
+        m_builder.add(Op::UMin(ScalarType::eU32, refByte, srcByte))));
+
+      auto isNonZero = m_builder.add(Op::INe(ScalarType::eBool, refByte, m_builder.makeConstant(0u)));
+      absDiff = m_builder.add(Op::Select(ScalarType::eU32, isNonZero, absDiff, m_builder.makeConstant(0u)));
+
+      accum = m_builder.add(Op::IAdd(ScalarType::eU32, accum, absDiff));
+    }
+
+    m_builder.add(Op::Return(ScalarType::eU32, accum));
+    m_builder.add(Op::FunctionEnd());
+  }
+
+  /* Msad lowering returns u32, convert as necessary */
+  auto newOp = Op::FunctionCall(ScalarType::eU32, m_msadFunction)
+    .addOperand(SsaDef(op->getOperand(0u)))
+    .addOperand(SsaDef(op->getOperand(1u)))
+    .addOperand(SsaDef(op->getOperand(2u)));
 
   m_builder.rewriteOp(op->getDef(), std::move(newOp));
   return ++op;
