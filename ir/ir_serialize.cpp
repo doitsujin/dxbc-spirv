@@ -50,7 +50,8 @@ size_t Serializer::computeEncodedTypeSize(const Type& type) const {
 
 
 size_t Serializer::computeEncodedOpTokenSize(const Op& op) const {
-  return util::vle::encodedSize(getOpToken(op));
+  return util::vle::encodedSize(getOpToken(op)) +
+         util::vle::encodedSize(op.getOperandCount());
 }
 
 
@@ -115,7 +116,8 @@ bool Serializer::encodeOp(const Op& op, uint8_t* dstData, size_t dstSize, size_t
   uint32_t refCount = op.getFirstLiteralOperandIndex();
   uint32_t argCount = op.getOperandCount();
 
-  if (!writeVle(dstData, dstSize, dstOffset, getOpToken(op)))
+  if (!writeVle(dstData, dstSize, dstOffset, getOpToken(op)) ||
+      !writeVle(dstData, dstSize, dstOffset, op.getOperandCount()))
     return false;
 
   if (!encodeType(op.getType(), dstData, dstSize, dstOffset))
@@ -140,7 +142,6 @@ bool Serializer::encodeOp(const Op& op, uint8_t* dstData, size_t dstSize, size_t
 uint64_t Serializer::getOpToken(const Op& op) const {
   uint64_t token = uint16_t(op.getOpCode());
   token |= uint64_t(uint8_t(op.getFlags())) << OpCodeBits;
-  token |= uint64_t(op.getOperandCount()) << (OpCodeBits + OpFlagBits);
   return token;
 }
 
@@ -192,8 +193,9 @@ bool Deserializer::deserializeOpCount(uint32_t& count) {
 
 bool Deserializer::deserializeOp(Op& op, SsaDef def) {
   uint64_t opToken = 0u;
+  uint64_t operandCount = 0u;
 
-  if (!readVle(opToken))
+  if (!readVle(opToken) || !readVle(operandCount))
     return false;
 
   Type type = { };
@@ -202,8 +204,7 @@ bool Deserializer::deserializeOp(Op& op, SsaDef def) {
     return false;
 
   OpCode opCode = OpCode(util::bextract(opToken, 0u, OpCodeBits));
-  OpFlags opFlags = OpFlags(util::bextract(opToken, OpCodeBits, OpFlagBits));
-  uint32_t operandCount = opToken >> (OpCodeBits + OpFlagBits);
+  OpFlags opFlags = OpFlags(opToken >> OpCodeBits);
 
   /* Initialize op with default operands before parsing those. We need
    * to query the instruction layout, so the operand count must be known. */

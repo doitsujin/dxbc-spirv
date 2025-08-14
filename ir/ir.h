@@ -1127,7 +1127,6 @@ enum class OpFlag : uint8_t {
   eFlagEnum = 0
 };
 
-constexpr uint32_t OpFlagBits = 6;
 using OpFlags = util::Flags<OpFlag>;
 
 
