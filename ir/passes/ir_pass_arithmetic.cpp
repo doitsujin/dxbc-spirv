@@ -49,6 +49,9 @@ bool ArithmeticPass::runPass() {
       std::tie(status, next) = resolveIdentityOp(iter);
 
     if (!status)
+      std::tie(status, next) = resolveBuiltInCompareOp(iter);
+
+    if (!status)
       std::tie(status, next) = selectOp(iter);
 
     if (!status)
@@ -2268,6 +2271,63 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityOp(Builder::it
 }
 
 
+std::pair<bool, Builder::iterator> ArithmeticPass::resolveBuiltInCompareOp(Builder::iterator op) {
+  switch (op->getOpCode()) {
+    case OpCode::eIEq:
+    case OpCode::eINe:
+    case OpCode::eULt:
+    case OpCode::eULe:
+    case OpCode::eUGt:
+    case OpCode::eUGe: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+      const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+      auto aBuiltIn = getBuiltInInput(a);
+      auto bBuiltIn = getBuiltInInput(b);
+
+      if (!aBuiltIn)
+        break;
+
+      std::optional<bool> constant;
+
+      if (aBuiltIn == BuiltIn::eTessControlPointId && bBuiltIn == BuiltIn::eTessControlPointCountIn) {
+        constant = op->getOpCode() == OpCode::eINe ||
+                   op->getOpCode() == OpCode::eULt ||
+                   op->getOpCode() == OpCode::eULe;
+      }
+
+      if (aBuiltIn == BuiltIn::eTessControlPointCountIn && bBuiltIn == BuiltIn::eTessControlPointId) {
+        constant = op->getOpCode() == OpCode::eINe ||
+                   op->getOpCode() == OpCode::eUGt ||
+                   op->getOpCode() == OpCode::eUGe;
+      }
+
+      if (aBuiltIn == BuiltIn::eTessControlPointCountIn && isConstantValue(b, 0)) {
+        constant = op->getOpCode() == OpCode::eINe ||
+                   op->getOpCode() == OpCode::eUGt ||
+                   op->getOpCode() == OpCode::eUGe;
+      }
+
+      if (aBuiltIn == BuiltIn::eGsVertexCountIn && isConstantValue(b, 0)) {
+        constant = op->getOpCode() == OpCode::eINe ||
+                   op->getOpCode() == OpCode::eUGt ||
+                   op->getOpCode() == OpCode::eUGe;
+      }
+
+      if (constant) {
+        auto next = m_builder.rewriteDef(op->getDef(), m_builder.makeConstant(*constant));
+        return std::make_pair(true, m_builder.iter(next));
+      }
+    } break;
+
+    default:
+      break;
+  }
+
+  return std::make_pair(false, ++op);
+}
+
+
 std::pair<bool, Builder::iterator> ArithmeticPass::vectorizeF32toF16(Builder::iterator op) {
   SsaDef lo = { };
   SsaDef hi = { };
@@ -3109,6 +3169,19 @@ OpFlags ArithmeticPass::getFpFlags(const Op& op) const {
     case ScalarType::eF64: return flags | m_fp64Flags;
     default: return flags;
   }
+}
+
+
+std::optional<BuiltIn> ArithmeticPass::getBuiltInInput(const Op& op) const {
+  if (op.getOpCode() != OpCode::eInputLoad)
+    return std::nullopt;
+
+  const auto& dcl = m_builder.getOpForOperand(op, 0u);
+
+  if (dcl.getOpCode() != OpCode::eDclInputBuiltIn)
+    return std::nullopt;
+
+  return std::make_optional(BuiltIn(dcl.getOperand(1u)));
 }
 
 

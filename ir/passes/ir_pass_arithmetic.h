@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include "../ir.h"
 #include "../ir_builder.h"
 
@@ -149,6 +151,8 @@ private:
 
   std::pair<bool, Builder::iterator> resolveIdentityOp(Builder::iterator op);
 
+  std::pair<bool, Builder::iterator> resolveBuiltInCompareOp(Builder::iterator op);
+
   std::pair<bool, Builder::iterator> vectorizeF32toF16(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> reorderConstantOperandsCompareOp(Builder::iterator op);
@@ -183,8 +187,9 @@ private:
 
   OpFlags getFpFlags(const Op& op) const;
 
-  template<typename T>
+  std::optional<BuiltIn> getBuiltInInput(const Op& op) const;
 
+  template<typename T>
   static Operand makeScalarOperand(const Type& type, T value);
 
   static constexpr float sincosTaylorFactor(uint32_t power) {
