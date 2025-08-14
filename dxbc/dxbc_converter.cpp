@@ -3742,13 +3742,16 @@ ir::SsaDef Converter::makeTypedConstant(ir::Builder& builder, ir::BasicType type
       case ir::ScalarType::eBool: return ir::Operand(bool(value));
       case ir::ScalarType::eU8:   return ir::Operand(uint8_t(value));
       case ir::ScalarType::eU16:  return ir::Operand(uint16_t(value));
+      case ir::ScalarType::eMinU16:
       case ir::ScalarType::eU32:  return ir::Operand(uint32_t(value));
       case ir::ScalarType::eU64:  return ir::Operand(uint64_t(value));
       case ir::ScalarType::eI8:   return ir::Operand(int8_t(value));
       case ir::ScalarType::eI16:  return ir::Operand(int16_t(value));
+      case ir::ScalarType::eMinI16:
       case ir::ScalarType::eI32:  return ir::Operand(int32_t(value));
       case ir::ScalarType::eI64:  return ir::Operand(int64_t(value));
       case ir::ScalarType::eF16:  return ir::Operand(util::float16_t(value));
+      case ir::ScalarType::eMinF16:
       case ir::ScalarType::eF32:  return ir::Operand(float(value));
       case ir::ScalarType::eF64:  return ir::Operand(double(value));
       default: break;
