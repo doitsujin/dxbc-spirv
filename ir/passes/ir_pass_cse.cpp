@@ -23,7 +23,12 @@ bool CsePass::run() {
   std::vector<SsaDef> blockList;
 
   while (iter != m_builder.getCode().second) {
-    if (canDeduplicateOp(*iter)) {
+    auto opType = classifyOp(*iter);
+
+    if (opType & CseOpFlag::eHasSideEffects)
+      m_functionIsPure = false;
+
+    if (opType & CseOpFlag::eCanDeduplicate) {
       auto [a, b] = m_defs.equal_range(*iter);
 
       SsaDef next = { };
@@ -45,6 +50,26 @@ bool CsePass::run() {
     } else if (iter->getOpCode() == OpCode::eLabel) {
       /* For phi processing */
       blockList.push_back(iter->getDef());
+    }
+
+    /* If no instruction or function call inside the current function has
+     * side effects, mark the function as pure so that calls to it can get
+     * deduplicated. Relevant for certain lowering steps. */
+    switch (iter->getOpCode()) {
+      case OpCode::eFunction: {
+        m_functionIsPure = true;
+        m_functionDef = iter->getDef();
+      } break;
+
+      case OpCode::eFunctionEnd: {
+        if (m_functionIsPure)
+          m_pureFunctions.insert(m_functionDef);
+
+        m_functionDef = SsaDef();
+      } break;
+
+      default:
+        break;
     }
 
     ++iter;
@@ -93,7 +118,7 @@ size_t CsePass::OpHash::operator () (const Op& op) const {
 }
 
 
-bool CsePass::canDeduplicateOp(const Op& op) const {
+CseOpFlags CsePass::classifyOp(const Op& op) const {
   switch (op.getOpCode()) {
     /* Simple instructions that can be deduplicated */
     case OpCode::eConvertFtoF:
@@ -205,22 +230,27 @@ bool CsePass::canDeduplicateOp(const Op& op) const {
     case OpCode::eUMax:
     case OpCode::eUClamp:
     case OpCode::eUMSad:
-      return true;
+      return CseOpFlag::eCanDeduplicate;
 
     case OpCode::eBufferLoad:
     case OpCode::eImageLoad: {
       /* Eliminate redundant loads if the resource is read-only */
       const auto& descriptorOp = m_builder.getOpForOperand(op, 0u);
-      return descriptorOp.getType() != ScalarType::eUav;
+
+      bool isPure = descriptorOp.getType() != ScalarType::eUav;
+      return isPure ? CseOpFlag::eCanDeduplicate : CseOpFlag::eHasSideEffects;
     }
 
-    /* TODO check if function has side effects */
-    case OpCode::eFunctionCall:
-      return false;
+    case OpCode::eFunctionCall: {
+      const auto& function = m_builder.getOpForOperand(op, 0u);
+
+      bool isPure = m_pureFunctions.find(function.getDef()) != m_pureFunctions.end();
+      return isPure ? CseOpFlag::eCanDeduplicate : CseOpFlag::eHasSideEffects;
+    }
 
     /* Phi needs special treatment due to forward references */
     case OpCode::ePhi:
-      return false;
+      return CseOpFlags();
 
     /* Control flow and function declarations */
     case OpCode::eFunction:
@@ -231,7 +261,7 @@ bool CsePass::canDeduplicateOp(const Op& op) const {
     case OpCode::eSwitch:
     case OpCode::eUnreachable:
     case OpCode::eReturn:
-      return false;
+      return CseOpFlags();
 
     /* Instructions with observable side effects */
     case OpCode::eBarrier:
@@ -255,11 +285,11 @@ bool CsePass::canDeduplicateOp(const Op& op) const {
     case OpCode::eDemote:
     case OpCode::eRovScopedLockBegin:
     case OpCode::eRovScopedLockEnd:
-      return false;
+      return CseOpFlag::eHasSideEffects;
 
     /* Optimization barrier */
     case OpCode::eDrain:
-      return false;
+      return CseOpFlags();
 
     /* Declarative ops that we shouldn't reach */
     case OpCode::eEntryPoint:
@@ -323,7 +353,7 @@ bool CsePass::canDeduplicateOp(const Op& op) const {
   }
 
   dxbc_spv_unreachable();
-  return false;
+  return CseOpFlag();
 }
 
 }
