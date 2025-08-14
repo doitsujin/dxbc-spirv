@@ -7,7 +7,7 @@ namespace dxbc_spv::ir {
 
 /** Simple arithmetic transforms. */
 class ArithmeticPass {
-
+  constexpr static double pi = 3.14159265359;
 public:
 
   struct Options {
@@ -79,6 +79,7 @@ private:
   util::small_vector<DotFunc, 8u> m_dotFunctions;
   SsaDef m_f32tof16Function = { };
   SsaDef m_msadFunction = { };
+  SsaDef m_sincosFunction = { };
 
   void lowerInstructionsPreTransform();
   void lowerInstructionsPostTransform();
@@ -94,6 +95,8 @@ private:
   Builder::iterator lowerF16toF32(Builder::iterator op);
 
   Builder::iterator lowerMsad(Builder::iterator op);
+
+  Builder::iterator lowerSinCos(Builder::iterator op);
 
   SsaDef buildF32toF16Func();
 
@@ -174,7 +177,17 @@ private:
   OpFlags getFpFlags(const Op& op) const;
 
   template<typename T>
+
   static Operand makeScalarOperand(const Type& type, T value);
+
+  static constexpr float sincosTaylorFactor(uint32_t power) {
+    double result = 1.0;
+
+    for (uint32_t i = 1; i <= power; i++)
+      result *= pi * 0.25 / double(i);
+
+    return float(result);
+  }
 
 };
 

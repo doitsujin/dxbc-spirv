@@ -108,6 +108,14 @@ void ArithmeticPass::lowerInstructionsPreTransform() {
         iter = lowerClamp(iter);
       } continue;
 
+      case OpCode::eFSin:
+      case OpCode::eFCos: {
+        if (m_options.lowerSinCos) {
+          iter = lowerSinCos(iter);
+          continue;
+        }
+      } break;
+
       default:
         break;
     }
@@ -530,6 +538,111 @@ Builder::iterator ArithmeticPass::lowerMsad(Builder::iterator op) {
     .addOperand(SsaDef(op->getOperand(2u)));
 
   m_builder.rewriteOp(op->getDef(), std::move(newOp));
+  return ++op;
+}
+
+
+Builder::iterator ArithmeticPass::lowerSinCos(Builder::iterator op) {
+  if (!m_sincosFunction) {
+    BasicType resultType(ScalarType::eF32, 2u);
+
+    auto param = m_builder.add(Op::DclParam(ScalarType::eF32));
+    m_builder.add(Op::DebugName(param, "x"));
+
+    m_sincosFunction = m_builder.addBefore(m_builder.getCode().first->getDef(),
+      Op::Function(resultType).addParam(param));
+    m_builder.add(Op::DebugName(m_sincosFunction, "sincos"));
+
+    m_builder.setCursor(m_sincosFunction);
+    m_builder.add(Op::Label());
+
+    auto x = m_builder.add(Op::ParamLoad(ScalarType::eF32, m_sincosFunction, param));
+
+    /* Normalize input to multiple of pi/4 */
+    auto xNorm = m_builder.add(Op::FMul(ScalarType::eF32,
+      m_builder.add(Op::FAbs(ScalarType::eF32, x).setFlags(OpFlag::eNoSz)),
+      m_builder.makeConstant(float(4.0f / pi))).setFlags(OpFlag::ePrecise | OpFlag::eNoSz));
+
+    /* Almost everything operates on values between [0..1) here, but may be nan */
+    OpFlags commonFlags = OpFlag::ePrecise | OpFlag::eNoSz | OpFlag::eNoInf;
+
+    auto xFract = m_builder.add(Op::FFract(ScalarType::eF32, xNorm).setFlags(OpFlag::eNoSz));
+    auto xInt = m_builder.add(Op::ConvertFtoI(ScalarType::eU32, xNorm));
+
+    /* Mirror input along x axis as necessary */
+    auto mirror = m_builder.add(Op::INe(ScalarType::eBool,
+      m_builder.add(Op::IAnd(ScalarType::eU32, xInt, m_builder.makeConstant(1u))),
+      m_builder.makeConstant(0u)));
+
+    xFract = m_builder.add(Op::Select(ScalarType::eF32, mirror,
+      m_builder.add(Op::FSub(ScalarType::eF32, m_builder.makeConstant(1.0f), xFract).setFlags(commonFlags)),
+      xFract).setFlags(OpFlag::eNoInf | OpFlag::eNoSz));
+
+    /* Compute taylor series for fractional part */
+    auto xFract_2 = m_builder.add(Op::FMul(ScalarType::eF32, xFract, xFract).setFlags(commonFlags));
+    auto xFract_4 = m_builder.add(Op::FMul(ScalarType::eF32, xFract_2, xFract_2).setFlags(commonFlags));
+    auto xFract_6 = m_builder.add(Op::FMul(ScalarType::eF32, xFract_4, xFract_2).setFlags(commonFlags));
+
+    auto taylor = m_builder.add(Op::FMul(ScalarType::eF32, xFract_6, m_builder.makeConstant(-sincosTaylorFactor(7))).setFlags(commonFlags));
+    taylor = m_builder.add(Op::FMad(ScalarType::eF32, xFract_4, m_builder.makeConstant(sincosTaylorFactor(5)), taylor).setFlags(commonFlags));
+    taylor = m_builder.add(Op::FMad(ScalarType::eF32, xFract_2, m_builder.makeConstant(-sincosTaylorFactor(3)), taylor).setFlags(commonFlags));
+    taylor = m_builder.add(Op::FAdd(ScalarType::eF32, m_builder.makeConstant(sincosTaylorFactor(1)), taylor).setFlags(commonFlags));
+    taylor = m_builder.add(Op::FMul(ScalarType::eF32, taylor, xFract).setFlags(commonFlags));
+
+    /* Compute co-function based on sin^2 + cos^2 = 1. This fma result
+     * is always greater than 0, so the sqrt trick is safe. */
+    auto coMad = m_builder.add(Op::FMad(ScalarType::eF32,
+      m_builder.add(Op::FNeg(ScalarType::eF32, taylor).setFlags(OpFlag::eNoSz | OpFlag::eNoInf)), taylor,
+      m_builder.makeConstant(1.0f)).setFlags(commonFlags));
+
+    auto coFunc = m_builder.add(Op::FMul(ScalarType::eF32, coMad,
+      m_builder.add(Op::FRsq(ScalarType::eF32, coMad).setFlags(commonFlags))).setFlags(commonFlags));
+
+    /* Determine whether the taylor series was used for sine or cosine and assign the correct result */
+    auto funcIsSin = m_builder.add(Op::IEq(ScalarType::eBool,
+      m_builder.add(Op::IAnd(ScalarType::eU32,
+        m_builder.add(Op::IAdd(ScalarType::eU32, xInt, m_builder.makeConstant(1u))),
+        m_builder.makeConstant(2u))),
+      m_builder.makeConstant(0u)));
+
+    auto sin = m_builder.add(Op::Select(ScalarType::eF32, funcIsSin, taylor, coFunc).setFlags(OpFlag::eNoInf | OpFlag::eNoSz));
+    auto cos = m_builder.add(Op::Select(ScalarType::eF32, funcIsSin, coFunc, taylor).setFlags(OpFlag::eNoInf | OpFlag::eNoSz));
+
+    /* Determine whether sine is negative. Interpret the input as a
+     * signed integer in order to propagate signed zeroes properly. */
+    auto inputNeg = m_builder.add(Op::SLt(ScalarType::eBool,
+      m_builder.add(Op::Cast(ScalarType::eI32, x)),
+      m_builder.makeConstant(0)));
+
+    auto sinNeg = m_builder.add(Op::IEq(ScalarType::eBool,
+      m_builder.add(Op::IAnd(ScalarType::eU32, xInt, m_builder.makeConstant(4u))),
+      m_builder.makeConstant(0u)));
+
+    sinNeg = m_builder.add(Op::BNe(ScalarType::eBool, sinNeg, inputNeg));
+
+    /* Determine whether cosine is negative */
+    auto cosNeg = m_builder.add(Op::INe(ScalarType::eBool,
+      m_builder.add(Op::IAnd(ScalarType::eU32,
+        m_builder.add(Op::IAdd(ScalarType::eU32, xInt, m_builder.makeConstant(2u))),
+        m_builder.makeConstant(4u))),
+      m_builder.makeConstant(0u)));
+
+    sin = m_builder.add(Op::Select(ScalarType::eF32, sinNeg, m_builder.add(Op::FNeg(ScalarType::eF32, sin).setFlags(OpFlag::eNoInf)), sin).setFlags(OpFlag::eNoInf));
+    cos = m_builder.add(Op::Select(ScalarType::eF32, cosNeg, m_builder.add(Op::FNeg(ScalarType::eF32, cos).setFlags(OpFlag::eNoInf)), cos).setFlags(OpFlag::eNoInf));
+
+    m_builder.add(Op::Return(resultType, m_builder.add(Op::CompositeConstruct(resultType, sin, cos))));
+    m_builder.add(Op::FunctionEnd());
+  }
+
+  /* Forward to custom sincos function */
+  auto sincosCall = m_builder.addBefore(op->getDef(),
+    Op::FunctionCall(BasicType(ScalarType::eF32, 2u), m_sincosFunction)
+      .addParam(SsaDef(op->getOperand(0u))).setFlags(OpFlag::eNoInf));
+
+  /* The result vector is vec2(sin, cos) */
+  auto componentIndex = op->getOpCode() == OpCode::eFCos ? 1u : 0u;
+  m_builder.rewriteOp(op->getDef(), Op::CompositeExtract(
+    op->getType(), sincosCall, m_builder.makeConstant(componentIndex)));
   return ++op;
 }
 
