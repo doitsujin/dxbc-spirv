@@ -420,7 +420,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   }} },
   /* UMul */
   { 4u, {{
-    { OperandKind::eDstReg, ir::ScalarType::eU32    },
+    { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },

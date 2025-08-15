@@ -1378,7 +1378,11 @@ bool Converter::handleIntMultiply(ir::Builder& builder, const Instruction& op) {
   const auto& dstLo = op.getDst(1u);
 
   if (dstHi.getRegisterType() == RegisterType::eNull) {
+    /* Default to an unsigned type regardless of op type */
     auto scalarType = determineOperandType(dstLo, ir::ScalarType::eU32);
+
+    if (scalarType == ir::ScalarType::eI32)
+      scalarType = ir::ScalarType::eU32;
 
     const auto& srcA = loadSrcModified(builder, op, op.getSrc(0u), dstLo.getWriteMask(), scalarType);
     const auto& srcB = loadSrcModified(builder, op, op.getSrc(1u), dstLo.getWriteMask(), scalarType);
