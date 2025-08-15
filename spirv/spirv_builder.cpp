@@ -40,13 +40,14 @@ std::vector<uint32_t> SpirvBuilder::getSpirvBinary() const {
 
 
 void SpirvBuilder::getSpirvBinary(size_t& size, void* data) const {
-  std::array<std::pair<size_t, const uint32_t*>, 10u> arrays = {{
+  std::array<std::pair<size_t, const uint32_t*>, 11u> arrays = {{
     { m_capabilities.size(), m_capabilities.data() },
     { m_extensions.size(), m_extensions.data() },
     { m_imports.size(), m_imports.data() },
     { m_memoryModel.size(), m_memoryModel.data() },
     { m_entryPoint.size(), m_entryPoint.data() },
     { m_executionModes.size(), m_executionModes.data() },
+    { m_source.size(), m_source.data() },
     { m_debug.size(), m_debug.data() },
     { m_decorations.size(), m_decorations.data() },
     { m_declarations.size(), m_declarations.data() },
@@ -584,7 +585,32 @@ void SpirvBuilder::emitEntryPoint(const ir::Op& op) {
   m_entryPoint.push_back(m_entryPointId);
   pushString(m_entryPoint, name);
 
+  emitSourceName(op);
+
   m_stage = stage;
+}
+
+
+void SpirvBuilder::emitSourceName(const ir::Op& op) {
+  auto [a, b] = m_builder.getUses(op.getDef());
+
+  for (auto i = a; i != b; i++) {
+    if (i->getOpCode() == ir::OpCode::eDebugName) {
+      m_source.clear();
+
+      auto name = i->getLiteralString(i->getFirstLiteralOperandIndex());
+
+      auto fileNameId = allocId();
+      m_source.push_back(makeOpcodeToken(spv::OpString, 2u + getStringDwordCount(name.c_str())));
+      m_source.push_back(fileNameId);
+      pushString(m_source, name.c_str());
+
+      m_source.push_back(makeOpcodeToken(spv::OpSource, 4u));
+      m_source.push_back(spv::SourceLanguageUnknown);
+      m_source.push_back(0u);
+      m_source.push_back(fileNameId);
+    }
+  }
 }
 
 

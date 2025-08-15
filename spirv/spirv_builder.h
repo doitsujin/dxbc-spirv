@@ -98,6 +98,7 @@ private:
   util::small_vector<uint32_t, 8>     m_memoryModel;
   util::small_vector<uint32_t, 256>   m_entryPoint;
   util::small_vector<uint32_t, 64>    m_executionModes;
+  util::small_vector<uint32_t, 64>    m_source;
   util::small_vector<uint32_t, 1024>  m_debug;
   util::small_vector<uint32_t, 1024>  m_decorations;
 
@@ -157,6 +158,8 @@ private:
   void emitInstruction(const ir::Op& op);
 
   void emitEntryPoint(const ir::Op& op);
+
+  void emitSourceName(const ir::Op& op);
 
   void emitConstant(const ir::Op& op);
 
