@@ -31,8 +31,14 @@ public:
   /** Runs pass. */
   void run();
 
+  /** Runs pass to remove unused floating point mode declarations. */
+  void removeUnusedFloatModes();
+
   /** Initializes and runs pass on the given builder. */
   static void runPass(Builder& builder);
+
+  /** Runs pass to remove unused floating point modes. */
+  static void runRemoveUnusedFloatModePass(Builder& builder);
 
 private:
 

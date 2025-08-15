@@ -46,8 +46,61 @@ void RemoveUnusedPass::run() {
 }
 
 
+void RemoveUnusedPass::removeUnusedFloatModes() {
+  SsaDef f16Mode = { };
+  SsaDef f32Mode = { };
+  SsaDef f64Mode = { };
+
+  bool usesF16 = false;
+  bool usesF32 = false;
+  bool usesF64 = false;
+
+  for (const auto& op : m_builder) {
+    if (op.getOpCode() == OpCode::eSetFpMode) {
+      /* Scan FP mode declarations */
+      if (op.getType() == ScalarType::eF16)
+        f16Mode = op.getDef();
+      else if (op.getType() == ScalarType::eF32)
+        f32Mode = op.getDef();
+      else if (op.getType() == ScalarType::eF64)
+        f64Mode = op.getDef();
+    } else {
+      /* Scan return type of each instruction */
+      for (uint32_t i = 0u; i < op.getType().getStructMemberCount(); i++) {
+        auto scalarType = op.getType().getBaseType(i).getBaseType();
+        usesF16 = usesF16 || scalarType == ScalarType::eF16;
+        usesF32 = usesF32 || scalarType == ScalarType::eF32;
+        usesF64 = usesF64 || scalarType == ScalarType::eF64;
+      }
+    }
+
+    /* If we finished scanning declarations, exit early once we
+     * know that all declared float modes are actively used */
+    if (!op.isDeclarative() &&
+        (usesF16 || !f16Mode) &&
+        (usesF32 || !f32Mode) &&
+        (usesF64 || !f64Mode))
+      return;
+  }
+
+  if (f16Mode && !usesF16)
+    m_builder.remove(f16Mode);
+
+  if (f32Mode && !usesF32)
+    m_builder.remove(f32Mode);
+
+  if (f64Mode && !usesF64)
+    m_builder.remove(f64Mode);
+}
+
+
 void RemoveUnusedPass::runPass(Builder& builder) {
   RemoveUnusedPass(builder).run();
+}
+
+
+void RemoveUnusedPass::runRemoveUnusedFloatModePass(Builder& builder) {
+  RemoveUnusedPass(builder).removeUnusedFloatModes();
 }
 
 
