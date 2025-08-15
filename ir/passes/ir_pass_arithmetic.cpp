@@ -1499,27 +1499,43 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
 
       /* a + -constant = a - constant
        * a - -constant = a + constant */
-      if (b.isConstant() && b.getType().getBaseType(0u).isIntType()) {
+      if (b.isConstant()) {
         Op constant(OpCode::eConstant, b.getType());
 
         bool isConstantNegative = false;
         bool isConstantPositive = false;
 
         for (uint32_t i = 0u; i < b.getOperandCount(); i++) {
-          auto value = getConstantAsSint(b, i);
+          auto baseType = b.getType().getBaseType(0u);
 
-          isConstantNegative = isConstantNegative || value < 0;
-          isConstantPositive = isConstantPositive || value > 0;
+          if (baseType.isIntType()) {
+            auto value = getConstantAsSint(b, i);
 
-          auto negOperand = makeScalarOperand(b.getType(), -value);
-          auto posOperand = makeScalarOperand(b.getType(), value);
+            isConstantNegative = isConstantNegative || value < 0;
+            isConstantPositive = isConstantPositive || value > 0;
 
-          constant.addOperand(negOperand);
+            auto negOperand = makeScalarOperand(b.getType(), -value);
+            auto posOperand = makeScalarOperand(b.getType(), value);
 
-          /* Negating the minimum representable value results in a
-           * negative number again, ensure that we ignore that case. */
-          if (value && negOperand == posOperand)
-            isConstantPositive = true;
+            constant.addOperand(negOperand);
+
+            /* Negating the minimum representable value results in a
+             * negative number again, ensure that we ignore that case. */
+            if (value && negOperand == posOperand)
+              isConstantPositive = true;
+          } else {
+            dxbc_spv_assert(baseType.isFloatType());
+
+            auto signBit = uint64_t(1u) << (byteSize(baseType.getBaseType()) * 8u - 1u);
+
+            auto posOperand = b.getOperand(i);
+            auto negOperand = Operand(signBit ^ uint64_t(posOperand));
+
+            isConstantNegative = isConstantNegative || (uint64_t(posOperand) & signBit);
+            isConstantPositive = isConstantPositive || !(uint64_t(posOperand) & signBit);
+
+            constant.addOperand(negOperand);
+          }
         }
 
         if (isConstantNegative && !isConstantPositive) {
