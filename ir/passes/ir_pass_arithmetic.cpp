@@ -802,7 +802,13 @@ Builder::iterator ArithmeticPass::tryFuseMad(Builder::iterator op) {
     }
   }
 
-  m_builder.rewriteOp(op->getDef(), Op::FMad(op->getType(), a, b, c).setFlags(op->getFlags()));
+  /* Emit fused op and constant-fold negations where possible. */
+  auto fusedOp = Op::FMad(op->getType(), a, b, c).setFlags(op->getFlags());
+  m_builder.rewriteOp(op->getDef(), fusedOp);
+
+  for (uint32_t i = 0u; i < fusedOp.getOperandCount(); i++)
+    constantFoldOp(m_builder.iter(SsaDef(fusedOp.getOperand(i))));
+
   return ++op;
 }
 
@@ -2783,6 +2789,21 @@ std::pair<bool, Builder::iterator> ArithmeticPass::constantFoldArithmeticOp(Buil
   for (uint32_t i = 0u; i < op->getType().getBaseType(0u).getVectorSize(); i++) {
     Operand operand = [this, op, i] {
       switch (op->getOpCode()) {
+        case OpCode::eFNeg:
+        case OpCode::eFAbs: {
+          auto scalarType = op->getType().getBaseType(0u).getBaseType();
+          auto signBit = uint64_t(1u) << (8u * byteSize(scalarType) - 1u);
+
+          auto value = uint64_t(m_builder.getOpForOperand(*op, 0u).getOperand(i));
+
+          if (op->getOpCode() == OpCode::eFNeg)
+            value ^= signBit;
+          else
+            value &= ~signBit;
+
+          return Operand(value);
+        }
+
         case OpCode::eIAnd: {
           const auto& a = getConstantAsUint(m_builder.getOpForOperand(*op, 0u), i);
           const auto& b = getConstantAsUint(m_builder.getOpForOperand(*op, 1u), i);
@@ -3190,6 +3211,8 @@ std::pair<bool, Builder::iterator> ArithmeticPass::constantFoldSelect(Builder::i
 
 std::pair<bool, Builder::iterator> ArithmeticPass::constantFoldOp(Builder::iterator op) {
   switch (op->getOpCode()) {
+    case OpCode::eFAbs:
+    case OpCode::eFNeg:
     case OpCode::eIAnd:
     case OpCode::eIOr:
     case OpCode::eIXor:
