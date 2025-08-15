@@ -1,5 +1,6 @@
 #include "ir.h"
 
+#include <algorithm>
 #include <iomanip>
 
 namespace dxbc_spv::ir {

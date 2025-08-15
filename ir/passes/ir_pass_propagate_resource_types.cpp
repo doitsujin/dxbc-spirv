@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <unordered_map>
 
 #include "ir_pass_propagate_resource_types.h"

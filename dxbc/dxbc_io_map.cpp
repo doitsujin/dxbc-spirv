@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "dxbc_converter.h"
 #include "dxbc_io_map.h"
 
