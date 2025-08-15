@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "ir_disasm.h"
 
 namespace dxbc_spv::ir {
@@ -15,8 +17,28 @@ Disassembler::~Disassembler() {
 
 
 void Disassembler::disassemble(std::ostream& stream) const {
-  for (auto ins : m_builder)
-    disassembleOp(stream, ins);
+  auto iter = m_builder.begin();
+
+  if (m_options.sortDeclarative) {
+    std::vector<Op> declarations;
+
+    while (iter != m_builder.getDeclarations().second)
+      declarations.push_back(*(iter++));
+
+    std::sort(declarations.begin(), declarations.end(),
+      [] (const Op& a, const Op& b) {
+        uint32_t aOp = normalizeOpCodeOrder(a.getOpCode());
+        uint32_t bOp = normalizeOpCodeOrder(b.getOpCode());
+
+        return aOp < bOp;
+      });
+
+    for (const auto& op : declarations)
+      disassembleOp(stream, op);
+  }
+
+  while (iter != m_builder.end())
+    disassembleOp(stream, *(iter++));
 }
 
 
@@ -356,6 +378,19 @@ size_t Disassembler::countChars(const std::string& str) {
   }
 
   return n;
+}
+
+
+uint32_t Disassembler::normalizeOpCodeOrder(OpCode op) {
+  switch (op) {
+    case OpCode::eSemantic:
+    case OpCode::eDebugName:
+    case OpCode::eDebugMemberName:
+      return uint16_t(op) + (1u << OpCodeBits);
+
+    default:
+      return uint16_t(op);
+  }
 }
 
 }

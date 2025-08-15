@@ -29,6 +29,8 @@ public:
     bool showConstants = true;
     /** Whether to show debug name instructions. */
     bool showDebugNames = true;
+    /** Whether to sort declarative ops by opcode. */
+    bool sortDeclarative = true;
     /** Whether to enable colored output */
     bool coloredOutput = false;
   };
@@ -67,6 +69,8 @@ private:
   util::ConsoleState scopedColor(std::ostream& stream, uint32_t fg, uint32_t effect = 0u) const;
 
   static size_t countChars(const std::string& str);
+
+  static uint32_t normalizeOpCodeOrder(OpCode op);
 
 };
 
