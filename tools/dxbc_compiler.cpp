@@ -27,6 +27,7 @@ struct Options {
   std::string spvTarget;
   std::string irBinTarget;
 
+  bool irInput = false;
   bool printIrAsm = false;
   bool convertOnly = false;
   bool noDebug = false;
@@ -159,41 +160,50 @@ bool writeSpirvBinary(const ir::Builder& builder, const Options& options, Timers
 
 
 bool compileShader(util::ByteReader reader, const Options& options) {
-  /* Parse file header */
-  dxbc::Container container(reader);
-
-  if (!container) {
-    std::cerr << "Error: " << options.input << " is not a valid dxbc file." << std::endl;
-    return false;
-  }
-
-  /* Work out shader name based on the file hash */
-  auto name = [&] {
-    std::stringstream stream;
-    stream << container.getHash();
-    return stream.str();
-  } ();
-
   Timers timers = { };
   timers.tConvertBegin = std::chrono::high_resolution_clock::now();
 
-  /* Set up conversion options */
-  dxbc::Converter::Options dxbcOptions = { };
-  dxbcOptions.includeDebugNames = !options.noDebug;
-  dxbcOptions.name = name.c_str();
-
-  dxbc::Converter converter(std::move(container), dxbcOptions);
-
   ir::Builder builder;
 
-  if (!converter.convertShader(builder)) {
-    std::cerr << "Error: Failed to convert shader." << std::endl;
-    return false;
+  if (!options.irInput) {
+    /* Parse file header */
+    dxbc::Container container(reader);
+
+    if (!container) {
+      std::cerr << "Error: " << options.input << " is not a valid dxbc file." << std::endl;
+      return false;
+    }
+
+    /* Work out shader name based on the file hash */
+    auto name = [&] {
+      std::stringstream stream;
+      stream << container.getHash();
+      return stream.str();
+    } ();
+
+    /* Set up conversion options */
+    dxbc::Converter::Options dxbcOptions = { };
+    dxbcOptions.includeDebugNames = !options.noDebug;
+    dxbcOptions.name = name.c_str();
+
+    dxbc::Converter converter(std::move(container), dxbcOptions);
+
+    if (!converter.convertShader(builder)) {
+      std::cerr << "Error: Failed to convert shader." << std::endl;
+      return false;
+    }
+  } else {
+    ir::Deserializer deserializer(reinterpret_cast<const uint8_t*>(reader.getData(0u)), reader.getSize());
+
+    if (!deserializer.deserialize(builder)) {
+      std::cerr << "Error: Failed to deserialize shader." << std::endl;
+      return false;
+    }
   }
 
   timers.tConvertEnd = std::chrono::high_resolution_clock::now();
 
-  if (!options.convertOnly) {
+  if (!(options.convertOnly || options.irInput)) {
     dxbc::legalizeIr(builder, dxbc::CompileOptions());
     timers.tAfterPasses = std::chrono::high_resolution_clock::now();
   }
@@ -244,6 +254,8 @@ int main(int argc, char** argv) {
       options.spvTarget = argv[++i];
     } else if (arg == "--ir" && i + 1 < argc) {
       options.irBinTarget = argv[++i];
+    } else if (arg == "--ir-input" && i + 1 < argc) {
+      options.irInput = true;
     } else if (arg == "--ir-asm") {
       options.printIrAsm = true;
     } else if (arg == "--convert-only") {
