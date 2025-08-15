@@ -74,15 +74,12 @@ void ScalarizePass::scalarizeVectorOps() {
         iter = handleCastConsume(iter);
         continue;
 
+      /* Operations that need to be scalarized fully,
+       * regardless of their operand types. */
       case OpCode::eConvertFtoF:
       case OpCode::eConvertFtoI:
       case OpCode::eConvertItoF:
       case OpCode::eConvertItoI:
-        iter = handleConvert(iter);
-        continue;
-
-      /* Operations that need to be scalarized fully,
-       * regardless of their operand types. */
       case OpCode::eInterpolateAtCentroid:
       case OpCode::eInterpolateAtSample:
       case OpCode::eInterpolateAtOffset:
@@ -502,10 +499,10 @@ Builder::iterator ScalarizePass::handleCastConsume(Builder::iterator op) {
   if (srcType.isScalar() || dstType.isScalar())
     return ++op;
 
-  /* When converting two vector types of the same component count, treat
-   * the operation as a normal conversion. */
+  /* When converting two vector types of the same component count,
+   * treat the operation as a regular instruction. */
   if (srcType.getVectorSize() == dstType.getVectorSize())
-    return handleConvert(op);
+    return handleGenericOp(op, true);
 
   /* If we're actually casting between vectors of different component counts,
    * work out how many components to process in one go. */
@@ -515,37 +512,6 @@ Builder::iterator ScalarizePass::handleCastConsume(Builder::iterator op) {
   auto dstStep = dstType.getVectorSize() / minCount;
 
   return scalarizeOp(op, dstStep, srcStep);
-}
-
-
-Builder::iterator ScalarizePass::handleConvert(Builder::iterator op) {
-  dxbc_spv_assert(op->getType().isBasicType());
-
-  if (!m_options.subDwordConversions)
-    return handleGenericOp(op, false);
-
-  /* Nothing to do if the instruction is scalar already */
-  auto dstType = op->getType().getBaseType(0u);
-  auto srcType = m_builder.getOpForOperand(*op, 0u).getType().getBaseType(0u);
-
-  dxbc_spv_assert(dstType.getVectorSize() == srcType.getVectorSize());
-
-  if (dstType.isScalar())
-    return ++op;
-
-  /* Decide desired vector size based on the smallest of the involved
-   * types rather than the largest. This may help keep min-precision
-   * code vectorized. */
-  auto smallestType = dstType.byteSize() < srcType.byteSize()
-    ? dstType.getBaseType()
-    : srcType.getBaseType();
-
-  uint32_t vectorSize = determineVectorSize(smallestType);
-
-  if (dstType.getVectorSize() == vectorSize)
-    return ++op;
-
-  return scalarizeOp(op, vectorSize, vectorSize);
 }
 
 
