@@ -177,6 +177,13 @@ void ArithmeticPass::lowerInstructionsPostTransform() {
         }
       } break;
 
+      case OpCode::eConvertItoF: {
+        if (m_options.hasNvUnsignedItoFBug) {
+          iter = lowerConvertItoF(iter);
+          continue;
+        }
+      } break;
+
       case OpCode::eConvertF32toPackedF16: {
         iter = lowerF32toF16(iter);
       } continue;
@@ -423,6 +430,63 @@ Builder::iterator ArithmeticPass::lowerConvertFtoI(Builder::iterator op) {
       v = m_builder.add(Op::Select(dstType, nanCond,
         m_builder.add(Op(OpCode::eConstant, dstType).addOperand(0u)), v));
     }
+
+    m_builder.add(Op::Return(dstType, v));
+    m_builder.add(Op::FunctionEnd());
+
+    e = m_convertFunctions.insert(m_convertFunctions.end(), fn);
+  }
+
+  m_builder.rewriteOp(op->getDef(),
+    Op::FunctionCall(dstType, e->function).addParam(src.getDef()));
+  return ++op;
+}
+
+
+Builder::iterator ArithmeticPass::lowerConvertItoF(Builder::iterator op) {
+  const auto& src = m_builder.getOpForOperand(*op, 0u);
+
+  /* Look up existing function for int-to-float conversion */
+  auto srcType = src.getType().getBaseType(0u).getBaseType();
+  auto dstType = op->getType().getBaseType(0u).getBaseType();
+
+  auto e = std::find_if(m_convertFunctions.begin(), m_convertFunctions.end(),
+    [dstType, srcType] (const ConvertFunc& fn) {
+      return fn.dstType == dstType &&
+             fn.srcType == srcType;
+    });
+
+  if (e == m_convertFunctions.end()) {
+    ConvertFunc fn = { };
+    fn.dstType = dstType;
+    fn.srcType = srcType;
+
+    /* Declare actual conversion function */
+    auto param = m_builder.add(Op::DclParam(srcType));
+    m_builder.add(Op::DebugName(param, "v"));
+
+    fn.function = m_builder.addBefore(m_builder.getCode().first->getDef(),
+      Op::Function(dstType).addParam(param));
+
+    std::stringstream debugName;
+    debugName << "cvt_" << srcType << "_" << dstType;
+
+    m_builder.add(Op::DebugName(fn.function, debugName.str().c_str()));
+
+    m_builder.setCursor(fn.function);
+    m_builder.add(Op::Label());
+
+    /* Nvidia is broken as of 580.76.05 and will treat UtoF inputs as signed
+     * with our code for some reason. Cast to the next largest integer type
+     * to work around the issue. */
+    auto v = m_builder.add(Op::ParamLoad(srcType, fn.function, param));
+
+    if (srcType == ScalarType::eU32)
+      v = m_builder.add(Op::ConvertItoI(ScalarType::eU64, v));
+    else if (srcType == ScalarType::eU16)
+      v = m_builder.add(Op::ConvertItoI(ScalarType::eU32, v));
+
+    v = m_builder.add(Op::ConvertItoF(dstType, v));
 
     m_builder.add(Op::Return(dstType, v));
     m_builder.add(Op::FunctionEnd());

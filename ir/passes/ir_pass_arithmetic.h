@@ -34,6 +34,9 @@ public:
     /** Whether to lower the geometry shader input vertex count
      *  to a constant based on the declared primitive type. */
     bool lowerGsVertexCountIn = false;
+    /** Work around an Nvidia bug where unsigned int-to-float
+     *  conversions are broken for very large numbers. */
+    bool hasNvUnsignedItoFBug = false;
   };
 
   ArithmeticPass(Builder& builder, const Options& options);
@@ -96,6 +99,8 @@ private:
   Builder::iterator lowerClamp(Builder::iterator op);
 
   Builder::iterator lowerConvertFtoI(Builder::iterator op);
+
+  Builder::iterator lowerConvertItoF(Builder::iterator op);
 
   Builder::iterator lowerF32toF16(Builder::iterator op);
 
