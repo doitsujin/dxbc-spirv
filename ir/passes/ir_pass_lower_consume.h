@@ -32,6 +32,9 @@ public:
    *  Returns true if any progress was made. */
   bool resolveCastChains();
 
+  /** Eliminates specific cast chain. */
+  std::pair<bool, SsaDef> resolveCastChain(SsaDef def);
+
   /** Initializes and runs lowering pass. */
   static void runLowerConsumePass(Builder& builder);
 

@@ -53,6 +53,12 @@ bool LowerConsumePass::resolveCastChains() {
 }
 
 
+std::pair<bool, SsaDef> LowerConsumePass::resolveCastChain(SsaDef def) {
+  auto [progress, iter] = handleCastChain(m_builder.iter(def));
+  return std::make_pair(progress, iter->getDef());
+}
+
+
 void LowerConsumePass::runLowerConsumePass(Builder& builder) {
   LowerConsumePass(builder).lowerConsume();
 }

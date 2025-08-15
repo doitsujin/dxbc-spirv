@@ -3,6 +3,7 @@
 #include <sstream>
 
 #include "ir_pass_arithmetic.h"
+#include "ir_pass_lower_consume.h"
 #include "ir_pass_remove_unused.h"
 #include "ir_pass_scalarize.h"
 
@@ -53,6 +54,9 @@ bool ArithmeticPass::runPass() {
 
     if (!status)
       std::tie(status, next) = selectOp(iter);
+
+    if (!status)
+      std::tie(status, next) = resolveIntSignOp(iter);
 
     if (!status)
       std::tie(status, next) = vectorizeF32toF16(iter);
@@ -1283,6 +1287,12 @@ std::pair<bool, Builder::iterator> ArithmeticPass::propagateAbsSignPhi(Builder::
 }
 
 
+std::pair<bool, Builder::iterator> ArithmeticPass::resolveCastOp(Builder::iterator op) {
+  auto [status, next] = LowerConsumePass(m_builder).resolveCastChain(op->getDef());
+  return std::make_pair(status, m_builder.iter(next));
+}
+
+
 std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(Builder::iterator op) {
   switch (op->getOpCode()) {
     case OpCode::eFAbs:
@@ -2213,6 +2223,9 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveCompositeExtract(Build
 
 std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityOp(Builder::iterator op) {
   switch (op->getOpCode()) {
+    case OpCode::eCast:
+      return resolveCastOp(op);
+
     case OpCode::eFAbs:
     case OpCode::eFNeg:
     case OpCode::eFAdd:
@@ -2438,6 +2451,215 @@ std::pair<bool, Builder::iterator> ArithmeticPass::vectorizeF32toF16(Builder::it
 
   m_builder.rewriteOp(op->getDef(), Op::IAnd(op->getType(), result, mask));
   return std::make_pair(true, m_builder.iter(loValue));
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::resolveIntSignCompareOp(Builder::iterator op) {
+  /* cast(a) == cast(b) -> a == b if source types are the same */
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+  const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+  if (a.getOpCode() != OpCode::eCast || b.getOpCode() != OpCode::eCast)
+    return std::make_pair(false, ++op);
+
+  /* Ensure that the operand types are compatible with the
+   * respective cast type and both are the same type */
+  const auto& aSrc = m_builder.getOpForOperand(a, 0u);
+  const auto& bSrc = m_builder.getOpForOperand(b, 0u);
+
+  if (aSrc.getType() != bSrc.getType() ||
+      !checkIntTypeCompatibility(a.getType(), aSrc.getType()) ||
+      !checkIntTypeCompatibility(b.getType(), bSrc.getType()))
+    return std::make_pair(false, ++op);
+
+  m_builder.rewriteOp(op->getDef(), Op(op->getOpCode(), op->getType())
+    .addOperands(aSrc.getDef(), bSrc.getDef()));
+
+  return std::make_pair(true, op);
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::resolveIntSignBinaryOp(Builder::iterator op, bool considerConstants) {
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+  const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+  /* If both operands are casts from the same type, rewrite the op
+   * to operate on the source type of both operands instead. */
+  if (a.getOpCode() == OpCode::eCast && b.getOpCode() == OpCode::eCast) {
+    const auto& aSrc = m_builder.getOpForOperand(a, 0u);
+    const auto& bSrc = m_builder.getOpForOperand(b, 0u);
+
+    if (aSrc.getType() == bSrc.getType() &&
+        checkIntTypeCompatibility(a.getType(), aSrc.getType()) &&
+        checkIntTypeCompatibility(b.getType(), bSrc.getType())) {
+      auto newDef = m_builder.addBefore(op->getDef(),
+        Op(op->getOpCode(), aSrc.getType()).addOperands(aSrc.getDef(), bSrc.getDef()));
+
+      m_builder.rewriteOp(op->getDef(), Op::Cast(op->getType(), newDef));
+      return std::make_pair(true, m_builder.iter(newDef));
+    }
+  }
+
+  /* If at least one incoming operand is signed, including constants,
+   * promote the entrire instruction to a signed type. */
+  auto resultType = op->getType().getBaseType(0u);
+
+  if (resultType.isSignedIntType())
+    return std::make_pair(false, ++op);
+
+  bool hasSignedInput = false;
+
+  if (a.getOpCode() == OpCode::eCast) {
+    const auto& aSrc = m_builder.getOpForOperand(a, 0u);
+
+    if (checkIntTypeCompatibility(a.getType(), aSrc.getType()))
+      hasSignedInput = hasSignedInput || aSrc.getType().getBaseType(0u).isSignedIntType();
+  }
+
+  if (b.getOpCode() == OpCode::eCast) {
+    const auto& bSrc = m_builder.getOpForOperand(b, 0u);
+
+    if (checkIntTypeCompatibility(b.getType(), bSrc.getType()))
+      hasSignedInput = hasSignedInput || bSrc.getType().getBaseType(0u).isSignedIntType();
+  }
+
+  if (b.isConstant() && considerConstants) {
+    for (uint32_t i = 0u; i < resultType.getVectorSize(); i++)
+      hasSignedInput = hasSignedInput || getConstantAsSint(b, i) < 0;
+  }
+
+  if (!hasSignedInput)
+    return std::make_pair(false, ++op);
+
+  /* Determine signed type to use for the op */
+  auto scalarType = [cScalarType = resultType.getBaseType()] {
+    switch (cScalarType) {
+      case ScalarType::eU8:  return ScalarType::eI8;
+      case ScalarType::eU16: return ScalarType::eI16;
+      case ScalarType::eU32: return ScalarType::eI32;
+      case ScalarType::eU64: return ScalarType::eI64;
+      default:               return ScalarType::eVoid;
+    }
+  } ();
+
+  if (scalarType == ScalarType::eVoid)
+    return std::make_pair(false, ++op);
+
+  resultType = BasicType(scalarType, resultType.getVectorSize());
+
+  /* Cast both operands to the desired signed type */
+  auto aCast = m_builder.addBefore(op->getDef(), Op::Cast(resultType, a.getDef()));
+  auto bCast = m_builder.addBefore(op->getDef(), Op::Cast(resultType, b.getDef()));
+
+  auto newDef = m_builder.addBefore(op->getDef(),
+    Op(op->getOpCode(), resultType).addOperands(aCast, bCast));
+
+  m_builder.rewriteOp(op->getDef(), Op::Cast(op->getType(), newDef));
+  return std::make_pair(true, m_builder.iter(aCast));
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::resolveIntSignUnaryOp(Builder::iterator op) {
+  /* op(cast(a)) -> cast(op(a)) */
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+  if (a.getOpCode() != OpCode::eCast)
+    return std::make_pair(false, ++op);
+
+  /* Ensure that the source type has the same bit width */
+  const auto& aSrc = m_builder.getOpForOperand(a, 0u);
+
+  if (!checkIntTypeCompatibility(a.getType(), aSrc.getType()))
+    return std::make_pair(false, ++op);
+
+  auto newDef = m_builder.addBefore(op->getDef(),
+    Op(op->getOpCode(), aSrc.getType()).addOperand(aSrc.getDef()));
+
+  m_builder.rewriteOp(op->getDef(), Op::Cast(op->getType(), newDef));
+  return std::make_pair(true, m_builder.iter(newDef));
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::resolveIntSignUnaryConsumeOp(Builder::iterator op) {
+  /* op(cast(a)) -> op(a), return type does not change for these ops */
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+  if (a.getOpCode() != OpCode::eCast)
+    return std::make_pair(false, ++op);
+
+  /* Ensure that the source type has the same bit width. We do not change
+   * the result type of the op since it does not depend on its operand. */
+  const auto& aSrc = m_builder.getOpForOperand(a, 0u);
+
+  if (!checkIntTypeCompatibility(a.getType(), aSrc.getType()))
+    return std::make_pair(false, ++op);
+
+  m_builder.rewriteOp(op->getDef(),
+    Op(op->getOpCode(), op->getType()).addOperand(aSrc.getDef()));
+  return std::make_pair(true, op);
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::resolveIntSignShiftOp(Builder::iterator op) {
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+  const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+  /* Check shift amount independently, it does not affect the
+   * result type so we can simply eliminate the cast. */
+  if (b.getOpCode() == OpCode::eCast) {
+    const auto& bSrc = m_builder.getOpForOperand(b, 0u);
+
+    if (checkIntTypeCompatibility(b.getType(), bSrc.getType())) {
+      m_builder.rewriteOp(op->getDef(),
+        Op(op->getOpCode(), op->getType()).addOperands(a.getDef(), bSrc.getDef()));
+      return std::make_pair(true, op);
+    }
+  }
+
+  if (a.getOpCode() != OpCode::eCast)
+    return std::make_pair(false, ++op);
+
+  /* The first operand determines the result type. */
+  const auto& aSrc = m_builder.getOpForOperand(a, 0u);
+
+  auto newDef = m_builder.addBefore(op->getDef(),
+    Op(op->getOpCode(), aSrc.getType()).addOperands(aSrc.getDef(), b.getDef()));
+
+  m_builder.rewriteOp(op->getDef(), Op::Cast(op->getType(), newDef));
+  return std::make_pair(true, m_builder.iter(newDef));
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::resolveIntSignOp(Builder::iterator op) {
+  switch (op->getOpCode()) {
+    case OpCode::eIEq:
+    case OpCode::eINe:
+      return resolveIntSignCompareOp(op);
+
+    case OpCode::eIAdd:
+    case OpCode::eISub:
+    case OpCode::eIMul:
+      return resolveIntSignBinaryOp(op, true);
+
+    case OpCode::eIAnd:
+    case OpCode::eIOr:
+    case OpCode::eIXor:
+      return resolveIntSignBinaryOp(op, false);
+
+    case OpCode::eINot:
+    case OpCode::eIBitReverse:
+      return resolveIntSignUnaryOp(op);
+
+    case OpCode::eIBitCount:
+    case OpCode::eIFindLsb:
+      return resolveIntSignUnaryConsumeOp(op);
+
+    case OpCode::eIShl:
+      return resolveIntSignShiftOp(op);
+
+    default:
+      return std::make_pair(false, ++op);
+  }
 }
 
 
@@ -3222,6 +3444,23 @@ Operand ArithmeticPass::makeScalarOperand(const Type& type, T value) {
 
   dxbc_spv_unreachable();
   return Operand();
+}
+
+
+bool ArithmeticPass::checkIntTypeCompatibility(const Type& a, const Type& b) {
+  if (!a.isBasicType() || !b.isBasicType())
+    return false;
+
+  BasicType aType = a.getBaseType(0u);
+  BasicType bType = b.getBaseType(0u);
+
+  if (aType == bType)
+    return true;
+
+  return aType.isIntType() &&
+         bType.isIntType() &&
+         aType.getVectorSize() == bType.getVectorSize() &&
+         aType.byteSize() == bType.byteSize();
 }
 
 }

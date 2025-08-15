@@ -133,6 +133,8 @@ private:
 
   std::pair<bool, Builder::iterator> propagateAbsSignPhi(Builder::iterator op);
 
+  std::pair<bool, Builder::iterator> resolveCastOp(Builder::iterator op);
+
   std::pair<bool, Builder::iterator> resolveIdentityArithmeticOp(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> resolveIdentityBoolOp(Builder::iterator op);
@@ -154,6 +156,18 @@ private:
   std::pair<bool, Builder::iterator> resolveBuiltInCompareOp(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> vectorizeF32toF16(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> resolveIntSignCompareOp(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> resolveIntSignBinaryOp(Builder::iterator op, bool considerConstants);
+
+  std::pair<bool, Builder::iterator> resolveIntSignUnaryOp(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> resolveIntSignUnaryConsumeOp(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> resolveIntSignShiftOp(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> resolveIntSignOp(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> reorderConstantOperandsCompareOp(Builder::iterator op);
 
@@ -191,6 +205,8 @@ private:
 
   template<typename T>
   static Operand makeScalarOperand(const Type& type, T value);
+
+  static bool checkIntTypeCompatibility(const Type& a, const Type& b);
 
   static constexpr float sincosTaylorFactor(uint32_t power) {
     double result = 1.0;
