@@ -69,8 +69,14 @@ inline size_t decode(uint64_t& sym, const uint8_t* data, size_t maxSize) {
 
   /* Sign-extend header token right away, we'll
    * shift any excess bits out anyway. */
-  uint64_t sign = 0x40u >> len;
-  sym = -uint64_t(sign & header) | (header & (sign - 1u));
+  if (len < 7u) {
+    uint64_t sign = 0x40u >> len;
+    sym = -uint64_t(sign & header) | (header & (sign - 1u));
+  } else if (len == 7u) {
+    sym = -uint64_t(data[1u] >> 7u);
+  } else {
+    sym = 0u;
+  }
 
   for (uint32_t i = 1u; i <= len; i++) {
     sym <<= 8u;
