@@ -2692,6 +2692,9 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIntSignShiftOp(Builder
   /* The first operand determines the result type. */
   const auto& aSrc = m_builder.getOpForOperand(a, 0u);
 
+  if (!checkIntTypeCompatibility(a.getType(), aSrc.getType()))
+    return std::make_pair(false, ++op);
+
   auto newDef = m_builder.addBefore(op->getDef(),
     Op(op->getOpCode(), aSrc.getType()).addOperands(aSrc.getDef(), b.getDef()));
 
@@ -3541,13 +3544,23 @@ bool ArithmeticPass::checkIntTypeCompatibility(const Type& a, const Type& b) {
   BasicType aType = a.getBaseType(0u);
   BasicType bType = b.getBaseType(0u);
 
-  if (aType == bType)
-    return true;
+  if (aType.getVectorSize() != bType.getVectorSize())
+    return false;
 
-  return aType.isIntType() &&
-         bType.isIntType() &&
-         aType.getVectorSize() == bType.getVectorSize() &&
-         aType.byteSize() == bType.byteSize();
+  static const std::array<std::pair<ScalarType, ScalarType>, 4u> s_types = {{
+    { ScalarType::eI8,  ScalarType::eU8  },
+    { ScalarType::eI16, ScalarType::eU16 },
+    { ScalarType::eI32, ScalarType::eU32 },
+    { ScalarType::eI64, ScalarType::eU64 },
+  }};
+
+  for (const auto& e : s_types) {
+    if ((e.first == aType.getBaseType() && e.second == bType.getBaseType()) ||
+        (e.first == bType.getBaseType() && e.second == aType.getBaseType()))
+      return true;
+  }
+
+  return false;
 }
 
 }
