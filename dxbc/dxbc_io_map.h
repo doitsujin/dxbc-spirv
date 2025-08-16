@@ -92,7 +92,7 @@ public:
 
   /** Initializes I/O map. If an error occurs with signature parsing, this
    *  will return false and shader processing must be aborted. */
-  bool init(const Container& dxbc, ShaderInfo shaderInfo);
+  bool init(const Container& dxbc, ShaderType shaderType);
 
   /** Handles geometry shader stream declarations. This affects subsequent
    *  I/O variable declarations, but not the way load/store ops work. */
@@ -162,7 +162,7 @@ public:
 private:
 
   Converter&      m_converter;
-  ShaderInfo      m_shaderInfo = { };
+  ShaderType      m_shaderType = { };
 
   Signature       m_isgn = { };
   Signature       m_osgn = { };

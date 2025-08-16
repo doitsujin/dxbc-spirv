@@ -24,11 +24,15 @@ Converter::~Converter() {
 
 
 bool Converter::convertShader(ir::Builder& builder) {
-  if (!initParser(m_parser, m_dxbc.getCodeChunk()) ||
-      !m_ioMap.init(m_dxbc, m_parser.getShaderInfo()))
+  if (!initParser(m_parser, m_dxbc.getCodeChunk()))
     return false;
 
-  initialize(builder);
+  auto shaderType = m_parser.getShaderInfo().getType();
+
+  if (!m_ioMap.init(m_dxbc, shaderType))
+    return false;
+
+  initialize(builder, shaderType);
 
   while (m_parser) {
     Instruction op = m_parser.parseInstruction();
@@ -37,7 +41,7 @@ bool Converter::convertShader(ir::Builder& builder) {
       return false;
   }
 
-  return finalize(builder);
+  return finalize(builder, shaderType);
 }
 
 
@@ -454,15 +458,13 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
 }
 
 
-bool Converter::initialize(ir::Builder& builder) {
-  auto info = m_parser.getShaderInfo();
-
+bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
   /* A valid debug namee is required for the main function */
   m_entryPoint.mainFunc = builder.add(ir::Op::Function(ir::ScalarType::eVoid));
   builder.add(ir::Op::FunctionEnd());
   builder.add(ir::Op::DebugName(m_entryPoint.mainFunc, "main"));
 
-  if (info.getType() == ShaderType::eHull) {
+  if (shaderType == ShaderType::eHull) {
     m_entryPoint.patchConstantFunc = builder.add(ir::Op::Function(ir::ScalarType::eVoid));
     builder.add(ir::Op::FunctionEnd());
 
@@ -473,9 +475,9 @@ bool Converter::initialize(ir::Builder& builder) {
   /* Emit entry point instruction as the first instruction of the
    * shader. This is technically not needed, but makes things more
    * readable. */
-  auto stage = resolveShaderStage(info.getType());
+  auto stage = resolveShaderStage(shaderType);
 
-  auto entryPointOp = (info.getType() == ShaderType::eHull)
+  auto entryPointOp = (shaderType == ShaderType::eHull)
     ? ir::Op::EntryPoint(m_entryPoint.mainFunc, m_entryPoint.patchConstantFunc, stage)
     : ir::Op::EntryPoint(m_entryPoint.mainFunc, stage);
 
@@ -492,12 +494,12 @@ bool Converter::initialize(ir::Builder& builder) {
 }
 
 
-bool Converter::finalize(ir::Builder& builder) {
+bool Converter::finalize(ir::Builder& builder, ShaderType shaderType) {
   m_resources.normalizeUavFlags(builder);
 
   emitFloatModes(builder);
 
-  if (m_parser.getShaderInfo().getType() == ShaderType::eHull) {
+  if (shaderType == ShaderType::eHull) {
     emitHsPatchConstantFunction(builder);
 
     if (!emitHsStateSetup(builder))
@@ -511,12 +513,12 @@ bool Converter::finalize(ir::Builder& builder) {
     }
   }
 
-  if (m_parser.getShaderInfo().getType() == ShaderType::eDomain) {
+  if (shaderType == ShaderType::eDomain) {
     if (!emitDsStateSetup(builder))
       return false;
   }
 
-  if (m_parser.getShaderInfo().getType() == ShaderType::eGeometry) {
+  if (shaderType == ShaderType::eGeometry) {
     if (!emitGsStateSetup(builder))
       return false;
   }

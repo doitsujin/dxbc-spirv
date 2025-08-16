@@ -154,9 +154,9 @@ private:
 
   bool convertInstruction(ir::Builder& builder, const Instruction& op);
 
-  bool initialize(ir::Builder& builder);
+  bool initialize(ir::Builder& builder, ShaderType shaderType);
 
-  bool finalize(ir::Builder& builder);
+  bool finalize(ir::Builder& builder, ShaderType shaderType);
 
   void emitFloatModes(ir::Builder& builder);
 

@@ -18,8 +18,8 @@ IoMap::~IoMap() {
 }
 
 
-bool IoMap::init(const Container& dxbc, ShaderInfo shaderInfo) {
-  m_shaderInfo = shaderInfo;
+bool IoMap::init(const Container& dxbc, ShaderType shaderType) {
+  m_shaderType = shaderType;
 
   return initSignature(m_isgn, dxbc.getInputSignatureChunk())
       && initSignature(m_osgn, dxbc.getOutputSignatureChunk())
@@ -57,7 +57,7 @@ bool IoMap::handleDclIoVar(ir::Builder& builder, const Instruction& op) {
    * stream assignments in geometry shaders. */
   bool result = declareIoRegisters(builder, op, regType);
 
-  if (m_shaderInfo.getType() == ShaderType::eGeometry)
+  if (m_shaderType == ShaderType::eGeometry)
     result = result && handleGsOutputStreams(builder);
 
   return result;
@@ -171,7 +171,7 @@ bool IoMap::handleEval(
   const auto& dst = op.getDst(0u);
   const auto& src = op.getSrc(0u);
 
-  if (m_shaderInfo.getType() != ShaderType::ePixel) {
+  if (m_shaderType != ShaderType::ePixel) {
     m_converter.logOpError(op, "Eval instruction encountered outside of pixel shader.");
     return false;
   }
@@ -263,7 +263,7 @@ bool IoMap::emitStore(
 
 ir::SsaDef IoMap::determineActualVertexCount(ir::Builder& builder) {
   if (!m_vertexCountIn) {
-    auto builtIn = m_shaderInfo.getType() == ShaderType::eGeometry
+    auto builtIn = m_shaderType == ShaderType::eGeometry
       ? ir::BuiltIn::eGsVertexCountIn
       : ir::BuiltIn::eTessControlPointCountIn;
 
@@ -536,7 +536,7 @@ bool IoMap::declareIoRegisters(ir::Builder& builder, const Instruction& op, Regi
 
     /* Use maximum array size for hull shader inputs since the patch
      * vertex count is not necessarily known at compile time. */
-    if (regType == RegisterType::eControlPointIn && m_shaderInfo.getType() == ShaderType::eHull)
+    if (regType == RegisterType::eControlPointIn && m_shaderType == ShaderType::eHull)
       arraySize = MaxIoArraySize;
   } else if (m_converter.m_hs.phase == HullShaderPhase::eControlPoint) {
     /* Control point outputs are non-arrayed in DXBC, so we need to
@@ -1165,7 +1165,7 @@ ir::SsaDef IoMap::loadIoRegister(
       auto scalar = builder.add(std::move(loadOp));
 
       /* Fix up pixel shader position.w semantics */
-      if (m_shaderInfo.getType() == ShaderType::ePixel && var->sv == Sysval::ePosition && c == ComponentBit::eW)
+      if (m_shaderType == ShaderType::ePixel && var->sv == Sysval::ePosition && c == ComponentBit::eW)
         scalar = builder.add(ir::Op(ir::OpCode::eFRcp, varScalarType).addOperand(scalar));
 
       /* If the load was bound-checked, replace with zero if out-of-bounds */
@@ -1815,7 +1815,7 @@ ir::SsaDef IoMap::getInterpolationFunction(
 
 
 ir::SsaDef IoMap::getCurrentFunction() const {
-  if (m_shaderInfo.getType() == ShaderType::eHull)
+  if (m_shaderType == ShaderType::eHull)
     return m_converter.m_hs.phaseFunction;
 
   return m_converter.m_entryPoint.mainFunc;
@@ -2008,7 +2008,7 @@ ir::InterpolationModes IoMap::determineInterpolationMode(const Instruction& op) 
 
 RegisterType IoMap::normalizeRegisterType(RegisterType regType) const {
   /* Outside of hull shaders, I/O mapping is actually well-defined */
-  if (m_shaderInfo.getType() != ShaderType::eHull)
+  if (m_shaderType != ShaderType::eHull)
     return regType;
 
   switch (regType) {
@@ -2039,8 +2039,8 @@ bool IoMap::sysvalNeedsMirror(RegisterType regType, Sysval sv) const {
        * exported by various stages that may attempt to forward them.
        * Emit both the built-in and a mirror variable in that case. */
       return isInput
-        ? m_shaderInfo.getType() != ShaderType::ePixel
-        : m_shaderInfo.getType() != ShaderType::eGeometry;
+        ? m_shaderType != ShaderType::ePixel
+        : m_shaderType != ShaderType::eGeometry;
     }
 
     default:
@@ -2059,34 +2059,34 @@ bool IoMap::sysvalNeedsBuiltIn(RegisterType regType, Sysval sv) const {
     case Sysval::eClipDistance:
     case Sysval::eCullDistance: {
       return isInput
-        ? m_shaderInfo.getType() != ShaderType::eVertex &&
-          m_shaderInfo.getType() != ShaderType::eDomain
-        : m_shaderInfo.getType() != ShaderType::eHull;
+        ? m_shaderType != ShaderType::eVertex &&
+          m_shaderType != ShaderType::eDomain
+        : m_shaderType != ShaderType::eHull;
     }
 
     case Sysval::eRenderTargetId:
     case Sysval::eViewportId: {
       return isInput
-        ? m_shaderInfo.getType() == ShaderType::ePixel
-        : m_shaderInfo.getType() != ShaderType::eHull &&
-          m_shaderInfo.getType() != ShaderType::ePixel;
+        ? m_shaderType == ShaderType::ePixel
+        : m_shaderType != ShaderType::eHull &&
+          m_shaderType != ShaderType::ePixel;
     }
 
     case Sysval::eIsFrontFace:
     case Sysval::eSampleIndex:
-      return isInput && m_shaderInfo.getType() == ShaderType::ePixel;
+      return isInput && m_shaderType == ShaderType::ePixel;
 
     case Sysval::eVertexId:
     case Sysval::eInstanceId:
-      return isInput && m_shaderInfo.getType() == ShaderType::eVertex;
+      return isInput && m_shaderType == ShaderType::eVertex;
 
     case Sysval::ePrimitiveId: {
       if (isInput)
-        return m_shaderInfo.getType() != ShaderType::eVertex;
+        return m_shaderType != ShaderType::eVertex;
 
       /* Special-case stages that can override the primitive ID */
-      return m_shaderInfo.getType() == ShaderType::eDomain ||
-             m_shaderInfo.getType() == ShaderType::eGeometry;
+      return m_shaderType == ShaderType::eDomain ||
+             m_shaderType == ShaderType::eGeometry;
     }
 
     case Sysval::eQuadU0EdgeTessFactor:
@@ -2102,8 +2102,8 @@ bool IoMap::sysvalNeedsBuiltIn(RegisterType regType, Sysval sv) const {
     case Sysval::eLineDetailTessFactor:
     case Sysval::eLineDensityTessFactor: {
       return isInput
-        ? m_shaderInfo.getType() == ShaderType::eDomain
-        : m_shaderInfo.getType() == ShaderType::eHull;
+        ? m_shaderType == ShaderType::eDomain
+        : m_shaderType == ShaderType::eHull;
     }
 
     case Sysval::eNone:
@@ -2119,10 +2119,10 @@ bool IoMap::sysvalNeedsBuiltIn(RegisterType regType, Sysval sv) const {
 ir::Op& IoMap::addDeclarationArgs(ir::Op& declaration, RegisterType type, ir::InterpolationModes interpolation) const {
   auto isInput = isInputRegister(type);
 
-  if (!isInput && m_shaderInfo.getType() == ShaderType::eGeometry)
+  if (!isInput && m_shaderType == ShaderType::eGeometry)
     declaration.addOperand(getCurrentGsStream());
 
-  if (isInput && m_shaderInfo.getType() == ShaderType::ePixel)
+  if (isInput && m_shaderType == ShaderType::ePixel)
     declaration.addOperand(interpolation);
 
   return declaration;
@@ -2146,7 +2146,7 @@ bool IoMap::isInputRegister(RegisterType type) const {
       return true;
 
     case RegisterType::ePatchConstant:
-      return m_shaderInfo.getType() == ShaderType::eDomain;
+      return m_shaderType == ShaderType::eDomain;
 
     default:
       return false;
@@ -2174,7 +2174,7 @@ const Signature* IoMap::selectSignature(RegisterType type) const {
 
 
 int32_t IoMap::getCurrentGsStream() const {
-  return (m_shaderInfo.getType() == ShaderType::eGeometry)
+  return (m_shaderType == ShaderType::eGeometry)
     ? int32_t(m_converter.m_gs.streamIndex)
     : int32_t(-1);
 }
