@@ -30,6 +30,7 @@ struct Options {
   bool irInput = false;
   bool printIrAsm = false;
   bool convertOnly = false;
+  bool gsPassthrough = false;
   bool noDebug = false;
   bool noColors = false;
   bool benchmark = false;
@@ -188,7 +189,14 @@ bool compileShader(util::ByteReader reader, const Options& options) {
 
     dxbc::Converter converter(std::move(container), dxbcOptions);
 
-    if (!converter.convertShader(builder)) {
+    bool status = false;
+
+    if (options.gsPassthrough)
+      status = converter.createPassthroughGs(builder);
+    else
+      status = converter.convertShader(builder);
+
+    if (!status) {
       std::cerr << "Error: Failed to convert shader." << std::endl;
       return false;
     }
@@ -236,8 +244,10 @@ void printHelp(const char* appName) {
             << std::endl
             << "    --convert-only      Only perform initial conversion to the initial IR and skip" << std::endl
             << "                        any further processing steps. Cannot be used with SPIR-V lowering." << std::endl
+            << "    --gs-passthrough    Create a pass-through geometry shader instead of compiling code." << std::endl
             << "    --no-debug          Do not emit any debug info in the shader binary." << std::endl
-            << "    --no-colors         Do not use colored output for disassembly." << std::endl;
+            << "    --no-colors         Do not use colored output for disassembly." << std::endl
+            << "    --benchmark         Time shader compilation." << std::endl;
 }
 
 
@@ -260,6 +270,8 @@ int main(int argc, char** argv) {
       options.printIrAsm = true;
     } else if (arg == "--convert-only") {
       options.convertOnly = true;
+    } else if (arg == "--gs-passthrough") {
+      options.gsPassthrough = true;
     } else if (arg == "--no-debug") {
       options.noDebug = true;
     } else if (arg == "--no-colors") {
