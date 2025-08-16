@@ -155,6 +155,10 @@ public:
    *  shader unmodified. Requires that the signatures match. */
   bool emitHsControlPointPhasePassthrough(ir::Builder& builder);
 
+  /** Emits pass-through geometry shader based on the output
+   *  signature of the incoming shader. */
+  bool emitGsPassthrough(ir::Builder& builder);
+
   /** Clamps exported tess factors to the requested range. This must be the last
    *  thing done in any given patch constant phase to not disturb output loads. */
   bool applyMaxTessFactor(ir::Builder& builder);

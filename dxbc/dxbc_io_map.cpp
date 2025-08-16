@@ -361,6 +361,35 @@ bool IoMap::emitHsControlPointPhasePassthrough(ir::Builder& builder) {
 }
 
 
+bool IoMap::emitGsPassthrough(ir::Builder& builder) {
+  for (const auto& e : m_osgn) {
+    if (!declareIoSignatureVars(builder, &m_osgn, RegisterType::eInput,
+        e.getRegisterIndex(), 1u, e.getComponentMask(), ir::InterpolationModes()))
+      return false;
+
+    if (!declareIoSignatureVars(builder, &m_osgn, RegisterType::eOutput,
+        e.getRegisterIndex(), 0u, e.getComponentMask(), ir::InterpolationModes()))
+      return false;
+
+    auto value = loadIoRegister(builder, e.getScalarType(), RegisterType::eInput,
+      builder.makeConstant(0u), ir::SsaDef(), e.getRegisterIndex(), Swizzle::identity(), e.getComponentMask());
+
+    if (!value)
+      return false;
+
+    /* Actually need to pass -1 as the stream index here since we don't fix up the
+     * actual declaration. Pass-through GS only ever has one stream anyway. */
+    if (!storeIoRegister(builder, RegisterType::eOutput, ir::SsaDef(), ir::SsaDef(),
+        e.getRegisterIndex(), -1, e.getComponentMask(), value))
+      return false;
+  }
+
+  /* Commit output vertex */
+  builder.add(ir::Op::EmitVertex(0u));
+  return true;
+}
+
+
 bool IoMap::applyMaxTessFactor(ir::Builder& builder) {
   auto [inner, outer] = [&] {
     switch (m_converter.m_hs.domain) {

@@ -62,6 +62,10 @@ public:
    *  will return false and log messages to the thread-local logger. */
   bool convertShader(ir::Builder& builder);
 
+  /** Creates pass-through geometry shader for use with D3D10 or D3D11 stream
+   *  output. Only requires the input blob to have an output signature. */
+  bool createPassthroughGs(ir::Builder& builder);
+
 private:
 
   Container     m_dxbc;
