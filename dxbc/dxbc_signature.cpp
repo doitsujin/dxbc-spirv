@@ -3,6 +3,7 @@
 #include "dxbc_container.h"
 #include "dxbc_signature.h"
 
+#include "../util/util_bit.h"
 #include "../util/util_log.h"
 
 namespace dxbc_spv::dxbc {
@@ -174,7 +175,7 @@ bool SignatureEntry::matches(const char* name) const {
   size_t index = 0u;
 
   while (name[index] && index < m_semanticName.size()) {
-    if (!compareChars(name[index], m_semanticName[index]))
+    if (!util::compareCharsCaseInsensitive(name[index], m_semanticName[index]))
       return false;
 
     index++;
@@ -224,13 +225,6 @@ bool SignatureEntry::writeName(util::ByteWriter& writer, util::FourCC tag, size_
 void SignatureEntry::resetOnError() {
   /* Reset everything to defaults if parsing failed */
   *this = SignatureEntry();
-}
-
-
-bool SignatureEntry::compareChars(char a, char b) {
-  if (a >= 'A' && a <= 'Z') a += 'a' - 'A';
-  if (b >= 'A' && b <= 'Z') b += 'a' - 'A';
-  return a == b;
 }
 
 

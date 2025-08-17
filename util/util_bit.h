@@ -192,5 +192,11 @@ T convertSintToFloatRtz(int64_t v) {
 }
 
 
+/** Compares ASCII characters in a case-insensitive way */
+inline bool compareCharsCaseInsensitive(char a, char b) {
+  if (a >= 'A' && a <= 'Z') a += 'a' - 'A';
+  if (b >= 'A' && b <= 'Z') b += 'a' - 'A';
+  return a == b;
+}
 
 }
