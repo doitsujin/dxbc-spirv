@@ -7,6 +7,7 @@ test_files = files([
   'dxbc/test_dxbc_signature.cpp',
 
   'ir/test_ir_builder.cpp',
+  'ir/test_ir_input_map.cpp',
   'ir/test_ir_op.cpp',
   'ir/test_ir_serialize.cpp',
   'ir/test_ir_type.cpp',
