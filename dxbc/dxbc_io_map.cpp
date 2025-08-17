@@ -1428,10 +1428,11 @@ std::pair<ir::SsaDef, ir::SsaDef> IoMap::boundCheckScratchAddress(
 
   for (uint32_t i = 0u; i < addressType.getVectorSize(); i++) {
     auto scalar = m_converter.extractFromVector(builder, address, i);
+    auto dim = baseType.getArrayDimensions();
 
-    if (i < baseType.getArrayDimensions()) {
+    if (i < dim) {
       auto inBounds = builder.add(ir::Op::ULt(ir::ScalarType::eBool, scalar,
-        builder.makeConstant(uint32_t(baseType.getArraySize(i)))));
+        builder.makeConstant(uint32_t(baseType.getArraySize(dim - i - 1u)))));
 
       scalar = builder.add(ir::Op::Select(addressType.getBaseType(),
         inBounds, scalar, builder.makeConstant(0u)));
