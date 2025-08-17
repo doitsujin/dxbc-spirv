@@ -264,6 +264,9 @@ public:
     return add(Op::Undef(type));
   }
 
+  /** Convenience method to create a zero constant for a given type. */
+  SsaDef makeConstantZero(const Type& t);
+
   /** Changes the type of the given operation without having
    *  to rewrite the entire operation. */
   void setOpType(SsaDef def, const Type& type) {

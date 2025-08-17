@@ -14,6 +14,16 @@ Builder::~Builder() {
 }
 
 
+SsaDef Builder::makeConstantZero(const Type& t) {
+  Op constant(OpCode::eConstant, t);
+
+  for (uint32_t i = 0u; i < t.computeFlattenedScalarCount(); i++)
+    constant.addOperand(0u);
+
+  return add(std::move(constant));
+}
+
+
 SsaDef Builder::add(Op op) {
   bool isDeclarative = op.isDeclarative();
   auto [def, isDuplicate] = writeOp(std::move(op));
