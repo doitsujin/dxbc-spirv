@@ -203,6 +203,25 @@ enum class IoSemanticType : uint32_t {
 };
 
 
+/** Output component mapping for render targets */
+enum class IoOutputComponent : uint8_t {
+  eX    = 0u,
+  eY    = 1u,
+  eZ    = 2u,
+  eW    = 3u,
+  eOne  = 4u,
+  eZero = 5u,
+};
+
+/** Output component swizzle */
+struct IoOutputSwizzle {
+  IoOutputComponent x = IoOutputComponent::eX;
+  IoOutputComponent y = IoOutputComponent::eY;
+  IoOutputComponent z = IoOutputComponent::eZ;
+  IoOutputComponent w = IoOutputComponent::eW;
+};
+
+
 /** Pass to investigate and fix up shader I/O for various use cases.
  *
  * This includes adjusting I/O locations for tessellation shaders to meet
@@ -245,6 +264,11 @@ public:
   /** Sets sample interpolation on all inputs that are not already declared as flat,
    *  sample or centroid. This will enable sample-rate shading for this shader. */
   void enableSampleInterpolation();
+
+  /** Swizzles render target outputs in pixel shaders. Needed to support certain render
+   *  target formats. This works by replacing the entry point with a wrapper function
+   *  whose purpose it is to change export swizzles on the fly. */
+  bool swizzleOutputs(uint32_t outputCount, const IoOutputSwizzle* swizzles);
 
 private:
 

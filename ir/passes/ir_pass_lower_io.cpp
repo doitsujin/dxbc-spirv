@@ -520,6 +520,133 @@ void LowerIoPass::enableSampleInterpolation() {
 }
 
 
+bool LowerIoPass::swizzleOutputs(uint32_t outputCount, const IoOutputSwizzle* swizzles) {
+  /* Ensure that the swizzles aren't all just identities */
+  uint32_t nonIdentityMask = 0u;
+
+  for (uint32_t i = 0u; i < outputCount; i++) {
+    const auto& e = swizzles[i];
+
+    if (e.x != IoOutputComponent::eX || e.y != IoOutputComponent::eY ||
+        e.z != IoOutputComponent::eZ || e.w != IoOutputComponent::eW)
+      nonIdentityMask |= 1u << i;
+  }
+
+  if (!nonIdentityMask)
+    return true;
+
+  /* Find entry point and replace it with a new function */
+  auto [a, b] = m_builder.getDeclarations();
+  auto entryPointFunction = SsaDef();
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::eEntryPoint) {
+      dxbc_spv_assert(ShaderStage(iter->getOperand(iter->getFirstLiteralOperandIndex())) == ShaderStage::ePixel);
+
+      entryPointFunction = SsaDef(iter->getOperand(0u));
+      break;
+    }
+  }
+
+  if (!entryPointFunction) {
+    Logger::err("No entry point found.");
+    return false;
+  }
+
+  auto wrappedFunction = m_builder.addAfter(entryPointFunction, Op::Function(ScalarType::eVoid));
+  m_builder.add(Op::DebugName(wrappedFunction, "main_pre_swizzle"));
+
+  /* Rewrite entry point function to call the wrapped 'main' function */
+  m_builder.setCursor(entryPointFunction);
+  m_builder.add(Op::Label());
+  m_builder.add(Op::FunctionCall(ScalarType::eVoid, wrappedFunction));
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::eDclOutput) {
+      auto location = uint32_t(iter->getOperand(iter->getFirstLiteralOperandIndex()));
+
+      if (nonIdentityMask & (1u << location)) {
+        const auto& e = swizzles[location];
+        auto type = iter->getType().getBaseType(0u);
+
+        /* Load individual components and apply swizzle */
+        std::array<IoOutputComponent, 4u> swizzle = { e.x, e.y, e.z, e.w };
+        std::array<SsaDef, 4u> scalars = { };
+
+        for (uint32_t i = 0u; i < type.getVectorSize(); i++) {
+          auto& scalar = scalars.at(i);
+
+          switch (swizzle.at(i)) {
+            case IoOutputComponent::eZero:
+            case IoOutputComponent::eOne: {
+              uint32_t value = swizzle.at(i) == IoOutputComponent::eOne ? 1u : 0u;
+
+              scalar = [&] {
+                switch (type.getBaseType()) {
+                  case ScalarType::eF16: return m_builder.makeConstant(float16_t(float(value)));
+                  case ScalarType::eF32: return m_builder.makeConstant(float(value));
+                  case ScalarType::eF64: return m_builder.makeConstant(double(value));
+                  case ScalarType::eU8:  return m_builder.makeConstant(uint8_t(value));
+                  case ScalarType::eU16: return m_builder.makeConstant(uint16_t(value));
+                  case ScalarType::eU32: return m_builder.makeConstant(uint32_t(value));
+                  case ScalarType::eU64: return m_builder.makeConstant(uint64_t(value));
+                  case ScalarType::eI8:  return m_builder.makeConstant(int8_t(value));
+                  case ScalarType::eI16: return m_builder.makeConstant(int16_t(value));
+                  case ScalarType::eI32: return m_builder.makeConstant(int32_t(value));
+                  case ScalarType::eI64: return m_builder.makeConstant(int64_t(value));
+                  default: break;
+                }
+
+                dxbc_spv_unreachable();
+              } ();
+            } break;
+
+            case IoOutputComponent::eX:
+            case IoOutputComponent::eY:
+            case IoOutputComponent::eZ:
+            case IoOutputComponent::eW: {
+              uint32_t index = uint32_t(swizzle.at(i)) - uint32_t(IoOutputComponent::eX);
+
+              if (index < type.getVectorSize()) {
+                SsaDef address = { };
+
+                if (type.isVector())
+                  address = m_builder.makeConstant(index);
+
+                scalar = m_builder.add(Op::OutputLoad(type.getBaseType(), iter->getDef(), address));
+              } else {
+                /* Out-of-bounds component, use zero */
+                scalar = m_builder.makeConstantZero(type.getBaseType());
+              }
+            } break;
+          }
+
+          dxbc_spv_assert(scalar);
+        }
+
+        /* Put result vector back together */
+        for (uint32_t i = 0u; i < type.getVectorSize(); i++) {
+          SsaDef address = { };
+
+          if (type.isVector())
+            address = m_builder.makeConstant(i);
+
+          m_builder.add(Op::OutputStore(iter->getDef(), address, scalars.at(i)));
+        }
+      }
+    }
+  }
+
+  m_builder.add(Op::Return());
+  auto entryPointFunctionEnd = m_builder.add(Op::FunctionEnd());
+
+  /* Move function to the end of the code block so that the wrapped
+   * function is defined before the new entry point function. */
+  m_builder.reorderBefore(SsaDef(), entryPointFunction, entryPointFunctionEnd);
+  return true;
+}
+
+
 void LowerIoPass::scalarizeInputLoads() {
   auto [a, b] = m_builder.getDeclarations();
 
