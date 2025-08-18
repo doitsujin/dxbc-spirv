@@ -30,7 +30,26 @@ void Disassembler::disassemble(std::ostream& stream) const {
         uint32_t aOp = normalizeOpCodeOrder(a.getOpCode());
         uint32_t bOp = normalizeOpCodeOrder(b.getOpCode());
 
-        return aOp < bOp;
+        if (aOp < bOp) return true;
+        if (aOp > bOp) return false;
+
+        for (uint32_t i = 0u; i < a.getFirstLiteralOperandIndex(); i++) {
+          auto aDef = SsaDef(a.getOperand(i));
+          auto bDef = SsaDef(b.getOperand(i));
+
+          if (aDef < bDef) return true;
+          if (aDef > bDef) return false;
+        }
+
+        for (uint32_t i = a.getFirstLiteralOperandIndex(); i < a.getOperandCount(); i++) {
+          auto aVal = int64_t(a.getOperand(i));
+          auto bVal = int64_t(b.getOperand(i));
+
+          if (aVal < bVal) return true;
+          if (aVal > bVal) return false;
+        }
+
+        return a.getOperandCount() < b.getOperandCount();
       });
 
     for (const auto& op : declarations)

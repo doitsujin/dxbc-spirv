@@ -5,6 +5,7 @@ test_api_files = files([
   'test_api_misc.cpp',
   'test_api_pass_arithmetic.cpp',
   'test_api_pass_buffer_kind.cpp',
+  'test_api_pass_lower_io.cpp',
   'test_api_pass_scalarize.cpp',
   'test_api_resources.cpp',
   'test_api_spirv.cpp',
