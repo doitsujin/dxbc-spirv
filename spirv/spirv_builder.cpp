@@ -831,6 +831,9 @@ uint32_t SpirvBuilder::emitBuiltInDrawParameter(spv::BuiltIn builtIn) {
 void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
   auto builtIn = ir::BuiltIn(op.getOperand(1u));
 
+  if (builtIn == ir::BuiltIn::eGsVertexCountIn)
+    return;
+
   bool isInput = op.getOpCode() == ir::OpCode::eDclInputBuiltIn;
   auto storageClass = isInput ? spv::StorageClassInput : spv::StorageClassOutput;
 
