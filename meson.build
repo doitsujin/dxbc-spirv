@@ -28,6 +28,7 @@ dxbc_spv_files = files([
   'ir/passes/ir_pass_cfg_convert.cpp',
   'ir/passes/ir_pass_cse.cpp',
   'ir/passes/ir_pass_lower_consume.cpp',
+  'ir/passes/ir_pass_lower_io.cpp',
   'ir/passes/ir_pass_lower_min16.cpp',
   'ir/passes/ir_pass_propagate_resource_types.cpp',
   'ir/passes/ir_pass_propagate_types.cpp',
