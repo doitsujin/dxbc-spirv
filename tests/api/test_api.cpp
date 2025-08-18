@@ -4,6 +4,7 @@
 #include "test_api_misc.h"
 #include "test_api_pass_arithmetic.h"
 #include "test_api_pass_buffer_kind.h"
+#include "test_api_pass_lower_io.h"
 #include "test_api_pass_scalarize.h"
 #include "test_api_resources.h"
 #include "test_api_spirv.h"
@@ -376,6 +377,40 @@ void enumeratePassesTests(std::vector<NamedTest>& result, const char* category, 
   ADD_TEST(test_pass_buffer_kind_structured_srv_to_typed);
   ADD_TEST(test_pass_buffer_kind_structured_srv_to_typed_sparse);
   ADD_TEST(test_pass_buffer_kind_structured_uav_to_typed);
+
+  ADD_TEST(test_pass_lower_io_xfb_simple);
+  ADD_TEST(test_pass_lower_io_xfb_partial);
+  ADD_TEST(test_pass_lower_io_xfb_multi_stream);
+  ADD_TEST(test_pass_lower_io_xfb_multi_stream_with_raster);
+  ADD_TEST(test_pass_lower_io_xfb_multi_stream_raster_only);
+
+  ADD_TEST(test_pass_lower_io_patch_constant_locations_hs);
+  ADD_TEST(test_pass_lower_io_patch_constant_locations_ds);
+
+  ADD_TEST(test_pass_lower_io_rewrite_gs_primitive_type);
+
+  ADD_TEST(test_pass_lower_io_mismatch_vs_basic);
+  ADD_TEST(test_pass_lower_io_mismatch_vs_missing_input);
+
+  ADD_TEST(test_pass_lower_io_mismatch_hs_basic);
+  ADD_TEST(test_pass_lower_io_mismatch_hs_missing_input);
+
+  ADD_TEST(test_pass_lower_io_mismatch_ds_basic);
+  ADD_TEST(test_pass_lower_io_mismatch_ds_missing_input);
+  ADD_TEST(test_pass_lower_io_mismatch_ds_straddle_input);
+
+  ADD_TEST(test_pass_lower_io_mismatch_gs_basic);
+  ADD_TEST(test_pass_lower_io_mismatch_gs_missing_input);
+  ADD_TEST(test_pass_lower_io_mismatch_gs_partial_input);
+  ADD_TEST(test_pass_lower_io_mismatch_gs_straddle);
+
+  ADD_TEST(test_pass_lower_io_mismatch_ps_basic);
+  ADD_TEST(test_pass_lower_io_mismatch_ps_missing_input);
+  ADD_TEST(test_pass_lower_io_mismatch_ps_partial_input);
+  ADD_TEST(test_pass_lower_io_mismatch_ps_missing_builtin);
+  ADD_TEST(test_pass_lower_io_mismatch_ps_straddle);
+  ADD_TEST(test_pass_lower_io_mismatch_ps_clip_distance_small);
+  ADD_TEST(test_pass_lower_io_mismatch_ps_clip_distance_large);
 }
 
 
