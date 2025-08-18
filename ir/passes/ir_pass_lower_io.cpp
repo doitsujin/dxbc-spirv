@@ -470,6 +470,56 @@ bool LowerIoPass::resolveMismatchedIo(ShaderStage prevStage, const IoMap& prevSt
 }
 
 
+void LowerIoPass::enableFlatInterpolation(uint32_t locationMask) {
+  auto [a, b] = m_builder.getDeclarations();
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::eDclInput) {
+      auto op = *iter;
+
+      auto location = uint32_t(op.getOperand(op.getFirstLiteralOperandIndex()));
+      op.setOperand(op.getFirstLiteralOperandIndex() + 2u, InterpolationMode::eFlat);
+
+      if (locationMask & (1u << location))
+        m_builder.rewriteOp(iter->getDef(), std::move(op));
+    }
+  }
+}
+
+
+void LowerIoPass::enableSampleInterpolation() {
+  auto [a, b] = m_builder.getDeclarations();
+
+  for (auto iter = a; iter != b; iter++) {
+    switch (iter->getOpCode()) {
+      case OpCode::eDclInputBuiltIn: {
+        auto builtIn = BuiltIn(iter->getOperand(iter->getFirstLiteralOperandIndex()));
+
+        if (builtIn != BuiltIn::eClipDistance &&
+            builtIn != BuiltIn::eCullDistance)
+          break;
+      } [[fallthrough]];
+
+      case OpCode::eDclInput: {
+        bool isBuiltIn = iter->getOpCode() == OpCode::eDclInputBuiltIn;
+
+        auto op = *iter;
+        auto operandIndex = op.getFirstLiteralOperandIndex() + (isBuiltIn ? 1u : 2u);
+        auto interpolation = InterpolationModes(op.getOperand(operandIndex));
+
+        if (!(interpolation & (InterpolationMode::eFlat | InterpolationMode::eCentroid))) {
+          op.setOperand(operandIndex, interpolation | InterpolationMode::eSample);
+          m_builder.rewriteOp(iter->getDef(), std::move(op));
+        }
+      } break;
+
+      default:
+        break;
+    }
+  }
+}
+
+
 void LowerIoPass::scalarizeInputLoads() {
   auto [a, b] = m_builder.getDeclarations();
 

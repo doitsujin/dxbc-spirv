@@ -238,6 +238,14 @@ public:
    *  actual output declaration. Should not be called if stages are I/O-compatible. */
   bool resolveMismatchedIo(ShaderStage prevStage, const IoMap& prevStageOut);
 
+  /** Sets flat interpolation for the given pixel shader input locations.
+   *  Built-ins are unaffected. Must only be used on pixel shaders. */
+  void enableFlatInterpolation(uint32_t locationMask);
+
+  /** Sets sample interpolation on all inputs that are not already declared as flat,
+   *  sample or centroid. This will enable sample-rate shading for this shader. */
+  void enableSampleInterpolation();
+
 private:
 
   struct OutputInfo {
