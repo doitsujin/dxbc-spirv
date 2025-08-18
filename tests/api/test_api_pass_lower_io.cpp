@@ -1102,4 +1102,111 @@ Builder test_pass_lower_io_mismatch_ps_clip_distance_large() {
   return test_io_mismatch_ps(ShaderStage::eVertex, prevOut);
 }
 
+
+Builder test_misc_ps() {
+  Builder builder;
+
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+
+  auto pos = builder.add(Op::DclInputBuiltIn(Type(ScalarType::eF32, 4u), entryPoint, BuiltIn::ePosition, InterpolationModes()));
+  auto clip = builder.add(Op::DclInputBuiltIn(Type(ScalarType::eF32).addArrayDimension(4u), entryPoint, BuiltIn::eClipDistance, InterpolationModes()));
+  auto color = builder.add(Op::DclInput(Type(ScalarType::eF32, 4u), entryPoint, 1u, 0u, InterpolationModes()));
+  auto coord = builder.add(Op::DclInput(Type(ScalarType::eF32, 2u), entryPoint, 2u, 0u, InterpolationMode::eNoPerspective));
+  auto depth = builder.add(Op::DclInput(Type(ScalarType::eF32, 1u), entryPoint, 3u, 0u, InterpolationMode::eNoPerspective));
+  auto index = builder.add(Op::DclInput(Type(ScalarType::eU32, 1u), entryPoint, 4u, 0u, InterpolationMode::eFlat));
+  auto base  = builder.add(Op::DclInput(Type(ScalarType::eI32, 3u), entryPoint, 4u, 1u, InterpolationMode::eFlat));
+  auto centroid = builder.add(Op::DclInput(Type(ScalarType::eF32, 4u), entryPoint, 5u, 0u, InterpolationMode::eCentroid));
+
+  builder.add(Op::Semantic(pos, 0u, "SV_POSITION"));
+  builder.add(Op::Semantic(clip, 0u, "SV_CLIPDISTANCE"));
+  builder.add(Op::Semantic(color, 0u, "COLOR"));
+  builder.add(Op::Semantic(coord, 0u, "TEXCOORD"));
+  builder.add(Op::Semantic(depth, 0u, "DEPTH"));
+  builder.add(Op::Semantic(index, 0u, "INDEX"));
+  builder.add(Op::Semantic(base, 0u, "BASE"));
+  builder.add(Op::Semantic(centroid, 0u, "CENTROID"));
+
+  auto o0 = builder.add(Op::DclOutput(Type(ScalarType::eF32, 4u), entryPoint, 0u, 0u));
+  auto o1 = builder.add(Op::DclOutput(Type(ScalarType::eF32, 4u), entryPoint, 1u, 0u));
+  auto o2 = builder.add(Op::DclOutput(Type(ScalarType::eF32, 4u), entryPoint, 2u, 0u));
+  auto o3 = builder.add(Op::DclOutput(Type(ScalarType::eF32, 2u), entryPoint, 3u, 0u));
+  auto o4 = builder.add(Op::DclOutput(Type(ScalarType::eU32, 1u), entryPoint, 4u, 0u));
+  auto o5 = builder.add(Op::DclOutput(Type(ScalarType::eI32, 3u), entryPoint, 5u, 0u));
+  auto o6 = builder.add(Op::DclOutput(Type(ScalarType::eF32, 4u), entryPoint, 6u, 0u));
+  auto oDepth = builder.add(Op::DclOutputBuiltIn(ScalarType::eF32, entryPoint, BuiltIn::eDepth));
+
+  builder.add(Op::Semantic(o0, 0u, "SV_TARGET"));
+  builder.add(Op::Semantic(o1, 1u, "SV_TARGET"));
+  builder.add(Op::Semantic(o2, 2u, "SV_TARGET"));
+  builder.add(Op::Semantic(o3, 3u, "SV_TARGET"));
+  builder.add(Op::Semantic(o4, 4u, "SV_TARGET"));
+  builder.add(Op::Semantic(o5, 5u, "SV_TARGET"));
+  builder.add(Op::Semantic(o6, 6u, "SV_TARGET"));
+  builder.add(Op::Semantic(oDepth, 6u, "SV_DEPTH"));
+
+  builder.add(Op::Label());
+
+  builder.add(Op::OutputStore(o0, SsaDef(),
+    builder.add(Op::InputLoad(Type(ScalarType::eF32, 4u), pos, SsaDef()))));
+
+  for (uint32_t i = 0u; i < 4u; i++) {
+    builder.add(Op::OutputStore(o1, builder.makeConstant(i),
+      builder.add(Op::InputLoad(ScalarType::eF32, pos, builder.makeConstant(i)))));
+  }
+
+  builder.add(Op::OutputStore(o2, SsaDef(),
+    builder.add(Op::InputLoad(Type(ScalarType::eF32, 4u), color, SsaDef()))));
+
+  builder.add(Op::OutputStore(o3, SsaDef(),
+    builder.add(Op::InputLoad(Type(ScalarType::eF32, 2u), coord, SsaDef()))));
+
+  builder.add(Op::OutputStore(o4, SsaDef(),
+    builder.add(Op::InputLoad(ScalarType::eU32, index, SsaDef()))));
+
+  builder.add(Op::OutputStore(o5, SsaDef(),
+    builder.add(Op::InputLoad(Type(ScalarType::eI32, 3u), base, SsaDef()))));
+
+  builder.add(Op::OutputStore(o6, SsaDef(),
+    builder.add(Op::InputLoad(Type(ScalarType::eF32, 4u), centroid, SsaDef()))));
+
+  builder.add(Op::OutputStore(oDepth, SsaDef(),
+    builder.add(Op::InputLoad(ScalarType::eF32, depth, SsaDef()))));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+
+Builder test_pass_lower_io_enable_flat_shading() {
+  auto ps = test_misc_ps();
+
+  /* Flatten locations 0, 1, 2, 4, 5 */
+  LowerIoPass(ps).enableFlatInterpolation(0x37u);
+  return ps;
+}
+
+
+Builder test_pass_lower_io_enable_sample_shading() {
+  auto ps = test_misc_ps();
+
+  LowerIoPass(ps).enableSampleInterpolation();
+  return ps;
+}
+
+
+Builder test_pass_lower_io_swizzle_rt() {
+  auto ps = test_misc_ps();
+
+  std::array<IoOutputSwizzle, 8u> swizzles = { };
+  swizzles.at(1u) = { IoOutputComponent::eY, IoOutputComponent::eW, IoOutputComponent::eZ, IoOutputComponent::eX };
+  swizzles.at(2u) = { IoOutputComponent::eOne, IoOutputComponent::eX, IoOutputComponent::eZero, IoOutputComponent::eY };
+  swizzles.at(3u) = { IoOutputComponent::eY, IoOutputComponent::eZ, IoOutputComponent::eW, IoOutputComponent::eX };
+  swizzles.at(4u) = { IoOutputComponent::eX, IoOutputComponent::eX, IoOutputComponent::eX, IoOutputComponent::eX };
+  swizzles.at(5u) = { IoOutputComponent::eW, IoOutputComponent::eOne, IoOutputComponent::eY, IoOutputComponent::eZ };
+  swizzles.at(6u) = { IoOutputComponent::eW, IoOutputComponent::eW, IoOutputComponent::eW, IoOutputComponent::eW };
+
+  LowerIoPass(ps).swizzleOutputs(swizzles.size(), swizzles.data());
+  return ps;
+}
+
 }

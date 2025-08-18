@@ -38,4 +38,8 @@ Builder test_pass_lower_io_mismatch_ps_straddle();
 Builder test_pass_lower_io_mismatch_ps_clip_distance_small();
 Builder test_pass_lower_io_mismatch_ps_clip_distance_large();
 
+Builder test_pass_lower_io_enable_flat_shading();
+Builder test_pass_lower_io_enable_sample_shading();
+Builder test_pass_lower_io_swizzle_rt();
+
 }

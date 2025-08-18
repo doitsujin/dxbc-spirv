@@ -411,6 +411,10 @@ void enumeratePassesTests(std::vector<NamedTest>& result, const char* category, 
   ADD_TEST(test_pass_lower_io_mismatch_ps_straddle);
   ADD_TEST(test_pass_lower_io_mismatch_ps_clip_distance_small);
   ADD_TEST(test_pass_lower_io_mismatch_ps_clip_distance_large);
+
+  ADD_TEST(test_pass_lower_io_enable_flat_shading);
+  ADD_TEST(test_pass_lower_io_enable_sample_shading);
+  ADD_TEST(test_pass_lower_io_swizzle_rt);
 }
 
 
