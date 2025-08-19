@@ -13,8 +13,6 @@ class DominanceGraph {
 
 public:
 
-  DominanceGraph() = default;
-
   explicit DominanceGraph(const Builder& builder);
 
   ~DominanceGraph();
@@ -48,6 +46,11 @@ public:
    * defined before b. */
   bool defDominates(SsaDef a, SsaDef b) const;
 
+  /* Queries containing block for a definition. */
+  SsaDef getBlockForDef(SsaDef def) const {
+    return m_nodeInfos.at(def).blockDef;
+  }
+
 private:
 
   struct NodeInfo {
@@ -63,9 +66,9 @@ private:
       /* Immediate post-dominator. Null if a path
        * returns before merging. */
       SsaDef immPostDom = { };
-      /* True if all paths from this node lead back
-       * to the containing loop header. */
-      bool isContinuePath = false;
+      /* Points to a loop header if alls paths
+       * lead back to it */
+      SsaDef continueLoop = { };
     } block;
 
   };
@@ -79,9 +82,11 @@ private:
 
   SsaDef computeImmediateDominator(SsaDef block) const;
 
-  std::pair<SsaDef, bool> computeImmediatePostDominator(SsaDef block) const;
+  std::pair<SsaDef, SsaDef> computeImmediatePostDominator(SsaDef block) const;
 
-  bool isContinuePath(SsaDef block, SsaDef target) const;
+  SsaDef getContinueLoop(SsaDef block, SsaDef target) const;
+
+  SsaDef findContainingLoop(SsaDef block) const;
 
 };
 

@@ -23,6 +23,8 @@ DominanceGraph::DominanceGraph(const Builder& builder)
         auto& node = m_nodeInfos[block];
         node.blockDef = block;
         node.block.immDom = computeImmediateDominator(block);
+
+        postDomQueue.push_back(block);
       } break;
 
       case OpCode::eFunction: {
@@ -41,8 +43,6 @@ DominanceGraph::DominanceGraph(const Builder& builder)
           auto& blockNode = m_nodeInfos[block];
           blockNode.block.terminator = iter->getDef();
         }
-
-        postDomQueue.push_back(block);
       } break;
     }
   }
@@ -53,8 +53,10 @@ DominanceGraph::DominanceGraph(const Builder& builder)
 
     auto& node = m_nodeInfos[block];
 
-    std::tie(node.block.immPostDom, node.block.isContinuePath) =
-      computeImmediatePostDominator(block);
+    if (!node.block.immPostDom) {
+      std::tie(node.block.immPostDom, node.block.continueLoop) =
+        computeImmediatePostDominator(block);
+    }
   }
 }
 
@@ -200,19 +202,19 @@ SsaDef DominanceGraph::computeImmediateDominator(SsaDef block) const {
 }
 
 
-std::pair<SsaDef, bool> DominanceGraph::computeImmediatePostDominator(SsaDef block) const {
+std::pair<SsaDef, SsaDef> DominanceGraph::computeImmediatePostDominator(SsaDef block) const {
   const auto& terminator = m_builder.getOp(m_nodeInfos[block].block.terminator);
 
   /* If the block returns, it has no strict post-dominator */
   if (!isBranchInstruction(terminator.getOpCode()))
-    return std::make_pair(SsaDef(), false);
+    return std::make_pair(SsaDef(), SsaDef());
 
   /* If the block has a single successor, that successor is its immediate post-dominator.
    * If additionally the block is the continue block of a loop, and only branches back to
    * the loop header it is the end of a continue path. */
   if (terminator.getOpCode() == OpCode::eBranch) {
     const auto& target = m_builder.getOpForOperand(terminator, 0u);
-    return std::make_pair(target.getDef(), isContinuePath(block, target.getDef()));
+    return std::make_pair(target.getDef(), getContinueLoop(block, target.getDef()));
   }
 
   /* Handling loops is tricky: If all or none of the block's successors are part of
@@ -224,8 +226,15 @@ std::pair<SsaDef, bool> DominanceGraph::computeImmediatePostDominator(SsaDef blo
    * already have processed all its successors that are not a back-edge. */
   util::small_vector<SsaDef, 16> succ;
 
+  SsaDef innerLoop = { };
+
   forEachBranchTarget(terminator, [&] (SsaDef target) {
-    if (!isContinuePath(block, target))
+    auto targetLoop = getContinueLoop(block, target);
+
+    if (targetLoop && !innerLoop)
+      innerLoop = findContainingLoop(block);
+
+    if (!targetLoop || targetLoop != innerLoop)
       succ.push_back(target);
   });
 
@@ -242,7 +251,7 @@ std::pair<SsaDef, bool> DominanceGraph::computeImmediatePostDominator(SsaDef blo
 
   if (succCount == 1u) {
     auto result = succ.at(0u);
-    return std::make_pair(result, isContinuePath(block, result));
+    return std::make_pair(result, getContinueLoop(block, result));
   }
 
   /* Otherwise, do a breadth-first search over post-dominators until we find
@@ -266,7 +275,7 @@ std::pair<SsaDef, bool> DominanceGraph::computeImmediatePostDominator(SsaDef blo
           found = true;
 
           if (++v.second == succCount)
-            return std::make_pair(v.first, m_nodeInfos[v.first].block.isContinuePath);
+            return std::make_pair(v.first, m_nodeInfos[v.first].block.continueLoop);
 
           break;
         }
@@ -280,15 +289,15 @@ std::pair<SsaDef, bool> DominanceGraph::computeImmediatePostDominator(SsaDef blo
     }
   }
 
-  return std::make_pair(SsaDef(), false);
+  return std::make_pair(SsaDef(), SsaDef());
 }
 
 
-bool DominanceGraph::isContinuePath(SsaDef block, SsaDef target) const {
+SsaDef DominanceGraph::getContinueLoop(SsaDef block, SsaDef target) const {
   /* If the edge leads to a continue path, it itself is
    * trivially part of a continue path */
-  if (m_nodeInfos[target].block.isContinuePath)
-    return true;
+  if (m_nodeInfos[target].block.continueLoop)
+    return m_nodeInfos[target].block.continueLoop;
 
   /* Otherwise, check whether this is a back-edge */
   const auto& targetOp = m_builder.getOp(target);
@@ -301,7 +310,23 @@ bool DominanceGraph::isContinuePath(SsaDef block, SsaDef target) const {
   if (construct == Construct::eStructuredLoop)
     continueBlock = SsaDef(targetOp.getOperand(1u));
 
-  return block == continueBlock;
+  return block == continueBlock ? target : SsaDef();
+}
+
+
+SsaDef DominanceGraph::findContainingLoop(SsaDef block) const {
+  do {
+    const auto& label = m_builder.getOp(block);
+
+    auto construct = Construct(label.getOperand(label.getFirstLiteralOperandIndex()));
+
+    if (construct == Construct::eStructuredLoop)
+      return label.getDef();
+
+    block = getImmediateDominator(block);
+  } while (block);
+
+  return SsaDef();
 }
 
 }
