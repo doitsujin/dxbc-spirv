@@ -2224,11 +2224,11 @@ bool Converter::handleAtomic(ir::Builder& builder, const Instruction& op) {
         atomicOp.addOperand(layer);
 
       atomicOp.addOperand(coord);
-
-      m_resources.setUavFlagsForAtomic(builder, target);
     } else {
       atomicOp.addOperand(computeAtomicBufferAddress(builder, op, address, resource.kind));
     }
+
+    m_resources.setUavFlagsForAtomic(builder, target);
   }
 
   atomicOp.addOperand(operandVector);
