@@ -36,6 +36,7 @@ dxbc_spv_files = files([
   'ir/passes/ir_pass_remove_unused.cpp',
   'ir/passes/ir_pass_scalarize.cpp',
   'ir/passes/ir_pass_ssa.cpp',
+  'ir/passes/ir_pass_sync.cpp',
 
   'util/util_float16.cpp',
   'util/util_log.cpp',
