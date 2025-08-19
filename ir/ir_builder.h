@@ -253,6 +253,12 @@ public:
     return m_ops.getMaxValidDef().getId() + 1u;
   }
 
+  /** Queries definition with the highest valid ID. Useful to pre-allocate
+   *  memory for containers. */
+  SsaDef getMaxValidDef() const {
+    return m_ops.getMaxValidDef();
+  }
+
   /** Convenience method to create and add a constant op. */
   template<typename... T>
   SsaDef makeConstant(T... args) {
