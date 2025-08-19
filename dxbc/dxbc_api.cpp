@@ -87,6 +87,9 @@ void legalizeIr(ir::Builder& builder, const CompileOptions& options) {
    * declarations for unused FP modes since those types may be unsupported. */
   ir::RemoveUnusedPass::runPass(builder);
   ir::RemoveUnusedPass::runRemoveUnusedFloatModePass(builder);
+
+  /* Run synchronization fix-up pass last, as this somewhat relies on CSE. */
+  ir::SyncPass::runPass(builder, options.syncOptions);
 }
 
 

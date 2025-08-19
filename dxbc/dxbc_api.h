@@ -16,6 +16,7 @@
 #include "../ir/passes/ir_pass_remove_unused.h"
 #include "../ir/passes/ir_pass_scalarize.h"
 #include "../ir/passes/ir_pass_ssa.h"
+#include "../ir/passes/ir_pass_sync.h"
 
 namespace dxbc_spv::dxbc {
 
@@ -43,6 +44,8 @@ struct CompileOptions {
   /* Scalarization options. Can be used to toggle between
    * full scalarization and maintaining vec2 for min16 code. */
   ir::ScalarizePass::Options scalarizeOptions = { };
+  /* Options for the synchronization pass. */
+  ir::SyncPass::Options syncOptions = { };
 };
 
 
