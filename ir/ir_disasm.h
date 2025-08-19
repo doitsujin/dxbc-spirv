@@ -1,10 +1,13 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <sstream>
 #include <unordered_map>
 
 #include "ir_builder.h"
+#include "ir_divergence.h"
+#include "ir_dominance.h"
 
 #include "../util/util_console.h"
 
@@ -31,6 +34,8 @@ public:
     bool showDebugNames = true;
     /** Whether to sort declarative ops by opcode. */
     bool sortDeclarative = true;
+    /** Whether to include divergence information */
+    bool showDivergence = true;
     /** Whether to enable colored output */
     bool coloredOutput = false;
   };
@@ -56,6 +61,9 @@ private:
   const Builder& m_builder;
   Options m_options;
 
+  std::optional<DominanceGraph>     m_dominance;
+  std::optional<DivergenceAnalysis> m_divergence;
+
   std::unordered_map<SsaDef, std::string> m_debugNames;
 
   void resolveDebugNames();
@@ -71,6 +79,8 @@ private:
   static size_t countChars(const std::string& str);
 
   static uint32_t normalizeOpCodeOrder(OpCode op);
+
+  static char getDivergenceScopeChar(Scope scope);
 
 };
 

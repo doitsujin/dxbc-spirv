@@ -172,7 +172,10 @@ Scope DivergenceAnalysis::determineScope(const Op& op) {
       const auto& func = m_builder.getOpForOperand(op, 0u);
       auto& funcInfo = m_nodeScopes.at(func.getDef());
 
+      /* Need to taint caller if the callee is not pure */
       if (funcInfo.tainted) {
+        taintFunction(m_currentFunction);
+
         funcInfo.callScope = std::min(funcInfo.callScope,
           getUniformScopeForDef(m_currentBlock));
       }

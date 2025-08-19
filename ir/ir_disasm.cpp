@@ -8,6 +8,11 @@ Disassembler::Disassembler(const Builder& builder, const Options& options)
 : m_builder(builder), m_options(options) {
   if (m_options.useDebugNames)
     resolveDebugNames();
+
+  if (m_options.showDivergence) {
+    m_dominance.emplace(m_builder);
+    m_divergence.emplace(m_builder, *m_dominance);
+  }
 }
 
 
@@ -81,10 +86,35 @@ void Disassembler::disassembleOp(std::ostream& stream, const Op& op) const {
     prefix = flags.str();
   }
 
+  if (m_options.showDivergence) {
+    auto scope = m_divergence->getUniformScopeForDef(op.getDef());
+
+    std::stringstream divergence;
+
+    for (uint32_t i = countChars(prefix); i < 12u; i++)
+      divergence << ' ';
+
+    { auto color = util::ConsoleState::FgGreen;
+
+      if (scope == Scope::eThread)
+        color = util::ConsoleState::FgMagenta;
+      else if (scope < Scope::eWorkgroup)
+        color = util::ConsoleState::FgBlue;
+
+      auto state = scopedColor(divergence, color);
+      divergence << getDivergenceScopeChar(scope);
+    }
+
+    divergence << ' ';
+
+    prefix += divergence.str();
+  }
+
   std::stringstream def;
   disassembleDef(def, op.getDef());
 
   std::stringstream lead;
+
   if (!op.getType().isVoidType()) {
     auto state = scopedColor(lead, util::ConsoleState::FgCyan);
     lead << op.getType();
@@ -99,8 +129,8 @@ void Disassembler::disassembleOp(std::ostream& stream, const Op& op) const {
 
   auto leadStr = lead.str();
 
-  if (countChars(prefix + leadStr) < 24u)
-    leadStr.insert(0u, 24u - countChars(prefix + leadStr), ' ');
+  if (countChars(prefix + leadStr) < 32u)
+    leadStr.insert(0u, 32u - countChars(prefix + leadStr), ' ');
 
   stream << prefix << leadStr;
   stream << " = " << op.getOpCode();
@@ -410,6 +440,19 @@ uint32_t Disassembler::normalizeOpCodeOrder(OpCode op) {
     default:
       return uint16_t(op);
   }
+}
+
+
+char Disassembler::getDivergenceScopeChar(Scope scope) {
+  switch (scope) {
+    case Scope::eThread:    return 'd';
+    case Scope::eQuad:      return 'q';
+    case Scope::eSubgroup:  return 's';
+    case Scope::eWorkgroup: return 'w';
+    case Scope::eGlobal:    return 'u';
+  }
+
+  return '?';
 }
 
 }

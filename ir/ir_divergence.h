@@ -18,6 +18,12 @@ public:
     return def ? m_nodeScopes.at(def).uniformScope : Scope::eGlobal;
   }
 
+  /** Checks whether a function returns the same result for the same
+   *  inputs. information is trivially available for this pass. */
+  bool functionIsPure(SsaDef function) const {
+    return !m_nodeScopes.at(function).tainted;
+  }
+
 private:
 
   const Builder&        m_builder;
