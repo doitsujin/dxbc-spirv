@@ -48,13 +48,13 @@ public:
 
   /* Queries containing block for a definition. */
   SsaDef getBlockForDef(SsaDef def) const {
-    return m_nodeInfos.at(def).blockDef;
+    return m_nodeInfos[def].blockDef;
   }
 
   /* Queries terminator instruction for a given block. */
   SsaDef getBlockTerminator(SsaDef def) const {
     dxbc_spv_assert(m_builder.getOp(def).getOpCode() == OpCode::eLabel);
-    return m_nodeInfos.at(def).block.terminator;
+    return m_nodeInfos[def].block.terminator;
   }
 
 private:
