@@ -1538,7 +1538,7 @@ Builder test_resource_rov() {
     builder.add(Op::ConvertFtoI(ScalarType::eI32,
       builder.add(Op::InputLoad(ScalarType::eF32, positionDef, builder.makeConstant(1u)))))));
 
-  builder.add(Op::RovScopedLockBegin(MemoryType::eUavImage, RovScope::ePixel));
+  builder.add(Op::RovScopedLockBegin(MemoryType::eUav, RovScope::ePixel));
 
   auto color = builder.add(Op::ImageLoad(Type(ScalarType::eF32, 4u),
     uavDescriptor, SsaDef(), SsaDef(), coord, SsaDef(), SsaDef()));
@@ -1549,7 +1549,7 @@ Builder test_resource_rov() {
 
   builder.add(Op::ImageStore(uavDescriptor, SsaDef(), coord, color));
 
-  builder.add(Op::RovScopedLockEnd(MemoryType::eUavImage));
+  builder.add(Op::RovScopedLockEnd(MemoryType::eUav));
 
   builder.add(Op::Return());
   return builder;

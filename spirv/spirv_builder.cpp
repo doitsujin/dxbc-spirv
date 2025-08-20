@@ -4418,11 +4418,10 @@ uint32_t SpirvBuilder::translateMemoryTypes(ir::MemoryTypeFlags memoryFlags, spv
   if (memoryFlags & ir::MemoryType::eLds)
     result |= spv::MemorySemanticsWorkgroupMemoryMask;
 
-  if (memoryFlags & ir::MemoryType::eUavBuffer)
-    result |= spv::MemorySemanticsUniformMemoryMask;
-
-  if (memoryFlags & ir::MemoryType::eUavImage)
-    result |= spv::MemorySemanticsImageMemoryMask;
+  if (memoryFlags & ir::MemoryType::eUav) {
+    result |= spv::MemorySemanticsUniformMemoryMask
+           |  spv::MemorySemanticsImageMemoryMask;
+  }
 
   if (memoryFlags) {
     result |= base;

@@ -563,8 +563,7 @@ std::ostream& operator << (std::ostream& os, const Scope& scope) {
 std::ostream& operator << (std::ostream& os, const MemoryType& type) {
   switch (type) {
     case MemoryType::eLds:        return os << "Lds";
-    case MemoryType::eUavBuffer:  return os << "UavBuffer";
-    case MemoryType::eUavImage:   return os << "UavImage";
+    case MemoryType::eUav:        return os << "Uav";
 
     case MemoryType::eFlagEnum: break;
   }

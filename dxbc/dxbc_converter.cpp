@@ -3089,12 +3089,12 @@ bool Converter::handleSync(ir::Builder& builder, const Instruction& op) {
 
   if (syncFlags & SyncFlag::eUavMemoryLocal) {
     memScope = ir::Scope::eWorkgroup;
-    memTypes |= ir::MemoryType::eUavBuffer | ir::MemoryType::eUavImage;
+    memTypes |= ir::MemoryType::eUav;
   }
 
   if (syncFlags & SyncFlag::eUavMemoryGlobal) {
     memScope = ir::Scope::eGlobal;
-    memTypes |= ir::MemoryType::eUavBuffer | ir::MemoryType::eUavImage;
+    memTypes |= ir::MemoryType::eUav;
   }
 
   if (execScope != ir::Scope::eThread || memScope != ir::Scope::eThread)

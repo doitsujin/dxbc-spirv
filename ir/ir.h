@@ -782,8 +782,7 @@ enum class Scope : uint8_t {
 /** Memory type flags */
 enum class MemoryType : uint32_t {
   eLds              = (1u << 0),
-  eUavBuffer        = (1u << 1),
-  eUavImage         = (1u << 2),
+  eUav              = (1u << 1),
 
   eFlagEnum         = 0
 };
