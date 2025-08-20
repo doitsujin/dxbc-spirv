@@ -87,22 +87,55 @@ void Disassembler::disassembleOp(std::ostream& stream, const Op& op) const {
   }
 
   if (m_options.showDivergence) {
-    auto scope = m_divergence->getUniformScopeForDef(op.getDef());
+    std::array<Scope, 2> scopes = { };
+    scopes.at(0u) = m_divergence->getUniformScopeForDef(op.getDef());
+    scopes.at(1u) = m_divergence->getUniformScopeForDef(m_dominance->getBlockForDef(op.getDef()));
 
     std::stringstream divergence;
 
     for (uint32_t i = countChars(prefix); i < 12u; i++)
       divergence << ' ';
 
-    { auto color = util::ConsoleState::FgGreen;
+    for (uint32_t i = 0u; i < scopes.size(); i++) {
+      bool show = false;
 
-      if (scope == Scope::eThread)
-        color = util::ConsoleState::FgMagenta;
-      else if (scope < Scope::eWorkgroup)
-        color = util::ConsoleState::FgBlue;
+      if (i == 0u) { /* value */
+        show = !op.getType().isVoidType() &&
+                op.getOpCode() != OpCode::eSetFpMode &&
+                op.getOpCode() != OpCode::eDclParam &&
+                op.getOpCode() != OpCode::eDclSampler &&
+                op.getOpCode() != OpCode::eDclSrv &&
+                op.getOpCode() != OpCode::eDclCbv &&
+                op.getOpCode() != OpCode::eDclUav &&
+                op.getOpCode() != OpCode::eDclUavCounter;
 
-      auto state = scopedColor(divergence, color);
-      divergence << getDivergenceScopeChar(scope);
+        show = show || isBranchInstruction(op.getOpCode()) ||
+                op.getOpCode() == OpCode::eOutputStore ||
+                op.getOpCode() == OpCode::eScratchStore ||
+                op.getOpCode() == OpCode::eLdsStore ||
+                op.getOpCode() == OpCode::eBufferStore ||
+                op.getOpCode() == OpCode::eImageStore ||
+                op.getOpCode() == OpCode::eMemoryStore;
+      } else { /* control flow */
+        show = !op.isDeclarative() &&
+                op.getOpCode() != OpCode::eFunction &&
+                op.getOpCode() != OpCode::eFunctionEnd;
+      }
+
+      if (show) {
+        auto color = util::ConsoleState::FgGreen;
+        auto scope = scopes[i];
+
+        if (scope == Scope::eThread)
+          color = util::ConsoleState::FgMagenta;
+        else if (scope < Scope::eWorkgroup)
+          color = util::ConsoleState::FgBlue;
+
+        auto state = scopedColor(divergence, color);
+        divergence << getDivergenceScopeChar(scope);
+      } else {
+        divergence << ' ';
+      }
     }
 
     divergence << ' ';
