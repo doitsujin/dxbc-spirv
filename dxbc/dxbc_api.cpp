@@ -67,6 +67,8 @@ void legalizeIr(ir::Builder& builder, const CompileOptions& options) {
   ir::ArithmeticPass::runEarlyLoweringPasses(builder, options.arithmeticOptions);
 
   /* Run some basic code transforms */
+  bool derivativePassRun = false;
+
   while (true) {
     bool progress = false;
 
@@ -74,6 +76,14 @@ void legalizeIr(ir::Builder& builder, const CompileOptions& options) {
     progress |= ir::CsePass::runPass(builder);
     progress |= ir::CleanupControlFlowPass::runPass(builder);
     progress |= ir::SsaConstructionPass::runResolveTrivialPhiPass(builder);
+
+    /* Derivative hoisting may feed into CSE and control flow */
+    if (!progress && !std::exchange(derivativePassRun, true)) {
+      ir::SsaConstructionPass::runInsertExitPhiPass(builder);
+
+      if (!(progress = ir::DerivativePass::runPass(builder, options.derivativeOptions)))
+        ir::SsaConstructionPass::runResolveTrivialPhiPass(builder);
+    }
 
     if (!progress)
       break;
