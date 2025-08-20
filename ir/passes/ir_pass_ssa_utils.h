@@ -31,6 +31,14 @@ struct SsaPassTempKey {
   bool operator != (const SsaPassTempKey& other) const { return var != other.var && block != other.block; }
 };
 
+
+/** Exit phi properties for a definition */
+struct SsaExitPhiState {
+  SsaDef loopHeader = { };
+  SsaDef loopMerge  = { };
+  SsaDef exitPhi    = { };
+};
+
 }
 
 namespace std {

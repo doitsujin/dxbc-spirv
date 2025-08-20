@@ -37,6 +37,10 @@ public:
    *  trivial phis remain, this returns true if any phis were removed. */
   bool resolveTrivialPhi();
 
+  /** Inserts exit phis for variables defined inside a loop. These phis are
+   *  trivial and may be removed again by the trivial phi resolve pass. */
+  void insertExitPhi();
+
   /** Initializes and runs pass on the given builder. */
   static void runPass(Builder& builder);
 
@@ -45,6 +49,8 @@ public:
    *  required after passes that change control flow or merge arithmetic
    *  operations as well. */
   static bool runResolveTrivialPhiPass(Builder& builder);
+
+  static void runInsertExitPhiPass(Builder& builder);
 
 private:
 
@@ -64,7 +70,6 @@ private:
   /* Global look-up table that stores the last valid definition of each
    * temporary variable for each block where it is used, including phis. */
   std::unordered_map<SsaPassTempKey, SsaDef> m_globalDefs;
-
 
   void resolveTempLoadStore();
 
@@ -101,6 +106,8 @@ private:
   SsaDef findContainingBlock(SsaDef def);
 
   SsaDef getOnlyUniquePhiOperand(SsaDef phi);
+
+  SsaDef createExitPhi(SsaDef def, SsaDef block);
 
 };
 

@@ -68,6 +68,96 @@ bool SsaConstructionPass::resolveTrivialPhi() {
 }
 
 
+void SsaConstructionPass::insertExitPhi() {
+  Container<SsaExitPhiState> exitPhi;
+  exitPhi.ensure(m_builder.getMaxValidDef());
+
+  util::small_vector<std::pair<SsaDef, SsaDef>, 64u> loops = { };
+
+  auto [a, b] = m_builder.getCode();
+
+  for (auto iter = a; iter != b; iter++) {
+    switch (iter->getOpCode()) {
+      case OpCode::eLabel: {
+        /* If this is the merge block of the innermost loop, we can
+         * no longer encounter code belonging to that loop. */
+        if (!loops.empty() && loops.back().second == iter->getDef())
+          loops.pop_back();
+
+        /* Add any loop header and its merge block to the loop stack */
+        if (Construct(iter->getOperand(iter->getFirstLiteralOperandIndex())) == Construct::eStructuredLoop)
+          loops.push_back(std::make_pair(iter->getDef(), SsaDef(iter->getOperand(0u))));
+
+        m_block = iter->getDef();
+      } break;
+
+      case OpCode::eBranch:
+      case OpCode::eBranchConditional:
+      case OpCode::eSwitch:
+      case OpCode::eUnreachable:
+      case OpCode::eReturn: {
+        m_block = SsaDef();
+      } break;
+
+      default: {
+        /* Metdadata stuff, ignore */
+        if (!m_block)
+          break;
+
+        /* If we are inside a loop, add metadata for the current op */
+        if (!loops.empty() && !iter->getType().isVoidType()) {
+          auto& phi = exitPhi.at(iter->getDef());
+          std::tie(phi.loopHeader, phi.loopMerge) = loops.back();
+        }
+
+        /* Scan any operands that may require an exit phi */
+        bool rewrite = false;
+
+        Op op = *iter;
+
+        for (uint32_t i = 0u; i < op.getFirstLiteralOperandIndex(); i++) {
+          auto arg = SsaDef(op.getOperand(i));
+          auto& phi = exitPhi.at(arg);
+
+          if (!phi.exitPhi) {
+            /* Operand was not defined inside a loop */
+            if (!phi.loopHeader)
+              continue;
+
+            /* Ignore phi instructions in the loop merge block of the loop that
+             * declared the value. This is basically an exit phi already. */
+            if (phi.loopMerge == m_block && iter->getOpCode() == OpCode::ePhi)
+              continue;
+
+            /* If we are still inside the declaring loop, ignore */
+            bool insideLoop = false;
+
+            for (size_t i = loops.size(); i && !insideLoop; i--) {
+              if (phi.loopHeader == loops.at(i - 1u).first)
+                insideLoop = true;
+            }
+
+            if (insideLoop)
+              continue;
+
+            /* Otherwise, insert a phi node inside the loop merge block */
+            phi.exitPhi = createExitPhi(arg, phi.loopMerge);
+          }
+
+          if (phi.exitPhi) {
+            op.setOperand(i, phi.exitPhi);
+            rewrite = true;
+          }
+        }
+
+        if (rewrite)
+          m_builder.rewriteOp(iter->getDef(), std::move(op));
+      }
+    }
+  }
+}
+
+
 void SsaConstructionPass::runPass(Builder& builder) {
   SsaConstructionPass pass(builder);
   pass.runPass();
@@ -77,6 +167,12 @@ void SsaConstructionPass::runPass(Builder& builder) {
 bool SsaConstructionPass::runResolveTrivialPhiPass(Builder& builder) {
   SsaConstructionPass pass(builder);
   return pass.resolveTrivialPhi();
+}
+
+
+void SsaConstructionPass::runInsertExitPhiPass(Builder& builder) {
+  SsaConstructionPass pass(builder);
+  pass.insertExitPhi();
 }
 
 
@@ -365,6 +461,20 @@ SsaDef SsaConstructionPass::getOnlyUniquePhiOperand(SsaDef phi) {
     unique = m_builder.makeUndef(m_builder.getOp(phi).getType());
 
   return unique;
+}
+
+
+SsaDef SsaConstructionPass::createExitPhi(SsaDef def, SsaDef block) {
+  Op phi(OpCode::ePhi, m_builder.getOp(def).getType());
+
+  auto [a, b] = m_builder.getUses(block);
+
+  for (auto iter = a; iter != b; iter++) {
+    if (isBranchInstruction(iter->getOpCode()))
+      phi.addPhi(ir::findContainingBlock(m_builder, iter->getDef()), def);
+  }
+
+  return m_builder.addAfter(block, std::move(phi));
 }
 
 }
