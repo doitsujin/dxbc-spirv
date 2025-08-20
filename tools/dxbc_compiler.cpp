@@ -79,11 +79,26 @@ void printTimers(const Timers& timers) {
 }
 
 
-bool printIrAssembly(const ir::Builder& builder, const Options& options) {
+bool printIrAssembly(ir::Builder& builder, const Options& options) {
+  if (!options.convertOnly)
+    ir::SsaConstructionPass::runInsertExitPhiPass(builder);
+
+  /* Do a serialization round-trip to clean up IDs */
+  ir::Serializer serializer(builder);
+
+  std::vector<uint8_t> serializedData(serializer.computeSerializedSize());
+  serializer.serialize(serializedData.data(), serializedData.size());
+
+  ir::Deserializer deserializer(serializedData.data(), serializedData.size());
+
+  builder = ir::Builder();
+  deserializer.deserialize(builder);
+
   ir::Disassembler::Options disasmOptions;
   disasmOptions.resolveConstants = true;
   disasmOptions.showConstants = false;
   disasmOptions.coloredOutput = !options.noColors;
+  disasmOptions.showDivergence = !options.convertOnly;
 
   ir::Disassembler disassembler(builder, disasmOptions);
   disassembler.disassemble(std::cout);

@@ -35,7 +35,7 @@ public:
     /** Whether to sort declarative ops by opcode. */
     bool sortDeclarative = true;
     /** Whether to include divergence information */
-    bool showDivergence = true;
+    bool showDivergence = false;
     /** Whether to enable colored output */
     bool coloredOutput = false;
   };
