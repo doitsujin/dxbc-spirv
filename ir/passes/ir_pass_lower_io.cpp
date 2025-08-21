@@ -598,6 +598,7 @@ bool LowerIoPass::swizzleOutputs(uint32_t outputCount, const IoOutputSwizzle* sw
                 }
 
                 dxbc_spv_unreachable();
+                return SsaDef();
               } ();
             } break;
 
@@ -919,9 +920,7 @@ void LowerIoPass::resolveMismatchedIoVar(const Op& oldVar, uint32_t oldComponent
 
 
 void LowerIoPass::rewriteBuiltInInputToZero(Builder::iterator op, uint32_t firstComponent) {
-  auto inputInfo = IoMap::getEntryForOp(m_stage, *op);
-
-  dxbc_spv_assert(!firstComponent || builtInIsArray(inputInfo.getBuiltIn()));
+  dxbc_spv_assert(!firstComponent || builtInIsArray(IoMap::getEntryForOp(m_stage, *op).getBuiltIn()));
 
   util::small_vector<SsaDef, 256u> uses = { };
   m_builder.getUses(op->getDef(), uses);
