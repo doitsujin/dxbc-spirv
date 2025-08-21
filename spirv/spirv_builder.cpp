@@ -847,7 +847,7 @@ void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
 
   /* Coverage mask is an array in SPIR-V */
   if (builtIn == ir::BuiltIn::eSampleMask)
-    type = type.addArrayDimension(1u);
+    type.addArrayDimension(1u);
 
   uint32_t typeId = getIdForType(type);
   uint32_t varId = getIdForDef(op.getDef());
