@@ -136,6 +136,9 @@ public:
 
   /** Copy assignment. */
   small_vector& operator = (const small_vector& other) {
+    if (this == &other)
+      return *this;
+
     clear();
     copy(other);
     return *this;
