@@ -770,7 +770,7 @@ using ShaderStageMask = util::Flags<ShaderStage>;
 
 
 /** Scope */
-enum class Scope : uint32_t {
+enum class Scope : uint8_t {
   eThread           = 0u,
   eQuad             = 1u,
   eSubgroup         = 2u,
