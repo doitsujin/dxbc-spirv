@@ -320,12 +320,12 @@ public:
 
   /** Checks whether type is void. */
   bool isVoidType() const {
-    return m_members.empty();
+    return !m_dimensions && m_members.empty();
   }
 
   /** Checks whether type is a scalar or vector */
   bool isBasicType() const {
-    return !isStructType() && !isArrayType();
+    return !m_dimensions && m_members.size() <= 1u;
   }
 
   /** Checks whether type is scalar */
