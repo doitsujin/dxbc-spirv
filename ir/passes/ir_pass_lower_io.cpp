@@ -648,6 +648,43 @@ bool LowerIoPass::swizzleOutputs(uint32_t outputCount, const IoOutputSwizzle* sw
 }
 
 
+void LowerIoPass::lowerSampleCountToSpecConstant(uint32_t specId) {
+  auto iter = m_builder.getDeclarations().first;
+
+  SsaDef constant = { };
+
+  while (iter != m_builder.getDeclarations().second) {
+    if (iter->getOpCode() == OpCode::eDclInputBuiltIn) {
+      auto builtIn = BuiltIn(iter->getOperand(iter->getFirstLiteralOperandIndex()));
+
+      if (builtIn == BuiltIn::eSampleCount) {
+        if (!constant) {
+          constant = m_builder.add(Op::DclSpecConstant(ScalarType::eU32,
+            SsaDef(iter->getOperand(0u)), specId, 4u));
+
+          m_builder.add(Op::DebugName(constant, "SampleCount"));
+        }
+
+        util::small_vector<SsaDef, 256u> uses;
+        m_builder.getUses(iter->getDef(), uses);
+
+        for (auto use : uses) {
+          if (m_builder.getOp(use).getOpCode() == OpCode::eInputLoad)
+            m_builder.rewriteDef(use, constant);
+          else
+            m_builder.remove(use);
+        }
+
+        iter = m_builder.iter(m_builder.remove(iter->getDef()));
+        continue;
+      }
+    }
+
+    ++iter;
+  }
+}
+
+
 void LowerIoPass::scalarizeInputLoads() {
   auto [a, b] = m_builder.getDeclarations();
 

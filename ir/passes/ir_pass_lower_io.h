@@ -270,6 +270,10 @@ public:
    *  whose purpose it is to change export swizzles on the fly. */
   bool swizzleOutputs(uint32_t outputCount, const IoOutputSwizzle* swizzles);
 
+  /** Lowers sample count built-in to a specialization constant. This mostly exists
+   *  for debugging purposes and standalone tools. */
+  void lowerSampleCountToSpecConstant(uint32_t specId);
+
 private:
 
   struct OutputInfo {
