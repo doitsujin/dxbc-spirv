@@ -456,7 +456,7 @@ bool IoMap::declareIoBuiltIn(ir::Builder& builder, RegisterType regType) {
     case RegisterType::eCoverageIn:
     case RegisterType::eCoverageOut: {
       return declareDedicatedBuiltIn(builder, regType,
-        ir::ScalarType::eU32, ir::BuiltIn::eSampleMask, "SV_PrimitiveID");
+        ir::ScalarType::eU32, ir::BuiltIn::eSampleMask, "SV_Coverage");
     }
 
     case RegisterType::eControlPointId: {
