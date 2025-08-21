@@ -10,6 +10,8 @@
 #include "../ir/ir_disasm.h"
 #include "../ir/ir_serialize.h"
 
+#include "../ir/passes/ir_pass_lower_io.h"
+
 #include "../dxbc/dxbc_api.h"
 #include "../dxbc/dxbc_container.h"
 #include "../dxbc/dxbc_converter.h"
@@ -133,8 +135,13 @@ bool writeIrBinary(const ir::Builder& builder, const Options& options, Timers& t
 }
 
 
-bool writeSpirvBinary(const ir::Builder& builder, const Options& options, Timers& timers) {
+bool writeSpirvBinary(ir::Builder builder, const Options& options, Timers& timers) {
   timers.tLowerSpirvBegin = std::chrono::high_resolution_clock::now();
+
+  { ir::LowerIoPass pass(builder);
+
+    pass.lowerSampleCountToSpecConstant(0u);
+  }
 
   spirv::BasicResourceMapping mapping = { };
 
