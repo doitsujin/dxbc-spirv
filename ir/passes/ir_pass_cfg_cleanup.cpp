@@ -393,9 +393,11 @@ bool CleanupControlFlowPass::isBlockReachable(SsaDef block) const {
 
 
 bool CleanupControlFlowPass::isBlockUsed(SsaDef block) const {
-  /* If the block itself is a continue block, we need to keep it intact,
-   * otherwise only consider blocks that are directly reachable. */
-  return isBlockReachable(block) || isContinueBlock(block);
+  /* If the block itself is part of a construct, we need to keep it intact, otherwise
+   * only consider blocks that are directly reachable. If the block is an unreachable
+   * merge block, it will be removed if the construct itself is unreachable and gets
+   * removed. */
+  return isBlockReachable(block) || isContinueBlock(block) || isMergeBlock(block);
 }
 
 
