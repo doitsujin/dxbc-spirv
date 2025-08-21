@@ -896,7 +896,7 @@ void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
       }
 
       case ir::BuiltIn::eLayerIndex: {
-        if ((m_stage != ir::ShaderStage::eGeometry || isInput) && m_stage != ir::ShaderStage::ePixel)
+        if (m_stage != ir::ShaderStage::eGeometry)
           enableCapability(spv::CapabilityShaderLayer);
         return spv::BuiltInLayer;
       }
@@ -904,7 +904,7 @@ void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
       case ir::BuiltIn::eViewportIndex: {
         enableCapability(spv::CapabilityMultiViewport);
 
-        if ((m_stage != ir::ShaderStage::eGeometry || isInput) && m_stage != ir::ShaderStage::ePixel)
+        if (m_stage != ir::ShaderStage::eGeometry)
           enableCapability(spv::CapabilityShaderViewportIndex);
 
         return spv::BuiltInViewportIndex;
