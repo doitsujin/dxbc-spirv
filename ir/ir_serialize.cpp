@@ -39,8 +39,11 @@ bool Serializer::serialize(uint8_t* data, size_t size) const {
 
 
 size_t Serializer::computeEncodedTypeSize(const Type& type) const {
-  /* Can encode basic types using only one byte */
-  size_t size = 1u + type.getStructMemberCount();
+  auto header = getTypeHeaderToken(type);
+
+  /* Basic types don't need more than one byte each */
+  size_t size = util::vle::encodedSize(header);
+  size += type.getStructMemberCount();
 
   for (uint32_t i = 0u; i < type.getArrayDimensions(); i++)
     size += util::vle::encodedSize(type.getArraySize(i));
@@ -85,10 +88,9 @@ int64_t Serializer::computeRelativeDef(uint32_t opIndex, SsaDef argDef) const {
 
 
 bool Serializer::encodeType(const Type& type, uint8_t* dstData, size_t dstSize, size_t& dstOffset) const {
-  uint8_t header = type.getArrayDimensions();
-  header |= uint8_t(type.getStructMemberCount()) << 2u;
+  auto header = getTypeHeaderToken(type);
 
-  if (!writeBytes(dstData, dstSize, dstOffset, header))
+  if (!writeVle(dstData, dstSize, dstOffset, header))
     return false;
 
   for (uint32_t i = 0u; i < type.getArrayDimensions(); i++) {
@@ -143,6 +145,12 @@ uint64_t Serializer::getOpToken(const Op& op) const {
   uint64_t token = uint16_t(op.getOpCode());
   token |= uint64_t(uint8_t(op.getFlags())) << OpCodeBits;
   return token;
+}
+
+
+uint64_t Serializer::getTypeHeaderToken(const Type& type) const {
+  return (uint64_t(type.getArrayDimensions())) |
+         (uint64_t(type.getStructMemberCount()) << 2u);
 }
 
 
@@ -285,9 +293,9 @@ bool Deserializer::deserialize(Builder& builder) {
 
 
 bool Deserializer::deserializeType(Type& type) {
-  uint8_t header = 0u;
+  uint64_t header = 0u;
 
-  if (!readBytes(header))
+  if (!readVle(header))
     return false;
 
   uint32_t arrayDimensions = header & 0x3u;

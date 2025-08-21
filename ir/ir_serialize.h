@@ -40,6 +40,8 @@ private:
 
   uint64_t getOpToken(const Op& op) const;
 
+  uint64_t getTypeHeaderToken(const Type& type) const;
+
   template<typename T>
   static bool writeBytes(uint8_t* dstData, size_t dstSize, size_t& dstOffset, T data);
 
