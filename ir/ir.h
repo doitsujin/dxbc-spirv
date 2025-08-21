@@ -293,20 +293,20 @@ class Type {
 
 public:
 
-  static constexpr uint32_t MaxArrayDimensions = 3;
-  static constexpr uint32_t MaxStructMembers = 24;
+  static constexpr uint32_t MaxArrayDimensions = 3u;
+  static constexpr uint32_t MaxStructMembers = 128u;
 
   /** Initializes void type */
-  Type() : Type(ScalarType::eVoid) { }
+  Type() { }
 
   /** Initializes type from scalar type */
   Type(ScalarType base)
   : Type(BasicType(base)) { }
 
   /** Initializes type from basic type */
-  Type(BasicType base)
-  : m_structSize(base.isVoidType() ? 0u : 1u) {
-    m_members[0u] = base;
+  Type(BasicType base) {
+    if (!base.isVoidType())
+      addStructMember(base);
   }
 
   /** Initializes basic vector type */
@@ -315,12 +315,12 @@ public:
 
   /** Queries base member type. */
   BasicType getBaseType(uint32_t memberIdx) const {
-    return memberIdx < m_structSize ? m_members[memberIdx] : BasicType();
+    return memberIdx < m_members.size() ? m_members[memberIdx] : BasicType();
   }
 
   /** Checks whether type is void. */
   bool isVoidType() const {
-    return !m_structSize;
+    return m_members.empty();
   }
 
   /** Checks whether type is a scalar or vector */
@@ -341,12 +341,12 @@ public:
   /** Checks whether type is a structure with multiple
    *  members, but is not an array of any kind. */
   bool isStructType() const {
-    return !m_dimensions && m_structSize > 1u;
+    return !m_dimensions && m_members.size() > 1u;
   }
 
   /** Queries struct member count */
   uint32_t getStructMemberCount() const {
-    return m_structSize;
+    return m_members.size();
   }
 
   /** Checks whether type is an array. */
@@ -429,15 +429,12 @@ public:
 
 private:
 
-  uint8_t m_dimensions = 0;
-  uint8_t m_structSize = 0;
+  uint16_t m_dimensions = 0;
 
   std::array<uint16_t, MaxArrayDimensions> m_sizes = { };
-  std::array<BasicType, MaxStructMembers> m_members = { };
+  util::small_vector<BasicType, 8u> m_members = { };
 
 };
-
-static_assert(sizeof(Type) == 32);
 
 
 /** Structured construct declaration for a block.

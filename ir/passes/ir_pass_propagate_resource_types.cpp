@@ -291,7 +291,7 @@ bool PropagateResourceTypeRewriteInfo::setupLocalType() {
     return true;
   } else {
     /* Keep things simple and add each accessed element as a dedicated member */
-    util::small_vector<BasicType, 32u> types;
+    util::small_vector<BasicType, Type::MaxStructMembers> types;
 
     for (size_t i = 0u; i < elements.size(); ) {
       const auto& e = elements.at(i);
@@ -460,7 +460,7 @@ bool PropagateResourceTypeRewriteInfo::setupResourceBufferType() {
   /* Assume a fully scalar block layout w.r.t. aligment and batch as many
    * elements that are only accessed in a scalar fashion together in order
    * to reduce the struct member count. */
-  util::small_vector<BasicType, 32u> types;
+  util::small_vector<BasicType, Type::MaxStructMembers> types;
 
   for (size_t i = 0u; i < elements.size(); ) {
     const auto& e = elements.at(i);

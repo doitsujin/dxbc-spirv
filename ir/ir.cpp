@@ -8,10 +8,7 @@ namespace dxbc_spv::ir {
 Type& Type::addStructMember(BasicType type) {
   dxbc_spv_assert(!type.isVoidType());
 
-  if (isVoidType())
-    m_structSize = 0u;
-
-  m_members.at(m_structSize++) = type;
+  m_members.push_back(type);
   return *this;
 }
 
@@ -23,13 +20,13 @@ Type& Type::addArrayDimension(uint32_t size) {
 
 
 Type Type::getSubType(uint32_t index) const {
-  if (m_dimensions) {
+  if (isArrayType()) {
     Type result = *this;
     result.m_dimensions -= 1u;
     return result;
   }
 
-  if (m_structSize > 1u)
+  if (isStructType())
     return Type(getBaseType(index));
 
   BasicType base = getBaseType(0u);
@@ -44,14 +41,14 @@ Type Type::getSubType(uint32_t index) const {
 ScalarType Type::resolveFlattenedType(uint32_t index) const {
   uint32_t componentCount = 0u;
 
-  for (uint32_t i = 0u; i < m_structSize; i++)
+  for (uint32_t i = 0u; i < m_members.size(); i++)
     componentCount += getBaseType(i).getVectorSize();
 
   index %= componentCount;
 
   uint32_t start = 0u;
 
-  for (uint32_t i = 0u; i < m_structSize; i++) {
+  for (uint32_t i = 0u; i < m_members.size(); i++) {
     auto type = getBaseType(i);
 
     if (start + type.getVectorSize() > index)
@@ -67,7 +64,7 @@ ScalarType Type::resolveFlattenedType(uint32_t index) const {
 uint32_t Type::computeFlattenedScalarCount() const {
   uint32_t componentCount = 0u;
 
-  for (uint32_t i = 0u; i < m_structSize; i++)
+  for (uint32_t i = 0u; i < m_members.size(); i++)
     componentCount += getBaseType(i).getVectorSize();
 
   for (uint32_t i = 0u; i < m_dimensions; i++)
@@ -95,7 +92,7 @@ uint32_t Type::byteSize() const {
   uint32_t alignment = 0u;
   uint32_t size = 0u;
 
-  for (uint32_t i = 0u; i < m_structSize; i++) {
+  for (uint32_t i = 0u; i < m_members.size(); i++) {
     uint32_t memberAlignment = getBaseType(i).byteAlignment();
 
     size = util::align(size, memberAlignment);
@@ -118,7 +115,7 @@ uint32_t Type::byteSize() const {
 uint32_t Type::byteAlignment() const {
   uint32_t alignment = 0u;
 
-  for (uint32_t i = 0u; i < m_structSize; i++)
+  for (uint32_t i = 0u; i < m_members.size(); i++)
     alignment = std::max(alignment, getBaseType(i).byteAlignment());
 
   return alignment;
@@ -130,7 +127,7 @@ uint32_t Type::byteOffset(uint32_t member) const {
     return member * getSubType(0u).byteSize();
 
   if (isStructType()) {
-    dxbc_spv_assert(member < m_structSize);
+    dxbc_spv_assert(member < m_members.size());
 
     uint32_t offset = 0u;
 
@@ -157,12 +154,12 @@ uint32_t Type::byteOffset(uint32_t member) const {
 
 bool Type::operator == (const Type& other) const {
   bool eq = m_dimensions == other.m_dimensions
-         && m_structSize == other.m_structSize;
+         && m_members.size() == other.m_members.size();
 
   for (uint32_t i = 0; i < m_dimensions && eq; i++)
     eq = m_sizes[i] == other.m_sizes[i];
 
-  for (uint32_t i = 0; i < m_structSize && eq; i++)
+  for (uint32_t i = 0; i < m_members.size() && eq; i++)
     eq = m_members[i] == other.m_members[i];
 
   return eq;
