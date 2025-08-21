@@ -305,7 +305,7 @@ bool Deserializer::deserializeType(Type& type) {
     if (!readVle(sym))
       return false;
 
-    type.addArrayDimension(sizeof(type));
+    type.addArrayDimension(sym);
   }
 
   /* Read struct members as basic types */
