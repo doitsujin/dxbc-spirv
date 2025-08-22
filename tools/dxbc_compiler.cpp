@@ -36,6 +36,8 @@ struct Options {
   bool noDebug = false;
   bool noColors = false;
   bool benchmark = false;
+  bool ldsBarriers = false;
+  bool uavBarriers = false;
 };
 
 
@@ -234,7 +236,12 @@ bool compileShader(util::ByteReader reader, const Options& options) {
   timers.tConvertEnd = std::chrono::high_resolution_clock::now();
 
   if (!(options.convertOnly || options.irInput)) {
-    dxbc::legalizeIr(builder, dxbc::CompileOptions());
+    dxbc::CompileOptions compileOptions = { };
+
+    compileOptions.syncOptions.insertLdsBarriers = options.ldsBarriers;
+    compileOptions.syncOptions.insertUavBarriers = options.uavBarriers;
+
+    dxbc::legalizeIr(builder, compileOptions);
     timers.tAfterPasses = std::chrono::high_resolution_clock::now();
   }
 
@@ -300,6 +307,10 @@ int main(int argc, char** argv) {
       options.noColors = true;
     } else if (arg == "--benchmark") {
       options.benchmark = true;
+    } else if (arg == "--lds-barriers") {
+      options.ldsBarriers = true;
+    } else if (arg == "--uav-barriers") {
+      options.uavBarriers = true;
     } else {
       if (arg.size() >= 2u && arg[0] == '-' && arg[1] == '-') {
         std::cerr << "Invalid option: " << arg << std::endl;
