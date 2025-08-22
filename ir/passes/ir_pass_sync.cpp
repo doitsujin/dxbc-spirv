@@ -1,4 +1,5 @@
 #include "ir_pass_sync.h"
+#include "ir_pass_ssa.h"
 
 #include "../../util/util_log.h"
 
@@ -38,6 +39,9 @@ void SyncPass::run() {
 
   if (m_options.insertRovLocks)
     insertRovLocks();
+
+  if (m_options.insertLdsBarriers || m_options.insertUavBarriers)
+    insertBarriers();
 }
 
 
@@ -218,6 +222,273 @@ void SyncPass::insertRovLocks() {
 }
 
 
+void SyncPass::insertBarriers() {
+  /* Could technically do UAV stuff in other stages, but
+   * there are no known case where that is needed */
+  if (m_stage != ShaderStage::eCompute)
+    return;
+
+  /* Prepare dominance and divergence analysis */
+  SsaConstructionPass::runInsertExitPhiPass(m_builder);
+
+  m_dominance.emplace(m_builder);
+  m_divergence.emplace(m_builder, *m_dominance);
+
+  auto [a, b] = m_builder.getDeclarations();
+
+  for (auto iter = a; iter != b; iter++) {
+    switch (iter->getOpCode()) {
+      case OpCode::eDclLds: {
+        if (m_options.insertLdsBarriers)
+          insertLdsBarriers(iter->getDef());
+      } break;
+
+      case OpCode::eDclUav: {
+        if (m_options.insertUavBarriers) {
+          auto uavFlags = UavFlags(iter->getOperand(iter->getFirstLiteralOperandIndex() + 4u));
+
+          if (!(uavFlags & (UavFlag::eReadOnly | UavFlag::eWriteOnly)))
+            insertUavBarriers(iter->getDef());
+        }
+      } break;
+
+      default:
+        break;
+    }
+  }
+
+  if (m_insertedBarrierCount)
+    Logger::debug("Inserted ", m_insertedBarrierCount, " barriers.");
+
+  SsaConstructionPass::runResolveTrivialPhiPass(m_builder);
+}
+
+
+void SyncPass::insertLdsBarriers(SsaDef variable) {
+  auto [a, b] = m_builder.getUses(variable);
+
+  for (auto i = a; i != b; i++) {
+    for (auto j = i; j != b; j++) {
+      if (i != j && !i->isDeclarative() && !j->isDeclarative())
+        resolveHazard(*i, *j, MemoryType::eLds);
+    }
+  }
+}
+
+
+void SyncPass::insertUavBarriers(SsaDef variable) {
+  auto [a, b] = m_builder.getUses(variable);
+  util::small_vector<SsaDef, 256u> uses;
+
+  for (auto i = a; i != b; i++) {
+    if (i->getOpCode() == OpCode::eDescriptorLoad)
+      m_builder.getUses(i->getDef(), uses);
+  }
+
+  for (auto i = uses.begin(); i != uses.end(); i++) {
+    for (auto j = i; j != uses.end(); j++) {
+      const auto& iOp = m_builder.getOp(*i);
+      const auto& jOp = m_builder.getOp(*j);
+
+      if (i != j && !iOp.isDeclarative() && !jOp.isDeclarative())
+        resolveHazard(iOp, jOp, MemoryType::eUav);
+    }
+  }
+}
+
+
+void SyncPass::resolveHazard(const Op& srcAccess, const Op& dstAccess, MemoryType type) {
+  /* Deliberately ignore store->store or atomic->atomic, there are
+   * no situations where those accesses are known to be a problem. */
+  if (srcAccess.getOpCode() == dstAccess.getOpCode())
+    return;
+
+  /* If both accesses happen within the same block, just check if there is a
+   * barrier between the two accesses and insert one if necessary. If the
+   * destination access happens before the source access, we need to take
+   * the regular path since there may still be a hazard e.g. inside a loop. */
+  auto srcBlock = m_dominance->getBlockForDef(srcAccess.getDef());
+  auto dstBlock = m_dominance->getBlockForDef(dstAccess.getDef());
+
+  if (srcBlock == dstBlock) {
+    auto iter = m_builder.iter(srcAccess.getDef());
+
+    while (!isBlockTerminator(iter->getOpCode())) {
+      if (iter->getOpCode() == OpCode::eBarrier && barrierSynchronizes(*iter, type))
+        return;
+
+      if (iter->getDef() == dstAccess.getDef()) {
+        insertBarrierBefore(dstAccess.getDef());
+        return;
+      }
+
+      ++iter;
+    }
+  }
+
+  /* Check if there is a barrier after the source access within the same block */
+  auto iter = m_builder.iter(srcAccess.getDef());
+
+  while (!isBlockTerminator(iter->getOpCode())) {
+    if (iter->getOpCode() == OpCode::eBarrier && barrierSynchronizes(*iter, type))
+      return;
+
+    iter++;
+  }
+
+  /* Check if there is a barrier before the destination access in the same block */
+  iter = m_builder.iter(dstAccess.getDef());
+
+  while (iter->getOpCode() != OpCode::eLabel) {
+    if (iter->getOpCode() == OpCode::eBarrier && barrierSynchronizes(*iter, type))
+      return;
+
+    iter--;
+  }
+
+  SsaDef dominator = { };
+
+  if (m_dominance->dominates(srcBlock, dstBlock)) {
+    /* Trivial case, we can insert a barrier after the source access */
+    dominator = srcBlock;
+  } else {
+    /* Check if there is a path from the source access to the destination access
+     * that does not go through a barrier. We can't use post-dominance information
+     * here since loops are going to break it. */
+    util::small_vector<SsaDef, 4096u> blocks;
+
+    forEachBranchTarget(m_builder.getOp(m_dominance->getBlockTerminator(srcBlock)),
+      [&blocks] (SsaDef target) { blocks.push_back(target); });
+
+    for (size_t i = 0u; i < blocks.size(); i++) {
+      auto to = blocks.at(i);
+
+      /* Skip source block if the blocks are the same since we already verified that
+       * there is no barrier dominating the destination access in that case. */
+      if (to != srcBlock && (scanBlockBarriers(to) & type))
+        continue;
+
+      /* If we reach a block that dominates the destination access without encountering
+       * a barrier, stop the search and set the innermost dominator as a candidate for
+       * inserting a new barrier. */
+      if (m_dominance->dominates(to, dstBlock)) {
+        if (!dominator || m_dominance->dominates(dominator, to)) {
+          dominator = to;
+
+          if (dominator == dstBlock)
+            break;
+        }
+
+        continue;
+      }
+
+      /* Recursively scan successors of the block in question */
+      forEachBranchTarget(m_builder.getOp(m_dominance->getBlockTerminator(to)), [&blocks] (SsaDef target) {
+        if (std::find(blocks.begin(), blocks.end(), target) == blocks.end())
+          blocks.push_back(target);
+      });
+    }
+  }
+
+  /* No hazard */
+  if (!dominator)
+    return;
+
+  /* Check if there is a barrier in the path from the innermost dominator
+   * to the destination access. Ignore the source block again. */
+  for (auto block = dstBlock; block != dominator; ) {
+    block = m_dominance->getImmediateDominator(block);
+
+    if (block && block != srcBlock && (scanBlockBarriers(block) & type))
+      return;
+  }
+
+  /* Find last post-dominator that still dominates the destination access
+   * to insert barrier as late as possible. This should also minimize the
+   * number of barriers inserted, compared to any approach that inserts
+   * barriers close to either access. */
+  while (true) {
+    auto next = m_dominance->getImmediatePostDominator(dominator);
+
+    if (!next || !m_dominance->dominates(next, dstBlock))
+      break;
+
+    dominator = next;
+  }
+
+  /* Insert new barrier at the start of the selected dominator, unless this
+   * is the source block itself, in which case we need to insert it at the end. */
+  if (dominator != srcBlock) {
+    iter = m_builder.iter(dominator);
+
+    while (iter->getOpCode() == OpCode::eLabel || iter->getOpCode() == OpCode::ePhi)
+      iter++;
+
+    insertBarrierBefore(iter->getDef());
+  } else {
+    insertBarrierBefore(m_dominance->getBlockTerminator(dominator));
+  }
+}
+
+
+MemoryTypeFlags SyncPass::scanBlockBarriers(SsaDef block) {
+  auto e = m_blockBarriers.find(block);
+
+  if (e != m_blockBarriers.end())
+    return e->second;
+
+  MemoryTypeFlags flags = { };
+
+  for (auto iter = m_builder.iter(block); !isBlockTerminator(iter->getOpCode()); iter++) {
+    if (iter->getOpCode() == OpCode::eBarrier)
+      flags |= MemoryTypeFlags(iter->getOperand(2u));
+  }
+
+  m_blockBarriers.insert({ block, flags });
+  return flags;
+}
+
+
+void SyncPass::addBlockBarrier(SsaDef block, MemoryTypeFlags types) {
+  types |= scanBlockBarriers(block);
+  m_blockBarriers.at(block) = types;
+
+  m_insertedBarrierCount++;
+}
+
+
+void SyncPass::insertBarrierBefore(SsaDef ref) {
+  auto block = m_dominance->getBlockForDef(ref);
+
+  if (!block)
+    block = findContainingBlock(m_builder, ref);
+
+  Scope execScope = Scope::eThread;
+
+  if (m_stage == ShaderStage::eCompute) {
+    execScope = m_divergence->getUniformScopeForDef(block) >= Scope::eWorkgroup
+      ? Scope::eWorkgroup
+      : Scope::eSubgroup;
+  }
+
+  Scope memScope = execScope;
+  MemoryTypeFlags memTypes = { };
+
+  if (m_options.insertLdsBarriers) {
+    memScope = std::max(memScope, Scope::eWorkgroup);
+    memTypes |= MemoryType::eLds;
+  }
+
+  if (m_options.insertUavBarriers) {
+    memScope = std::max(memScope, getUavMemoryScope());
+    memTypes |= MemoryType::eUav;
+  }
+
+  m_builder.addBefore(ref, Op::Barrier(execScope, memScope, memTypes));
+  addBlockBarrier(block, memTypes);
+}
+
+
 bool SyncPass::hasSharedVariables() const {
   auto [a, b] = m_builder.getDeclarations();
 
@@ -274,6 +545,13 @@ Scope SyncPass::getUavMemoryScope() const {
   }
 
   return Scope::eWorkgroup;
+}
+
+bool SyncPass::barrierSynchronizes(const Op& barrier, MemoryType type) {
+  dxbc_spv_assert(barrier.getOpCode() == OpCode::eBarrier);
+
+  auto types = MemoryTypeFlags(barrier.getOperand(2u));
+  return bool(types & type);
 }
 
 }
