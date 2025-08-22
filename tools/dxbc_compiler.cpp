@@ -38,6 +38,32 @@ struct Options {
   bool benchmark = false;
   bool ldsBarriers = false;
   bool uavBarriers = false;
+  bool debugLog = false;
+};
+
+
+class LocalLogger : public util::Logger {
+
+public:
+
+  LocalLogger(const Options& options)
+  : m_fileName(options.input), m_debugLog(options.debugLog) { }
+
+  ~LocalLogger() { }
+
+  LogLevel getMinimumSeverity() override {
+    return m_debugLog ? LogLevel::eDebug : LogLevel::eInfo;
+  }
+
+  void message(LogLevel severity, const char* message) override {
+    std::cerr << severity << m_fileName << ": " << message << std::endl;
+  }
+
+private:
+
+  std::string m_fileName;
+  bool        m_debugLog = false;
+
 };
 
 
@@ -311,6 +337,8 @@ int main(int argc, char** argv) {
       options.ldsBarriers = true;
     } else if (arg == "--uav-barriers") {
       options.uavBarriers = true;
+    } else if (arg == "--debug") {
+      options.debugLog = true;
     } else {
       if (arg.size() >= 2u && arg[0] == '-' && arg[1] == '-') {
         std::cerr << "Invalid option: " << arg << std::endl;
@@ -338,6 +366,8 @@ int main(int argc, char** argv) {
     std::cerr << "Error: Failed to open input file: " << options.input << std::endl;
     return 1;
   }
+
+  LocalLogger logger(options);
 
   file.seekg(0u, std::ios_base::end);
   std::vector<char> data(file.tellg());
