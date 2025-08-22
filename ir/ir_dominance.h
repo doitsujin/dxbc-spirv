@@ -1,7 +1,5 @@
 #pragma once
 
-#include <unordered_map>
-
 #include "ir_builder.h"
 #include "ir_container.h"
 #include "ir_utils.h"
@@ -72,27 +70,66 @@ private:
       /* Immediate post-dominator. Null if a path
        * returns before merging. */
       SsaDef immPostDom = { };
-      /* Points to a loop header if alls paths
-       * lead back to it */
-      SsaDef continueLoop = { };
+      /* Block index for dominance masks */
+      uint32_t index = 0u;
     } block;
+  };
 
+  struct BlockInfo {
+    SsaDef block = { };
+    uint32_t predIndex = 0u;
+    uint32_t predCount = 0u;
+    uint32_t succIndex = 0u;
+    uint32_t succCount = 0u;
   };
 
   const Builder& m_builder;
+
+  std::vector<BlockInfo> m_blocks;
+
+  std::vector<SsaDef> m_startNodes;
+  std::vector<SsaDef> m_exitNodes;
+
+  std::vector<uint64_t> m_bitMaskDom;
+  std::vector<uint64_t> m_bitMaskPostDom;
+
+  std::vector<uint32_t> m_links;
+
+  size_t m_nodeCount = 0u;
+  size_t m_maskCount = 0u;
 
   /* Node properties. For labels, this stores the immediate dominator.
    * For all other instructions, crucially including block terminators,
    * this stores the block that the instruction belongs to. */
   Container<NodeInfo> m_nodeInfos;
 
-  SsaDef computeImmediateDominator(SsaDef block) const;
+  void initLinks();
 
-  std::pair<SsaDef, SsaDef> computeImmediatePostDominator(SsaDef block) const;
+  void initDominators();
 
-  SsaDef getContinueLoop(SsaDef block, SsaDef target) const;
+  void computeDominators();
 
-  SsaDef findContainingLoop(SsaDef block) const;
+  void computePostDominators();
+
+  SsaDef findImmediateDominator(SsaDef node);
+
+  SsaDef findImmediatePostDominator(SsaDef node);
+
+  int32_t findImmediateDominatorBit(const uint64_t* masks, uint32_t node) const;
+
+  bool isDominatorBit(const uint64_t* masks, uint32_t base, uint32_t node) const;
+
+  void initDominanceMask(uint64_t* masks, uint32_t node);
+
+  bool mergeDominanceMasks(uint64_t* masks, uint32_t base, uint32_t node);
+
+  std::pair<size_t, uint64_t> computeMaskIndex(uint32_t node) const;
+
+  size_t computeBaseIndex(uint32_t node) const;
+
+  size_t computeNodeIndex(size_t maskIndex, uint64_t mask) const;
+
+  bool blockHasPredecessors(SsaDef block) const;
 
 };
 

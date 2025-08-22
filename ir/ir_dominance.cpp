@@ -1,5 +1,3 @@
-#include <vector>
-
 #include "ir_dominance.h"
 
 #include "../util/util_log.h"
@@ -8,55 +6,56 @@ namespace dxbc_spv::ir {
 
 DominanceGraph::DominanceGraph(const Builder& builder)
 : m_builder(builder) {
-  std::vector<SsaDef> postDomQueue;
-
-  SsaDef function = { };
   SsaDef block = { };
 
-  auto [a, b] = m_builder.getCode();
-
-  for (auto iter = a; iter != b; iter++) {
-    switch (iter->getOpCode()) {
+  for (const auto& op : builder) {
+    switch (op.getOpCode()) {
       case OpCode::eLabel: {
-        block = iter->getDef();
+        block = op.getDef();
+
+        if (!blockHasPredecessors(block))
+          m_startNodes.push_back(block);
 
         auto& node = m_nodeInfos[block];
         node.blockDef = block;
-        node.block.immDom = computeImmediateDominator(block);
+        node.block.index = m_blocks.size();
 
-        postDomQueue.push_back(block);
+        auto& info = m_blocks.emplace_back();
+        info.block = block;
       } break;
 
-      case OpCode::eFunction: {
-        function = iter->getDef();
-      } break;
+      case OpCode::eReturn:
+      case OpCode::eUnreachable: {
+        m_exitNodes.push_back(block);
+      } [[fallthrough]];
 
-      case OpCode::eFunctionEnd: {
-        function = SsaDef();
+      case OpCode::eBranch:
+      case OpCode::eBranchConditional:
+      case OpCode::eSwitch: {
+        auto& node = m_nodeInfos[op.getDef()];
+        node.blockDef = block;
+
+        auto& blockInfo = m_nodeInfos[block];
+        blockInfo.block.terminator = op.getDef();
       } break;
 
       default: {
-        auto& node = m_nodeInfos[iter->getDef()];
+        auto& node = m_nodeInfos[op.getDef()];
         node.blockDef = block;
-
-        if (isBlockTerminator(iter->getOpCode())) {
-          auto& blockNode = m_nodeInfos[block];
-          blockNode.block.terminator = iter->getDef();
-        }
       } break;
     }
   }
 
-  while (!postDomQueue.empty()) {
-    auto block = postDomQueue.back();
-    postDomQueue.pop_back();
+  initLinks();
+  initDominators();
 
-    auto& node = m_nodeInfos[block];
+  computeDominators();
+  computePostDominators();
 
-    if (!node.block.immPostDom) {
-      std::tie(node.block.immPostDom, node.block.continueLoop) =
-        computeImmediatePostDominator(block);
-    }
+  for (const auto& n : m_blocks) {
+    auto& node = m_nodeInfos[n.block];
+    node.block.immDom = findImmediateDominator(n.block);
+    node.block.immPostDom = findImmediatePostDominator(n.block);
   }
 }
 
@@ -67,14 +66,10 @@ DominanceGraph::~DominanceGraph() {
 
 
 bool DominanceGraph::dominates(SsaDef a, SsaDef b) const {
-  dxbc_spv_assert(m_nodeInfos[a].blockDef == a && m_nodeInfos[b].blockDef == b);
+  auto aIndex = m_nodeInfos.at(a).block.index;
+  auto bIndex = m_nodeInfos.at(b).block.index;
 
-  auto node = b;
-
-  while (node && node != a)
-    node = getImmediateDominator(node);
-
-  return node == a;
+  return isDominatorBit(m_bitMaskDom.data(), bIndex, aIndex);
 }
 
 
@@ -84,20 +79,15 @@ bool DominanceGraph::strictlyDominates(SsaDef a, SsaDef b) const {
 
 
 bool DominanceGraph::postDominates(SsaDef a, SsaDef b) const {
-  return a == b || strictlyPostDominates(a, b);
+  auto aIndex = m_nodeInfos.at(a).block.index;
+  auto bIndex = m_nodeInfos.at(b).block.index;
+
+  return isDominatorBit(m_bitMaskPostDom.data(), bIndex, aIndex);
 }
 
 
 bool DominanceGraph::strictlyPostDominates(SsaDef a, SsaDef b) const {
-  dxbc_spv_assert(m_nodeInfos.at(a).blockDef == a && m_nodeInfos.at(b).blockDef == b);
-
-  /* Post-dominance can be cyclic due to infinite loops */
-  auto node = getImmediatePostDominator(b);
-
-  while (node && node != a && node != b)
-    node = getImmediatePostDominator(node);
-
-  return node == a;
+  return a != b && postDominates(a, b);
 }
 
 
@@ -128,205 +118,212 @@ bool DominanceGraph::defDominates(SsaDef a, SsaDef b) const {
 }
 
 
-SsaDef DominanceGraph::computeImmediateDominator(SsaDef block) const {
-  /* The SPIR-V flavour of structured control flow that we implement gives us
-   * the following guarantees that simplify dominance analysis:
-   * - Back edges can only occur in continue blocks, and if reachable, continue
-   *   blocks are dominated by the loop header. Consequently, continue blocks can
-   *   never dominate the loop header and can therefore be ignored.
-   * - Excluding back edges, successors of any given block must occur after the
-   *   block itself in the program.
-   * Together, this means that when processing any given block, we must have
-   * already fully processed all its predecessors as well as all its dominators. */
-  auto [a, b] = m_builder.getUses(block);
+void DominanceGraph::initLinks() {
+  /* Compute number of successors and predecessors for each block */
+  for (const auto& n : m_blocks) {
+    const auto& terminator = m_builder.getOp(getBlockTerminator(n.block));
 
-  util::small_vector<SsaDef, 16> pred;
-
-  for (auto iter = a; iter != b; iter++) {
-    if (isBranchInstruction(iter->getOpCode())) {
-      /* will be null for back edges */
-      auto predBlock = m_nodeInfos[iter->getDef()].blockDef;
-
-      if (predBlock)
-        pred.push_back(predBlock);
-    }
-  }
-
-  /* Handle trivial cases where the block does not have multiple predecessors */
-  auto predCount = uint32_t(pred.size());
-
-  if (!predCount)
-    return SsaDef();
-
-  if (predCount == 1u)
-    return pred.at(0u);
-
-  /* Determine the immediate dominator of the node by performing a breadth-first
-   * search over its n predecessors. The first node that we visit n times must
-   * therefore be its immediate dominator. */
-  util::small_vector<std::pair<SsaDef, uint32_t>, 256> visited;
-
-  while (!pred.empty()) {
-    for (auto iter = pred.begin(); iter != pred.end();) {
-      auto& node = *iter;
-
-      if (!node) {
-        iter = pred.erase(iter);
-        continue;
-      }
-
-      bool found = false;
-
-      for (auto& v : visited) {
-        if (v.first == node) {
-          found = true;
-
-          if (++v.second == predCount)
-            return v.first;
-
-          break;
-        }
-      }
-
-      if (!found)
-        visited.push_back(std::make_pair(node, 1u));
-
-      node = getImmediateDominator(node);
-      iter++;
-    }
-  }
-
-  /* Invalid cfg? */
-  dxbc_spv_unreachable();
-  return SsaDef();
-}
-
-
-std::pair<SsaDef, SsaDef> DominanceGraph::computeImmediatePostDominator(SsaDef block) const {
-  const auto& terminator = m_builder.getOp(m_nodeInfos[block].block.terminator);
-
-  /* If the block returns, it has no strict post-dominator */
-  if (!isBranchInstruction(terminator.getOpCode()))
-    return std::make_pair(SsaDef(), SsaDef());
-
-  /* If the block has a single successor, that successor is its immediate post-dominator.
-   * If additionally the block is the continue block of a loop, and only branches back to
-   * the loop header it is the end of a continue path. */
-  if (terminator.getOpCode() == OpCode::eBranch) {
-    const auto& target = m_builder.getOpForOperand(terminator, 0u);
-    return std::make_pair(target.getDef(), getContinueLoop(block, target.getDef()));
-  }
-
-  /* Handling loops is tricky: If all or none of the block's successors are part of
-   * a continue path, find the common post-dominator using a breadth-first search.
-   * Otherwise, we need to ignore continue paths.
-   *
-   * Ordering guarantees from above still apply, and we process blocks in reverse
-   * order for post-dominance analysis, so when processing any given block we will
-   * already have processed all its successors that are not a back-edge. */
-  util::small_vector<SsaDef, 16> succ;
-
-  SsaDef innerLoop = { };
-
-  forEachBranchTarget(terminator, [&] (SsaDef target) {
-    auto targetLoop = getContinueLoop(block, target);
-
-    if (targetLoop && !innerLoop)
-      innerLoop = findContainingLoop(block);
-
-    if (!targetLoop || targetLoop != innerLoop)
-      succ.push_back(target);
-  });
-
-  if (succ.empty()) {
     forEachBranchTarget(terminator, [&] (SsaDef target) {
-      succ.push_back(target);
+      auto srcIndex = m_nodeInfos.at(n.block).block.index;
+      auto dstIndex = m_nodeInfos.at(target).block.index;
+
+      m_blocks.at(srcIndex).succCount++;
+      m_blocks.at(dstIndex).predCount++;
     });
   }
 
-  dxbc_spv_assert(!succ.empty());
+  uint32_t linkCount = 0u;
 
-  /* Handle simple case where only one branch target is not a continue path */
-  uint32_t succCount = uint32_t(succ.size());
+  for (auto& n : m_blocks) {
+    n.predIndex = linkCount;
+    n.succIndex = linkCount + n.predCount;
 
-  if (succCount == 1u) {
-    auto result = succ.at(0u);
-    return std::make_pair(result, getContinueLoop(block, result));
+    linkCount += n.predCount + n.succCount;
   }
 
-  /* Otherwise, do a breadth-first search over post-dominators until we find
-   * a common node. If no common node exists, then some paths may return and
-   * the node does not have an immediate post-dominator. */
-  util::small_vector<std::pair<SsaDef, uint32_t>, 256> visited;
+  /* Write out successor and predecessor array for each node */
+  m_links.resize(linkCount);
 
-  while (!succ.empty()) {
-    for (auto iter = succ.begin(); iter != succ.end(); ) {
-      auto& node = *iter;
+  for (const auto& n : m_blocks) {
+    const auto& terminator = m_builder.getOp(getBlockTerminator(n.block));
 
-      if (!node) {
-        iter = succ.erase(iter);
-        continue;
+    forEachBranchTarget(terminator, [&] (SsaDef target) {
+      auto srcIndex = m_nodeInfos.at(n.block).block.index;
+      auto dstIndex = m_nodeInfos.at(target).block.index;
+
+      m_links.at(m_blocks.at(srcIndex).succIndex++) = dstIndex;
+      m_links.at(m_blocks.at(dstIndex).predIndex++) = srcIndex;
+    });
+  }
+
+  /* Fix up indices once again */
+  for (auto& n : m_blocks) {
+    n.predIndex -= n.predCount;
+    n.succIndex -= n.succCount;
+  }
+}
+
+
+void DominanceGraph::initDominators() {
+  m_nodeCount = m_blocks.size();
+
+  if (m_nodeCount)
+    m_maskCount = computeMaskIndex(m_nodeCount - 1u).first + 1u;
+
+  m_bitMaskDom.resize(m_maskCount * m_nodeCount, uint64_t(-1));
+  m_bitMaskPostDom.resize(m_maskCount * m_nodeCount, uint64_t(-1));
+
+  for (auto n : m_startNodes) {
+    auto index = m_nodeInfos[n].block.index;
+    initDominanceMask(m_bitMaskDom.data(), index);
+  }
+
+  for (auto n : m_exitNodes) {
+    auto index = m_nodeInfos[n].block.index;
+    initDominanceMask(m_bitMaskPostDom.data(), index);
+  }
+}
+
+
+void DominanceGraph::computeDominators() {
+  bool progress = false;
+
+  do {
+    for (size_t i = 0u; i < m_nodeCount; i++) {
+      const auto& n = m_blocks[i];
+
+      for (uint32_t j = 0u; j < n.predCount; j++)
+        progress |= mergeDominanceMasks(m_bitMaskDom.data(), i, m_links[n.predIndex + j]);
+    }
+  } while (std::exchange(progress, false));
+}
+
+
+void DominanceGraph::computePostDominators() {
+  bool progress = false;
+
+  do {
+    /* Scanning in reverse order drastically reduces the iteration count */
+    for (size_t i = m_nodeCount; i; i--) {
+      const auto& n = m_blocks[i - 1u];
+
+      for (uint32_t j = 0u; j < n.succCount; j++)
+        progress |= mergeDominanceMasks(m_bitMaskPostDom.data(), i - 1u, m_links[n.succIndex + j]);
+    }
+  } while (std::exchange(progress, false));
+}
+
+
+SsaDef DominanceGraph::findImmediateDominator(SsaDef node) {
+  auto index = findImmediateDominatorBit(m_bitMaskDom.data(), m_nodeInfos[node].block.index);
+
+  if (index < 0)
+    return SsaDef();
+
+  return m_blocks.at(index).block;
+}
+
+
+SsaDef DominanceGraph::findImmediatePostDominator(SsaDef node) {
+  auto index = findImmediateDominatorBit(m_bitMaskPostDom.data(), m_nodeInfos[node].block.index);
+
+  if (index < 0)
+    return SsaDef();
+
+  return m_blocks.at(index).block;
+}
+
+
+int32_t DominanceGraph::findImmediateDominatorBit(const uint64_t* masks, uint32_t node) const {
+  auto base = computeBaseIndex(node);
+
+  int32_t selected = -1;
+
+  for (size_t i = 0u; i < m_maskCount; i++) {
+    auto mask = masks[base + i];
+
+    while (mask) {
+      auto index = computeNodeIndex(i, mask);
+
+      if (index != node && index < m_nodeCount) {
+        /* Immediate dominator can't dominate any other dominators */
+        if (selected < 0 || isDominatorBit(masks, index, uint32_t(selected)))
+          selected = int32_t(index);
       }
 
-      bool found = false;
-
-      for (auto& v : visited) {
-        if (v.first == node) {
-          found = true;
-
-          if (++v.second == succCount)
-            return std::make_pair(v.first, m_nodeInfos[v.first].block.continueLoop);
-
-          break;
-        }
-      }
-
-      if (!found)
-        visited.push_back(std::make_pair(node, 1u));
-
-      node = getImmediatePostDominator(node);
-      iter++;
+      mask &= mask - 1u;
     }
   }
 
-  return std::make_pair(SsaDef(), SsaDef());
+  return selected;
 }
 
 
-SsaDef DominanceGraph::getContinueLoop(SsaDef block, SsaDef target) const {
-  /* If the edge leads to a continue path, it itself is
-   * trivially part of a continue path */
-  if (m_nodeInfos[target].block.continueLoop)
-    return m_nodeInfos[target].block.continueLoop;
+bool DominanceGraph::isDominatorBit(const uint64_t* masks, uint32_t base, uint32_t node) const {
+  auto [index, bit] = computeMaskIndex(node);
+  index += computeBaseIndex(base);
 
-  /* Otherwise, check whether this is a back-edge */
-  const auto& targetOp = m_builder.getOp(target);
-  dxbc_spv_assert(targetOp.getOpCode() == OpCode::eLabel);
-
-  auto construct = Construct(targetOp.getOperand(targetOp.getFirstLiteralOperandIndex()));
-
-  SsaDef continueBlock = { };
-
-  if (construct == Construct::eStructuredLoop)
-    continueBlock = SsaDef(targetOp.getOperand(1u));
-
-  return block == continueBlock ? target : SsaDef();
+  return masks[index] & bit;
 }
 
 
-SsaDef DominanceGraph::findContainingLoop(SsaDef block) const {
-  do {
-    const auto& label = m_builder.getOp(block);
+void DominanceGraph::initDominanceMask(uint64_t* masks, uint32_t node) {
+  auto [index, bit] = computeMaskIndex(node);
+  auto base = computeBaseIndex(node);
 
-    auto construct = Construct(label.getOperand(label.getFirstLiteralOperandIndex()));
+  for (size_t i = 0u; i < m_maskCount; i++)
+    masks[base + i] = (i == index ? bit : uint64_t(0u));
+}
 
-    if (construct == Construct::eStructuredLoop)
-      return label.getDef();
 
-    block = getImmediateDominator(block);
-  } while (block);
+bool DominanceGraph::mergeDominanceMasks(uint64_t* masks, uint32_t base, uint32_t node) {
+  auto [dstIndex, dstBit] = computeMaskIndex(base);
+  auto dstBase = computeBaseIndex(base);
+  auto srcBase = computeBaseIndex(node);
 
-  return SsaDef();
+  bool progress = false;
+
+  for (size_t i = 0u; i < m_maskCount; i++) {
+    auto dstMask = masks[dstBase + i];
+    auto srcMask = masks[srcBase + i] & dstMask;
+
+    if (i == dstIndex)
+      srcMask |= dstBit;
+
+    if (dstMask != srcMask) {
+      masks[dstBase + i] = srcMask;
+      progress = true;
+    }
+  }
+
+  return progress;
+}
+
+
+std::pair<size_t, uint64_t> DominanceGraph::computeMaskIndex(uint32_t node) const {
+  return std::make_pair(size_t(node / 64u), uint64_t(1u) << (node % 64u));
+}
+
+
+size_t DominanceGraph::computeBaseIndex(uint32_t node) const {
+  return node * m_maskCount;
+}
+
+
+size_t DominanceGraph::computeNodeIndex(size_t maskIndex, uint64_t mask) const {
+  return 64u * maskIndex + util::tzcnt(mask);
+}
+
+
+bool DominanceGraph::blockHasPredecessors(SsaDef block) const {
+  auto [a, b] = m_builder.getUses(block);
+
+  for (auto use = a; use != b; use++) {
+    if (isBranchInstruction(use->getOpCode()))
+      return true;
+  }
+
+  return false;
 }
 
 }
