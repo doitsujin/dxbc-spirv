@@ -1736,9 +1736,10 @@ Instruction::Instruction(util::ByteReader& reader, const ShaderInfo& info) {
 
   }
 
-  /* There shouldn't be any bytes left in the reader */
+  /* There shouldn't be any bytes left in the reader, but sometimes
+   * FXC will pad instructions with a zero operand for some reason */
   if (tokenReader.getRemaining())
-    Logger::err("Instruction ", token.getOpCode(), " has unhandled operands.");
+    Logger::debug("Instruction ", token.getOpCode(), " has unhandled operands.");
 }
 
 
