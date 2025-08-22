@@ -39,6 +39,7 @@ struct Options {
   bool ldsBarriers = false;
   bool uavBarriers = false;
   bool debugLog = false;
+  bool compactIds = false;
 };
 
 
@@ -113,16 +114,18 @@ bool printIrAssembly(ir::Builder& builder, const Options& options) {
   if (!options.convertOnly)
     ir::SsaConstructionPass::runInsertExitPhiPass(builder);
 
-  /* Do a serialization round-trip to clean up IDs */
-  ir::Serializer serializer(builder);
+  if (options.compactIds) {
+    /* Do a serialization round-trip to clean up IDs */
+    ir::Serializer serializer(builder);
 
-  std::vector<uint8_t> serializedData(serializer.computeSerializedSize());
-  serializer.serialize(serializedData.data(), serializedData.size());
+    std::vector<uint8_t> serializedData(serializer.computeSerializedSize());
+    serializer.serialize(serializedData.data(), serializedData.size());
 
-  ir::Deserializer deserializer(serializedData.data(), serializedData.size());
+    ir::Deserializer deserializer(serializedData.data(), serializedData.size());
 
-  builder = ir::Builder();
-  deserializer.deserialize(builder);
+    builder = ir::Builder();
+    deserializer.deserialize(builder);
+  }
 
   ir::Disassembler::Options disasmOptions;
   disasmOptions.resolveConstants = true;
@@ -337,6 +340,8 @@ int main(int argc, char** argv) {
       options.ldsBarriers = true;
     } else if (arg == "--uav-barriers") {
       options.uavBarriers = true;
+    } else if (arg == "--compact-ids") {
+      options.compactIds = true;
     } else if (arg == "--debug") {
       options.debugLog = true;
     } else {
