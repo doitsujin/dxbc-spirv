@@ -1456,9 +1456,35 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
       }
     } return propagateSignBinary(op);
 
+    case OpCode::eUMin: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+      const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+      if (b.isConstant() && op->getType().isScalarType()) {
+        /* umin(a & b, c) -> a & b if b <= c */
+        if (a.getOpCode() == OpCode::eIAnd) {
+          const auto& a1 = m_builder.getOpForOperand(a, 1u);
+
+          if (a1.isConstant() && uint64_t(a1.getOperand(0u)) <= uint64_t(b.getOperand(0u))) {
+            auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
+            return std::make_pair(true, m_builder.iter(next));
+          }
+        }
+
+        /* umin(bfe(b, o, cnt), c) -> bfe(b, o, cnt) if (1u << cnt) - 1u <= c */
+        if (a.getOpCode() == OpCode::eUBitExtract) {
+          const auto& cnt = m_builder.getOpForOperand(a, 2u);
+
+          if (cnt.isConstant() && (uint64_t(1u) << uint64_t(cnt.getOperand(0u))) - 1u <= uint64_t(b.getOperand(0u))) {
+            auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
+            return std::make_pair(true, m_builder.iter(next));
+          }
+        }
+      }
+    } [[fallthrough]];
+
     case OpCode::eFMin:
     case OpCode::eSMin:
-    case OpCode::eUMin:
     case OpCode::eFMax:
     case OpCode::eSMax:
     case OpCode::eUMax: {
