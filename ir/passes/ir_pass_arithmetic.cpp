@@ -40,6 +40,9 @@ bool ArithmeticPass::runPass() {
     bool status = false;
     auto next = iter;
 
+    if (iter->getOpCode() == OpCode::eLabel)
+      m_visitedBlocks.insert(iter->getDef());
+
     if (!status)
       std::tie(status, next) = constantFoldOp(iter);
 
@@ -932,42 +935,6 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectBitOp(Builder::iterator
       }
     } break;
 
-    case OpCode::eCast: {
-      const auto& a = m_builder.getOpForOperand(*op, 0u);
-
-      if (a.getOpCode() == OpCode::eSelect) {
-        /* Don't fold if there are non-cast uses already since we'd
-         * just duplicate the instruction for no good reason. */
-        auto [x, y] = m_builder.getUses(a.getDef());
-        bool fold = true;
-
-        for (auto i = x; i != y && fold; i++)
-          fold = i->getOpCode() == OpCode::eCast;
-
-        if (!fold)
-          break;
-
-        /* Also only fold if there is something to gain, i.e. if any operand
-         * is another cast, constant, or select that can be handled recursively. */
-        const auto& tOp = m_builder.getOpForOperand(a, 1u);
-        const auto& fOp = m_builder.getOpForOperand(a, 2u);
-
-        if (!isBitPreservingOp(tOp) || !isBitPreservingOp(fOp))
-          break;
-
-        /* Override the *old* select instruction as one using the new type. This is
-         * safe because we know all uses are casts, and we can eliminate any casts
-         * that became redundant later. */
-        auto tDef = m_builder.addBefore(a.getDef(), Op::Cast(op->getType(), tOp.getDef()));
-        auto fDef = m_builder.addBefore(a.getDef(), Op::Cast(op->getType(), fOp.getDef()));
-
-        m_builder.rewriteOp(a.getDef(), Op::Select(op->getType(),
-          SsaDef(a.getOperand(0u)), tDef, fDef).setFlags(a.getFlags()));
-
-        return std::make_pair(true, m_builder.iter(tDef));
-      }
-    } break;
-
     case OpCode::eIAnd:
     case OpCode::eIOr:
     case OpCode::eIXor: {
@@ -1182,7 +1149,6 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectPhi(Builder::iterator o
 
 std::pair<bool, Builder::iterator> ArithmeticPass::selectOp(Builder::iterator op) {
   switch (op->getOpCode()) {
-    case OpCode::eCast:
     case OpCode::eIAbs:
     case OpCode::eINeg:
     case OpCode::eINot:
@@ -1387,7 +1353,90 @@ std::pair<bool, Builder::iterator> ArithmeticPass::propagateAbsSignPhi(Builder::
 
 std::pair<bool, Builder::iterator> ArithmeticPass::resolveCastOp(Builder::iterator op) {
   auto [status, next] = LowerConsumePass(m_builder).resolveCastChain(op->getDef());
-  return std::make_pair(status, m_builder.iter(next));
+
+  if (status)
+    return std::make_pair(status, m_builder.iter(next));
+
+  /* Skip any further processing if there are any casts using this cast, resolve
+   * those first. */
+  auto [x, y] = m_builder.getUses(op->getDef());
+
+  for (auto i = x; i != y; i++) {
+    if (i->getOpCode() == OpCode::eCast)
+      return std::make_pair(false, ++op);
+  }
+
+  /* Fold casts of phi ops into phi operands if all operands are bit-preserving ops.
+   * However, only fold into already visited blocks to avoid feedback loops. */
+  const auto& arg = m_builder.getOpForOperand(*op, 0u);
+
+  if (arg.getOpCode() == OpCode::eSelect) {
+    /* Don't fold if there are non-cast uses already since we'd
+     * just duplicate the instruction for no good reason. */
+    auto [x, y] = m_builder.getUses(arg.getDef());
+
+    for (auto i = x; i != y; i++) {
+      if (i->getOpCode() != OpCode::eCast)
+        return std::make_pair(false, ++op);
+    }
+
+    /* Also only fold if there is something to gain, i.e. if any operand
+     * is another cast, constant, or select that can be handled recursively. */
+    const auto& tOp = m_builder.getOpForOperand(arg, 1u);
+    const auto& fOp = m_builder.getOpForOperand(arg, 2u);
+
+    if (!isBitPreservingOp(tOp) && !isBitPreservingOp(fOp))
+      return std::make_pair(false, ++op);
+
+    /* Override the *old* select instruction as one using the new type. This is
+     * safe because we know all uses are casts, and we can eliminate any casts
+     * that became redundant later. */
+    auto tDef = m_builder.addBefore(arg.getDef(), Op::Cast(op->getType(), tOp.getDef()));
+    auto fDef = m_builder.addBefore(arg.getDef(), Op::Cast(op->getType(), fOp.getDef()));
+
+    m_builder.rewriteOp(arg.getDef(), Op::Select(op->getType(),
+      SsaDef(arg.getOperand(0u)), tDef, fDef).setFlags(arg.getFlags()));
+
+    return std::make_pair(true, m_builder.iter(tDef));
+  }
+
+  if (arg.getOpCode() == OpCode::ePhi) {
+    /* Much like with selects, only fold if all uses of the phi are casts. */
+    auto [x, y] = m_builder.getUses(arg.getDef());
+
+    for (auto i = x; i != y; i++) {
+      if (i->getOpCode() != OpCode::eCast)
+        return std::make_pair(false, ++op);
+    }
+
+    bool canFold = true;
+
+    forEachPhiOperand(arg, [&] (SsaDef block, SsaDef value) {
+      canFold = canFold && isBitPreservingOp(m_builder.getOp(value)) &&
+        (m_visitedBlocks.find(block) != m_visitedBlocks.end());
+    });
+
+    if (!canFold)
+      return std::make_pair(false, ++op);
+
+    /* Build new phi instruction */
+    Op newPhi(OpCode::ePhi, op->getType());
+
+    forEachPhiOperand(arg, [&] (SsaDef block, SsaDef value) {
+      auto terminator = block;
+
+      while (!isBlockTerminator(m_builder.getOp(terminator).getOpCode()))
+        terminator = m_builder.getNext(terminator);
+
+      value = m_builder.addBefore(terminator, Op::Cast(op->getType(), value));
+      newPhi.addPhi(block, value);
+    });
+
+    m_builder.rewriteOp(arg.getDef(), std::move(newPhi));
+    return std::make_pair(true, op);
+  }
+
+  return std::make_pair(false, ++op);
 }
 
 

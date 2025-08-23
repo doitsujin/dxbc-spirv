@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <unordered_set>
 
 #include "../ir.h"
 #include "../ir_builder.h"
@@ -90,6 +91,8 @@ private:
   SsaDef m_sincosFunction = { };
 
   uint32_t m_gsInputVertexCount = 0u;
+
+  std::unordered_set<SsaDef> m_visitedBlocks;
 
   void lowerInstructionsPreTransform();
   void lowerInstructionsPostTransform();
