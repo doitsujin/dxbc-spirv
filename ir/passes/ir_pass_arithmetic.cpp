@@ -2030,11 +2030,36 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityCompareOp(Buil
     return std::make_pair(false, ++op);
   }
 
-  /* For comparisons, we can only really do anything
-   * if the operands are the same */
+  /* If b and c are constants, we can evaluate:
+   * and(a, b) < c -> true if b < c
+   * min(a, b) < c -> true if b < c
+   * bfe(a, b, c) < d -> true if (1u << c) <= d
+   * These are common patterns for bound-checking. */
   const auto& a = m_builder.getOpForOperand(*op, 0u);
   const auto& b = m_builder.getOpForOperand(*op, 1u);
 
+  if (op->getOpCode() == OpCode::eULt && b.isConstant()) {
+    if (a.getOpCode() == OpCode::eUMin || a.getOpCode() == OpCode::eIAnd) {
+      const auto& a1 = m_builder.getOpForOperand(a, 1u);
+
+      if (a1.isConstant() && uint64_t(a1.getOperand(0u)) < uint64_t(b.getOperand(0u))) {
+        auto next = m_builder.rewriteDef(op->getDef(), m_builder.makeConstant(true));
+        return std::make_pair(true, m_builder.iter(next));
+      }
+    }
+
+    if (a.getOpCode() == OpCode::eUBitExtract) {
+      const auto& cnt = m_builder.getOpForOperand(a, 2u);
+
+      if (cnt.isConstant() && (uint64_t(1u) << uint64_t(cnt.getOperand(0u))) <= uint64_t(b.getOperand(0u))) {
+        auto next = m_builder.rewriteDef(op->getDef(), m_builder.makeConstant(true));
+        return std::make_pair(true, m_builder.iter(next));
+      }
+    }
+  }
+
+  /* For comparisons, we can only really do anything
+   * if the operands are the same */
   if (a.getDef() != b.getDef())
     return std::make_pair(false, ++op);
 
