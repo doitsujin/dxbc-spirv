@@ -1781,6 +1781,19 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
       }
     } break;
 
+    case OpCode::eIShl:
+    case OpCode::eSShr:
+    case OpCode::eUShr: {
+      const auto& value = m_builder.getOpForOperand(*op, 0u);
+      const auto& shift = m_builder.getOpForOperand(*op, 1u);
+
+      /* a << 0 -> a */
+      if (isConstantValue(shift, 0)) {
+        auto next = m_builder.rewriteDef(op->getDef(), value.getDef());
+        return std::make_pair(true, m_builder.iter(next));
+      }
+    } break;
+
     default:
       break;
   }
@@ -2343,6 +2356,9 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityOp(Builder::it
     case OpCode::eIAdd:
     case OpCode::eISub:
     case OpCode::eINot:
+    case OpCode::eIShl:
+    case OpCode::eSShr:
+    case OpCode::eUShr:
     case OpCode::eSMin:
     case OpCode::eSMax:
     case OpCode::eUMin:
