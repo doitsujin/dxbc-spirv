@@ -219,7 +219,6 @@ bool RegisterFile::emitStore(
 
   /* Verify that the array index is in bounds and skip store if not */
   ir::SsaDef condDef = { };
-  ir::SsaDef condBlock = { };
 
   if (operand.getRegisterType() == RegisterType::eIndexableTemp) {
     auto scratchReg = getIndexableTemp(regIndex);
@@ -233,7 +232,8 @@ bool RegisterFile::emitStore(
 
       condDef = builder.add(ir::Op::ULt(ir::ScalarType::eBool,
         arrayIndex, builder.makeConstant(arraySize - 1u)));
-      condBlock = builder.add(ir::Op::ScopedIf(ir::SsaDef(), condDef));
+      arrayIndex = builder.add(ir::Op::Select(ir::ScalarType::eU32,
+        condDef, arrayIndex, builder.makeConstant(arraySize - 1u)));
     }
   }
 
@@ -252,6 +252,11 @@ bool RegisterFile::emitStore(
       auto scratchReg = getIndexableTemp(regIndex);
       dxbc_spv_assert(scratchReg);
 
+      if (condDef) {
+        scalar = builder.add(ir::Op::Select(ir::ScalarType::eUnknown,
+          condDef, scalar, builder.makeConstantZero(ir::ScalarType::eUnknown)));
+      }
+
       /* Scratch is vec4, so use two indices */
       auto address = builder.add(ir::Op::CompositeConstruct(
         ir::Type(ir::ScalarType::eU32, 2u), arrayIndex, builder.makeConstant(uint32_t(component))));
@@ -260,11 +265,6 @@ bool RegisterFile::emitStore(
       auto tmpReg = getOrDeclareTemp(builder, regIndex, component);
       builder.add(ir::Op::TmpStore(tmpReg, scalar));
     }
-  }
-
-  if (condBlock) {
-    auto condEnd = builder.add(ir::Op::ScopedEndIf(condBlock));
-    builder.rewriteOp(condBlock, ir::Op::ScopedIf(condEnd, condDef));
   }
 
   return true;
