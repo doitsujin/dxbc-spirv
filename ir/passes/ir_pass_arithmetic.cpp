@@ -919,15 +919,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectBitOp(Builder::iterator
     case OpCode::eINeg: {
       const auto& a = m_builder.getOpForOperand(*op, 0u);
 
-      if (!isConstantSelect(a))
-        break;
-    } [[fallthrough]];
-
-    case OpCode::eCast: {
-      const auto& a = m_builder.getOpForOperand(*op, 0u);
-
-      /* Fold op into select operands */
-      if (a.getOpCode() == OpCode::eSelect) {
+      if (isConstantSelect(a)) {
         auto trueDef = m_builder.addBefore(op->getDef(),
           Op(op->getOpCode(), op->getType()).addOperand(SsaDef(a.getOperand(1u))));
         auto falseDef = m_builder.addBefore(op->getDef(),
@@ -937,6 +929,42 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectBitOp(Builder::iterator
           SsaDef(a.getOperand(0u)), trueDef, falseDef).setFlags(a.getFlags()));
 
         return std::make_pair(true, m_builder.iter(trueDef));
+      }
+    } break;
+
+    case OpCode::eCast: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+      if (a.getOpCode() == OpCode::eSelect) {
+        /* Don't fold if there are non-cast uses already since we'd
+         * just duplicate the instruction for no good reason. */
+        auto [x, y] = m_builder.getUses(a.getDef());
+        bool fold = true;
+
+        for (auto i = x; i != y && fold; i++)
+          fold = i->getOpCode() == OpCode::eCast;
+
+        if (!fold)
+          break;
+
+        /* Also only fold if there is something to gain, i.e. if any operand
+         * is another cast, constant, or select that can be handled recursively. */
+        const auto& tOp = m_builder.getOpForOperand(a, 1u);
+        const auto& fOp = m_builder.getOpForOperand(a, 2u);
+
+        if (!isBitPreservingOp(tOp) || !isBitPreservingOp(fOp))
+          break;
+
+        /* Override the *old* select instruction as one using the new type. This is
+         * safe because we know all uses are casts, and we can eliminate any casts
+         * that became redundant later. */
+        auto tDef = m_builder.addBefore(a.getDef(), Op::Cast(op->getType(), tOp.getDef()));
+        auto fDef = m_builder.addBefore(a.getDef(), Op::Cast(op->getType(), fOp.getDef()));
+
+        m_builder.rewriteOp(a.getDef(), Op::Select(op->getType(),
+          SsaDef(a.getOperand(0u)), tDef, fDef).setFlags(a.getFlags()));
+
+        return std::make_pair(true, m_builder.iter(tDef));
       }
     } break;
 
@@ -3628,6 +3656,15 @@ bool ArithmeticPass::checkIntTypeCompatibility(const Type& a, const Type& b) {
   }
 
   return false;
+}
+
+
+bool ArithmeticPass::isBitPreservingOp(const Op& op) {
+  return op.getOpCode() == OpCode::eConstant ||
+         op.getOpCode() == OpCode::eUndef ||
+         op.getOpCode() == OpCode::eCast ||
+         op.getOpCode() == OpCode::eSelect ||
+         op.getOpCode() == OpCode::ePhi;
 }
 
 }

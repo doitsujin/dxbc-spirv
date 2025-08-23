@@ -213,6 +213,8 @@ private:
 
   static bool checkIntTypeCompatibility(const Type& a, const Type& b);
 
+  static bool isBitPreservingOp(const Op& op);
+
   static constexpr float sincosTaylorFactor(uint32_t power) {
     double result = 1.0;
 
