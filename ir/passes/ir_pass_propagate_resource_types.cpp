@@ -287,8 +287,6 @@ bool PropagateResourceTypeRewriteInfo::setupLocalType() {
 
     for (uint32_t i = oldType.getArrayDimensions() - oldOuterArrayDims; i < oldType.getArrayDimensions(); i++)
       newType.addArrayDimension(oldType.getArraySize(i));
-
-    return true;
   } else {
     /* Keep things simple and add each accessed element as a dedicated member */
     util::small_vector<BasicType, Type::MaxStructMembers> types;
@@ -335,8 +333,15 @@ bool PropagateResourceTypeRewriteInfo::setupLocalType() {
       newType.addArrayDimension(oldType.getArraySize(i));
 
     newOuterArrayDims = oldOuterArrayDims;
-    return true;
   }
+
+  /* Remove unnecessary array dimensions */
+  while (newOuterArrayDims && newType.getArraySize(newOuterArrayDims - 1u) == 1u) {
+    newType = newType.getSubType(0u);
+    newOuterArrayDims -= 1u;
+  }
+
+  return true;
 }
 
 
@@ -578,6 +583,12 @@ void PropagateResourceTypeRewriteInfo::flattenStructureType() {
   dxbc_spv_assert(oldOuterArrayDims);
 
   auto innerType = getNewInnerType();
+
+  /* Make sure we have at least one array dimension to fold stuff into */
+  if (!newOuterArrayDims) {
+    newType = newType.addArrayDimension(1u);
+    newOuterArrayDims = 1u;
+  }
 
   /* Count the total number of scalars in the inner type */
   auto scalarCount = 0u;
