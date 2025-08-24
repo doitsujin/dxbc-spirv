@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 
@@ -20,6 +21,8 @@ struct float16_t {
 
   explicit float16_t(float f)
   : data(f32tof16(f)) { }
+
+  int classify() const;
 
   bool operator == (const float16_t& other) const { return data == other.data; }
   bool operator != (const float16_t& other) const { return data != other.data; }

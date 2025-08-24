@@ -88,4 +88,18 @@ float f16tof32(uint16_t f16) {
   return f32;
 }
 
+
+int float16_t::classify() const {
+  uint16_t exponent = (data >> 10u) & 0x1f;
+  uint16_t mantissa = data & 0x3ff;
+
+  if (!exponent)
+    return mantissa ? FP_SUBNORMAL : FP_ZERO;
+
+  if (exponent == 0x1f)
+    return mantissa ? FP_NAN : FP_INFINITE;
+
+  return FP_NORMAL;
+}
+
 }
