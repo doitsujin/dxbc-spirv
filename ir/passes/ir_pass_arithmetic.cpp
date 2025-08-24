@@ -269,14 +269,12 @@ Builder::iterator ArithmeticPass::lowerDot(Builder::iterator op) {
 
     /* Mark the multiply-add chain as precise so that compilers don't screw around with
     * it, otherwise we run into rendering issues in e.g. Trails through Daybreak. */
-    auto opFlags = op->getFlags() | OpFlag::ePrecise;
-
-    auto result = m_builder.add(Op(mulOp, op->getType()).setFlags(opFlags)
+    auto result = m_builder.add(Op(mulOp, op->getType()).setFlags(OpFlag::ePrecise)
       .addOperand(m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorA, m_builder.makeConstant(0u))))
       .addOperand(m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorB, m_builder.makeConstant(0u)))));
 
     for (uint32_t i = 1u; i < srcA.getType().getBaseType(0u).getVectorSize(); i++) {
-      result = m_builder.add(Op(madOp, op->getType()).setFlags(opFlags)
+      result = m_builder.add(Op(madOp, op->getType()).setFlags(OpFlag::ePrecise)
         .addOperand(m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorA, m_builder.makeConstant(i))))
         .addOperand(m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorB, m_builder.makeConstant(i))))
         .addOperand(result));
@@ -289,7 +287,8 @@ Builder::iterator ArithmeticPass::lowerDot(Builder::iterator op) {
   }
 
   m_builder.rewriteOp(op->getDef(), Op::FunctionCall(op->getType(), e->function)
-    .addParam(srcA.getDef()).addParam(srcB.getDef()));
+    .addParam(srcA.getDef())
+    .addParam(srcB.getDef()));
   return ++op;
 }
 
