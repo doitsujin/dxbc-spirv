@@ -1262,7 +1262,6 @@ void SpirvBuilder::emitPushDataLoad(const ir::Op& op) {
   auto id = getIdForDef(op.getDef());
   pushOp(m_code, spv::OpLoad, typeId, id, ptrId);
 
-  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -1455,7 +1454,6 @@ void SpirvBuilder::emitBufferLoad(const ir::Op& op) {
     imageOperands.pushTo(m_code);
   }
 
-  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -1637,7 +1635,6 @@ void SpirvBuilder::emitMemoryLoad(const ir::Op& op) {
   m_code.push_back(accessChainId);
   memoryOperands.pushTo(m_code);
 
-  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -1832,7 +1829,6 @@ void SpirvBuilder::emitImageLoad(const ir::Op& op) {
   m_code.push_back(coordId);
   imageOperands.pushTo(m_code);
 
-  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -1987,7 +1983,6 @@ void SpirvBuilder::emitImageSample(const ir::Op& op) {
 
   imageOperands.pushTo(m_code);
 
-  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -2056,7 +2051,6 @@ void SpirvBuilder::emitImageGather(const ir::Op& op) {
 
   imageOperands.pushTo(m_code);
 
-  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -2076,7 +2070,6 @@ void SpirvBuilder::emitImageComputeLod(const ir::Op& op) {
     getIdForType(op.getType()), id, sampledImageId,
     getIdForDef(coordDef));
 
-  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -2280,7 +2273,6 @@ void SpirvBuilder::emitConvert(const ir::Op& op) {
 
   pushOp(m_code, spvOp, dstTypeId, dstId, srcId);
 
-  emitFpMode(op, dstId);
   emitDebugName(op.getDef(), dstId);
 }
 
@@ -2316,7 +2308,6 @@ void SpirvBuilder::emitDerivative(const ir::Op& op) {
   pushOp(m_code, opCode, getIdForType(op.getType()), id,
     getIdForDef(ir::SsaDef(op.getOperand(0u))));
 
-  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -2662,11 +2653,14 @@ void SpirvBuilder::emitMemoryModel() {
 void SpirvBuilder::emitFpMode(const ir::Op& op, uint32_t id, uint32_t mask) {
   const auto& type = op.getType();
 
-  if (!type.isBasicType() || !type.getBaseType(0u).isFloatType())
+  if (!opSupportsFpMode(op))
     return;
 
   /* Find correct default mode for type */
   auto scalarType = type.getBaseType(0u).getBaseType();
+
+  if (type.getBaseType(0u).isBoolType())
+    scalarType = m_builder.getOpForOperand(op, 0u).getType().getBaseType(0u).getBaseType();
 
   auto desiredMode = op.getFlags();
   auto defaultMode = [&] {
@@ -2680,6 +2674,28 @@ void SpirvBuilder::emitFpMode(const ir::Op& op, uint32_t id, uint32_t mask) {
     dxbc_spv_unreachable();
     return ir::OpFlags();
   } ();
+
+  /* Compare instructions do not use FP hints in our IR, but may in SPIR-V */
+  if (type.getBaseType(0u).isBoolType())
+    desiredMode = defaultMode;
+
+  /* The notnan, notinf and nosz flags in SPIR-V extend to the operands rather than
+   * just the result of the instruction, which does not match our IR. Scan all float
+   * operands of the instruction for these flags and AND them together. */
+  auto fpHints = desiredMode & (ir::OpFlag::eNoInf | ir::OpFlag::eNoNan | ir::OpFlag::eNoSz);
+
+  if (fpHints) {
+    desiredMode -= fpHints;
+
+    for (uint32_t i = 0u; i < op.getFirstLiteralOperandIndex(); i++) {
+      const auto& arg = m_builder.getOpForOperand(op, i);
+
+      if (arg && arg.getType().isBasicType() && arg.getType().getBaseType(0u).isFloatType())
+        fpHints &= arg.getFlags();
+    }
+
+    desiredMode |= fpHints;
+  }
 
   if (m_options.floatControls2) {
     /* Fp mode flags in our IR are additive, only emit a decoration if
@@ -2696,6 +2712,48 @@ void SpirvBuilder::emitFpMode(const ir::Op& op, uint32_t id, uint32_t mask) {
     if ((defaultMode | desiredMode) & ir::OpFlag::ePrecise)
       pushOp(m_decorations, spv::OpDecorate, id, spv::DecorationNoContraction);
   }
+}
+
+
+bool SpirvBuilder::opSupportsFpMode(const ir::Op& op) {
+  if (!op.getType().isBasicType())
+    return false;
+
+  /* Allow boolean types for comparisons */
+  auto type = op.getType().getBaseType(0u);
+
+  if (!type.isFloatType() && !type.isBoolType())
+    return false;
+
+  /* SPIR-V only allows FP mode decorations on specific instructions,
+   * with float_controls2 this includes all extended instructions. */
+  auto opCode = op.getOpCode();
+
+  return opCode == ir::OpCode::eFAbs ||
+         opCode == ir::OpCode::eFNeg ||
+         opCode == ir::OpCode::eFAdd ||
+         opCode == ir::OpCode::eFSub ||
+         opCode == ir::OpCode::eFMul ||
+         opCode == ir::OpCode::eFMad ||
+         opCode == ir::OpCode::eFDiv ||
+         opCode == ir::OpCode::eFRcp ||
+         opCode == ir::OpCode::eFSqrt ||
+         opCode == ir::OpCode::eFRsq ||
+         opCode == ir::OpCode::eFExp2 ||
+         opCode == ir::OpCode::eFLog2 ||
+         opCode == ir::OpCode::eFFract ||
+         opCode == ir::OpCode::eFRound ||
+         opCode == ir::OpCode::eFMin ||
+         opCode == ir::OpCode::eFMax ||
+         opCode == ir::OpCode::eFClamp ||
+         opCode == ir::OpCode::eFSin ||
+         opCode == ir::OpCode::eFCos ||
+         opCode == ir::OpCode::eFEq ||
+         opCode == ir::OpCode::eFNe ||
+         opCode == ir::OpCode::eFGt ||
+         opCode == ir::OpCode::eFGe ||
+         opCode == ir::OpCode::eFLt ||
+         opCode == ir::OpCode::eFLe;
 }
 
 
@@ -2863,7 +2921,6 @@ void SpirvBuilder::emitParamLoad(const ir::Op& op) {
     setIdForDef(op.getDef(), paramId);
   }
 
-  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -3158,7 +3215,6 @@ void SpirvBuilder::emitLoadSamplePositionBuiltIn(const ir::Op& op) {
   auto id = getIdForDef(op.getDef());
   pushOp(m_code, spv::OpFSub, typeId, id, loadId, offsetId);
 
-  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -3227,7 +3283,6 @@ void SpirvBuilder::emitLoadVariable(const ir::Op& op) {
     m_tessControl.needsIoBarrier |= !isPatchConstant(outputDcl);
   }
 
-  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
@@ -3292,7 +3347,6 @@ void SpirvBuilder::emitCompositeOp(const ir::Op& op) {
   for (uint32_t i = 0u; i < addressOp.getOperandCount(); i++)
     m_code.push_back(uint32_t(addressOp.getOperand(i)));
 
-  emitFpMode(op, spvId);
   emitDebugName(op.getDef(), spvId);
 }
 
@@ -3312,7 +3366,6 @@ void SpirvBuilder::emitCompositeConstruct(const ir::Op& op) {
   for (uint32_t i = 0u; i < op.getOperandCount(); i++)
     m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(i))));
 
-  emitFpMode(op, spvId);
   emitDebugName(op.getDef(), spvId);
 }
 
@@ -3600,7 +3653,6 @@ void SpirvBuilder::emitInterpolation(const ir::Op& op) {
   for (uint32_t i = 2u; i < op.getOperandCount(); i++)
     m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(i))));
 
-  emitFpMode(op, id);
   emitDebugName(op.getDef(), id);
 }
 
