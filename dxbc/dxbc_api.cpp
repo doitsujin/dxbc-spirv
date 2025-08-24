@@ -91,6 +91,7 @@ void legalizeIr(ir::Builder& builder, const CompileOptions& options) {
     ir::RemoveUnusedPass::runPass(builder);
   }
 
+  ir::FloatControlPass::runPass(builder, options.floatControlOptions);
   ir::ArithmeticPass::runLateLoweringPasses(builder, options.arithmeticOptions);
 
   /* Do a last round of dead code elimination and also get rid of any FP mode
