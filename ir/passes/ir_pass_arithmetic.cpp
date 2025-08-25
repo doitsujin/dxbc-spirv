@@ -287,6 +287,7 @@ Builder::iterator ArithmeticPass::lowerDot(Builder::iterator op) {
   }
 
   m_builder.rewriteOp(op->getDef(), Op::FunctionCall(op->getType(), e->function)
+    .setFlags(op->getFlags())
     .addParam(srcA.getDef())
     .addParam(srcB.getDef()));
   return ++op;
@@ -439,8 +440,9 @@ Builder::iterator ArithmeticPass::lowerConvertFtoI(Builder::iterator op) {
     e = m_convertFunctions.insert(m_convertFunctions.end(), fn);
   }
 
-  m_builder.rewriteOp(op->getDef(),
-    Op::FunctionCall(dstType, e->function).addParam(src.getDef()));
+  m_builder.rewriteOp(op->getDef(), Op::FunctionCall(dstType, e->function)
+    .setFlags(op->getFlags())
+    .addParam(src.getDef()));
   return ++op;
 }
 
@@ -496,8 +498,9 @@ Builder::iterator ArithmeticPass::lowerConvertItoF(Builder::iterator op) {
     e = m_convertFunctions.insert(m_convertFunctions.end(), fn);
   }
 
-  m_builder.rewriteOp(op->getDef(),
-    Op::FunctionCall(dstType, e->function).addParam(src.getDef()));
+  m_builder.rewriteOp(op->getDef(), Op::FunctionCall(dstType, e->function)
+    .setFlags(op->getFlags())
+    .addParam(src.getDef()));
   return ++op;
 }
 
@@ -533,8 +536,11 @@ Builder::iterator ArithmeticPass::lowerF32toF16(Builder::iterator op) {
 
     Op newOp = *op;
 
-    if (m_options.lowerF32toF16)
-      newOp = Op::FunctionCall(ScalarType::eU32, buildF32toF16Func()).addParam(a.getDef());
+    if (m_options.lowerF32toF16) {
+      newOp = Op::FunctionCall(ScalarType::eU32, buildF32toF16Func())
+        .setFlags(op->getFlags())
+        .addParam(a.getDef());
+    }
 
     /* If necessary, insert an integer conversion */
     if (dstType != ScalarType::eU32) {
@@ -617,6 +623,7 @@ Builder::iterator ArithmeticPass::lowerMsad(Builder::iterator op) {
 
   /* Msad lowering returns u32, convert as necessary */
   auto newOp = Op::FunctionCall(ScalarType::eU32, m_msadFunction)
+    .setFlags(op->getFlags())
     .addOperand(SsaDef(op->getOperand(0u)))
     .addOperand(SsaDef(op->getOperand(1u)))
     .addOperand(SsaDef(op->getOperand(2u)));
@@ -735,7 +742,7 @@ Builder::iterator ArithmeticPass::lowerSinCos(Builder::iterator op) {
   /* Forward to custom sincos function */
   auto sincosCall = m_builder.addBefore(op->getDef(),
     Op::FunctionCall(BasicType(ScalarType::eF32, 2u), m_sincosFunction)
-      .addParam(SsaDef(op->getOperand(0u))).setFlags(OpFlag::eNoInf));
+      .addParam(SsaDef(op->getOperand(0u))).setFlags(op->getFlags() | OpFlag::eNoInf));
 
   /* The result vector is vec2(sin, cos) */
   auto componentIndex = op->getOpCode() == OpCode::eFCos ? 1u : 0u;
