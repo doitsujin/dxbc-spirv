@@ -1479,9 +1479,9 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
       }
 
       /* -(a - b) = b - a */
-      if (a.getOpCode() == OpCode::eFSub || a.getOpCode() == OpCode::eISub) {
+      if (a.getOpCode() == OpCode::eISub || (a.getOpCode() == OpCode::eFSub && (getFpFlags(a) & OpFlag::eNoSz))) {
         m_builder.rewriteOp(op->getDef(), Op(a.getOpCode(), op->getType())
-          .setFlags(op->getFlags())
+          .setFlags(op->getFlags() | a.getFlags())
           .addOperand(SsaDef(a.getOperand(1u)))
           .addOperand(SsaDef(a.getOperand(0u))));
 
@@ -1532,7 +1532,8 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
           } else if (isNegRcp) {
             auto rcpDef = m_builder.addBefore(op->getDef(),
               Op::FRcp(op->getType(), b.getDef()).setFlags(op->getFlags()));
-            m_builder.rewriteOp(op->getDef(), Op::FNeg(op->getType(), rcpDef));
+            m_builder.rewriteOp(op->getDef(),
+              Op::FNeg(op->getType(), rcpDef).setFlags(op->getFlags()));
             return std::make_pair(true, op);
           }
         }
@@ -1785,20 +1786,6 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
 
         m_builder.rewriteOp(op->getDef(), Op::FAbs(op->getType(), newOp).setFlags(op->getFlags()));
         return std::make_pair(true, m_builder.iter(newOp));
-      }
-    } break;
-
-    case OpCode::eFSin:
-      return propagateSignUnary(op);
-
-    case OpCode::eFCos: {
-      /* cos(-a) -> cos(a)
-       * cos(|a|) -> cos(a) */
-      const auto& a = m_builder.getOpForOperand(*op, 0u);
-
-      if (a.getOpCode() == OpCode::eFNeg || a.getOpCode() == OpCode::eFAbs) {
-        m_builder.rewriteOp(op->getDef(), Op::FCos(op->getType(), SsaDef(a.getOperand(0u))).setFlags(op->getFlags()));
-        return std::make_pair(true, op);
       }
     } break;
 
@@ -2454,8 +2441,6 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityOp(Builder::it
     case OpCode::eFMax:
     case OpCode::eFRcp:
     case OpCode::eFRound:
-    case OpCode::eFSin:
-    case OpCode::eFCos:
     case OpCode::eIAnd:
     case OpCode::eIOr:
     case OpCode::eIXor:
