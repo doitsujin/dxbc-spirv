@@ -2677,7 +2677,7 @@ void SpirvBuilder::emitFpMode(const ir::Op& op, uint32_t id, uint32_t mask) {
 
   /* Compare instructions do not use FP hints in our IR, but may in SPIR-V */
   if (type.getBaseType(0u).isBoolType())
-    desiredMode = defaultMode;
+    desiredMode |= ir::OpFlag::eNoInf | ir::OpFlag::eNoNan | ir::OpFlag::eNoSz;
 
   /* The notnan, notinf and nosz flags in SPIR-V extend to the operands rather than
    * just the result of the instruction, which does not match our IR. Scan all float
@@ -2694,7 +2694,7 @@ void SpirvBuilder::emitFpMode(const ir::Op& op, uint32_t id, uint32_t mask) {
         fpHints &= arg.getFlags();
     }
 
-    desiredMode |= fpHints;
+    desiredMode |= fpHints & filterFpMode(op);
   }
 
   if (m_options.floatControls2) {
@@ -2711,6 +2711,90 @@ void SpirvBuilder::emitFpMode(const ir::Op& op, uint32_t id, uint32_t mask) {
     /* Enable no-contraction mode for the instruction if necessary */
     if ((defaultMode | desiredMode) & ir::OpFlag::ePrecise)
       pushOp(m_decorations, spv::OpDecorate, id, spv::DecorationNoContraction);
+  }
+}
+
+
+ir::OpFlags SpirvBuilder::filterFpMode(const ir::Op& op) const {
+  /* Pass everythig through if the instruction is precise
+   * to not discard information for no reason */
+  if (op.getFlags() & ir::OpFlag::ePrecise)
+    return ir::OpFlag::eNoNan | ir::OpFlag::eNoInf | ir::OpFlag::eNoSz;
+
+  switch (op.getOpCode()) {
+    /* Only propagate not-nan by default. Signed zero could be interesting
+     * to enable additional transforms, but gets very spammy in practice. */
+    case ir::OpCode::eFAbs:
+    case ir::OpCode::eFNeg:
+    case ir::OpCode::eFAdd:
+    case ir::OpCode::eFSub:
+    case ir::OpCode::eFSqrt:
+    case ir::OpCode::eFExp2:
+    case ir::OpCode::eFLog2:
+    case ir::OpCode::eFRound:
+      return ir::OpFlag::eNoNan;
+
+    /* Only propagate no-signed-zero if one factor is constant. Somewhat
+     * hardware-specific quirk to enable fast paths on AMD in some cases. */
+    case ir::OpCode::eFMul:
+    case ir::OpCode::eFMad: {
+      const auto& a = m_builder.getOpForOperand(op, 0u);
+      const auto& b = m_builder.getOpForOperand(op, 1u);
+
+      const auto& constant = a.isConstant() ? a : b;
+
+      if (constant.isConstant()) {
+        uint64_t mantissaMask = [&] {
+          switch (constant.getType().getBaseType(0u).getBaseType()) {
+            case ir::ScalarType::eF16: return (uint64_t(1u) << 10u) - 1u;
+            case ir::ScalarType::eF32: return (uint64_t(1u) << 23u) - 1u;
+            case ir::ScalarType::eF64: return (uint64_t(1u) << 52u) - 1u;
+            default: break;
+          }
+
+          dxbc_spv_unreachable();
+          return uint64_t(0u);
+        } ();
+
+        bool propagateSz = true;
+
+        for (uint32_t i = 0u; i < constant.getOperandCount() && propagateSz; i++)
+          propagateSz = !(uint64_t(constant.getOperand(i)) & mantissaMask);
+
+        if (propagateSz)
+          return ir::OpFlag::eNoNan | ir::OpFlag::eNoSz;
+      }
+    } return ir::OpFlag::eNoNan;
+
+    case ir::OpCode::eFDiv:
+    case ir::OpCode::eFRcp:
+    case ir::OpCode::eFRsq:
+      return ir::OpFlag::eNoNan | ir::OpFlag::eNoInf | ir::OpFlag::eNoSz;
+
+    /* some hardware may have isses implementing the
+     * nan and signed zero semantics efficiently */
+    case ir::OpCode::eFMin:
+    case ir::OpCode::eFMax:
+    case ir::OpCode::eFClamp:
+      return ir::OpFlag::eNoNan | ir::OpFlag::eNoSz;
+
+    /* inf -> nan, so check for that */
+    case ir::OpCode::eFFract:
+    case ir::OpCode::eFSin:
+    case ir::OpCode::eFCos:
+      return ir::OpFlag::eNoNan | ir::OpFlag::eNoInf;
+
+    /* For comparisons, only the not nan case seems interesting */
+    case ir::OpCode::eFEq:
+    case ir::OpCode::eFNe:
+    case ir::OpCode::eFGt:
+    case ir::OpCode::eFGe:
+    case ir::OpCode::eFLt:
+    case ir::OpCode::eFLe:
+      return ir::OpFlag::eNoNan;
+
+    default:
+      return ir::OpFlags();
   }
 }
 
