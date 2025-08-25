@@ -290,6 +290,8 @@ private:
 
   void emitFpMode(const ir::Op& op, uint32_t id, uint32_t mask = 0u);
 
+  ir::OpFlags filterFpMode(const ir::Op& op) const;
+
   bool opSupportsFpMode(const ir::Op& op);
 
   void emitDebugName(ir::SsaDef def, uint32_t id);
