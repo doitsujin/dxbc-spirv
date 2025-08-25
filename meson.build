@@ -20,6 +20,7 @@ dxbc_spv_files = files([
   'ir/ir_disasm.cpp',
   'ir/ir_divergence.cpp',
   'ir/ir_dominance.cpp',
+  'ir/ir_range.cpp',
   'ir/ir_serialize.cpp',
   'ir/ir_utils.cpp',
 
