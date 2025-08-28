@@ -74,6 +74,9 @@ bool IoMap::checkCompatibility(ShaderStage prevStage, const IoMap& prevStageOut,
         continue;
     }
 
+    if (w == prevStageOut.m_entries.end())
+      return false;
+
     /* Find matching item in the output I/O map */
     while (w->isOrderedBefore(r)) {
       if (++w == prevStageOut.m_entries.end())
