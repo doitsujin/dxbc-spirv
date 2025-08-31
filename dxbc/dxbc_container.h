@@ -63,6 +63,9 @@ class Container {
 
 public:
 
+  explicit Container(const void* data, size_t size)
+  : Container(util::ByteReader(data, size)) { }
+
   explicit Container(util::ByteReader reader);
 
   /** Looks up chunk by its four-character code and returns a
