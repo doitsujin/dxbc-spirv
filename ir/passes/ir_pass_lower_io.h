@@ -188,7 +188,9 @@ private:
 
 /** Streamout entry for a given geometry shader output. */
 struct IoXfbInfo {
-  IoLocation  output = { };
+  std::string semanticName;
+  uint8_t     semanticIndex = 0u;
+  uint8_t     componentMask = 0u;
   uint8_t     stream = 0u;
   uint8_t     buffer = 0u;
   uint16_t    offset = 0u;
