@@ -1024,11 +1024,18 @@ bool LowerIoPass::emitXfbForOutput(size_t entryCount, const IoXfbInfo* entries, 
   if (!entry)
     return true;
 
+  auto ioVariable = getSemanticInfo(entry->semanticName.c_str(),
+    entry->semanticIndex, IoSemanticType::eOutput, entry->stream);
+
+  if (!ioVariable)
+    return false;
+
   auto outputInfo = IoMap::getEntryForOp(ShaderStage::eGeometry, *output);
   auto outputType = output->getType();
 
   auto xfbOffset = entry->offset;
-  auto componentMask = entry->output.getComponentMask();
+  auto componentMask = entry->componentMask << ioVariable->getFirstComponentIndex();
+  componentMask &= ioVariable->getComponentMask();
 
   auto [a, b] = m_builder.getUses(output->getDef());
 
@@ -1110,12 +1117,18 @@ const IoXfbInfo* LowerIoPass::findXfbEntry(size_t entryCount, const IoXfbInfo* e
     if (e.stream != stream)
       continue;
 
-    if (e.output.getType() == info.getType()) {
-      bool match = (info.getType() == IoEntryType::eBuiltIn)
-        ? (info.getBuiltIn() == e.output.getBuiltIn())
-        : (info.getLocationIndex() == e.output.getLocationIndex());
+    auto ioVariable = getSemanticInfo(e.semanticName.c_str(),
+      e.semanticIndex, IoSemanticType::eOutput, e.stream);
 
-      match = match && (info.getComponentMask() & e.output.getComponentMask());
+    if (!ioVariable)
+      continue;
+
+    if (ioVariable->getType() == info.getType()) {
+      bool match = (info.getType() == IoEntryType::eBuiltIn)
+        ? (info.getBuiltIn() == ioVariable->getBuiltIn())
+        : (info.getLocationIndex() == ioVariable->getLocationIndex());
+
+      match = match && (info.getComponentMask() & ioVariable->getComponentMask());
 
       if (match)
         return &e;

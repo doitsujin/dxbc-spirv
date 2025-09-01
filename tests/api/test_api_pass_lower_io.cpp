@@ -34,10 +34,10 @@ Builder test_pass_lower_io_xfb_simple() {
   auto [b, entry] = setup_xfb_test(0x1u);
 
   util::small_vector<IoXfbInfo, 32u> xfb;
-  xfb.push_back(IoXfbInfo { IoLocation(BuiltIn::ePosition, 0xfu), 0u, 0u, 0u, 16u });
-  xfb.push_back(IoXfbInfo { IoLocation(IoEntryType::ePerVertex, 1u, 0x7u), 0u, 1u, 0u, 20u });
-  xfb.push_back(IoXfbInfo { IoLocation(IoEntryType::ePerVertex, 2u, 0x3u), 0u, 1u, 12u, 20u });
-  xfb.push_back(IoXfbInfo { IoLocation(IoEntryType::ePerVertex, 2u, 0x4u), 0u, 2u, 0u, 4u });
+  xfb.push_back(IoXfbInfo { "sv_position", 0u, 0xfu, 0u, 0u, 0u, 16u });
+  xfb.push_back(IoXfbInfo { "normal", 0u, 0x7u, 0u, 1u, 0u, 20u });
+  xfb.push_back(IoXfbInfo { "texcoord", 0u, 0x3u, 0u, 1u, 12u, 20u });
+  xfb.push_back(IoXfbInfo { "drawid", 0u, 0x1u, 0u, 2u, 0u, 4u });
 
   auto inPosition = b.add(Op::DclInputBuiltIn(Type(ScalarType::eF32, 4u).addArrayDimension(3u), entry, BuiltIn::ePosition));
   auto inNormal = b.add(Op::DclInput(Type(ScalarType::eF32, 3u).addArrayDimension(3u), entry, 1u, 0u));
@@ -83,9 +83,9 @@ Builder test_pass_lower_io_xfb_partial() {
   auto [b, entry] = setup_xfb_test(0x1u);
 
   util::small_vector<IoXfbInfo, 32u> xfb;
-  xfb.push_back(IoXfbInfo { IoLocation(BuiltIn::ePosition, 0xau), 0u, 0u, 0u, 16u });
-  xfb.push_back(IoXfbInfo { IoLocation(IoEntryType::ePerVertex, 1u, 0x1u), 0u, 1u, 0u, 20u });
-  xfb.push_back(IoXfbInfo { IoLocation(IoEntryType::ePerVertex, 2u, 0x2u), 0u, 1u, 12u, 20u });
+  xfb.push_back(IoXfbInfo { "sv_position", 0u, 0xau, 0u, 0u, 0u, 8u });
+  xfb.push_back(IoXfbInfo { "NORMAL", 0u, 0x1u, 0u, 1u, 0u, 8u });
+  xfb.push_back(IoXfbInfo { "TEXCOORD", 0u, 0x2u, 0u, 1u, 4u, 8u });
 
   auto inPosition = b.add(Op::DclInputBuiltIn(Type(ScalarType::eF32, 4u).addArrayDimension(3u), entry, BuiltIn::ePosition));
   auto inNormal = b.add(Op::DclInput(Type(ScalarType::eF32, 3u).addArrayDimension(3u), entry, 1u, 0u));
@@ -133,9 +133,9 @@ Builder test_pass_lower_io_xfb_multi_stream_with_stream_index(int32_t rasterized
   util::small_vector<IoXfbInfo, 32u> xfb;
 
   /* Stream 0 */
-  xfb.push_back(IoXfbInfo { IoLocation(BuiltIn::ePosition, 0x7u), 0u, 0u, 0u, 16u });
-  xfb.push_back(IoXfbInfo { IoLocation(IoEntryType::ePerVertex, 1u, 0x7u), 0u, 1u, 0u, 20u });
-  xfb.push_back(IoXfbInfo { IoLocation(IoEntryType::ePerVertex, 2u, 0x3u), 0u, 1u, 16u, 20u });
+  xfb.push_back(IoXfbInfo { "SV_position", 0u, 0x7u, 0u, 0u, 0u, 16u });
+  xfb.push_back(IoXfbInfo { "NORMAL", 0u, 0x7u, 0u, 1u, 0u, 20u });
+  xfb.push_back(IoXfbInfo { "texcoord", 0u, 0x3u, 0u, 1u, 16u, 20u });
 
   auto inS0Position = b.add(Op::DclInputBuiltIn(Type(ScalarType::eF32, 4u).addArrayDimension(3u), entry, BuiltIn::ePosition));
   auto inS0Normal = b.add(Op::DclInput(Type(ScalarType::eF32, 3u).addArrayDimension(3u), entry, 1u, 0u));
@@ -154,7 +154,7 @@ Builder test_pass_lower_io_xfb_multi_stream_with_stream_index(int32_t rasterized
   b.add(Op::Semantic(outS0TexCoord, 0, "TEXCOORD"));
 
   /* Stream 1 */
-  xfb.push_back(IoXfbInfo { IoLocation(BuiltIn::ePosition, 0x3u), 1u, 2u, 0u, 16u });
+  xfb.push_back(IoXfbInfo { "SV_POSITION", 0u, 0x3u, 1u, 2u, 0u, 16u });
 
   auto inS1Position = b.add(Op::DclInput(Type(ScalarType::eF32, 4u).addArrayDimension(3u), entry, 4u, 0u));
   auto inS1Color = b.add(Op::DclInput(Type(ScalarType::eF32, 3u).addArrayDimension(3u), entry, 5u, 1u));
@@ -169,7 +169,7 @@ Builder test_pass_lower_io_xfb_multi_stream_with_stream_index(int32_t rasterized
   b.add(Op::Semantic(outS1Color, 0, "COLOR"));
 
   /* Stream 2 */
-  xfb.push_back(IoXfbInfo { IoLocation(IoEntryType::ePerVertex, 8u, 0x7u), 2u, 3u, 0u, 12u });
+  xfb.push_back(IoXfbInfo { "COLOR", 0u, 0x7u, 2u, 3u, 0u, 12u });
 
   auto inS2Color = b.add(Op::DclInput(Type(ScalarType::eF32, 3u).addArrayDimension(3u), entry, 8u, 0u));
   b.add(Op::Semantic(inS2Color, 0, "COLOR"));
