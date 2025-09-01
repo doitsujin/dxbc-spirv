@@ -22,6 +22,8 @@ void ConvertBufferKindPass::run() {
         convertRawStructuredToTyped(iter->getDef());
       else if (shouldConvertToRawBuffer(iter->getDef()))
         convertTypedToRaw(iter->getDef());
+      else if (iter->getOpCode() == OpCode::eDclUav)
+        forceFormatForTypedUavLoad(iter->getDef());
     }
   }
 }
@@ -29,6 +31,45 @@ void ConvertBufferKindPass::run() {
 
 void ConvertBufferKindPass::runPass(Builder& builder, const Options& options) {
   ConvertBufferKindPass(builder, options).run();
+}
+
+
+void ConvertBufferKindPass::forceFormatForTypedUavLoad(SsaDef def) {
+  if (!m_options.forceFormatForTypedUavRead)
+    return;
+
+  /* Check whether the resource is a typed UAV */
+  auto dclOp = m_builder.getOp(def);
+  dxbc_spv_assert(dclOp.getOpCode() == OpCode::eDclUav);
+
+  auto uavKind = ResourceKind(dclOp.getOperand(dclOp.getFirstLiteralOperandIndex() + 3u));
+
+  if (!resourceIsTyped(uavKind))
+    return;
+
+  /* If the resource is already tagged or cannot be read, ignore */
+  auto uavFlags = UavFlags(dclOp.getOperand(dclOp.getFirstLiteralOperandIndex() + 4u));
+
+  if (uavFlags & (UavFlag::eWriteOnly | UavFlag::eFixedFormat))
+    return;
+
+  /* Check for any actual load instructions */
+  bool hasLoad = false;
+
+  forEachResourceUse(def, [&] (SsaDef use) {
+    const auto& useOp = m_builder.getOp(use);
+
+    hasLoad = hasLoad ||
+      useOp.getOpCode() == OpCode::eBufferLoad ||
+      useOp.getOpCode() == OpCode::eImageLoad;
+  });
+
+  if (!hasLoad)
+    return;
+
+  /* Rewrite declaration with adjusted UAV flags */
+  dclOp.setOperand(dclOp.getFirstLiteralOperandIndex() + 4u, uavFlags | UavFlag::eFixedFormat);
+  m_builder.rewriteOp(def, std::move(dclOp));
 }
 
 
