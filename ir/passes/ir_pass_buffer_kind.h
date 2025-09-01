@@ -24,6 +24,8 @@ public:
     /* Use raw buffers for typed buffers used with 32-bit atomics. This works
      * because client APIs require the buffer to use a 32-bit integer format. */
     bool useRawForTypedAtomic = false;
+    /* Force R32 formats for typed UAVs that are read. */
+    bool forceFormatForTypedUavRead = false;
     /* Minimum structure alignment for structured buffers. Any structured
      * buffer with a struct size that is a multiple of the given alignment
      * will be kept as a structured buffer regardless of he option. */
