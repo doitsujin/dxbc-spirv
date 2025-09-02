@@ -356,7 +356,7 @@ bool ConvertBufferKindPass::shouldConvertToTypedBuffer(SsaDef def) const {
 bool ConvertBufferKindPass::shouldConvertToRawBuffer(SsaDef def) const {
   const auto& dcl = m_builder.getOp(def);
 
-  if (dcl.getOpCode() != OpCode::eDclUav && !m_options.useRawForTypedAtomic)
+  if (dcl.getOpCode() != OpCode::eDclUav || !m_options.useRawForTypedAtomic)
     return false;
 
   /* Only promote non-arrayed resources since buffers may be accessed in different ways */
