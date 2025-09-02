@@ -3612,10 +3612,13 @@ bool ArithmeticPass::shouldFlipOperands(const Op& op) const {
   const auto& a = m_builder.getOpForOperand(op, 0u);
   const auto& b = m_builder.getOpForOperand(op, 1u);
 
-  if (a.isConstant() && !b.isConstant())
-    return true;
+  /* Ensure that constant operands are always on the right */
+  if (a.isConstant() != b.isConstant())
+    return a.isConstant();
 
-  if (a.isConstant() == b.isConstant())
+  /* Help CSE by further normalizing expressions within the shader.
+   * Don't flip float operands since doing so breaks invariance. */
+  if (a.getType().isBasicType() && !a.getType().getBaseType(0u).isFloatType())
     return a.getDef() > b.getDef();
 
   return false;
