@@ -4174,10 +4174,12 @@ uint32_t SpirvBuilder::defDescriptor(const ir::Op& op, uint32_t typeId, spv::Sto
   if (arraySize != 1u) {
     auto id = allocId();
 
-    if (arraySize)
+    if (arraySize) {
       pushOp(m_declarations, spv::OpTypeArray, id, typeId, makeConstU32(arraySize));
-    else
+    } else {
+      enableCapability(spv::CapabilityRuntimeDescriptorArray);
       pushOp(m_declarations, spv::OpTypeRuntimeArray, id, typeId);
+    }
 
     typeId = id;
   }
