@@ -113,7 +113,7 @@ void ArithmeticPass::lowerInstructionsPreTransform() {
   while (iter != m_builder.end()) {
     switch (iter->getOpCode()) {
       case OpCode::eSetGsInputPrimitive: {
-        auto primType = PrimitiveType(iter->getOperand(0u));
+        auto primType = PrimitiveType(iter->getOperand(iter->getFirstLiteralOperandIndex()));
         m_gsInputVertexCount = primitiveVertexCount(primType);
 
         ++iter;
@@ -636,7 +636,7 @@ Builder::iterator ArithmeticPass::lowerMsad(Builder::iterator op) {
 Builder::iterator ArithmeticPass::lowerInputBuiltIn(Builder::iterator op) {
   auto builtIn = getBuiltInInput(*op);
 
-  if (builtIn == BuiltIn::eGsVertexCountIn) {
+  if (builtIn == BuiltIn::eGsVertexCountIn && m_options.lowerGsVertexCountIn) {
     dxbc_spv_assert(m_gsInputVertexCount);
 
     auto next = m_builder.rewriteDef(op->getDef(), m_builder.makeConstant(m_gsInputVertexCount));
