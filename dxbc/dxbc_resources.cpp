@@ -690,7 +690,7 @@ uint32_t ResourceMap::computeRawStructuredAlignment(
     return sizeof(uint32_t);
 
   uint32_t componentIndex = uint8_t(componentFromBit(components.first()));
-  uint32_t structOffset = uint32_t(elementOp.getOperand(0u)) + componentIndex + sizeof(uint32_t);
+  uint32_t structOffset = uint32_t(elementOp.getOperand(0u)) + componentIndex * sizeof(uint32_t);
 
   /* Compute alignment of the underlying structure and cap at 16 bytes,
    * which is the largest vector unit we can possibly load in one go */
