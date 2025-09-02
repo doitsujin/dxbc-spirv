@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstring>
+#include <optional>
 #include <sstream>
 #include <iostream>
 
@@ -3027,11 +3028,11 @@ uint32_t SpirvBuilder::emitAccessChain(spv::StorageClass storageClass, const ir:
 }
 
 
-uint32_t SpirvBuilder::emitRawStrutcuredElementAddress(const ir::Op& op, uint32_t depth, uint32_t stride) {
+uint32_t SpirvBuilder::emitRawStructuredElementAddress(const ir::Op& op, uint32_t stride) {
   dxbc_spv_assert(op.getType().isBasicType());
 
   if (op.isConstant())
-    return makeConstU32(uint32_t(op.getOperand(depth)) * stride);
+    return makeConstU32(uint32_t(op.getOperand(0u)) * stride);
 
   auto baseId = 0u;
 
@@ -3040,7 +3041,7 @@ uint32_t SpirvBuilder::emitRawStrutcuredElementAddress(const ir::Op& op, uint32_
     baseId = getIdForDef(op.getDef());
   } else if (op.getOpCode() == ir::OpCode::eCompositeConstruct) {
     /* Resolve constants in composites directly */
-    const auto& componentOp = m_builder.getOp((ir::SsaDef(op.getOperand(depth))));
+    const auto& componentOp = m_builder.getOpForOperand(op, 0u);
 
     if (componentOp.isConstant())
       return makeConstU32(uint32_t(componentOp.getOperand(0u)) * stride);
@@ -3052,7 +3053,7 @@ uint32_t SpirvBuilder::emitRawStrutcuredElementAddress(const ir::Op& op, uint32_
 
     pushOp(m_code, spv::OpCompositeExtract,
       getIdForType(op.getType().getSubType(0u)), baseId,
-      getIdForDef(op.getDef()), depth);
+      getIdForDef(op.getDef()), 0u);
   }
 
   if (stride == 1u)
@@ -3066,6 +3067,76 @@ uint32_t SpirvBuilder::emitRawStrutcuredElementAddress(const ir::Op& op, uint32_
     baseId, makeConstU32(stride));
 
   return id;
+}
+
+
+uint32_t SpirvBuilder::emitStructuredByteOffset(const ir::Op& op, ir::Type type) {
+  dxbc_spv_assert(op.getType().isBasicType());
+
+  uint32_t constOffset = 0u;
+  uint32_t resultId = 0u;
+
+  for (uint32_t i = 1u; i < op.getType().getBaseType(0u).getVectorSize(); i++) {
+    std::optional<uint32_t> memberIdx;
+
+    if (op.isConstant()) {
+      memberIdx = uint32_t(op.getOperand(i));
+    } else if (op.getOpCode() == ir::OpCode::eCompositeConstruct) {
+      const auto& componentOp = m_builder.getOpForOperand(op, i);
+
+      if (componentOp.isConstant())
+        memberIdx = uint32_t(componentOp.getOperand(0u));
+    }
+
+    if (memberIdx) {
+      /* We can trivially determine the byte offset */
+      constOffset += type.byteOffset(*memberIdx);
+      type = type.getSubType(*memberIdx);
+    } else {
+      dxbc_spv_assert(type.isArrayType());
+      type = type.getSubType(0u);
+
+      /* Extract array index from component vector */
+      auto indexId = allocId();
+
+      pushOp(m_code, spv::OpCompositeExtract,
+        getIdForType(op.getType().getSubType(0u)), indexId,
+        getIdForDef(op.getDef()), 0u);
+
+      /* Multiply with byte stride of the element type */
+      auto offsetId = allocId();
+
+      pushOp(m_code, spv::OpIMul,
+        getIdForType(op.getType().getSubType(0u)), offsetId,
+        indexId, makeConstU32(type.byteSize()));
+
+      if (resultId) {
+        auto sumId = allocId();
+
+        pushOp(m_code, spv::OpIAdd,
+          getIdForType(op.getType().getSubType(0u)), sumId,
+          resultId, offsetId);
+
+        resultId = sumId;
+      } else {
+        resultId = offsetId;
+      }
+    }
+  }
+
+  if (!resultId)
+    return makeConstU32(constOffset);
+
+  if (!constOffset)
+    return resultId;
+
+  auto sumId = allocId();
+
+  pushOp(m_code, spv::OpIAdd,
+    getIdForType(op.getType().getSubType(0u)), sumId,
+    resultId, makeConstU32(constOffset));
+
+  return sumId;
 }
 
 
@@ -3088,7 +3159,7 @@ uint32_t SpirvBuilder::emitRawAccessChainNv(spv::StorageClass storageClass, cons
     dxbc_spv_assert(addressOp.getType().isScalarType());
 
     /* Compute byte offset from the given element index */
-    auto byteOffsetId = emitRawStrutcuredElementAddress(addressOp, 0u,
+    auto byteOffsetId = emitRawStructuredElementAddress(addressOp,
       resourceOp.getType().getSubType(0u).byteSize());
 
     auto nullId = makeConstU32(0u);
@@ -3097,18 +3168,15 @@ uint32_t SpirvBuilder::emitRawAccessChainNv(spv::StorageClass storageClass, cons
       id, baseId, nullId, nullId, byteOffsetId,
       spv::RawAccessChainOperandsRobustnessPerComponentNVMask);
   } else if (kind == ir::ResourceKind::eBufferStructured) {
-    dxbc_spv_assert(addressOp.getType().isVectorType());
+    dxbc_spv_assert(addressOp.getType().isBasicType());
 
     /* Compute byte size of the structure based on the resource type */
     auto structureType = resourceOp.getType().getSubType(0u);
-    dxbc_spv_assert(structureType.isSizedArray());
-
     auto strideId = makeConstU32(structureType.byteSize());
 
     /* Compute structure index and byte offset into the structure */
-    auto elementId = emitRawStrutcuredElementAddress(addressOp, 0u, 1u);
-    auto byteOffsetId = emitRawStrutcuredElementAddress(addressOp, 1u,
-      structureType.getSubType(0u).byteSize());
+    auto elementId = emitRawStructuredElementAddress(addressOp, 1u);
+    auto byteOffsetId = emitStructuredByteOffset(addressOp, structureType);
 
     pushOp(m_code, spv::OpRawAccessChainNV, ptrTypeId,
       id, baseId, strideId, elementId, byteOffsetId,

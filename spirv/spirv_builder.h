@@ -307,7 +307,9 @@ private:
 
   uint32_t emitAccessChain(spv::StorageClass storageClass, ir::SsaDef base, ir::SsaDef address, bool wrapped);
 
-  uint32_t emitRawStrutcuredElementAddress(const ir::Op& op, uint32_t depth, uint32_t stride);
+  uint32_t emitRawStructuredElementAddress(const ir::Op& op, uint32_t stride);
+
+  uint32_t emitStructuredByteOffset(const ir::Op& op, ir::Type type);
 
   uint32_t emitRawAccessChainNv(spv::StorageClass storageClass, const ir::Type& type, const ir::Op& resourceOp, uint32_t baseId, ir::SsaDef address);
 
