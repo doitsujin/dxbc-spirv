@@ -482,14 +482,17 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
   /* A valid debug namee is required for the main function */
   m_entryPoint.mainFunc = builder.add(ir::Op::Function(ir::ScalarType::eVoid));
   builder.add(ir::Op::FunctionEnd());
-  builder.add(ir::Op::DebugName(m_entryPoint.mainFunc, "main"));
 
   if (shaderType == ShaderType::eHull) {
+    builder.add(ir::Op::DebugName(m_entryPoint.mainFunc, "control_point"));
+
     m_entryPoint.patchConstantFunc = builder.add(ir::Op::Function(ir::ScalarType::eVoid));
     builder.add(ir::Op::FunctionEnd());
 
     if (m_options.includeDebugNames)
       builder.add(ir::Op::DebugName(m_entryPoint.patchConstantFunc, "patch_const"));
+  } else {
+    builder.add(ir::Op::DebugName(m_entryPoint.mainFunc, "main"));
   }
 
   /* Emit entry point instruction as the first instruction of the
