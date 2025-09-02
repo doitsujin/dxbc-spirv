@@ -147,6 +147,11 @@ uint32_t Type::byteOffset(uint32_t member) const {
     return member * ir::byteSize(getBaseType(0u).getBaseType());
   }
 
+  if (isScalarType()) {
+    dxbc_spv_assert(!member);
+    return 0u;
+  }
+
   dxbc_spv_unreachable(0u);
   return 0u;
 }
