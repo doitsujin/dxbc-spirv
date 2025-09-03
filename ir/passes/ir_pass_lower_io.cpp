@@ -1,4 +1,5 @@
 #include "ir_pass_lower_io.h"
+#include "ir_pass_remove_unused.h"
 
 #include "../ir_utils.h"
 
@@ -469,6 +470,8 @@ bool LowerIoPass::resolveMismatchedIo(ShaderStage prevStage, const IoMap& prevSt
     resolveMismatchedLocation(type, index, entry);
   }
 
+  /* Nuke unused variables out of existence */
+  RemoveUnusedPass::runPass(m_builder);
   return true;
 }
 
