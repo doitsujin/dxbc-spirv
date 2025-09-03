@@ -641,37 +641,50 @@ bool IoMap::declareIoSignatureVars(
     auto sv = *resolveSignatureSysval(e->getSystemValue(), e->getSemanticIndex());
 
     if (sv == Sysval::eNone || sysvalNeedsMirror(regType, sv)) {
-      /* Create declaration instructio */
-      ir::Type type = e->getVectorType();
+      auto usedMask = uint8_t(e->getComponentMask());
 
-      if (arraySize)
-        type.addArrayDimension(arraySize);
+      /* For inputs, mask out unused component at the end. It is not uncommon
+       * for shaders to export vec3, consume vec4, but only actually use the
+       * input as vec3 again. */
+      if (isInput)
+        usedMask &= 0xffu >> util::lzcnt8(uint8_t(e->getUsedComponentMask()));
 
-      auto declaration = ir::Op(opCode, type)
-        .addOperand(m_converter.getEntryPoint())
-        .addOperand(regIndex)
-        .addOperand(e->computeComponentIndex());
+      if (usedMask) {
+        /* Create declaration instructio */
+        ir::Type type(e->getScalarType(), util::popcnt(usedMask));
 
-      if (!type.getBaseType(0u).isFloatType())
-        interpolation = ir::InterpolationMode::eFlat;
+        if (arraySize)
+          type.addArrayDimension(arraySize);
 
-      addDeclarationArgs(declaration, regType, interpolation);
+        auto declaration = ir::Op(opCode, type)
+          .addOperand(m_converter.getEntryPoint())
+          .addOperand(regIndex)
+          .addOperand(e->computeComponentIndex());
 
-      /* Add mapping entry to the look-up table */
-      auto& mapping = m_variables.emplace_back();
-      mapping.regType = regType;
-      mapping.regIndex = regIndex;
-      mapping.regCount = 1u;
-      mapping.sv = Sysval::eNone;
-      mapping.componentMask = e->getComponentMask();
-      mapping.baseType = declaration.getType();
-      mapping.baseDef = builder.add(std::move(declaration));
-      mapping.baseIndex = type.getBaseType(0u).isVector() ? 0 : -1;
+        if (!type.getBaseType(0u).isFloatType())
+          interpolation = ir::InterpolationMode::eFlat;
 
-      emitSemanticName(builder, mapping.baseDef, *e);
-      emitDebugName(builder, mapping.baseDef, regType, regIndex, mapping.componentMask, &(*e));
+        addDeclarationArgs(declaration, regType, interpolation);
 
-      componentMask -= mapping.componentMask;
+        /* Add mapping entry to the look-up table */
+        auto& mapping = m_variables.emplace_back();
+        mapping.regType = regType;
+        mapping.regIndex = regIndex;
+        mapping.regCount = 1u;
+        mapping.sv = Sysval::eNone;
+        mapping.componentMask = usedMask;
+        mapping.baseType = declaration.getType();
+        mapping.baseDef = builder.add(std::move(declaration));
+        mapping.baseIndex = type.getBaseType(0u).isVector() ? 0 : -1;
+
+        emitSemanticName(builder, mapping.baseDef, *e);
+        emitDebugName(builder, mapping.baseDef, regType, regIndex, mapping.componentMask, &(*e));
+      }
+
+      /* Still declare the unused components in case the signature is wrong,
+       * which can happen with certain mods. If the components are truly
+       * unused, we will remove these declarations later. */
+      componentMask -= usedMask;
     } else if (sv != Sysval::eNone && sysvalNeedsBuiltIn(regType, sv)) {
       /* We only expect this to happen for certain inputs. FXC will not declare
        * clip/cull distance inputs with the actual system value if used in a
@@ -688,7 +701,6 @@ bool IoMap::declareIoSignatureVars(
 
   if (componentMask) {
     auto name = m_converter.makeRegisterDebugName(regType, regIndex, componentMask);
-    Logger::warn("Register ", name, " not declared in signature.");
 
     while (componentMask) {
       WriteMask nextMask = extractConsecutiveComponents(componentMask);
