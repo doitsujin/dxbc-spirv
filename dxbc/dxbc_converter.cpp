@@ -1661,6 +1661,12 @@ bool Converter::handleBitExtract(ir::Builder& builder, const Instruction& op) {
   auto offset = loadSrcBitCount(builder, op, op.getSrc(1u), dst.getWriteMask());
   auto count = loadSrcBitCount(builder, op, op.getSrc(0u), dst.getWriteMask());
 
+  /* Clamp bit count so that offset + size are not larger than 32 */
+  auto countType = builder.getOp(count).getType().getBaseType(0u);
+
+  count = builder.add(ir::Op::UMin(countType, count,
+    builder.add(ir::Op::ISub(countType, makeTypedConstant(builder, countType, 32), offset))));
+
   auto opCode = [&op] {
     switch (op.getOpToken().getOpCode()) {
       case OpCode::eUBfe: return ir::OpCode::eUBitExtract;
