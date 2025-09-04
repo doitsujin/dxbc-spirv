@@ -654,8 +654,10 @@ bool Converter::emitGsStateSetup(ir::Builder& builder) {
 
 
 bool Converter::handleCustomData(ir::Builder& builder, const Instruction& op) {
-  if (op.getOpToken().getCustomDataType() != CustomDataType::eDclIcb)
-    return logOpMessage(LogLevel::eDebug, op, "Skipping custom data block of type ", uint32_t(op.getOpToken().getCustomDataType()));
+  if (op.getOpToken().getCustomDataType() != CustomDataType::eDclIcb) {
+    logOpMessage(LogLevel::eDebug, op, "Skipping custom data block of type ", uint32_t(op.getOpToken().getCustomDataType()));
+    return true;
+  }
 
   /* We can only have one icb per shader module */
   if (m_icb)
