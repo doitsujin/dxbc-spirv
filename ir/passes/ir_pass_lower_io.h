@@ -259,6 +259,10 @@ public:
    *  actual output declaration. Should not be called if stages are I/O-compatible. */
   bool resolveMismatchedIo(ShaderStage prevStage, const IoMap& prevStageOut);
 
+  /** Rewrites multisampled image bindings as single-sampled, and adjusts load
+   *  instructions as well as sample count queries accordingly. */
+  bool demoteMultisampledSrv();
+
   /** Sets flat interpolation for the given pixel shader input locations.
    *  Built-ins are unaffected. Must only be used on pixel shaders. */
   void enableFlatInterpolation(uint32_t locationMask);
@@ -322,6 +326,8 @@ private:
   void removeUnusedStreams();
 
   bool remapTessIoLocation(Builder::iterator op, uint32_t perPatchMask, uint32_t perVertexMask);
+
+  bool rewriteMultisampledDescriptorUse(SsaDef descriptorDef);
 
   static uint32_t getStreamForIoVariable(const Op& op);
 

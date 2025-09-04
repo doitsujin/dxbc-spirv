@@ -476,6 +476,39 @@ bool LowerIoPass::resolveMismatchedIo(ShaderStage prevStage, const IoMap& prevSt
 }
 
 
+bool LowerIoPass::demoteMultisampledSrv() {
+  auto [a, b] = m_builder.getDeclarations();
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::eDclSrv) {
+      auto kind = ResourceKind(iter->getOperand(iter->getFirstLiteralOperandIndex() + 3u));
+
+      if (!resourceIsMultisampled(kind))
+        continue;
+
+      /* Rewrite image loads and sample queries */
+      auto [aUse, bUse] = m_builder.getUses(iter->getDef());
+
+      for (auto use = aUse; use != bUse; use++) {
+        if (!rewriteMultisampledDescriptorUse(use->getDef()))
+          return false;
+      }
+
+      /* Rewrite resource declaration to not be multisampled */
+      kind = resourceIsLayered(kind)
+        ? ResourceKind::eImage2DArray
+        : ResourceKind::eImage2D;
+
+      auto dclOp = *iter;
+      dclOp.setOperand(iter->getFirstLiteralOperandIndex() + 3u, kind);
+      m_builder.rewriteOp(iter->getDef(), std::move(dclOp));
+    }
+  }
+
+  return true;
+}
+
+
 void LowerIoPass::enableFlatInterpolation(uint32_t locationMask) {
   auto [a, b] = m_builder.getDeclarations();
 
@@ -1295,6 +1328,42 @@ bool LowerIoPass::remapTessIoLocation(Builder::iterator op, uint32_t perPatchMas
 
   /* Rewrite op to use the new location */
   m_builder.rewriteOp(op->getDef(), Op(*op).setOperand(1u, newLocation));
+  return true;
+}
+
+
+bool LowerIoPass::rewriteMultisampledDescriptorUse(SsaDef descriptorDef) {
+  small_vector<SsaDef, 256u> uses;
+  m_builder.getUses(descriptorDef, uses);
+
+  for (auto use : uses) {
+    auto useOp = m_builder.getOp(use);
+
+    switch (useOp.getOpCode()) {
+      case OpCode::eImageLoad: {
+        /* Set mip to 0, remove sample operand */
+        useOp.setOperand(1u, m_builder.makeConstant(0u));
+        useOp.setOperand(4u, SsaDef());
+
+        m_builder.rewriteOp(use, std::move(useOp));
+      } break;
+
+      case OpCode::eImageQuerySize: {
+        /* Add mip operand */
+        useOp.setOperand(1u, m_builder.makeConstant(0u));
+        m_builder.rewriteOp(use, std::move(useOp));
+      } break;
+
+      case OpCode::eImageQuerySamples: {
+        dxbc_spv_assert(useOp.getType() == ScalarType::eU32);
+        m_builder.rewriteDef(use, m_builder.makeConstant(1u));
+      } break;
+
+      default:
+        break;
+    }
+  }
+
   return true;
 }
 
