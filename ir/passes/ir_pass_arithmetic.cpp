@@ -719,7 +719,7 @@ Builder::iterator ArithmeticPass::lowerSinCos(Builder::iterator op) {
       m_builder.add(Op::Cast(ScalarType::eI32, x)),
       m_builder.makeConstant(0)));
 
-    auto sinNeg = m_builder.add(Op::IEq(ScalarType::eBool,
+    auto sinNeg = m_builder.add(Op::INe(ScalarType::eBool,
       m_builder.add(Op::IAnd(ScalarType::eU32, xInt, m_builder.makeConstant(4u))),
       m_builder.makeConstant(0u)));
 
