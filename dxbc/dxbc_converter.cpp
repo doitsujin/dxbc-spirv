@@ -625,6 +625,13 @@ bool Converter::emitDsStateSetup(ir::Builder& builder) {
 
 
 bool Converter::emitGsStateSetup(ir::Builder& builder) {
+  /* Output-less geometry shader, weird but technically legal */
+  if (m_gs.outputTopology == PrimitiveTopology::eUndefined && !m_gs.streamMask) {
+    m_gs.outputTopology = PrimitiveTopology::ePointList;
+    m_gs.outputVertices = 1u;
+    m_gs.streamMask = 0x1u;
+  }
+
   auto inputPrimitive = resolvePrimitiveType(m_gs.inputPrimitive);
   auto outputTopology = resolvePrimitiveTopology(m_gs.outputTopology);
 
