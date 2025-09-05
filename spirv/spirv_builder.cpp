@@ -1286,6 +1286,7 @@ void SpirvBuilder::emitConstantLoad(const ir::Op& op) {
       spv::StorageClassPrivate, getIdForDef(constantOp.getDef()));
 
     addEntryPointId(varId);
+    emitDebugName(constantOp.getDef(), varId);
 
     m_constantVars.insert({ constantOp.getDef(), varId });
   } else {
