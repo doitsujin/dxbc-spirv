@@ -46,6 +46,11 @@ public:
     /** Whether to bound-check immediate constant buffer loads.
      *  Only useful if ICB is not lowered to a constant buffer. */
     bool boundCheckIcb = true;
+    /** Whether to lower icb to a constant buffer */
+    bool lowerIcb = false;
+    /** Constant buffer binding and register space */
+    uint8_t icbRegisterSpace = 0u;
+    uint8_t icbRegisterIndex = 0u;
     /** Maximum tessellation factor override. Shaders may specify a
      *  different value, but any higher values will be ignored. */
     float maxTessFactor = 0.0f;
