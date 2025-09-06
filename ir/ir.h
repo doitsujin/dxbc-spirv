@@ -1119,6 +1119,8 @@ enum class OpFlag : uint8_t {
   /** Flag to indicate that the sign of a zero result
    *  does not need to be preserved. */
   eNoSz = (1u << 5),
+  /** Flag to indicate that an array access is in bounds */
+  eInBounds = (1u << 6u),
 
   eFlagEnum = 0
 };

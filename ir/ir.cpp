@@ -639,6 +639,7 @@ std::ostream& operator << (std::ostream& os, const OpFlag& flag) {
     case OpFlag::eNoNan:          return os << "nonan";
     case OpFlag::eNoInf:          return os << "noinf";
     case OpFlag::eNoSz:           return os << "nosz";
+    case OpFlag::eInBounds:       return os << "inbounds";
 
     case OpFlag::eFlagEnum: break;
   }
