@@ -1,4 +1,5 @@
 #include "ir_pass_scratch.h"
+#include "ir_pass_ssa.h"
 
 #include "../../util/util_log.h"
 
@@ -27,6 +28,26 @@ void CleanupScratchPass::propagateCbvScratchCopies() {
 
 void CleanupScratchPass::runResolveCbvToScratchCopyPass(Builder& builder, const Options& options) {
   CleanupScratchPass(builder, options).propagateCbvScratchCopies();
+}
+
+
+void CleanupScratchPass::unpackArrays() {
+  auto [a, b] = m_builder.getDeclarations();
+
+  bool feedback = false;
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::eDclScratch)
+      feedback |= tryUnpackArray(iter->getDef());
+  }
+
+  if (feedback)
+    ir::SsaConstructionPass::runPass(m_builder);
+}
+
+
+void CleanupScratchPass::runUnpackArrayPass(Builder& builder, const Options& options) {
+  CleanupScratchPass(builder, options).unpackArrays();
 }
 
 
@@ -393,6 +414,240 @@ bool CleanupScratchPass::hasConstantIndexOffset(SsaDef baseIndex, SsaDef index, 
 }
 
 
+bool CleanupScratchPass::tryUnpackArray(SsaDef def) {
+  const auto& arrayOp = m_builder.getOp(def);
+  auto arraySize = arrayOp.getType().getArraySize(0u);
+
+  bool hasDynamicLoads = !allLoadIndicesConstant(def);
+  bool hasDynamicStores = !allStoreIndicesConstant(def);
+
+  uint32_t maxSize = 0u;
+
+  if (hasDynamicLoads || hasDynamicStores) {
+    if (m_options.unpackSmallArrays) {
+      maxSize = hasDynamicStores
+        ? m_options.maxUnpackedDynamicStoreArraySize
+        : m_options.maxUnpackedDynamicLoadArraySize;
+    }
+  } else if (m_options.unpackConstantIndexedArrays) {
+    maxSize = -1u;
+  }
+
+  if (arraySize > maxSize)
+    return false;
+
+  /* Need to skip if any accesses are in different functions,
+   * since temporaries simply won't work in that case. */
+  if (!m_functionsForDef.getMaxValidDef())
+    determineFunctionForDefs();
+
+  SsaDef accessFunction = { };
+
+  auto [a, b] = m_builder.getUses(def);
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::eScratchLoad ||
+        iter->getOpCode() == OpCode::eScratchStore) {
+      auto function = m_functionsForDef.at(iter->getDef());
+
+      if (!accessFunction)
+        accessFunction = function;
+
+      if (accessFunction != function)
+        return false;
+    }
+  }
+
+  return unpackArray(def);
+}
+
+
+bool CleanupScratchPass::unpackArray(SsaDef def) {
+  const auto& arrayOp = m_builder.getOp(def);
+
+  /* For simplicity, only accept scalar or vector arrays */
+  if (!arrayOp.getType().isArrayType() ||
+      !arrayOp.getType().getSubType(0u).isBasicType())
+    return false;
+
+  auto arraySize = arrayOp.getType().getArraySize(0u);
+  auto baseType = arrayOp.getType().getBaseType(0u);
+
+  util::small_vector<SsaDef, 256u> temps(arraySize * baseType.getVectorSize());
+
+  for (size_t i = 0u; i < temps.size(); i++)
+    temps.at(i) = m_builder.add(Op::DclTmp(baseType.getBaseType(), SsaDef(arrayOp.getOperand(0u))));
+
+  /* Replace constant index loads and stores with a load or store using the
+   * temporary corresponding to the constant index and component. If the index
+   * is dynamic, use a helper function to emit an if ladder. */
+  util::small_vector<SsaDef, 256u> uses;
+  m_builder.getUses(def, uses);
+
+  for (auto use : uses) {
+    const auto& useOp = m_builder.getOp(use);
+
+    switch (useOp.getOpCode()) {
+      case OpCode::eScratchLoad: {
+        rewriteScratchLoadToTemp(useOp, temps.size(), temps.data());
+      } break;
+
+      case OpCode::eScratchStore: {
+        rewriteScratchStoreToTemp(useOp, temps.size(), temps.data());
+      } break;
+
+      default:
+        break;
+    }
+  }
+
+  return true;
+}
+
+
+void CleanupScratchPass::rewriteScratchLoadToTemp(const Op& loadOp, size_t tempCount, const SsaDef* temps) {
+  (void)tempCount;
+
+  dxbc_spv_assert(loadOp.getType().isBasicType());
+
+  const auto& scratchOp = m_builder.getOpForOperand(loadOp, 0u);
+  const auto& indexOp = m_builder.getOpForOperand(loadOp, 1u);
+
+  auto scratchType = scratchOp.getType().getBaseType(0u);
+  auto valueType = loadOp.getType().getBaseType(0u);
+  auto indexInfo = extractConstantIndex(indexOp);
+
+  util::small_vector<SsaDef, 4u> scalars;
+
+  if (!indexInfo.indexDef) {
+    /* Emit single load for each vector component */
+    for (uint32_t c = 0u; c < valueType.getVectorSize(); c++) {
+      auto tempIndex = indexInfo.index * scratchType.getVectorSize() + indexInfo.component + c;
+      dxbc_spv_assert(tempIndex < tempCount);
+
+      scalars.push_back(m_builder.addBefore(loadOp.getDef(),
+        Op::TmpLoad(valueType.getBaseType(), temps[tempIndex])));
+    }
+  } else {
+    /* Start with a zero constant in case of an out-of-bound index */
+    for (uint32_t c = 0u; c < valueType.getVectorSize(); c++)
+      scalars.push_back(m_builder.makeConstantZero(valueType.getBaseType()));
+
+    for (uint32_t a = 0u; a < scratchOp.getType().getArraySize(0u); a++) {
+      auto indexCond = m_builder.addBefore(loadOp.getDef(),
+        Op::IEq(ScalarType::eBool, indexInfo.indexDef, m_builder.makeConstant(a)));
+
+      for (uint32_t c = 0u; c < valueType.getVectorSize(); c++) {
+        auto tempIndex = a * scratchType.getVectorSize() + indexInfo.component + c;
+        dxbc_spv_assert(tempIndex < tempCount);
+
+        auto tempValue = m_builder.addBefore(loadOp.getDef(),
+          Op::TmpLoad(valueType.getBaseType(), temps[tempIndex]));
+
+        scalars.at(c) = m_builder.addBefore(loadOp.getDef(),
+          Op::Select(valueType.getBaseType(), indexCond, tempValue, scalars.at(c)));
+      }
+    }
+  }
+
+  /* Assemble vector as necessary */
+  if (valueType.isVector()) {
+    Op compositeOp(OpCode::eCompositeConstruct, valueType);
+
+    for (auto s : scalars)
+      compositeOp.addOperand(s);
+
+    m_builder.rewriteOp(loadOp.getDef(), std::move(compositeOp));
+  } else {
+    m_builder.rewriteDef(loadOp.getDef(), scalars.front());
+  }
+}
+
+
+void CleanupScratchPass::rewriteScratchStoreToTemp(const Op& storeOp, size_t tempCount, const SsaDef* temps) {
+  (void)tempCount;
+
+  const auto& scratchOp = m_builder.getOpForOperand(storeOp, 0u);
+  const auto& indexOp = m_builder.getOpForOperand(storeOp, 1u);
+  const auto& valueOp = m_builder.getOpForOperand(storeOp, 2u);
+  dxbc_spv_assert(valueOp.getType().isBasicType());
+
+  auto scratchType = scratchOp.getType().getBaseType(0u);
+  auto valueType = valueOp.getType().getBaseType(0u);
+  auto indexInfo = extractConstantIndex(indexOp);
+
+  /* Extract scalars from value vector as necessary */
+  util::small_vector<SsaDef, 4u> scalars;
+
+  for (uint32_t c = 0u; c < valueType.getVectorSize(); c++) {
+    auto& scalar = scalars.emplace_back();
+    scalar = valueOp.getDef();
+
+    if (valueType.isVector()) {
+      scalar = m_builder.addBefore(storeOp.getDef(), Op::CompositeExtract(
+        scratchType.getBaseType(), scalar, m_builder.makeConstant(c)));
+    }
+  }
+
+  if (!indexInfo.indexDef) {
+    /* Emit single store for each vector component */
+    for (uint32_t c = 0u; c < valueType.getVectorSize(); c++) {
+      auto tempIndex = indexInfo.index * scratchType.getVectorSize() + indexInfo.component + c;
+      dxbc_spv_assert(tempIndex < tempCount);
+
+      m_builder.addBefore(storeOp.getDef(), Op::TmpStore(temps[tempIndex], scalars.at(c)));
+    }
+  } else {
+    /* Load each temporary and replace its value if the index matches */
+    for (uint32_t a = 0u; a < scratchOp.getType().getArraySize(0u); a++) {
+      auto indexCond = m_builder.addBefore(storeOp.getDef(),
+        Op::IEq(ScalarType::eBool, indexInfo.indexDef, m_builder.makeConstant(a)));
+
+      for (uint32_t c = 0u; c < valueType.getVectorSize(); c++) {
+        auto tempIndex = a * scratchType.getVectorSize() + indexInfo.component + c;
+        dxbc_spv_assert(tempIndex < tempCount);
+
+        auto tempValue = m_builder.addBefore(storeOp.getDef(),
+          Op::TmpLoad(scratchType.getBaseType(), temps[tempIndex]));
+
+        tempValue = m_builder.addBefore(storeOp.getDef(),
+          Op::Select(scratchType.getBaseType(), indexCond, scalars.at(c), tempValue));
+
+        m_builder.addBefore(storeOp.getDef(),
+          Op::TmpStore(temps[tempIndex], tempValue));
+      }
+    }
+  }
+
+  m_builder.remove(storeOp.getDef());
+}
+
+
+void CleanupScratchPass::determineFunctionForDefs() {
+  m_functionsForDef.ensure(m_builder.getMaxValidDef());
+
+  auto [a, b] = m_builder.getCode();
+  SsaDef function = { };
+
+  for (auto iter = a; iter != b; iter++) {
+    switch (iter->getOpCode()) {
+      case OpCode::eFunction: {
+        function = iter->getDef();
+        m_functionsForDef.at(iter->getDef()) = function;
+      } break;
+
+      case OpCode::eFunctionEnd: {
+        m_functionsForDef.at(iter->getDef()) = function;
+        function = SsaDef();
+      } break;
+
+      default:
+        m_functionsForDef.at(iter->getDef()) = function;
+    }
+  }
+}
+
+
 std::pair<SsaDef, uint64_t> CleanupScratchPass::extractBaseAndOffset(const Op& op) const {
   dxbc_spv_assert(op.getType().isScalarType());
 
@@ -435,5 +690,81 @@ std::string CleanupScratchPass::getScratchCbvFunctionName(SsaDef def) const {
   str << "_cbv";
   return str.str();
 }
+
+
+bool CleanupScratchPass::allStoreIndicesConstant(SsaDef def) const {
+  auto [a, b] = m_builder.getUses(def);
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::eScratchStore) {
+      const auto& index = m_builder.getOpForOperand(*iter, 1u);
+
+      if (!isConstantIndex(index))
+        return false;
+    }
+  }
+
+  return true;
+}
+
+
+bool CleanupScratchPass::allLoadIndicesConstant(SsaDef def) const {
+  auto [a, b] = m_builder.getUses(def);
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::eScratchLoad) {
+      const auto& index = m_builder.getOpForOperand(*iter, 1u);
+
+      if (!isConstantIndex(index))
+        return false;
+    }
+  }
+
+  return true;
+}
+
+
+bool CleanupScratchPass::isConstantIndex(const Op& op) const {
+  if (op.isConstant())
+    return true;
+
+  if (op.getOpCode() == OpCode::eCompositeConstruct) {
+    const auto& a = m_builder.getOpForOperand(op, 0u);
+    const auto& b = m_builder.getOpForOperand(op, 1u);
+
+    return a.isConstant() && b.isConstant();
+  }
+
+  return false;
+}
+
+
+CleanupScratchPass::IndexInfo CleanupScratchPass::extractConstantIndex(const Op& op) const {
+  if (op.isConstant()) {
+    IndexInfo result = { };
+    result.index = uint32_t(op.getOperand(0u));
+    result.component = uint32_t(op.getOperand(1u));
+    return result;
+  }
+
+  if (op.getOpCode() == OpCode::eCompositeConstruct) {
+    const auto& a = m_builder.getOpForOperand(op, 0u);
+    const auto& b = m_builder.getOpForOperand(op, 1u);
+    dxbc_spv_assert(b.isConstant());
+
+    IndexInfo result = { };
+    result.index = a.isConstant() ? uint32_t(a.getOperand(0u)) : 0u;
+    result.indexDef = a.isConstant() ? SsaDef() : a.getDef();
+    result.component = uint32_t(b.getOperand(0u));
+    return result;
+  }
+
+  dxbc_spv_assert(op.getType().isScalarType());
+
+  IndexInfo result = { };
+  result.indexDef = op.getDef();
+  return result;
+}
+
 
 }

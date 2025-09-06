@@ -20,6 +20,17 @@ public:
     bool enableBoundChecking = true;
     /* Whether to optimize constant buffer to scratch array copies. */
     bool resolveCbvCopy = true;
+    /* Whether to unpack arrays that are only accessed via constant
+     * indices. These arrays can be trivially converted to SSA form. */
+    bool unpackConstantIndexedArrays = true;
+    /* Whether to unpack small arrays with dynamic indexing. The
+     * size thresholds are defined below. */
+    bool unpackSmallArrays = true;
+    /* Maximum array size for arrays using dynamically indexed loads or
+     * stores, respectively. If an array has both, then the store limit
+     * takes precedence and should be the smaller of the two limits. */
+    uint32_t maxUnpackedDynamicLoadArraySize = 8u;
+    uint32_t maxUnpackedDynamicStoreArraySize = 2u;
   };
 
   CleanupScratchPass(Builder& builder, const Options& options);
@@ -36,6 +47,12 @@ public:
 
   static void runResolveCbvToScratchCopyPass(Builder& builder, const Options& options);
 
+  /* Optimizes small scalar or vector arrays with constant store indices to
+   * use temporaries and if-ladders for loads. May invoke SSA construction. */
+  void unpackArrays();
+
+  static void runUnpackArrayPass(Builder& builder, const Options& options);
+
 private:
 
   Builder&  m_builder;
@@ -50,6 +67,12 @@ private:
     uint32_t cbvComponent = { };
   };
 
+  struct IndexInfo {
+    SsaDef indexDef = { };
+    uint32_t index = 0u;
+    uint32_t component = 0u;
+  };
+
   bool promoteScratchCbvCopy(SsaDef def);
 
   CbvInfo getCbvCopyMapping(const Op& op);
@@ -62,9 +85,27 @@ private:
 
   bool hasConstantIndexOffset(SsaDef baseIndex, SsaDef index, uint32_t offset) const;
 
+  bool tryUnpackArray(SsaDef def);
+
+  bool unpackArray(SsaDef def);
+
+  void rewriteScratchLoadToTemp(const Op& loadOp, size_t tempCount, const SsaDef* temps);
+
+  void rewriteScratchStoreToTemp(const Op& storeOp, size_t tempCount, const SsaDef* temps);
+
+  void determineFunctionForDefs();
+
   std::pair<SsaDef, uint64_t> extractBaseAndOffset(const Op& op) const;
 
   std::string getScratchCbvFunctionName(SsaDef def) const;
+
+  bool allStoreIndicesConstant(SsaDef def) const;
+
+  bool allLoadIndicesConstant(SsaDef def) const;
+
+  bool isConstantIndex(const Op& op) const;
+
+  IndexInfo extractConstantIndex(const Op& op) const;
 
 };
 
