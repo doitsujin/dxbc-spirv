@@ -529,9 +529,11 @@ void CleanupScratchPass::rewriteScratchLoadToTemp(const Op& loadOp, size_t tempC
         Op::TmpLoad(valueType.getBaseType(), temps[tempIndex])));
     }
   } else {
-    /* Start with a zero constant in case of an out-of-bound index */
-    for (uint32_t c = 0u; c < valueType.getVectorSize(); c++)
-      scalars.push_back(m_builder.makeConstantZero(valueType.getBaseType()));
+    if (m_options.enableBoundChecking && !(loadOp.getFlags() & OpFlag::eInBounds)) {
+      /* Start with a zero constant in case of an out-of-bound index */
+      for (uint32_t c = 0u; c < valueType.getVectorSize(); c++)
+        scalars.push_back(m_builder.makeConstantZero(valueType.getBaseType()));
+    }
 
     for (uint32_t a = 0u; a < scratchOp.getType().getArraySize(0u); a++) {
       auto indexCond = m_builder.addBefore(loadOp.getDef(),
@@ -544,8 +546,14 @@ void CleanupScratchPass::rewriteScratchLoadToTemp(const Op& loadOp, size_t tempC
         auto tempValue = m_builder.addBefore(loadOp.getDef(),
           Op::TmpLoad(valueType.getBaseType(), temps[tempIndex]));
 
-        scalars.at(c) = m_builder.addBefore(loadOp.getDef(),
-          Op::Select(valueType.getBaseType(), indexCond, tempValue, scalars.at(c)));
+        auto& scalar = scalars.at(c);
+
+        if (scalar) {
+          scalar = m_builder.addBefore(loadOp.getDef(),
+            Op::Select(valueType.getBaseType(), indexCond, tempValue, scalar));
+        } else {
+          scalar = tempValue;
+        }
       }
     }
   }
