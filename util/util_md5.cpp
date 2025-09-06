@@ -149,8 +149,6 @@ void Hasher::padBlock() {
   size_t currentLength = m_size % BlockSize;
   size_t desiredLength = currentLength >= 56u ? 120u : 56u;
 
-  dxbc_spv_assert(desiredLength <= s_padding.size());
-
   update(s_padding.data(), desiredLength - currentLength);
 
   /* Append bit count as little endian */
