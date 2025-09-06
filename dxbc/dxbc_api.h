@@ -16,6 +16,7 @@
 #include "../ir/passes/ir_pass_propagate_types.h"
 #include "../ir/passes/ir_pass_remove_unused.h"
 #include "../ir/passes/ir_pass_scalarize.h"
+#include "../ir/passes/ir_pass_scratch.h"
 #include "../ir/passes/ir_pass_ssa.h"
 #include "../ir/passes/ir_pass_sync.h"
 
@@ -28,6 +29,8 @@ struct CompileOptions {
   /* DXBC conversion options. Includes the shader name,
    * which should always be provided. */
   Converter::Options convertOptions = { };
+  /* Scratch clean-up pass options */
+  ir::CleanupScratchPass::Options scratchOptions = { };
   /* Arithmetic pass options. Enables lowering for certain
    * instructions and some basic code transforms. */
   ir::ArithmeticPass::Options arithmeticOptions = { };

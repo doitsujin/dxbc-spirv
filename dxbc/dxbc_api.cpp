@@ -31,9 +31,10 @@ std::optional<ir::Builder> compileShaderToIr(const void* data, size_t size, cons
 
 
 void legalizeIr(ir::Builder& builder, const CompileOptions& options) {
-  /* Convert to structured control flow and run SSA construction */
+  /* Convert to structured control flow */
   ir::ConvertControlFlowPass::runPass(builder);
   ir::CleanupControlFlowPass::runPass(builder);
+
   ir::SsaConstructionPass::runPass(builder);
 
   /* Lower min-precision types */
@@ -51,8 +52,17 @@ void legalizeIr(ir::Builder& builder, const CompileOptions& options) {
       break;
   }
 
-  /* Run type propagation for expressions and resources */
+  /* Optimize various scratch array patterns since drivers tend to have issues
+   * in this area. This may not be ideal since we haven't run CSE yet, but in
+   * practice this should detect problematic patterns. Must be run before consume
+   * instructions are lowered, and should be run before constant buffer types are
+   * inferred to not disrupt array optimizations. */
+  ir::CleanupScratchPass::runPass(builder, options.scratchOptions);
+
+  /* Run type propagation for expressions */
   ir::PropagateTypesPass::runPass(builder);
+
+  /* Run type propagation for resources */
   ir::PropagateResourceTypesPass::runPass(builder, options.resourceOptions);
   ir::ConvertBufferKindPass::runPass(builder, options.bufferOptions);
 
