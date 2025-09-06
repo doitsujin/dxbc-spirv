@@ -2777,7 +2777,8 @@ bool Converter::handleSamplePos(ir::Builder& builder, const Instruction& op) {
   lookupIndex = builder.add(ir::Op::Select(ir::ScalarType::eU32, cond, lookupIndex, builder.makeConstant(0u)));
 
   auto lookupTable = declareSamplePositionLut(builder);
-  auto samplePos = builder.add(ir::Op::ConstantLoad(ir::BasicType(ir::ScalarType::eF32, 2u), lookupTable, lookupIndex));
+  auto samplePos = builder.add(ir::Op::ConstantLoad(
+    ir::BasicType(ir::ScalarType::eF32, 2u), lookupTable, lookupIndex).setFlags(ir::OpFlag::eInBounds));
 
   /* Assemble result vector and store */
   std::array<ir::SsaDef, 4u> scalars = { };

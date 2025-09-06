@@ -1200,6 +1200,9 @@ ir::SsaDef IoMap::loadIoRegister(
 
       auto loadOp = ir::Op(opCode, varScalarType).addOperand(var->baseDef);
 
+      if (opCode == ir::OpCode::eScratchLoad && boundCheck)
+        loadOp.setFlags(ir::OpFlag::eInBounds);
+
       if (opCode != ir::OpCode::eTmpLoad)
         loadOp.addOperand(addressDef);
 
@@ -1553,7 +1556,7 @@ std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicLoadFunction(
         dstAddress.push_back(builder.makeConstant(componentIndex++));
 
       auto dstAddressDef = m_converter.buildVector(builder, ir::ScalarType::eU32, dstAddress.size(), dstAddress.data());
-      builder.add(ir::Op::ScratchStore(scratch, dstAddressDef, scalar));
+      builder.add(ir::Op::ScratchStore(scratch, dstAddressDef, scalar).setFlags(ir::OpFlag::eInBounds));
     }
   }
 
