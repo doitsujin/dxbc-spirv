@@ -2243,6 +2243,12 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentitySelect(Builder
       m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), ac, invert ? af : at, b.getDef()));
       return std::make_pair(true, m_builder.iter(ac));
     }
+
+    /* select(c0, select(c0, a, _), b) -> select(c0, a, b) */
+    if (ac == cond.getDef()) {
+      m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), cond.getDef(), at, b.getDef()));
+      return std::make_pair(true, op);
+    }
   } else if (b.getOpCode() == OpCode::eSelect) {
     /* select(c0, a, select(c1, a, b)) -> select(c0 || c1, a, b)
      * select(c0, a, select(c1, b, a)) -> select(c0 || !c1, a, b) */
@@ -2259,6 +2265,12 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentitySelect(Builder
       bc = m_builder.addBefore(op->getDef(), Op::BOr(cond.getType(), cond.getDef(), bc));
       m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), bc, a.getDef(), invert ? bt : bf));
       return std::make_pair(true, m_builder.iter(bc));
+    }
+
+    /* select(c0, a, select(c0, _, b)) -> select(c0, a, b) */
+    if (bc == cond.getDef()) {
+      m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), cond.getDef(), a.getDef(), bf));
+      return std::make_pair(true, op);
     }
   }
 
