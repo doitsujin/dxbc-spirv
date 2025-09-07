@@ -98,7 +98,7 @@ struct PropagateResourceTypeRewriteInfo {
   Type getNewInnerType() const;
 
   /* Generates LDS type. Typically emits a basic struct. */
-  void processLocalLayout(bool flatten, bool allowSubDword);
+  void processLocalLayout(bool flatten, bool allowSubDword, bool removeTrivialArrays);
 
   /* Generates constant buffer type. Respects vec4 layout for
    * constant buffers, but may subdivide vectors depending on
@@ -135,6 +135,8 @@ private:
   void setupArrayType();
 
   void flattenStructureType();
+
+  void flattenTrivialArrays();
 
   void normalizeFinalElementTypes();
 
@@ -237,6 +239,8 @@ private:
   void rewritePartialVectorLoad(const Type& type, SsaDef def);
 
   void rewritePartialVectorLoadsForDescriptor(const Type& type, SsaDef def);
+
+  bool canRemoveTrivialArrays(const Op& op);
 
   static bool isUntypedDeclaration(const Op& op);
 

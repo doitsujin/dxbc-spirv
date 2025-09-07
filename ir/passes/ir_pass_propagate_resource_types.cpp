@@ -91,7 +91,7 @@ Type PropagateResourceTypeRewriteInfo::traverseType(Type t, uint32_t n) {
 }
 
 
-void PropagateResourceTypeRewriteInfo::processLocalLayout(bool flatten, bool allowSubDword) {
+void PropagateResourceTypeRewriteInfo::processLocalLayout(bool flatten, bool allowSubDword, bool removeTrivialArrays) {
   normalizeElementAccess();
 
   if (!allowSubDword)
@@ -99,7 +99,16 @@ void PropagateResourceTypeRewriteInfo::processLocalLayout(bool flatten, bool all
 
   handleLdsUnusedElements();
 
-  if (isDynamicallyIndexed || !setupLocalType())
+  bool needsArrayType = true;
+
+  if (!isDynamicallyIndexed && setupLocalType()) {
+    needsArrayType = false;
+
+    if (removeTrivialArrays)
+      flattenTrivialArrays();
+  }
+
+  if (needsArrayType)
     setupArrayType();
 
   if (flatten)
@@ -333,12 +342,6 @@ bool PropagateResourceTypeRewriteInfo::setupLocalType() {
       newType.addArrayDimension(oldType.getArraySize(i));
 
     newOuterArrayDims = oldOuterArrayDims;
-  }
-
-  /* Remove unnecessary array dimensions */
-  while (newOuterArrayDims && newType.getArraySize(newOuterArrayDims - 1u) == 1u) {
-    newType = newType.getSubType(0u);
-    newOuterArrayDims -= 1u;
   }
 
   return true;
@@ -629,6 +632,14 @@ void PropagateResourceTypeRewriteInfo::flattenStructureType() {
   /* Write back type metadata */
   isFlattened = true;
   flattenedScalarCount = scalarCount;
+}
+
+
+void PropagateResourceTypeRewriteInfo::flattenTrivialArrays() {
+  while (newOuterArrayDims && newType.getArraySize(newOuterArrayDims - 1u) == 1u) {
+    newType = newType.getSubType(0u);
+    newOuterArrayDims -= 1u;
+  }
 }
 
 
@@ -1267,15 +1278,16 @@ void PropagateResourceTypesPass::determineDeclarationType(const Op& op, Propagat
 
   switch (op.getOpCode()) {
     case OpCode::eDclLds: {
-      info.processLocalLayout(m_options.flattenLds, m_options.allowSubDwordScratchAndLds);
+      info.processLocalLayout(m_options.flattenLds, m_options.allowSubDwordScratchAndLds,
+        !m_options.flattenLds && canRemoveTrivialArrays(op));
     } break;
 
     case OpCode::eConstant: {
-      info.processLocalLayout(false, true);
+      info.processLocalLayout(false, true, false);
     } break;
 
     case OpCode::eDclScratch: {
-      info.processLocalLayout(m_options.flattenScratch, m_options.allowSubDwordScratchAndLds);
+      info.processLocalLayout(m_options.flattenScratch, m_options.allowSubDwordScratchAndLds, false);
     } break;
 
     case OpCode::eDclCbv: {
@@ -1484,6 +1496,56 @@ void PropagateResourceTypesPass::rewritePartialVectorLoadsForDescriptor(const Ty
     if (m_builder.getOp(use).getOpCode() == OpCode::eBufferLoad)
       rewritePartialVectorLoad(type, use);
   }
+}
+
+
+bool PropagateResourceTypesPass::canRemoveTrivialArrays(const Op& op) {
+  /* Check whether all indices into an array dimension with a size of
+   * 1 are constant zero. In that case, we can remove the dimension. */
+  uint32_t dims = op.getType().getArrayDimensions();
+  uint32_t size1 = 0;
+
+  while (size1 < dims && op.getType().getArraySize(dims - size1 - 1u) == 1u)
+    size1++;
+
+  if (!size1)
+    return false;
+
+  auto [a, b] = m_builder.getUses(op.getDef());
+
+  for (auto iter = a; iter != b; iter++) {
+    switch (iter->getOpCode()) {
+      case OpCode::eLdsLoad:
+      case OpCode::eLdsAtomic:
+      case OpCode::eLdsStore:
+      case OpCode::eScratchLoad:
+      case OpCode::eScratchStore:
+      case OpCode::eConstantLoad: {
+        const auto& indexOp = m_builder.getOpForOperand(*iter, 1u);
+
+        if (indexOp.isConstant()) {
+          for (uint32_t i = 0u; i < size1; i++) {
+            if (uint32_t(indexOp.getOperand(i)))
+              return false;
+          }
+        } else if (indexOp.getOpCode() == OpCode::eCompositeConstruct) {
+          for (uint32_t i = 0u; i < size1; i++) {
+            const auto& arg = m_builder.getOpForOperand(indexOp, i);
+
+            if (!arg.isConstant() || uint32_t(arg.getOperand(0u)))
+              return false;
+          }
+        } else {
+          return false;
+        }
+      } break;
+
+      default:
+        break;
+    }
+  }
+
+  return true;
 }
 
 

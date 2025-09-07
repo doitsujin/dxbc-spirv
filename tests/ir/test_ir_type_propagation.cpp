@@ -20,7 +20,7 @@ void testIrPropagateStructuredLdsToScalar() {
   e.resolvedType = ScalarType::eF32;
   e.accessSize = 1u;
 
-  info.processLocalLayout(false, true);
+  info.processLocalLayout(false, true, true);
 
   ok(e.componentIndex < 0);
   ok(e.memberIndex < 0);
@@ -45,7 +45,7 @@ void testIrPropagateRawLdsType() {
   e.resolvedType = ScalarType::eUnknown;
   e.accessSize = 1u;
 
-  info.processLocalLayout(false, true);
+  info.processLocalLayout(false, true, true);
 
   ok(e.componentIndex < 0);
   ok(e.memberIndex < 0);
@@ -99,7 +99,7 @@ void testIrPropagateStructuredLdsComplex() {
   }
 
   PropagateResourceTypeRewriteInfo info = base;
-  info.processLocalLayout(false, true);
+  info.processLocalLayout(false, true, true);
 
   for (size_t i = 0u; i < s_expected.size(); i++) {
     auto [type, component, member, index] = s_expected.at(i);
@@ -122,7 +122,7 @@ void testIrPropagateStructuredLdsComplex() {
 
   /* Test again but flatten to scalar array this time */
   info = base;
-  info.processLocalLayout(true, true);
+  info.processLocalLayout(true, true, true);
 
   ok(info.isFlattened && info.flattenedScalarCount == 7u);
   ok(info.newOuterArrayDims == 1u);
@@ -174,7 +174,7 @@ void testIrPropagateStructuredLdsDynamic() {
   }
 
   PropagateResourceTypeRewriteInfo info = base;
-  info.processLocalLayout(false, true);
+  info.processLocalLayout(false, true, true);
 
   for (size_t i = 0u; i < info.elements.size(); i++) {
     const auto& e = info.elements.at(i);
@@ -188,7 +188,7 @@ void testIrPropagateStructuredLdsDynamic() {
 
   /* Flatten */
   info = base;
-  info.processLocalLayout(true, true);
+  info.processLocalLayout(true, true, true);
 
   ok(info.isFlattened && info.flattenedScalarCount == 6u);
   ok(info.newOuterArrayDims == 1u);
@@ -222,7 +222,7 @@ void testIrPropagateStructuredLdsAtomic() {
   base.elements.at(1u).isAtomicallyAccessed = true;
 
   PropagateResourceTypeRewriteInfo info = base;
-  info.processLocalLayout(false, true);
+  info.processLocalLayout(false, true, true);
 
   for (size_t i = 0u; i < info.elements.size(); i++) {
     const auto& e = info.elements.at(i);
