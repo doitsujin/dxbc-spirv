@@ -378,6 +378,12 @@ public:
     return dimension < m_dimensions ? m_sizes[dimension] : 0u;
   }
 
+  /** Overrides array size for an existing array dimension */
+  void setArraySize(uint32_t dimension, uint32_t size) {
+    if (dimension < m_dimensions)
+      m_sizes[dimension] = size;
+  }
+
   /** Adds a struct member. */
   Type& addStructMember(BasicType type);
 

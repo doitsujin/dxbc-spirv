@@ -53,6 +53,15 @@ public:
 
   static void runUnpackArrayPass(Builder& builder, const Options& options);
 
+  /* Runs pass to enable bound-checking on scratch variables. Should be
+   * run last in order to not replace constant indices with non-constants. */
+  void enableBoundChecking();
+
+  static void runBoundCheckingPass(Builder& builder, const Options& options);
+
+  /* Runs all passes in a sensible order */
+  static void runPass(Builder& builder, const Options& options);
+
 private:
 
   Builder&  m_builder;
@@ -94,6 +103,8 @@ private:
   void rewriteScratchStoreToTemp(const Op& storeOp, size_t tempCount, const SsaDef* temps);
 
   void determineFunctionForDefs();
+
+  bool boundCheckScratchArray(SsaDef def);
 
   std::pair<SsaDef, uint64_t> extractBaseAndOffset(const Op& op) const;
 

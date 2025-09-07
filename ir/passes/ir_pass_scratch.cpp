@@ -51,6 +51,40 @@ void CleanupScratchPass::runUnpackArrayPass(Builder& builder, const Options& opt
 }
 
 
+void CleanupScratchPass::enableBoundChecking() {
+  if (!m_options.enableBoundChecking)
+    return;
+
+  auto [a, b] = m_builder.getDeclarations();
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::eDclScratch) {
+      if (boundCheckScratchArray(iter->getDef())) {
+        auto type = iter->getType();
+
+        for (uint32_t i = 0u; i < type.getArrayDimensions(); i++)
+          type.setArraySize(i, 1u + type.getArraySize(i));
+
+        m_builder.setOpType(iter->getDef(), type);
+      }
+    }
+  }
+}
+
+
+void CleanupScratchPass::runBoundCheckingPass(Builder& builder, const Options& options) {
+  CleanupScratchPass(builder, options).enableBoundChecking();
+}
+
+
+void CleanupScratchPass::runPass(Builder& builder, const Options& options) {
+  CleanupScratchPass instance(builder, options);
+  instance.propagateCbvScratchCopies();
+  instance.unpackArrays();
+  instance.enableBoundChecking();
+}
+
+
 bool CleanupScratchPass::promoteScratchCbvCopy(SsaDef def) {
   constexpr uint32_t MaxSparseSize = 32u;
 
@@ -366,6 +400,110 @@ SsaDef CleanupScratchPass::emitScratchCbvFunction(SsaDef def, const CbvInfo& bas
 
   m_builder.add(Op::FunctionEnd());
   return function;
+}
+
+
+bool CleanupScratchPass::boundCheckScratchArray(SsaDef def) {
+  const auto& scratchOp = m_builder.getOp(def);
+
+  util::small_vector<SsaDef, 256u> uses;
+  m_builder.getUses(def, uses);
+
+  bool addedBoundCheck = false;
+
+  for (auto use : uses) {
+    auto useOp = m_builder.getOp(use);
+
+    if (useOp.getFlags() & OpFlag::eInBounds)
+      continue;
+
+    if (useOp.getOpCode() != OpCode::eScratchLoad &&
+        useOp.getOpCode() != OpCode::eScratchStore)
+      continue;
+
+    /* Ignore op if the index is fully constant and in bounds */
+    const auto& indexOp = m_builder.getOpForOperand(useOp, 1u);
+    auto indexType = indexOp.getType().getBaseType(0u);
+
+    uint32_t dims = std::min(scratchOp.getType().getArrayDimensions(), indexType.getVectorSize());
+
+    SsaDef inBoundsCond = { };
+    bool isInBoundsConstant = true;
+
+    for (uint32_t i = 0u; i < dims; i++) {
+      auto size = scratchOp.getType().getArraySize(scratchOp.getType().getArrayDimensions() - i - 1u);
+      isInBoundsConstant = isInBoundsConstant && indexOp.isConstant() && uint32_t(indexOp.getOperand(i)) < size;
+    }
+
+    if (isInBoundsConstant)
+      continue;
+
+    /* Check all relevant index components against the respective array size */
+    util::small_vector<SsaDef, 4u> indexDefs;
+
+    for (uint32_t i = 0u; i < dims; i++) {
+      auto size = scratchOp.getType().getArraySize(scratchOp.getType().getArrayDimensions() - i - 1u);
+
+      auto& indexDef = indexDefs.emplace_back();
+      indexDef = indexOp.getDef();
+
+      if (indexType.isVector()) {
+        indexDef = m_builder.addBefore(use, Op::CompositeExtract(
+          indexType.getBaseType(), indexDef, m_builder.makeConstant(i)));
+      }
+
+      if (useOp.getOpCode() == OpCode::eScratchStore) {
+        auto check = m_builder.addBefore(use,
+          Op::ULt(ScalarType::eBool, indexDef, m_builder.makeConstant(size)));
+
+        if (inBoundsCond) {
+          inBoundsCond = m_builder.addBefore(use,
+            Op::BAnd(ScalarType::eBool, inBoundsCond, check));
+        } else {
+          inBoundsCond = check;
+        }
+      }
+
+      indexDef = m_builder.addBefore(use,
+        Op::UMin(indexType.getBaseType(), indexDef, m_builder.makeConstant(size)));
+    }
+
+    if (isInBoundsConstant)
+      continue;
+
+    for (uint32_t i = dims; i < indexType.getVectorSize(); i++) {
+      indexDefs.push_back(m_builder.addBefore(use,
+        Op::CompositeExtract(indexType.getBaseType(), indexOp.getDef(), m_builder.makeConstant(i))));
+    }
+
+    /* Build new index vector */
+    auto newIndex = indexDefs.front();
+
+    if (indexType.isVector()) {
+      Op newIndexOp(OpCode::eCompositeConstruct, indexType);
+
+      for (auto s : indexDefs)
+        newIndexOp.addOperand(s);
+
+      newIndex = m_builder.addBefore(use, std::move(newIndexOp));
+    }
+
+    useOp.setFlags(useOp.getFlags() | OpFlag::eInBounds);
+    useOp.setOperand(1u, newIndex);
+
+    /* If this is an out-of-bounds store, replace the value with zero */
+    if (useOp.getOpCode() == OpCode::eScratchStore && inBoundsCond) {
+      const auto& valueOp = m_builder.getOpForOperand(useOp, 2u);
+
+      useOp.setOperand(2u, m_builder.addBefore(use, Op::Select(valueOp.getType(),
+        inBoundsCond, valueOp.getDef(), m_builder.makeConstantZero(valueOp.getType()))));
+    }
+
+    m_builder.rewriteOp(use, std::move(useOp));
+    addedBoundCheck = true;
+  }
+
+  return addedBoundCheck;
 }
 
 
