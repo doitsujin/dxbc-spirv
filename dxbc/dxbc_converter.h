@@ -39,8 +39,6 @@ public:
      *  includes resources, scratch and shared variables, as well as
      *  semantic names for I/O variables. */
     bool includeDebugNames = false;
-    /** Whether to bound-check scratch loads and stores. */
-    bool boundCheckScratch = true;
     /** Whether to bound-check the vertex axis of shader I/O. */
     bool boundCheckShaderIo = true;
     /** Whether to bound-check immediate constant buffer loads.
