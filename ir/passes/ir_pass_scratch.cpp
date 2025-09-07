@@ -16,22 +16,29 @@ CleanupScratchPass::~CleanupScratchPass() {
 }
 
 
-void CleanupScratchPass::propagateCbvScratchCopies() {
+bool CleanupScratchPass::propagateCbvScratchCopies() {
+  bool feedback = false;
+
+  if (!m_options.resolveCbvCopy)
+    return feedback;
+
   auto [a, b] = m_builder.getDeclarations();
 
   for (auto iter = a; iter != b; iter++) {
     if (iter->getOpCode() == OpCode::eDclScratch)
-      promoteScratchCbvCopy(iter->getDef());
+      feedback |= promoteScratchCbvCopy(iter->getDef());
   }
+
+  return feedback;
 }
 
 
-void CleanupScratchPass::runResolveCbvToScratchCopyPass(Builder& builder, const Options& options) {
-  CleanupScratchPass(builder, options).propagateCbvScratchCopies();
+bool CleanupScratchPass::runResolveCbvToScratchCopyPass(Builder& builder, const Options& options) {
+  return CleanupScratchPass(builder, options).propagateCbvScratchCopies();
 }
 
 
-void CleanupScratchPass::unpackArrays() {
+bool CleanupScratchPass::unpackArrays() {
   auto [a, b] = m_builder.getDeclarations();
 
   bool feedback = false;
@@ -43,17 +50,21 @@ void CleanupScratchPass::unpackArrays() {
 
   if (feedback)
     ir::SsaConstructionPass::runPass(m_builder);
+
+  return feedback;
 }
 
 
-void CleanupScratchPass::runUnpackArrayPass(Builder& builder, const Options& options) {
-  CleanupScratchPass(builder, options).unpackArrays();
+bool CleanupScratchPass::runUnpackArrayPass(Builder& builder, const Options& options) {
+  return CleanupScratchPass(builder, options).unpackArrays();
 }
 
 
-void CleanupScratchPass::enableBoundChecking() {
+bool CleanupScratchPass::enableBoundChecking() {
+  bool feedback = false;
+
   if (!m_options.enableBoundChecking)
-    return;
+    return feedback;
 
   auto iter = m_builder.begin();
 
@@ -66,37 +77,42 @@ void CleanupScratchPass::enableBoundChecking() {
           type.setArraySize(i, 1u + type.getArraySize(i));
 
         m_builder.setOpType(iter->getDef(), type);
+        feedback = true;
       }
     } else if (iter->isConstant() && iter->getType().isArrayType()) {
       if (boundCheckScratchArray(iter->getDef())) {
         iter = rewriteBoundCheckedConstant(*iter);
+        feedback = true;
         continue;
       }
     }
 
     ++iter;
   }
+
+  return feedback;
 }
 
 
-void CleanupScratchPass::runBoundCheckingPass(Builder& builder, const Options& options) {
-  CleanupScratchPass(builder, options).enableBoundChecking();
+bool CleanupScratchPass::runBoundCheckingPass(Builder& builder, const Options& options) {
+  return CleanupScratchPass(builder, options).enableBoundChecking();
 }
 
 
-void CleanupScratchPass::runPass(Builder& builder, const Options& options) {
+bool CleanupScratchPass::runPass(Builder& builder, const Options& options) {
+  bool feedback = false;
+
   CleanupScratchPass instance(builder, options);
-  instance.propagateCbvScratchCopies();
-  instance.unpackArrays();
-  instance.enableBoundChecking();
+  feedback |= instance.propagateCbvScratchCopies();
+  feedback |= instance.unpackArrays();
+  feedback |= instance.enableBoundChecking();
+
+  return feedback;
 }
 
 
 bool CleanupScratchPass::promoteScratchCbvCopy(SsaDef def) {
   constexpr uint32_t MaxSparseSize = 32u;
-
-  if (!m_options.resolveCbvCopy)
-    return false;
 
   /* Scratch type must be a flat array of scalars or vectors */
   auto type = m_builder.getOp(def).getType();
@@ -475,9 +491,6 @@ bool CleanupScratchPass::boundCheckScratchArray(SsaDef def) {
       indexDef = m_builder.addBefore(use,
         Op::UMin(indexType.getBaseType(), indexDef, m_builder.makeConstant(size)));
     }
-
-    if (isInBoundsConstant)
-      continue;
 
     for (uint32_t i = dims; i < indexType.getVectorSize(); i++) {
       indexDefs.push_back(m_builder.addBefore(use,

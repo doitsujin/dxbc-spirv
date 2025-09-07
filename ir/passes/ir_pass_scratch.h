@@ -43,24 +43,24 @@ public:
   /* Runs pass to optimize away constant buffer to scratch arrray copies
    * in such a way that the constant buffer is accessed directly. This
    * pass must be run before consume instructions are lowered. */
-  void propagateCbvScratchCopies();
+  bool propagateCbvScratchCopies();
 
-  static void runResolveCbvToScratchCopyPass(Builder& builder, const Options& options);
+  static bool runResolveCbvToScratchCopyPass(Builder& builder, const Options& options);
 
   /* Optimizes small scalar or vector arrays with constant store indices to
    * use temporaries and if-ladders for loads. May invoke SSA construction. */
-  void unpackArrays();
+  bool unpackArrays();
 
-  static void runUnpackArrayPass(Builder& builder, const Options& options);
+  static bool runUnpackArrayPass(Builder& builder, const Options& options);
 
   /* Runs pass to enable bound-checking on scratch variables. Should be
    * run last in order to not replace constant indices with non-constants. */
-  void enableBoundChecking();
+  bool enableBoundChecking();
 
-  static void runBoundCheckingPass(Builder& builder, const Options& options);
+  static bool runBoundCheckingPass(Builder& builder, const Options& options);
 
   /* Runs all passes in a sensible order */
-  static void runPass(Builder& builder, const Options& options);
+  static bool runPass(Builder& builder, const Options& options);
 
 private:
 
