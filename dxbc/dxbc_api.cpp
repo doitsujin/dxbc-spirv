@@ -57,7 +57,15 @@ void legalizeIr(ir::Builder& builder, const CompileOptions& options) {
    * practice this should detect problematic patterns. Must be run before consume
    * instructions are lowered, and should be run before constant buffer types are
    * inferred to not disrupt array optimizations. */
-  ir::CleanupScratchPass::runPass(builder, options.scratchOptions);
+  if (ir::CleanupScratchPass::runPass(builder, options.scratchOptions)) {
+    bool progress;
+
+    do {
+      progress = false;
+      progress |= ir::ScalarizePass::runResolveRedundantCompositesPass(builder);
+      progress |= ir::LowerConsumePass::runResolveCastChainsPass(builder);
+    } while (progress);
+  }
 
   /* Run type propagation for expressions */
   ir::PropagateTypesPass::runPass(builder);
