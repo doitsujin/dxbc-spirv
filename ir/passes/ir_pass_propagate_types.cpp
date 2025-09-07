@@ -101,11 +101,7 @@ std::pair<bool, BasicType> PropagateTypesPass::resolveUnknownPhiSelect(const Op&
     auto [a, b] = m_builder.getUses(op.getDef());
 
     for (auto use = a; use != b; use++) {
-      auto isValidOp = use->getOpCode() == OpCode::eConsumeAs ||
-                       use->getOpCode() == OpCode::ePhi ||
-                       use->getOpCode() == OpCode::eSelect;
-
-      if (isValidOp) {
+      if (use->getOpCode() == OpCode::eConsumeAs) {
         resolvedType = resolveTypeForUnknownOp(
           resolvedType, inferOpType(use->getDef()));
       }
