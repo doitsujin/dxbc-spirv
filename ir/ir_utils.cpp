@@ -6,6 +6,28 @@
 
 namespace dxbc_spv::ir {
 
+void rewritePhiBlock(Builder& builder, SsaDef oldBlock, SsaDef newBlock) {
+  util::small_vector<SsaDef, 64u> uses;
+  builder.getUses(oldBlock, uses);
+
+  for (auto use : uses) {
+    auto phi = builder.getOp(use);
+
+    if (phi.getOpCode() != OpCode::ePhi)
+      continue;
+
+    for (uint32_t i = 0u; i < phi.getOperandCount(); i += 2u) {
+      if (SsaDef(phi.getOperand(i)) == oldBlock) {
+        phi.setOperand(i, newBlock);
+        break;
+      }
+    }
+
+    builder.rewriteOp(use, std::move(phi));
+  }
+}
+
+
 template<typename T>
 std::pair<uint64_t, double> normalizeConstantLiteral(Operand src) {
   if constexpr (std::is_integral_v<T>) {

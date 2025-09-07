@@ -101,6 +101,10 @@ inline bool isOnlyUse(const Builder& builder, SsaDef def, SsaDef use) {
 }
 
 
+/** Rewrites a block reference in all phis to a different block */
+void rewritePhiBlock(Builder& builder, SsaDef oldBlock, SsaDef newBlock);
+
+
 /** Normalizes sub-dword basic scalar or vector types to 32-bit for
  *  use in consume operations. */
 ScalarType normalizeTypeForConsume(ScalarType type);
