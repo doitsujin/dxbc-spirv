@@ -55,9 +55,9 @@ void CleanupScratchPass::enableBoundChecking() {
   if (!m_options.enableBoundChecking)
     return;
 
-  auto [a, b] = m_builder.getDeclarations();
+  auto iter = m_builder.begin();
 
-  for (auto iter = a; iter != b; iter++) {
+  while (iter != m_builder.getDeclarations().second) {
     if (iter->getOpCode() == OpCode::eDclScratch) {
       if (boundCheckScratchArray(iter->getDef())) {
         auto type = iter->getType();
@@ -67,7 +67,14 @@ void CleanupScratchPass::enableBoundChecking() {
 
         m_builder.setOpType(iter->getDef(), type);
       }
+    } else if (iter->isConstant() && iter->getType().isArrayType()) {
+      if (boundCheckScratchArray(iter->getDef())) {
+        iter = rewriteBoundCheckedConstant(*iter);
+        continue;
+      }
     }
+
+    ++iter;
   }
 }
 
@@ -418,7 +425,8 @@ bool CleanupScratchPass::boundCheckScratchArray(SsaDef def) {
       continue;
 
     if (useOp.getOpCode() != OpCode::eScratchLoad &&
-        useOp.getOpCode() != OpCode::eScratchStore)
+        useOp.getOpCode() != OpCode::eScratchStore &&
+        useOp.getOpCode() != OpCode::eConstantLoad)
       continue;
 
     /* Ignore op if the index is fully constant and in bounds */
@@ -504,6 +512,65 @@ bool CleanupScratchPass::boundCheckScratchArray(SsaDef def) {
   }
 
   return addedBoundCheck;
+}
+
+
+Builder::iterator CleanupScratchPass::rewriteBoundCheckedConstant(const Op& op) {
+  /* Determine number of scalars in the innermost non-array type */
+  Type type = op.getType();
+  Type baseType = type;
+
+  for (uint32_t i = 0u; i < type.getArrayDimensions(); i++)
+    baseType = baseType.getSubType(0u);
+
+  uint32_t scalarCount = baseType.computeFlattenedScalarCount();
+  uint32_t scalarIndex = 0u;
+
+  /* Build new constant by copying scalars from the source, and insert
+   * zero constants as the last element in each array dimension. */
+  util::small_vector<uint32_t, Type::MaxArrayDimensions> idx(type.getArrayDimensions());
+
+  Op newConstant(OpCode::eConstant, Type());
+
+  while (true) {
+    /* Check whether we can copy source values or
+     * need to insert zeroes in this iteration */
+    bool copy = true;
+
+    for (size_t i = 0u; i < idx.size(); i++) {
+      if (idx.at(i) == type.getArraySize(i))
+        copy = false;
+    }
+
+    /* Add constant operands */
+    if (copy) {
+      for (uint32_t i = 0u; i < scalarCount; i++)
+        newConstant.addOperand(op.getOperand(scalarIndex++));
+    } else {
+      for (uint32_t i = 0u; i < scalarCount; i++)
+        newConstant.addOperand(Operand());
+    }
+
+    /* Advance indices. If the last index, i.e. the one for the
+     * outermost array dimension, exceeds the target array size,
+     * we're done. */
+    size_t dim = 0u;
+
+    while (dim < idx.size() && (++idx.at(dim) > type.getArraySize(dim)))
+      idx.at(dim++) = 0u;
+
+    if (dim == idx.size())
+      break;
+  }
+
+  /* Increase the size of each array dimension by one */
+  for (uint32_t i = 0u; i < type.getArrayDimensions(); i++)
+    type.setArraySize(i, type.getArraySize(i) + 1u);
+
+  newConstant.setType(type);
+
+  return m_builder.iter(m_builder.rewriteDef(op.getDef(),
+    m_builder.add(std::move(newConstant))));
 }
 
 
