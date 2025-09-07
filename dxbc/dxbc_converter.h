@@ -41,9 +41,6 @@ public:
     bool includeDebugNames = false;
     /** Whether to bound-check the vertex axis of shader I/O. */
     bool boundCheckShaderIo = true;
-    /** Whether to bound-check immediate constant buffer loads.
-     *  Only useful if ICB is not lowered to a constant buffer. */
-    bool boundCheckIcb = true;
     /** Whether to lower icb to a constant buffer */
     bool lowerIcb = false;
     /** Constant buffer binding and register space */

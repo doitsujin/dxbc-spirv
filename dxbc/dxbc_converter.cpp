@@ -666,7 +666,7 @@ bool Converter::handleCustomData(ir::Builder& builder, const Instruction& op) {
   /* ICB is always declared as a vec4 array, we can get rid of
    * unused vector components later. */
   auto [data, size] = op.getCustomData();
-  uint32_t arraySize = size / 4u + (m_options.boundCheckIcb ? 1u : 0u);
+  uint32_t arraySize = size / 4u;
 
   auto type = ir::Type(ir::ScalarType::eUnknown, 4u).addArrayDimension(arraySize);
 
@@ -678,11 +678,6 @@ bool Converter::handleCustomData(ir::Builder& builder, const Instruction& op) {
 
     for (size_t i = 0u; i < size; i++)
       constant.addOperand(data[i]);
-
-    if (m_options.boundCheckIcb) {
-      for (size_t i = 0u; i < 4u; i++)
-        constant.addOperand(ir::Operand());
-    }
 
     m_icb = builder.add(std::move(constant));
   }
@@ -3276,11 +3271,6 @@ ir::SsaDef Converter::loadIcb(ir::Builder& builder, const Instruction& op, const
 
   auto index = loadOperandIndex(builder, op, operand, 0u);
 
-  if (m_options.boundCheckIcb) {
-    auto arraySize = builder.getOp(m_icb).getType().getArraySize(0u);
-    index = builder.add(ir::Op::UMin(ir::ScalarType::eU32, index, builder.makeConstant(arraySize - 1u)));
-  }
-
   /* Load icb descriptor in case it is lowered */
   ir::SsaDef icbDescriptor = { };
 
@@ -3289,19 +3279,31 @@ ir::SsaDef Converter::loadIcb(ir::Builder& builder, const Instruction& op, const
       ir::ScalarType::eCbv, m_icb, builder.makeConstant(0u)));
   }
 
-  /* Read entire vec4 and extract used components */
-  ir::BasicType unknownType(ir::ScalarType::eUnknown, 4u);
+  if (builder.getOp(m_icb).isConstant()) {
+    /* Don't bother deduplicating loads here, this is a private array anyway */
+    for (auto c : mask) {
+      uint32_t componentIndex = uint8_t(operand.getSwizzle().map(c));
 
-  auto vector = builder.add(builder.getOp(m_icb).isConstant()
-    ? ir::Op::ConstantLoad(unknownType, m_icb, index)
-    : ir::Op::BufferLoad(unknownType, icbDescriptor, index, 4u));
+      auto address = builder.add(ir::Op::CompositeConstruct(
+        ir::BasicType(ir::ScalarType::eU32, 2u), index, builder.makeConstant(componentIndex)));
 
-  for (auto c : mask) {
-    uint32_t componentIndex = uint8_t(operand.getSwizzle().map(c));
+      auto& scalar = scalars.emplace_back();
+      scalar = builder.add(ir::Op::ConstantLoad(ir::ScalarType::eUnknown, m_icb, address));
+      scalar = builder.add(ir::Op::ConsumeAs(type, scalar));
+    }
+  } else {
+    /* Read entire vec4 and extract used components */
+    ir::BasicType unknownType(ir::ScalarType::eUnknown, 4u);
 
-    auto& scalar = scalars.emplace_back();
-    scalar = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eUnknown, vector, builder.makeConstant(componentIndex)));
-    scalar = builder.add(ir::Op::ConsumeAs(type, scalar));
+    auto vector = builder.add(ir::Op::BufferLoad(unknownType, icbDescriptor, index, 4u));
+
+    for (auto c : mask) {
+      uint32_t componentIndex = uint8_t(operand.getSwizzle().map(c));
+
+      auto& scalar = scalars.emplace_back();
+      scalar = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eUnknown, vector, builder.makeConstant(componentIndex)));
+      scalar = builder.add(ir::Op::ConsumeAs(type, scalar));
+    }
   }
 
   return buildVector(builder, type, scalars.size(), scalars.data());
