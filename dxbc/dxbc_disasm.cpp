@@ -490,8 +490,13 @@ void Disassembler::disassembleImmediate(std::ostream& stream, const Operand& arg
     }
 
     /* Resolve ambiguous types based on context */
-    if (type == ir::ScalarType::eUnknown)
-      type = ir::ScalarType::eF32;
+    if (type == ir::ScalarType::eUnknown) {
+      auto kind = std::fpclassify(arg.getImmediate<float>(i));
+
+      type = (kind == FP_INFINITE || kind == FP_NORMAL)
+        ? ir::ScalarType::eF32
+        : ir::ScalarType::eI32;
+    }
 
     switch (type) {
       case ir::ScalarType::eBool:
@@ -517,7 +522,7 @@ void Disassembler::disassembleImmediate(std::ostream& stream, const Operand& arg
         auto ui = arg.getImmediate<uint32_t>(i);
 
         if (ui >= 0x100000u)
-          stream << "0x" << std::hex << std::setw(16u) << std::setfill('0') << ui;
+          stream << "0x" << std::hex << std::setw(8u) << std::setfill('0') << ui;
         else
           stream << ui;
       } break;
