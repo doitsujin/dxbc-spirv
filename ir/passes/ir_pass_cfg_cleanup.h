@@ -74,8 +74,6 @@ private:
 
   SsaDef removeBlockTerminator(SsaDef block);
 
-  void removeBlockFromPhiUses(SsaDef block);
-
   bool isMergeBlock(SsaDef block) const;
 
   bool isContinueBlock(SsaDef block) const;

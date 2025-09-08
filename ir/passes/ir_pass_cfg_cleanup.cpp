@@ -111,18 +111,29 @@ std::pair<bool, Builder::iterator> CleanupControlFlowPass::handleBranchCondition
     auto targetTrue  = SsaDef(op->getOperand(1u));
     auto targetFalse = SsaDef(op->getOperand(2u));
 
+    dxbc_spv_assert(targetTrue != targetFalse);
+
     auto branchTarget = cond ? targetTrue : targetFalse;
     auto removeTarget = cond ? targetFalse : targetTrue;
 
     m_builder.rewriteOp(op->getDef(), Op::Branch(branchTarget));
 
-    auto block = findContainingBlock(m_builder, op->getDef());
-    dxbc_spv_assert(block);
+    const auto& block = m_builder.getOp(findContainingBlock(m_builder, op->getDef()));
+    dxbc_spv_assert(block && Construct(block.getOperand(block.getFirstLiteralOperandIndex())) == Construct::eStructuredSelection);
 
-    m_builder.rewriteOp(block, Op::Label());
+    const auto& mergeBlock = m_builder.getOpForOperand(block, 0u);
+    m_builder.rewriteOp(block.getDef(), Op::Label());
 
-    if (!isBlockReachable(removeTarget))
+    if (removeTarget == mergeBlock.getDef()) {
+      /* If the non-taken branch targets the merge block, we obviously cannot
+       * remove that block, but we do need to alter all phis in the block to
+       * no longer check for the block containing the conditional branch. */
+      rewriteBlockInPhiUsesInBlock(m_builder, removeTarget, block.getDef(), SsaDef());
+    } else {
+      /* Otherwise, the block targeted by the non-taken branch will be unreachable. */
+      dxbc_spv_assert(!isBlockReachable(removeTarget));
       removeBlock(removeTarget);
+    }
 
     return std::make_pair(true, ++op);
   }
@@ -174,15 +185,6 @@ std::pair<bool, Builder::iterator> CleanupControlFlowPass::handleBranchCondition
             return std::make_pair(false, ++op);
         } break;
 
-        case OpCode::ePhi: {
-          /* This is a selection, so phis from this block should only really
-           * occur inside the merge block. Ignore other cases for simplicity. */
-          auto phiBlock = findContainingBlock(m_builder, use->getDef());
-
-          if (phiBlock != mergeBlock.getDef())
-            return std::make_pair(false, ++op);
-        } break;
-
         default:
           break;
       }
@@ -193,7 +195,8 @@ std::pair<bool, Builder::iterator> CleanupControlFlowPass::handleBranchCondition
 
     /* We ensured that phis for this block only exist inside the merge block.
      * Rewrite those phis to use the original selection instead. */
-    rewritePhiBlock(m_builder, block.getDef(), parentSelection);
+    rewriteBlockInPhiUsesInBlock(m_builder,
+      mergeBlock.getDef(), block.getDef(), parentSelection);
 
     /* Rewrite unconditional branch inside the parent's if block to target
      * the true branch of the current selection instead */
@@ -215,8 +218,8 @@ std::pair<bool, Builder::iterator> CleanupControlFlowPass::handleBranchCondition
     m_builder.rewriteOp(parentSelection, Op::LabelSelection(mergeBlock.getDef()));
 
     /* Remove the old merge block, which is now unreachable */
-    removeBlock(block.getDef());
-    return std::make_pair(true, ++op);
+    auto next = removeBlock(block.getDef());
+    return std::make_pair(true, m_builder.iter(next));
   }
 
   return std::make_pair(false, ++op);
@@ -313,7 +316,7 @@ bool CleanupControlFlowPass::removeUnusedBlocks() {
 
 SsaDef CleanupControlFlowPass::removeBlock(SsaDef block) {
   auto iter = m_builder.iter(block);
-  removeBlockFromPhiUses(block);
+  rewriteBlockInPhiUses(m_builder, block, SsaDef());
 
   while (!isBlockTerminator(iter->getOpCode())) {
     if (iter->getOpCode() == OpCode::eFunctionCall)
@@ -360,51 +363,6 @@ SsaDef CleanupControlFlowPass::removeBlockTerminator(SsaDef block) {
   }
 
   return next;
-}
-
-
-void CleanupControlFlowPass::removeBlockFromPhiUses(SsaDef block) {
-  dxbc_spv_assert(m_builder.getOp(block).getOpCode() == OpCode::eLabel);
-
-  util::small_vector<SsaDef, 64u> uses;
-  m_builder.getUses(block, uses);
-
-  for (auto useDef : uses) {
-    const auto& use = m_builder.getOp(useDef);
-
-    if (use.getOpCode() == OpCode::ePhi) {
-      uint32_t blockCount = use.getOperandCount() / 2u;
-
-      if (blockCount <= 2u) {
-        /* Find the value that does not correspond to the block
-         * being removed and remove the phi entirely. */
-        for (uint32_t i = 0u; i < use.getOperandCount(); i += 2u) {
-          auto phiBlock = SsaDef(use.getOperand(i));
-
-          if (phiBlock != block) {
-            auto phiValue = SsaDef(use.getOperand(i + 1u));
-            m_builder.rewriteDef(use.getDef(), phiValue);
-            break;
-          }
-        }
-      } else {
-        /* Replace phi op with another phi that is missing this block */
-        Op phi(OpCode::ePhi, use.getType());
-
-        for (uint32_t i = 0u; i < use.getOperandCount(); i += 2u) {
-          auto phiBlock = SsaDef(use.getOperand(i));
-          auto phiValue = SsaDef(use.getOperand(i + 1u));
-
-          if (phiBlock != block) {
-            phi.addOperand(phiBlock);
-            phi.addOperand(phiValue);
-          }
-        }
-
-        m_builder.rewriteOp(use.getDef(), std::move(phi));
-      }
-    }
-  }
 }
 
 
