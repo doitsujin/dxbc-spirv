@@ -80,6 +80,8 @@ private:
 
   bool isReadOnlyResource(const Op& op) const;
 
+  bool derivativeIsZeroForArg(const Op& op) const;
+
 };
 
 }

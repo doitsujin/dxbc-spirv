@@ -29,6 +29,8 @@ DerivativePass::~DerivativePass() {
 
 
 bool DerivativePass::run() {
+  bool status = false;
+
   if (m_stage != ShaderStage::ePixel)
     return false;
 
@@ -38,6 +40,16 @@ bool DerivativePass::run() {
   auto iter = m_builder.getCode().first;
 
   while (iter != m_builder.getCode().second) {
+    if (iter->getOpCode() == OpCode::eDerivX || iter->getOpCode() == OpCode::eDerivY) {
+      const auto& arg = m_builder.getOpForOperand(*iter, 0u);
+
+      if (derivativeIsZeroForArg(arg)) {
+        iter = m_builder.iter(m_builder.rewriteDef(iter->getDef(), m_builder.makeConstantZero(iter->getType())));
+        status = true;
+        continue;
+      }
+    }
+
     if (iter->getOpCode() == OpCode::eLabel) {
       currentBlockScope = m_divergence->getUniformScopeForDef(iter->getDef());
     } else if (isBlockTerminator(iter->getOpCode())) {
@@ -59,7 +71,7 @@ bool DerivativePass::run() {
   }
 
   if (m_opBlocks.empty())
-    return false;
+    return status;
 
   relocateInstructions();
   return true;
@@ -568,6 +580,28 @@ bool DerivativePass::isReadOnlyResource(const Op& op) const {
 
   auto uavFlags = UavFlags(dcl.getOperand(dcl.getFirstLiteralOperandIndex() + 4u));
   return bool(uavFlags & UavFlag::eReadOnly);
+}
+
+
+bool DerivativePass::derivativeIsZeroForArg(const Op& op) const {
+  if (m_divergence->getUniformScopeForDef(op.getDef()) < Scope::eQuad)
+    return false;
+
+  if ((op.getFlags() & OpFlag::eNoNan) && (op.getFlags() & OpFlag::eNoInf))
+    return true;
+
+  if (op.isConstant() && op.getType().getBaseType(0u).getBaseType() == ScalarType::eF32) {
+    bool noInfNan = true;
+
+    for (uint32_t i = 0u; i < op.getOperandCount(); i++) {
+      auto kind = std::fpclassify(float(op.getOperand(i)));
+      noInfNan = noInfNan && kind != FP_NAN && kind != FP_INFINITE;
+    }
+
+    return noInfNan;
+  }
+
+  return false;
 }
 
 }
