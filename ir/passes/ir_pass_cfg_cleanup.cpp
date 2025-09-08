@@ -93,10 +93,66 @@ std::pair<bool, Builder::iterator> CleanupControlFlowPass::handleFunction(Builde
 
 
 std::pair<bool, Builder::iterator> CleanupControlFlowPass::handleLabel(Builder::iterator op) {
-  if (isBlockUsed(op->getDef()))
+  /* Remove unused blocks entirely */
+  if (!isBlockUsed(op->getDef()))
+    return std::make_pair(true, m_builder.iter(removeBlock(op->getDef())));
+
+  /* If the block does not serve any special function w.r.t. structured control flow,
+   * only has a single predecessor, and if that predecessor is not the header of any
+   * construct and unconditionally branches to this block without any trivial phi,
+   * we can merge the two blocks. This is a common occurence as part of other control
+   * flow optimizations. */
+  SsaDef parentBranch = { };
+
+  auto [a, b] = m_builder.getUses(op->getDef());
+
+  for (auto iter = a; iter != b; iter++) {
+    switch (iter->getOpCode()) {
+      case OpCode::eLabel:
+      case OpCode::eBranchConditional:
+      case OpCode::eSwitch:
+        return std::make_pair(false, ++op);
+
+      case OpCode::eBranch: {
+        if (std::exchange(parentBranch, iter->getDef()))
+          return std::make_pair(false, ++op);
+      } break;
+
+      case OpCode::ePhi:
+        continue;
+
+      default:
+        dxbc_spv_assert(iter->isDeclarative());
+    }
+  }
+
+  /* The blocks must be adjacent in code */
+  if (m_builder.getPrev(op->getDef()) != parentBranch)
     return std::make_pair(false, ++op);
 
-  return std::make_pair(true, m_builder.iter(removeBlock(op->getDef())));
+  /* The single predecessor can't be a construct header of any kind */
+  auto& parentBlock = m_builder.getOp(findContainingBlock(m_builder, parentBranch));
+
+  if (Construct(parentBlock.getOperand(parentBlock.getFirstLiteralOperandIndex())) != Construct::eNone)
+    return std::make_pair(false, ++op);
+
+  /* If the parent block is used in any phi, which must be a trivial phi
+   * inside the block we want to eliminate, we can't merge yet */
+  std::tie(a, b) = m_builder.getUses(parentBlock.getDef());
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::ePhi)
+      return std::make_pair(false, ++op);
+  }
+
+  /* We can merge, simply replace all uses of the block with its predecessor */
+  m_builder.rewriteOp(parentBlock.getDef(), *op);
+  m_builder.remove(parentBranch);
+
+  dxbc_spv_assert(!isBlockUsed(op->getDef()));
+
+  auto next = m_builder.rewriteDef(op->getDef(), parentBlock.getDef());
+  return std::make_pair(true, m_builder.iter(next));
 }
 
 
