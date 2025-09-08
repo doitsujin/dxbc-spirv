@@ -103,23 +103,26 @@ std::pair<bool, Builder::iterator> CleanupControlFlowPass::handleLabel(Builder::
 std::pair<bool, Builder::iterator> CleanupControlFlowPass::handleBranchConditional(Builder::iterator op) {
   const auto& condOp = m_builder.getOpForOperand(*op, 0u);
 
+  const auto& targetTrue  = m_builder.getOpForOperand(*op, 1u);
+  const auto& targetFalse = m_builder.getOpForOperand(*op, 2u);
+
+  dxbc_spv_assert(targetTrue.getDef() != targetFalse.getDef());
+
+  const auto& block = m_builder.getOp(findContainingBlock(m_builder, op->getDef()));
+  dxbc_spv_assert(block && Construct(block.getOperand(block.getFirstLiteralOperandIndex())) == Construct::eStructuredSelection);
+
+  const auto& mergeBlock = m_builder.getOpForOperand(block, 0u);
+  dxbc_spv_assert(targetTrue.getDef() != mergeBlock.getDef());
+
   if (condOp.isConstant()) {
     /* Replace conditionl branch with constant condition with a
      * plain branch, and remove the unreachable block */
     bool cond = bool(condOp.getOperand(0u));
 
-    auto targetTrue  = SsaDef(op->getOperand(1u));
-    auto targetFalse = SsaDef(op->getOperand(2u));
-
-    dxbc_spv_assert(targetTrue != targetFalse);
-
-    auto branchTarget = cond ? targetTrue : targetFalse;
-    auto removeTarget = cond ? targetFalse : targetTrue;
+    auto branchTarget = cond ? targetTrue.getDef() : targetFalse.getDef();
+    auto removeTarget = cond ? targetFalse.getDef() : targetTrue.getDef();
 
     m_builder.rewriteOp(op->getDef(), Op::Branch(branchTarget));
-
-    const auto& block = m_builder.getOp(findContainingBlock(m_builder, op->getDef()));
-    dxbc_spv_assert(block && Construct(block.getOperand(block.getFirstLiteralOperandIndex())) == Construct::eStructuredSelection);
 
     const auto& mergeBlock = m_builder.getOpForOperand(block, 0u);
     m_builder.rewriteOp(block.getDef(), Op::Label());
@@ -131,26 +134,83 @@ std::pair<bool, Builder::iterator> CleanupControlFlowPass::handleBranchCondition
       rewriteBlockInPhiUsesInBlock(m_builder, removeTarget, block.getDef(), SsaDef());
     } else {
       /* Otherwise, the block targeted by the non-taken branch will be unreachable. */
-      dxbc_spv_assert(!isBlockReachable(removeTarget));
+      dxbc_spv_assert(!isBlockUsed(removeTarget));
       removeBlock(removeTarget);
     }
 
-    return std::make_pair(true, ++op);
+    return std::make_pair(true, op);
+  }
+
+  /* If the 'false' branch targets an empty block that only branches to the merge
+   * block of the selection, simply target the merge block itself instead. */
+  if (targetFalse.getDef() != mergeBlock.getDef()) {
+    const auto& branch = m_builder.getOp(m_builder.getNext(targetFalse.getDef()));
+
+    if (branch.getOpCode() == OpCode::eBranch && SsaDef(branch.getOperand(0u)) == mergeBlock.getDef()) {
+      m_builder.rewriteOp(op->getDef(), Op::BranchConditional(condOp.getDef(), targetTrue.getDef(), mergeBlock.getDef()));
+      rewriteBlockInPhiUses(m_builder, targetFalse.getDef(), block.getDef());
+
+      dxbc_spv_assert(!isBlockUsed(targetFalse.getDef()));
+      removeBlock(targetFalse.getDef());
+
+      return std::make_pair(true, op);
+    }
+  }
+
+  /* If the 'true' branch is empty, there are two scenarios: Either the 'false' branch
+   * targets a dedicated block, in which case we can simply invert the branch condition
+   * and let the empty 'false' branch elimination get rid of the empty block.
+   * Alternatively, if the 'false' branch targets the merge block, rewrite all phis for
+   * this selection as plain selects based on the branch condition and eliminate the
+   * conditional branch altogether. This is a non-aggressive way of flattening control
+   * flow, as it will eliminate blocks that only perform assignments, but will preserve
+   * any control flow with non-trivial code inside it. */
+  if (targetTrue.getDef() != mergeBlock.getDef()) {
+    const auto& branch = m_builder.getOp(m_builder.getNext(targetTrue.getDef()));
+
+    if (branch.getOpCode() == OpCode::eBranch && SsaDef(branch.getOperand(0u)) == mergeBlock.getDef()) {
+      if (targetFalse.getDef() != mergeBlock.getDef()) {
+        auto notCond = m_builder.addBefore(op->getDef(), Op::BNot(condOp.getType(), condOp.getDef()));
+        m_builder.rewriteOp(op->getDef(), Op::BranchConditional(notCond, targetFalse.getDef(), targetTrue.getDef()));
+        return std::make_pair(true, op);
+      } else {
+        auto next = m_builder.getNext(mergeBlock.getDef());
+
+        while (m_builder.getOp(next).getOpCode() == OpCode::ePhi) {
+          const auto& phi = m_builder.getOp(next);
+
+          SsaDef trueValue = { };
+          SsaDef falseValue = { };
+
+          forEachPhiOperand(phi, [&] (SsaDef from, SsaDef value) {
+            if (from == targetTrue.getDef())
+              trueValue = value;
+            else if (from == block.getDef())
+              falseValue = value;
+            else
+              dxbc_spv_unreachable();
+          });
+
+          m_builder.rewriteOp(next, Op::Select(phi.getType(), condOp.getDef(), trueValue, falseValue));
+          next = m_builder.getNext(phi.getDef());
+        }
+
+        m_builder.rewriteOp(op->getDef(), Op::Branch(mergeBlock.getDef()));
+        m_builder.rewriteOp(block.getDef(), Op::Label());
+
+        dxbc_spv_assert(!isBlockUsed(targetTrue.getDef()));
+        removeBlock(targetTrue.getDef());
+
+        return std::make_pair(true, op);
+      }
+    }
   }
 
   /* If the block consists of nothing but a conditional branch, is the merge
    * block of a selection, and that selection uses a conditional branch with
    * the same condition and the merge block as its false branch, we can fold
    * the block into the parent selection and get rid of the redundant branch. */
-  const auto& block = m_builder.getOp(m_builder.getPrev(op->getDef()));
-
-  if (block.getOpCode() == OpCode::eLabel) {
-    /* Make sure this is a proper selection and not something weird */
-    if (Construct(block.getOperand(block.getFirstLiteralOperandIndex())) != Construct::eStructuredSelection)
-      return std::make_pair(false, ++op);
-
-    const auto& mergeBlock = m_builder.getOpForOperand(block, 0u);
-
+  if (block.getDef() == m_builder.getPrev(op->getDef())) {
     SsaDef parentSelection = { };
     SsaDef parentBranchIf = { };
     SsaDef parentBranchEnd = { };
