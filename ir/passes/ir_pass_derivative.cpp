@@ -35,9 +35,9 @@ bool DerivativePass::run() {
   /* Gather instructions that can and need to be relocated */
   Scope currentBlockScope = Scope::eGlobal;
 
-  auto [a, b] = m_builder.getCode();
+  auto iter = m_builder.getCode().first;
 
-  for (auto iter = a; iter != b; iter++) {
+  while (iter != m_builder.getCode().second) {
     if (iter->getOpCode() == OpCode::eLabel) {
       currentBlockScope = m_divergence->getUniformScopeForDef(iter->getDef());
     } else if (isBlockTerminator(iter->getOpCode())) {
@@ -54,6 +54,8 @@ bool DerivativePass::run() {
           hoistInstruction(*iter, dom);
       }
     }
+
+    ++iter;
   }
 
   if (m_opBlocks.empty())
@@ -74,60 +76,68 @@ void DerivativePass::hoistInstruction(const Op& op, SsaDef block) {
     const auto& coord = m_builder.getOpForOperand(op, 3u);
     dxbc_spv_assert(coord && coord.getType().isBasicType());
 
-    const auto& lodBias = m_builder.getOpForOperand(op, 6u);
-    dxbc_spv_assert(!m_builder.getOpForOperand(op, 5u));
-
-    /* If an LOD bias is specified, use it to scale the derivatives. */
-    SsaDef lodBiasScale = { };
-
-    if (lodBias) {
-      lodBiasScale = m_builder.addBefore(op.getDef(),
-        Op::FExp2(lodBias.getType(), lodBias.getDef()));
-    }
-
-    /* Explicitly compute derivatives for the given coordinates and
-     * hoist the derivative op itself. */
     auto coordType = coord.getType().getBaseType(0u);
 
-    Op dxComposite(OpCode::eCompositeConstruct, coordType);
-    Op dyComposite(OpCode::eCompositeConstruct, coordType);
+    SsaDef dx = { };
+    SsaDef dy = { };
 
-    for (uint32_t i = 0u; i < coordType.getVectorSize(); i++) {
-      auto coordScalar = coord.getDef();
+    if (m_divergence->getUniformScopeForDef(coord.getDef()) < Scope::eQuad) {
+      const auto& lodBias = m_builder.getOpForOperand(op, 6u);
+      dxbc_spv_assert(!m_builder.getOpForOperand(op, 5u));
+
+      /* If an LOD bias is specified, use it to scale the derivatives. */
+      SsaDef lodBiasScale = { };
+
+      if (lodBias) {
+        lodBiasScale = m_builder.addBefore(op.getDef(),
+          Op::FExp2(lodBias.getType(), lodBias.getDef()));
+      }
+
+      /* Explicitly compute derivatives for the given coordinates and
+      * hoist the derivative op itself. */
+      Op dxComposite(OpCode::eCompositeConstruct, coordType);
+      Op dyComposite(OpCode::eCompositeConstruct, coordType);
+
+      for (uint32_t i = 0u; i < coordType.getVectorSize(); i++) {
+        auto coordScalar = coord.getDef();
+
+        if (coordType.isVector()) {
+          if (coord.getOpCode() == OpCode::eCompositeConstruct) {
+            coordScalar = SsaDef(coord.getOperand(i));
+          } else {
+            coordScalar = m_builder.addBefore(op.getDef(),
+              Op::CompositeExtract(coordType.getBaseType(), coord.getDef(), m_builder.makeConstant(i)));
+          }
+        }
+
+        auto dx = m_builder.addBefore(op.getDef(),
+          Op::DerivX(coordType.getBaseType(), coordScalar, DerivativeMode::eCoarse));
+        auto dy = m_builder.addBefore(op.getDef(),
+          Op::DerivY(coordType.getBaseType(), coordScalar, DerivativeMode::eCoarse));
+
+        /* Only hoist the derivative, not the scaling */
+        m_opBlocks.insert({ dx, block });
+        m_opBlocks.insert({ dy, block });
+
+        if (lodBiasScale) {
+          dx = m_builder.addBefore(op.getDef(), Op::FMul(coordType.getBaseType(), dx, lodBiasScale));
+          dy = m_builder.addBefore(op.getDef(), Op::FMul(coordType.getBaseType(), dy, lodBiasScale));
+        }
+
+        dxComposite.addOperand(dx);
+        dyComposite.addOperand(dy);
+      }
+
+      dx = SsaDef(dxComposite.getOperand(0u));
+      dy = SsaDef(dyComposite.getOperand(0u));
 
       if (coordType.isVector()) {
-        if (coord.getOpCode() == OpCode::eCompositeConstruct) {
-          coordScalar = SsaDef(coord.getOperand(i));
-        } else {
-          coordScalar = m_builder.addBefore(op.getDef(),
-            Op::CompositeExtract(coordType.getBaseType(), coord.getDef(), m_builder.makeConstant(i)));
-        }
+        dx = m_builder.addBefore(op.getDef(), std::move(dxComposite));
+        dy = m_builder.addBefore(op.getDef(), std::move(dyComposite));
       }
-
-      auto dx = m_builder.addBefore(op.getDef(),
-        Op::DerivX(coordType.getBaseType(), coordScalar, DerivativeMode::eCoarse));
-      auto dy = m_builder.addBefore(op.getDef(),
-        Op::DerivY(coordType.getBaseType(), coordScalar, DerivativeMode::eCoarse));
-
-      /* Only hoist the derivative, not the scaling */
-      m_opBlocks.insert({ dx, block });
-      m_opBlocks.insert({ dy, block });
-
-      if (lodBiasScale) {
-        dx = m_builder.addBefore(op.getDef(), Op::FMul(coordType.getBaseType(), dx, lodBiasScale));
-        dy = m_builder.addBefore(op.getDef(), Op::FMul(coordType.getBaseType(), dy, lodBiasScale));
-      }
-
-      dxComposite.addOperand(dx);
-      dyComposite.addOperand(dy);
-    }
-
-    SsaDef dx = SsaDef(dxComposite.getOperand(0u));
-    SsaDef dy = SsaDef(dyComposite.getOperand(0u));
-
-    if (coordType.isVector()) {
-      dx = m_builder.addBefore(op.getDef(), std::move(dxComposite));
-      dy = m_builder.addBefore(op.getDef(), std::move(dyComposite));
+    } else {
+      /* Derivatives of uniform values are constant */
+      dx = dy = m_builder.makeConstantZero(coordType);
     }
 
     /* Rewrite sample op to use derivatives */
