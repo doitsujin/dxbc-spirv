@@ -490,7 +490,7 @@ bool CleanupScratchPass::boundCheckScratchArray(SsaDef def) {
       m_builder.rewriteOp(block, Op::LabelSelection(mergeLabel));
 
       /* Rewrite phis using the original block to use the new merge block */
-      rewritePhiBlock(m_builder, block, mergeLabel);
+      rewriteBlockInPhiUses(m_builder, block, mergeLabel);
     } else {
       util::small_vector<SsaDef, 4u> indexDefs;
 

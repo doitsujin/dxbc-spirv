@@ -6,24 +6,54 @@
 
 namespace dxbc_spv::ir {
 
-void rewritePhiBlock(Builder& builder, SsaDef oldBlock, SsaDef newBlock) {
+void rewriteBlockInPhiUse(Builder& builder, SsaDef phi, SsaDef oldBlock, SsaDef newBlock) {
+  const auto& oldPhi = builder.getOp(phi);
+
+  dxbc_spv_assert(oldPhi.getOpCode() == OpCode::ePhi);
+  dxbc_spv_assert(builder.getOp(oldBlock).getOpCode() == OpCode::eLabel);
+  dxbc_spv_assert(!newBlock || builder.getOp(newBlock).getOpCode() == OpCode::eLabel);
+
+  auto newPhi = Op(OpCode::ePhi, oldPhi.getType()).setFlags(oldPhi.getFlags());
+
+  for (uint32_t i = 0u; i < oldPhi.getOperandCount(); i += 2u) {
+    if (SsaDef(oldPhi.getOperand(i)) == oldBlock) {
+      if (newBlock) {
+        newPhi.addOperand(newBlock);
+        newPhi.addOperand(oldPhi.getOperand(i + 1u));
+      }
+    } else {
+      newPhi.addOperand(oldPhi.getOperand(i));
+      newPhi.addOperand(oldPhi.getOperand(i + 1u));
+    }
+  }
+
+  /* Resolve trivial phi right away */
+  if (newPhi.getOperandCount() > 2u)
+    builder.rewriteOp(phi, std::move(newPhi));
+  else
+    builder.rewriteDef(phi, SsaDef(newPhi.getOperand(1u)));
+}
+
+
+void rewriteBlockInPhiUses(Builder& builder, SsaDef oldBlock, SsaDef newBlock) {
   util::small_vector<SsaDef, 64u> uses;
   builder.getUses(oldBlock, uses);
 
   for (auto use : uses) {
-    auto phi = builder.getOp(use);
+    if (builder.getOp(use).getOpCode() == OpCode::ePhi)
+      rewriteBlockInPhiUse(builder, use, oldBlock, newBlock);
+  }
+}
 
-    if (phi.getOpCode() != OpCode::ePhi)
-      continue;
 
-    for (uint32_t i = 0u; i < phi.getOperandCount(); i += 2u) {
-      if (SsaDef(phi.getOperand(i)) == oldBlock) {
-        phi.setOperand(i, newBlock);
-        break;
-      }
-    }
+void rewriteBlockInPhiUsesInBlock(Builder& builder, SsaDef targetBlock, SsaDef oldBlock, SsaDef newBlock) {
+  util::small_vector<SsaDef, 64u> uses;
+  builder.getUses(oldBlock, uses);
 
-    builder.rewriteOp(use, std::move(phi));
+  for (auto use : uses) {
+    if (builder.getOp(use).getOpCode() == OpCode::ePhi &&
+        findContainingBlock(builder, use) == targetBlock)
+      rewriteBlockInPhiUse(builder, use, oldBlock, newBlock);
   }
 }
 
