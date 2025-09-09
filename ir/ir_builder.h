@@ -198,7 +198,7 @@ public:
   /** Gets iterator pair over all uses of an instruction. Note that
    *  these iterators get invalidated when modifying, adding or
    *  removing any instructions. */
-  auto getUses(SsaDef def) const {
+  [[nodiscard]] auto getUses(SsaDef def) const {
     auto& uses = m_ops.at(def).uses;
 
     return std::make_pair(
