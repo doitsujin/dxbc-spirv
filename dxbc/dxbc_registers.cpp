@@ -126,6 +126,11 @@ ir::SsaDef RegisterFile::getFunctionForLabel(
       code->getDef(), ir::Op::Function(ir::ScalarType::eVoid));
 
     builder.addBefore(code->getDef(), ir::Op::FunctionEnd());
+
+    if (m_converter.m_options.includeDebugNames) {
+      builder.add(ir::Op::DebugName(m_labels.at(labelIndex),
+        (std::string("l") + std::to_string(labelIndex)).c_str()));
+    }
   }
 
   return m_labels.at(labelIndex);
