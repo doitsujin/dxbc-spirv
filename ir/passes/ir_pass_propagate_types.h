@@ -45,6 +45,9 @@ public:
   /** Initializes and runs pass on the given builder. */
   static void runPass(Builder& builder);
 
+  /** Helper function to determine the type for an instruction. */
+  static BasicType resolveTypeForUnknownOp(BasicType opType, BasicType operandType);
+
 private:
 
   Builder& m_builder;
@@ -58,8 +61,6 @@ private:
   SsaDef consumeAs(SsaDef def, BasicType type);
 
   BasicType inferOpType(SsaDef def);
-
-  static BasicType resolveTypeForUnknownOp(BasicType opType, BasicType operandType);
 
   static ScalarType makeIntTypeSigned(ScalarType t);
 

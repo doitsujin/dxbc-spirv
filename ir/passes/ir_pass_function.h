@@ -1,7 +1,8 @@
 #pragma once
 
+#include <map>
 #include <unordered_map>
-#include <set>
+#include <unordered_set>
 
 #include "../ir.h"
 #include "../ir_builder.h"
@@ -29,24 +30,47 @@ public:
 
 private:
 
-  struct TempEntry {
-    SsaDef function;
-    SsaDef var;
-
-    bool operator < (const TempEntry& other) const {
-      if (function != other.function)
-        return function < other.function;
-      return var < other.var;
-    }
+  struct TmpParamInfo {
+    BasicType type = { };
+    SsaDef sharedTemp = { };
+    SsaDef localTemp = { };
   };
 
   Builder& m_builder;
 
-  std::unordered_map<SsaDef, SsaDef> m_tempFunctions;
+  std::unordered_map<SsaDef, SsaDef> m_sharedTemps;
+  std::unordered_map<SsaDef, uint32_t> m_callDepth;
 
-  std::set<TempEntry> m_temps;
+  std::multimap<SsaDef, SsaDef> m_functionTemps;
+  std::multimap<SsaDef, SsaDef> m_functionCalls;
 
+  void gatherSharedTempUses();
 
+  void propagateSharedTempUses();
+
+  bool propagateSharedTempUsesRound();
+
+  void removeLocalTempsFromLookupTables();
+
+  void resolveSharedTempsForFunction(SsaDef fn);
+
+  bool isEntryPointFunction(SsaDef function) const;
+
+  void rewriteSharedTempUses(SsaDef function, TmpParamInfo* a, TmpParamInfo* b);
+
+  void resolveLocalTempTypes(TmpParamInfo* a, TmpParamInfo* b);
+
+  void adjustFunctionCallsForSharedTemps(SsaDef function, TmpParamInfo* a, TmpParamInfo* b);
+
+  void adjustFunctionForSharedTemps(SsaDef function, TmpParamInfo* a, TmpParamInfo* b);
+
+  void determineFunctionCallDepth();
+
+  Builder::iterator findFunctionStart(SsaDef function);
+
+  BasicType determineLocalTempType(BasicType type, const Op& op) const;
+
+  static bool insertUnique(std::multimap<SsaDef, SsaDef>& map, SsaDef fn, SsaDef value);
 
 };
 
