@@ -48,6 +48,99 @@ void FunctionCleanupPass::runResolveSharedTempPass(Builder& builder) {
 }
 
 
+void FunctionCleanupPass::removeUnusedParameters() {
+  std::unordered_set<ParamEntry, ParamEntryHash> usedParams;
+  std::unordered_set<SsaDef> functions;
+
+  auto [a, b] = m_builder.getDeclarations();
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::eDclParam) {
+      auto [a, b] = m_builder.getUses(iter->getDef());
+
+      for (auto i = a; i != b; i++) {
+        if (i->getOpCode() == OpCode::eParamLoad) {
+          auto function = SsaDef(i->getOperand(0u));
+          usedParams.insert({ function, iter->getDef() });
+        }
+
+        if (i->getOpCode() == OpCode::eFunction)
+          functions.insert(i->getDef());
+      }
+    }
+  }
+
+  for (auto function : functions) {
+    auto oldFunctionOp = m_builder.getOp(function);
+    auto newFunctionOp = Op::Function(ScalarType::eVoid);
+
+    util::small_vector<SsaDef, 64u> uses;
+    m_builder.getUses(function, uses);
+
+    /* Remove unused parameters from the declaration */
+    for (uint32_t i = 0u; i < oldFunctionOp.getFirstLiteralOperandIndex(); i++) {
+      auto param = SsaDef(oldFunctionOp.getOperand(i));
+
+      if (usedParams.find({ function, param }) != usedParams.end())
+        newFunctionOp.addParam(param);
+    }
+
+    /* Void returns aren't technically 'used', but we can't
+     * actually eliminate anything either */
+    bool usesReturnValue = oldFunctionOp.getType().isVoidType();
+
+    for (auto use : uses) {
+      const auto& useOp = m_builder.getOp(use);
+
+      if (useOp.getOpCode() != OpCode::eFunctionCall)
+        continue;
+
+      if (!usesReturnValue && m_builder.getUseCount(use))
+        usesReturnValue = true;
+    }
+
+    /* Remove unused parameters from function calls and adjust type */
+    for (auto use : uses) {
+      const auto& oldCall = m_builder.getOp(use);
+
+      if (oldCall.getOpCode() != OpCode::eFunctionCall)
+        continue;
+
+      Op newCall(OpCode::eFunctionCall, Type());
+
+      if (usesReturnValue)
+        newCall.setType(oldFunctionOp.getType());
+
+      dxbc_spv_assert(function == SsaDef(oldCall.getOperand(0u)));
+      newCall.addOperand(function);
+
+      for (uint32_t i = 0u; i < oldFunctionOp.getFirstLiteralOperandIndex(); i++) {
+        auto paramDef = SsaDef(oldFunctionOp.getOperand(i));
+        auto paramValue = SsaDef(oldCall.getOperand(i + 1u));
+
+        if (usedParams.find({ function, paramDef }) != usedParams.end())
+          newCall.addOperand(paramValue);
+      }
+
+      m_builder.rewriteOp(use, std::move(newCall));
+    }
+
+    /* Remove return values if the function result is never used */
+    if (usesReturnValue)
+      newFunctionOp.setType(oldFunctionOp.getType());
+    else
+      removeReturnValue(function);
+
+    m_builder.rewriteOp(function, std::move(newFunctionOp));
+  }
+}
+
+
+void FunctionCleanupPass::runRemoveParameterPass(Builder& builder) {
+  FunctionCleanupPass(builder).removeUnusedParameters();
+}
+
+
 void FunctionCleanupPass::gatherSharedTempUses() {
   auto [a, b] = m_builder.getCode();
 
@@ -380,6 +473,18 @@ void FunctionCleanupPass::determineFunctionCallDepth() {
       }
     }
   } while (progress);
+}
+
+
+void FunctionCleanupPass::removeReturnValue(SsaDef function) {
+  auto iter = findFunctionStart(function);
+
+  while (iter->getOpCode() != OpCode::eFunctionEnd) {
+    if (iter->getOpCode() == OpCode::eReturn)
+      m_builder.rewriteOp(iter->getDef(), Op::Return());
+
+    ++iter;
+  }
 }
 
 

@@ -7,6 +7,7 @@
 #include "../ir.h"
 #include "../ir_builder.h"
 
+#include "../../util/util_hash.h"
 #include "../../util/util_small_vector.h"
 
 namespace dxbc_spv::ir {
@@ -28,12 +29,37 @@ public:
 
   static void runResolveSharedTempPass(Builder& builder);
 
+  /* Removes unused parameters and return values from functions */
+  void removeUnusedParameters();
+
+  static void runRemoveParameterPass(Builder& builder);
+
 private:
 
   struct TmpParamInfo {
     BasicType type = { };
     SsaDef sharedTemp = { };
     SsaDef localTemp = { };
+  };
+
+  struct ParamEntry {
+    SsaDef function = { };
+    SsaDef param = { };
+
+    bool operator == (const ParamEntry& other) const {
+      return function == other.function && param == other.param;
+    }
+
+    bool operator != (const ParamEntry& other) const {
+      return function != other.function || param != other.param;
+    }
+  };
+
+  struct ParamEntryHash {
+    size_t operator () (const ParamEntry& e) const {
+      std::hash<SsaDef> hash;
+      return util::hash_combine(hash(e.function), hash(e.param));
+    }
   };
 
   Builder& m_builder;
@@ -65,6 +91,8 @@ private:
   void adjustFunctionForSharedTemps(SsaDef function, TmpParamInfo* a, TmpParamInfo* b);
 
   void determineFunctionCallDepth();
+
+  void removeReturnValue(SsaDef function);
 
   Builder::iterator findFunctionStart(SsaDef function);
 
