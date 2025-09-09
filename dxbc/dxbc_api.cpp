@@ -112,6 +112,9 @@ void legalizeIr(ir::Builder& builder, const CompileOptions& options) {
 
   ir::ArithmeticPass::runLateLoweringPasses(builder, options.arithmeticOptions);
 
+  /* Remove unused function parameters and function returns. */
+  ir::FunctionCleanupPass::runRemoveParameterPass(builder);
+
   /* Do a last round of dead code elimination and also get rid of any FP mode
    * declarations for unused FP modes since those types may be unsupported. */
   ir::RemoveUnusedPass::runPass(builder);

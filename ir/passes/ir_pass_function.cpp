@@ -3,8 +3,6 @@
 #include "ir_pass_function.h"
 #include "ir_pass_propagate_types.h"
 
-#include "../../util/util_log.h"
-
 namespace dxbc_spv::ir {
 
 FunctionCleanupPass::FunctionCleanupPass(Builder& builder)
@@ -99,6 +97,16 @@ void FunctionCleanupPass::removeUnusedParameters() {
         usesReturnValue = true;
     }
 
+    /* Remove return values if the function result is never used */
+    if (usesReturnValue)
+      newFunctionOp.setType(oldFunctionOp.getType());
+    else
+      removeReturnValue(function);
+
+    /* Skip expensive stuff below if the function doesn't change */
+    if (newFunctionOp.isEquivalent(oldFunctionOp))
+      continue;
+
     /* Remove unused parameters from function calls and adjust type */
     for (auto use : uses) {
       const auto& oldCall = m_builder.getOp(use);
@@ -124,12 +132,6 @@ void FunctionCleanupPass::removeUnusedParameters() {
 
       m_builder.rewriteOp(use, std::move(newCall));
     }
-
-    /* Remove return values if the function result is never used */
-    if (usesReturnValue)
-      newFunctionOp.setType(oldFunctionOp.getType());
-    else
-      removeReturnValue(function);
 
     m_builder.rewriteOp(function, std::move(newFunctionOp));
   }
