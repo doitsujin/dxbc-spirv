@@ -1,5 +1,10 @@
 #include "test_api_misc.h"
 
+#include "../../ir/passes/ir_pass_function.h"
+#include "../../ir/passes/ir_pass_lower_consume.h"
+#include "../../ir/passes/ir_pass_remove_unused.h"
+#include "../../ir/passes/ir_pass_ssa.h"
+
 namespace dxbc_spv::test_api {
 
 Builder test_misc_scratch() {
@@ -791,6 +796,135 @@ Builder test_cfg_switch_complex() {
 
   builder.add(Op::OutputStore(outDef, SsaDef(), phi));
   builder.add(Op::Return());
+  return builder;
+}
+
+
+Builder test_pass_function_shared_temps() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+  auto mainFunc = builder.getOpForOperand(entryPoint, 0u).getDef();
+
+  /* Helper function that writes texture coordinates to a two temporaries */
+  auto coordX = builder.add(Op::DclTmp(ScalarType::eF32, entryPoint));
+  auto coordY = builder.add(Op::DclTmp(ScalarType::eF32, entryPoint));
+
+  auto coordIn = builder.add(Op::DclInput(BasicType(ScalarType::eF32, 2u), entryPoint, 0u, 0u, InterpolationModes()));
+  builder.add(Op::Semantic(coordIn, 0u, "TEXCOORD"));
+
+  auto texCoordFunc = builder.addBefore(mainFunc, Op::Function(ScalarType::eVoid));
+  builder.setCursor(texCoordFunc);
+  builder.add(Op::DebugName(texCoordFunc, "get_texcoord"));
+
+  builder.add(Op::Label());
+  builder.add(Op::TmpStore(coordX, builder.add(Op::InputLoad(ScalarType::eF32, coordIn, builder.makeConstant(0u)))));
+  builder.add(Op::TmpStore(coordY, builder.add(Op::InputLoad(ScalarType::eF32, coordIn, builder.makeConstant(1u)))));
+  builder.add(Op::Return());
+  builder.add(Op::FunctionEnd());
+
+  /* Helper function that computes derivatives using temporaries */
+  auto derivX = builder.add(Op::DclTmp(BasicType(ScalarType::eF32, 2u), entryPoint));
+  auto derivY = builder.add(Op::DclTmp(BasicType(ScalarType::eF32, 2u), entryPoint));
+
+  auto derivativeFunc = builder.addBefore(mainFunc, Op::Function(ScalarType::eVoid));
+  builder.setCursor(derivativeFunc);
+  builder.add(Op::DebugName(derivativeFunc, "get_derivatives"));
+
+  builder.add(Op::Label());
+  auto x = builder.add(Op::TmpLoad(ScalarType::eF32, coordX));
+  auto y = builder.add(Op::TmpLoad(ScalarType::eF32, coordY));
+
+  auto dxx = builder.add(Op::DerivX(ScalarType::eF32, x, DerivativeMode::eCoarse));
+  auto dxy = builder.add(Op::DerivY(ScalarType::eF32, x, DerivativeMode::eCoarse));
+  auto dyx = builder.add(Op::DerivX(ScalarType::eF32, y, DerivativeMode::eCoarse));
+  auto dyy = builder.add(Op::DerivY(ScalarType::eF32, y, DerivativeMode::eCoarse));
+
+  builder.add(Op::TmpStore(derivX, builder.add(Op::CompositeConstruct(BasicType(ScalarType::eF32, 2u), dxx, dxy))));
+  builder.add(Op::TmpStore(derivY, builder.add(Op::CompositeConstruct(BasicType(ScalarType::eF32, 2u), dyx, dyy))));
+
+  builder.add(Op::Return());
+  builder.add(Op::FunctionEnd());
+
+  /* Helper function that samples a texture using derivatives */
+  auto color = builder.add(Op::DclTmp(BasicType(ScalarType::eF32, 4u), entryPoint));
+
+  auto sampler = builder.add(Op::DclSampler(entryPoint, 0u, 0u, 1u));
+  auto texture = builder.add(Op::DclSrv(ScalarType::eF32, entryPoint, 0u, 0u, 1u, ResourceKind::eImage2D));
+
+  auto sampleFunc = builder.addBefore(mainFunc, Op::Function(ScalarType::eVoid));
+  builder.setCursor(sampleFunc);
+  builder.add(Op::DebugName(sampleFunc, "sample_texture"));
+
+  builder.add(Op::Label());
+  builder.add(Op::FunctionCall(ScalarType::eVoid, texCoordFunc));
+  builder.add(Op::FunctionCall(ScalarType::eVoid, derivativeFunc));
+
+  auto value = builder.add(Op::ImageSample(BasicType(ScalarType::eF32, 4u),
+    builder.add(Op::DescriptorLoad(ScalarType::eSrv, texture, builder.makeConstant(0u))),
+    builder.add(Op::DescriptorLoad(ScalarType::eSampler, sampler, builder.makeConstant(0u))),
+    SsaDef(),
+    builder.add(Op::CompositeConstruct(BasicType(ScalarType::eF32, 2u),
+      builder.add(Op::TmpLoad(ScalarType::eF32, coordX)),
+      builder.add(Op::TmpLoad(ScalarType::eF32, coordY)))),
+    SsaDef(),
+    SsaDef(),
+    SsaDef(),
+    SsaDef(),
+    builder.add(Op::TmpLoad(BasicType(ScalarType::eF32, 2u), derivX)),
+    builder.add(Op::TmpLoad(BasicType(ScalarType::eF32, 2u), derivY)),
+    SsaDef()));
+
+  builder.add(Op::TmpStore(color, value));
+  builder.add(Op::Return());
+  builder.add(Op::FunctionEnd());
+
+  /* Helper function to return a constant scaling factor for derivatives */
+  auto scale = builder.add(Op::DclTmp(ScalarType::eF32, entryPoint));
+
+  auto scaleFunc = builder.addBefore(mainFunc, Op::Function(ScalarType::eVoid));
+  builder.setCursor(scaleFunc);
+  builder.add(Op::DebugName(scaleFunc, "get_scale"));
+  builder.add(Op::Label());
+  builder.add(Op::TmpStore(scale, builder.makeConstant(2.0f)));
+  builder.add(Op::Return());
+  builder.add(Op::FunctionEnd());
+
+  /* Main function */
+  auto colorOut = builder.add(Op::DclOutput(BasicType(ScalarType::eF32, 4u), entryPoint, 0u, 0u));
+  auto derivXOut = builder.add(Op::DclOutput(BasicType(ScalarType::eF32, 2u), entryPoint, 1u, 0u));
+  auto derivYOut = builder.add(Op::DclOutput(BasicType(ScalarType::eF32, 2u), entryPoint, 2u, 0u));
+
+  builder.add(Op::Semantic(colorOut, 0u, "SV_TARGET"));
+  builder.add(Op::Semantic(derivXOut, 1u, "SV_TARGET"));
+  builder.add(Op::Semantic(derivYOut, 2u, "SV_TARGET"));
+
+  builder.setCursor(mainFunc);
+  builder.add(Op::Label());
+
+  builder.add(Op::FunctionCall(ScalarType::eVoid, sampleFunc));
+  builder.add(Op::FunctionCall(ScalarType::eVoid, scaleFunc));
+
+  auto factor = builder.add(Op::TmpLoad(ScalarType::eF32, scale));
+
+  builder.add(Op::TmpStore(coordX, builder.add(Op::FMul(ScalarType::eF32, builder.add(Op::TmpLoad(ScalarType::eF32, coordX)), factor))));
+  builder.add(Op::TmpStore(coordY, builder.add(Op::FMul(ScalarType::eF32, builder.add(Op::TmpLoad(ScalarType::eF32, coordY)), factor))));
+
+  builder.add(Op::FunctionCall(ScalarType::eVoid, derivativeFunc));
+
+  builder.add(Op::OutputStore(colorOut, SsaDef(), builder.add(Op::TmpLoad(BasicType(ScalarType::eF32, 4u), color))));
+  builder.add(Op::OutputStore(derivXOut, SsaDef(), builder.add(Op::TmpLoad(BasicType(ScalarType::eF32, 2u), derivX))));
+  builder.add(Op::OutputStore(derivYOut, SsaDef(), builder.add(Op::TmpLoad(BasicType(ScalarType::eF32, 2u), derivY))));
+
+  builder.add(Op::Return());
+
+  ir::FunctionCleanupPass::runResolveSharedTempPass(builder);
+  ir::SsaConstructionPass::runPass(builder);
+  ir::LowerConsumePass::runResolveCastChainsPass(builder);
+  ir::LowerConsumePass::runLowerConsumePass(builder);
+  ir::RemoveUnusedPass::runPass(builder);
+  ir::FunctionCleanupPass::runRemoveParameterPass(builder);
+  ir::RemoveUnusedPass::runPass(builder);
+
   return builder;
 }
 

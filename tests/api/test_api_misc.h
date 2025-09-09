@@ -22,4 +22,6 @@ Builder test_cfg_loop_infinite();
 Builder test_cfg_switch_simple();
 Builder test_cfg_switch_complex();
 
+Builder test_pass_function_shared_temps();
+
 }

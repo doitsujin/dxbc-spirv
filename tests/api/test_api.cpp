@@ -415,6 +415,8 @@ void enumeratePassesTests(std::vector<NamedTest>& result, const char* category, 
   ADD_TEST(test_pass_lower_io_enable_flat_shading);
   ADD_TEST(test_pass_lower_io_enable_sample_shading);
   ADD_TEST(test_pass_lower_io_swizzle_rt);
+
+  ADD_TEST(test_pass_function_shared_temps);
 }
 
 
