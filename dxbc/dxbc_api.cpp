@@ -35,6 +35,7 @@ void legalizeIr(ir::Builder& builder, const CompileOptions& options) {
   ir::ConvertControlFlowPass::runPass(builder);
   ir::CleanupControlFlowPass::runPass(builder);
 
+  ir::FunctionCleanupPass::runResolveSharedTempPass(builder);
   ir::SsaConstructionPass::runPass(builder);
 
   /* Lower min-precision types */

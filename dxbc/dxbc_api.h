@@ -10,6 +10,7 @@
 #include "../ir/passes/ir_pass_cfg_convert.h"
 #include "../ir/passes/ir_pass_cse.h"
 #include "../ir/passes/ir_pass_derivative.h"
+#include "../ir/passes/ir_pass_function.h"
 #include "../ir/passes/ir_pass_lower_consume.h"
 #include "../ir/passes/ir_pass_lower_min16.h"
 #include "../ir/passes/ir_pass_propagate_resource_types.h"
