@@ -88,6 +88,32 @@ uint32_t Type::computeTopLevelMemberCount() const {
 }
 
 
+uint32_t Type::computeScalarIndex(uint32_t member) const {
+  if (isArrayType())
+    return member * getSubType(0u).computeFlattenedScalarCount();
+
+  if (isStructType()) {
+    uint32_t base = 0u;
+
+    for (uint32_t i = 0u; i < member; i++)
+      base += getBaseType(i).getVectorSize();
+
+    return base;
+  }
+
+  if (isVectorType())
+    return member;
+
+  if (isScalarType()) {
+    dxbc_spv_assert(!member);
+    return 0u;
+  }
+
+  dxbc_spv_unreachable();
+  return 0u;
+}
+
+
 uint32_t Type::byteSize() const {
   uint32_t alignment = 0u;
   uint32_t size = 0u;

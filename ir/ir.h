@@ -418,6 +418,10 @@ public:
    *  number of vector components. */
   uint32_t computeTopLevelMemberCount() const;
 
+  /** Computes scalar index for a given index into a value. Useful
+   *  when processing constants. */
+  uint32_t computeScalarIndex(uint32_t member) const;
+
   /** Computes byte size of type. If the outermost array dimension
    *  is unsized, returns the size of the underlying type. */
   uint32_t byteSize() const;
