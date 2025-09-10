@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "ir_pass_scratch.h"
 #include "ir_pass_ssa.h"
 
@@ -44,7 +46,7 @@ bool CleanupScratchPass::unpackArrays() {
   bool feedback = false;
 
   for (auto iter = a; iter != b; iter++) {
-    if (iter->getOpCode() == OpCode::eDclScratch)
+    if (iter->getOpCode() == OpCode::eDclScratch || iter->getOpCode() == OpCode::eConstant)
       feedback |= tryUnpackArray(iter->getDef());
   }
 
@@ -658,6 +660,10 @@ bool CleanupScratchPass::hasConstantIndexOffset(SsaDef baseIndex, SsaDef index, 
 
 bool CleanupScratchPass::tryUnpackArray(SsaDef def) {
   const auto& arrayOp = m_builder.getOp(def);
+
+  if (!arrayOp.getType().isArrayType())
+    return false;
+
   auto arraySize = arrayOp.getType().getArraySize(0u);
 
   bool hasDynamicLoads = !allLoadIndicesConstant(def);
@@ -667,9 +673,13 @@ bool CleanupScratchPass::tryUnpackArray(SsaDef def) {
 
   if (hasDynamicLoads || hasDynamicStores) {
     if (m_options.unpackSmallArrays) {
-      maxSize = hasDynamicStores
-        ? m_options.maxUnpackedDynamicStoreArraySize
-        : m_options.maxUnpackedDynamicLoadArraySize;
+      if (arrayOp.isConstant()) {
+        maxSize = m_options.maxUnpackedConstantArraySize;
+      } else {
+        maxSize = hasDynamicStores
+          ? m_options.maxUnpackedDynamicStoreArraySize
+          : m_options.maxUnpackedDynamicLoadArraySize;
+      }
     }
   } else if (m_options.unpackConstantIndexedArrays) {
     maxSize = -1u;
@@ -715,10 +725,14 @@ bool CleanupScratchPass::unpackArray(SsaDef def) {
   auto arraySize = arrayOp.getType().getArraySize(0u);
   auto baseType = arrayOp.getType().getBaseType(0u);
 
-  util::small_vector<SsaDef, 256u> temps(arraySize * baseType.getVectorSize());
+  util::small_vector<SsaDef, 256u> temps;
 
-  for (size_t i = 0u; i < temps.size(); i++)
-    temps.at(i) = m_builder.add(Op::DclTmp(baseType.getBaseType(), SsaDef(arrayOp.getOperand(0u))));
+  if (!arrayOp.isConstant()) {
+    temps.resize(arraySize * baseType.getVectorSize());
+
+    for (size_t i = 0u; i < temps.size(); i++)
+      temps.at(i) = m_builder.add(Op::DclTmp(baseType.getBaseType(), SsaDef(arrayOp.getOperand(0u))));
+  }
 
   /* Replace constant index loads and stores with a load or store using the
    * temporary corresponding to the constant index and component. If the index
@@ -730,6 +744,10 @@ bool CleanupScratchPass::unpackArray(SsaDef def) {
     const auto& useOp = m_builder.getOp(use);
 
     switch (useOp.getOpCode()) {
+      case OpCode::eConstantLoad: {
+        rewriteConstantLoadToSelect(useOp);
+      } break;
+
       case OpCode::eScratchLoad: {
         rewriteScratchLoadToTemp(useOp, temps.size(), temps.data());
       } break;
@@ -744,6 +762,98 @@ bool CleanupScratchPass::unpackArray(SsaDef def) {
   }
 
   return true;
+}
+
+
+void CleanupScratchPass::rewriteConstantLoadToSelect(const Op& loadOp) {
+  const auto& constantOp = m_builder.getOpForOperand(loadOp, 0u);
+  const auto& indexOp = m_builder.getOpForOperand(loadOp, 1u);
+
+  auto arraySize = constantOp.getType().computeTopLevelMemberCount();
+  auto scalarCount = constantOp.getType().getSubType(0u).computeFlattenedScalarCount();
+  auto indexInfo = extractConstantIndex(indexOp);
+
+  /* For each scalar, gather possible values and indices. This resolves
+   * some common patterns where fxc will emit a constant matrix as icb. */
+  util::small_vector<SsaDef, 4u> constituents;
+
+  for (uint32_t i = 0u; i < loadOp.getType().computeFlattenedScalarCount(); i++) {
+    util::small_vector<EqualRange, 64u> ranges = { };
+    bool emitZeroCase = !(loadOp.getFlags() & OpFlag::eInBounds);
+
+    for (uint32_t j = 0u; j < arraySize; j++) {
+      auto operand = uint64_t(constantOp.getOperand(scalarCount * j + indexInfo.component + i));
+
+      if (!operand) {
+        /* Assume zero as a "default" value */
+        emitZeroCase = true;
+      } else {
+        bool found = false;
+
+        for (auto& e : ranges) {
+          if ((found = (e.value == operand && e.index + e.count == j))) {
+            e.count++;
+            break;
+          }
+        }
+
+        if (!found) {
+          auto& e = ranges.emplace_back();
+          e.value = operand;
+          e.index = j;
+          e.count = 1u;
+        }
+      }
+    }
+
+    /* Sort by value. This is mostly done to batch identical values,
+     * so that subsequent passes can optimize further. */
+    std::sort(ranges.begin(), ranges.end(), [] (const EqualRange& a, const EqualRange& b) {
+      if (a.value != b.value)
+        return a.value < b.value;
+      return a.index < b.index;
+    });
+
+    /* If necessary, emit zero operand */
+    auto type = loadOp.getType().resolveFlattenedType(i);
+    auto& scalar = constituents.emplace_back();
+
+    if (emitZeroCase)
+      scalar = m_builder.makeConstantZero(type);
+
+    /* For all non-zero operands, emit a select op with an index range */
+    for (const auto& e : ranges) {
+      auto value = m_builder.add(Op(OpCode::eConstant, type).addOperand(e.value));
+
+      if (scalar) {
+        SsaDef cond = { };
+
+        if (e.count > 1u) {
+          cond = m_builder.addBefore(loadOp.getDef(), Op::BAnd(ScalarType::eBool,
+            m_builder.addBefore(loadOp.getDef(), Op::UGe(ScalarType::eBool, indexInfo.indexDef, m_builder.makeConstant(e.index))),
+            m_builder.addBefore(loadOp.getDef(), Op::ULt(ScalarType::eBool, indexInfo.indexDef, m_builder.makeConstant(e.index + e.count)))));
+        } else {
+          cond = m_builder.addBefore(loadOp.getDef(), Op::IEq(ScalarType::eBool, indexInfo.indexDef, m_builder.makeConstant(e.index)));
+        }
+
+        scalar = m_builder.addBefore(loadOp.getDef(), Op::Select(type, cond, value, scalar));
+      } else {
+        scalar = value;
+      }
+    }
+  }
+
+  /* Assemble vector as necessary */
+  if (constituents.size() > 1u) {
+    Op compositeOp(OpCode::eCompositeConstruct, loadOp.getType());
+
+    for (auto s : constituents)
+      compositeOp.addOperand(s);
+
+    m_builder.rewriteOp(loadOp.getDef(), std::move(compositeOp));
+  } else {
+    m_builder.rewriteDef(loadOp.getDef(), constituents.front());
+  }
 }
 
 
@@ -962,7 +1072,8 @@ bool CleanupScratchPass::allLoadIndicesConstant(SsaDef def) const {
   auto [a, b] = m_builder.getUses(def);
 
   for (auto iter = a; iter != b; iter++) {
-    if (iter->getOpCode() == OpCode::eScratchLoad) {
+    if (iter->getOpCode() == OpCode::eScratchLoad ||
+        iter->getOpCode() == OpCode::eConstantLoad) {
       const auto& index = m_builder.getOpForOperand(*iter, 1u);
 
       if (!isConstantIndex(index))

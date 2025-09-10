@@ -31,6 +31,8 @@ public:
      * takes precedence and should be the smaller of the two limits. */
     uint32_t maxUnpackedDynamicLoadArraySize = 8u;
     uint32_t maxUnpackedDynamicStoreArraySize = 2u;
+    /* Maximum size for unpacking constant arrays */
+    uint32_t maxUnpackedConstantArraySize = 4u;
   };
 
   CleanupScratchPass(Builder& builder, const Options& options);
@@ -82,6 +84,12 @@ private:
     uint32_t component = 0u;
   };
 
+  struct EqualRange {
+    uint64_t value = 0u;
+    uint32_t index = 0u;
+    uint32_t count = 0u;
+  };
+
   bool promoteScratchCbvCopy(SsaDef def);
 
   CbvInfo getCbvCopyMapping(const Op& op);
@@ -97,6 +105,8 @@ private:
   bool tryUnpackArray(SsaDef def);
 
   bool unpackArray(SsaDef def);
+
+  void rewriteConstantLoadToSelect(const Op& loadOp);
 
   void rewriteScratchLoadToTemp(const Op& loadOp, size_t tempCount, const SsaDef* temps);
 
