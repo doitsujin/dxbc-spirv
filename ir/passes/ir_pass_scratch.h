@@ -49,6 +49,13 @@ public:
 
   static bool runResolveCbvToScratchCopyPass(Builder& builder, const Options& options);
 
+  /* Promotes scratch arrays that only has constant stores that dominate
+   * all loads to a constant array. Primarily done to reduce binary size
+   * and make more readable code. */
+  bool promoteConstantScratchToConstantArray();
+
+  static bool runPromoteConstantScratchToConstantArrayPass(Builder& builder, const Options& options);
+
   /* Optimizes small scalar or vector arrays with constant store indices to
    * use temporaries and if-ladders for loads. May invoke SSA construction. */
   bool unpackArrays();
@@ -90,6 +97,8 @@ private:
     uint32_t count = 0u;
   };
 
+  bool promoteScratchToConstant(SsaDef def);
+
   bool promoteScratchCbvCopy(SsaDef def);
 
   CbvInfo getCbvCopyMapping(const Op& op);
@@ -129,6 +138,8 @@ private:
   bool isConstantIndex(const Op& op) const;
 
   IndexInfo extractConstantIndex(const Op& op) const;
+
+  bool storesDominateLoads(const SsaDef* storeA, const SsaDef* storeB, const SsaDef* loadA, const SsaDef* loadB) const;
 
 };
 

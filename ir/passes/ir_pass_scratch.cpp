@@ -40,6 +40,25 @@ bool CleanupScratchPass::runResolveCbvToScratchCopyPass(Builder& builder, const 
 }
 
 
+bool CleanupScratchPass::promoteConstantScratchToConstantArray() {
+  bool feedback = false;
+
+  auto [a, b] = m_builder.getDeclarations();
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::eDclScratch)
+      feedback |= promoteScratchToConstant(iter->getDef());
+  }
+
+  return feedback;
+}
+
+
+bool CleanupScratchPass::runPromoteConstantScratchToConstantArrayPass(Builder& builder, const Options& options) {
+  return CleanupScratchPass(builder, options).promoteConstantScratchToConstantArray();
+}
+
+
 bool CleanupScratchPass::unpackArrays() {
   auto [a, b] = m_builder.getDeclarations();
 
@@ -98,10 +117,114 @@ bool CleanupScratchPass::runPass(Builder& builder, const Options& options) {
 
   CleanupScratchPass instance(builder, options);
   feedback |= instance.propagateCbvScratchCopies();
+  feedback |= instance.promoteConstantScratchToConstantArray();
   feedback |= instance.unpackArrays();
   feedback |= instance.enableBoundChecking();
 
   return feedback;
+}
+
+
+bool CleanupScratchPass::promoteScratchToConstant(SsaDef def) {
+  auto type = m_builder.getOp(def).getType();
+
+  if (!type.isArrayType())
+    return false;
+
+  /* Check whether all stores are constant */
+  auto [a, b] = m_builder.getUses(def);
+
+  util::small_vector<SsaDef, 256u> loads;
+  util::small_vector<SsaDef, 256u> stores;
+
+  Op debugName = { };
+
+  for (auto iter = a; iter != b; iter++) {
+    switch (iter->getOpCode()) {
+      case OpCode::eScratchLoad: {
+        loads.push_back(iter->getDef());
+      } break;
+
+      case OpCode::eScratchStore: {
+        const auto& index = m_builder.getOpForOperand(*iter, 1u);
+        const auto& value = m_builder.getOpForOperand(*iter, 2u);
+
+        if (!index.isConstant() || !value.isConstant())
+          return false;
+
+        stores.push_back(iter->getDef());
+      } break;
+
+      case OpCode::eDebugName: {
+        debugName = *iter;
+      } break;
+
+      default:
+        break;
+    }
+  }
+
+  /* Check whether all stores dominate all loads */
+  if (!storesDominateLoads(stores.begin(), stores.end(), loads.begin(), loads.end()))
+    return false;
+
+  /* Build constant op to replace scratch array with */
+  Op constantOp(OpCode::eConstant, type);
+
+  for (uint32_t i = 0u; i < type.computeFlattenedScalarCount(); i++)
+    constantOp.addOperand(Operand());
+
+  util::small_vector<bool, 1024> written(constantOp.getOperandCount());
+
+  for (auto store : stores) {
+    const auto& index = m_builder.getOpForOperand(store, 1u);
+    const auto& value = m_builder.getOpForOperand(store, 2u);
+
+    dxbc_spv_assert(index.isConstant());
+
+    /* Compute scalar index based on index into scratch type */
+    uint32_t baseIndex = 0u;
+    auto subType = type;
+
+    for (uint32_t i = 0u; i < index.getType().getBaseType(0u).getVectorSize(); i++) {
+      auto component = uint32_t(index.getOperand(i));
+      baseIndex += subType.computeScalarIndex(component);
+      subType = subType.getSubType(component);
+    }
+
+    /* Copy operands from store value */
+    for (uint32_t i = 0u; i < value.getType().computeFlattenedScalarCount(); i++) {
+      if (baseIndex + i < constantOp.getOperandCount()) {
+        if (written.at(baseIndex + i))
+          return false;
+
+        constantOp.setOperand(baseIndex + i, value.getOperand(i));
+        written.at(baseIndex + i) = true;
+      }
+    }
+  }
+
+  /* Remove stores after we have verified that there are no overlapping stores */
+  for (auto store : stores)
+    m_builder.remove(store);
+
+  /* Rewrite all scratch loads as constant loads */
+  auto constantDef = m_builder.add(std::move(constantOp));
+
+  for (auto load : loads) {
+    const auto& loadOp = m_builder.getOp(load);
+    const auto& index = m_builder.getOpForOperand(load, 1u);
+
+    m_builder.rewriteOp(load, Op::ConstantLoad(
+      loadOp.getType(), constantDef, index.getDef()).setFlags(loadOp.getFlags()));
+  }
+
+  if (debugName) {
+    debugName.setOperand(0u, constantDef);
+    m_builder.add(std::move(debugName));
+  }
+
+  return true;
 }
 
 
@@ -204,22 +327,6 @@ bool CleanupScratchPass::promoteScratchCbvCopy(SsaDef def) {
 
   /* Now that we verified that we can map each scratch store to
    * a cbv load, verify that all stores dominate all loads */
-  DominanceGraph dominance(m_builder);
-
-  for (auto store = a; store != b; store++) {
-    if (store->getOpCode() != OpCode::eScratchStore)
-      continue;
-
-    for (auto load = a; load != b; load++) {
-      if (!dominance.dominates(store->getDef(), load->getDef()))
-        return false;
-    }
-  }
-
-  auto function = emitScratchCbvFunction(def, baseStore, baseIndex, storeMask);
-
-  /* Replace all loads with a call to the helper function,
-   * and extract the correct vector component as necessary. */
   util::small_vector<SsaDef, 256u> loads;
   util::small_vector<SsaDef, 256u> stores;
 
@@ -229,6 +336,13 @@ bool CleanupScratchPass::promoteScratchCbvCopy(SsaDef def) {
     else if (iter->getOpCode() == OpCode::eScratchStore)
       stores.push_back(iter->getDef());
   }
+
+  if (!storesDominateLoads(stores.begin(), stores.end(), loads.begin(), loads.end()))
+    return false;
+
+  /* Replace all loads with a call to the helper function,
+   * and extract the correct vector component as necessary. */
+  auto function = emitScratchCbvFunction(def, baseStore, baseIndex, storeMask);
 
   for (auto load : loads) {
     const auto& loadOp = m_builder.getOp(load);
@@ -1127,5 +1241,18 @@ CleanupScratchPass::IndexInfo CleanupScratchPass::extractConstantIndex(const Op&
   return result;
 }
 
+
+bool CleanupScratchPass::storesDominateLoads(const SsaDef* storeA, const SsaDef* storeB, const SsaDef* loadA, const SsaDef* loadB) const {
+  DominanceGraph dominance(m_builder);
+
+  for (auto i = storeA; i != storeB; i++) {
+    for (auto j = loadA; j != loadB; j++) {
+      if (!dominance.defDominates(*i, *j))
+        return false;
+    }
+  }
+
+  return true;
+}
 
 }
