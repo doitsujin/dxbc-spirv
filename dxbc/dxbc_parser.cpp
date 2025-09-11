@@ -7,344 +7,344 @@ namespace dxbc_spv::dxbc {
 
 static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   /* Add */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* And */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* Break */
-  { 0u },
+  { },
   /* Breakc */
-  { 1u, {{
+  { {{
     { OperandKind::eSrcReg, ir::ScalarType::eBool },
   }} },
   /* Call */
-  { 1u, {{
+  { {{
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* Callc */
-  { 2u, {{
+  { {{
     { OperandKind::eSrcReg, ir::ScalarType::eBool     },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* Case */
-  { 1u, {{
+  { {{
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* Continue */
-  { 0u },
+  { },
   /* Continuec */
-  { 1u, {{
+  { {{
     { OperandKind::eSrcReg, ir::ScalarType::eBool },
   }} },
   /* Cut */
-  { 0u },
+  { },
   /* Default */
-  { 0u },
+  { },
   /* DerivRtx */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* DerivRty */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* Discard */
-  { 1u, {{
+  { {{
     { OperandKind::eSrcReg, ir::ScalarType::eBool },
   }} },
   /* Div */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* Dp2 */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* Dp3 */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* Dp4 */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* Else */
-  { 0u },
+  { },
   /* Emit */
-  { 0u },
+  { },
   /* EmitThenCut */
-  { 0u },
+  { },
   /* EndIf */
-  { 0u },
+  { },
   /* EndLoop */
-  { 0u },
+  { },
   /* EndSwitch */
-  { 0u },
+  { },
   /* Eq */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eBool },
     { OperandKind::eSrcReg, ir::ScalarType::eF32  },
     { OperandKind::eSrcReg, ir::ScalarType::eF32  },
   }} },
   /* Exp */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* Frc */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* FtoI */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eI32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* FtoU */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* Ge */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eBool },
     { OperandKind::eSrcReg, ir::ScalarType::eF32  },
     { OperandKind::eSrcReg, ir::ScalarType::eF32  },
   }} },
   /* IAdd */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* If */
-  { 1u, {{
+  { {{
     { OperandKind::eSrcReg, ir::ScalarType::eBool },
   }} },
   /* IEq */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eBool   },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* IGe */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eBool },
     { OperandKind::eSrcReg, ir::ScalarType::eI32  },
     { OperandKind::eSrcReg, ir::ScalarType::eI32  },
   }} },
   /* ILt */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eBool },
     { OperandKind::eSrcReg, ir::ScalarType::eI32  },
     { OperandKind::eSrcReg, ir::ScalarType::eI32  },
   }} },
   /* IMad */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* IMax */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eI32 },
     { OperandKind::eSrcReg, ir::ScalarType::eI32 },
     { OperandKind::eSrcReg, ir::ScalarType::eI32 },
   }} },
   /* IMin */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eI32 },
     { OperandKind::eSrcReg, ir::ScalarType::eI32 },
     { OperandKind::eSrcReg, ir::ScalarType::eI32 },
   }} },
   /* IMul */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eI32 },
     { OperandKind::eDstReg, ir::ScalarType::eI32 },
     { OperandKind::eSrcReg, ir::ScalarType::eI32 },
     { OperandKind::eSrcReg, ir::ScalarType::eI32 },
   }} },
   /* INe */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eBool },
     { OperandKind::eSrcReg, ir::ScalarType::eU32  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32  },
   }} },
   /* INeg */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eI32 },
     { OperandKind::eSrcReg, ir::ScalarType::eI32 },
   }} },
   /* IShl */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* IShr */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eI32 },
     { OperandKind::eSrcReg, ir::ScalarType::eI32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* ItoF */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eI32 },
   }} },
   /* Label */
-  { 1u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
   }} },
   /* Ld */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eSrv },
   }} },
   /* LdMs */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eSrv      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* Log */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* Loop */
-  { 0u },
+  { },
   /* Lt */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eBool },
     { OperandKind::eSrcReg, ir::ScalarType::eF32  },
     { OperandKind::eSrcReg, ir::ScalarType::eF32  },
   }} },
   /* Mad */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* Min */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* Max */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* CustomData */
-  { 0u },
+  { },
   /* Mov */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* Movc */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eBool     },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* Mul */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* Ne */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eBool },
     { OperandKind::eSrcReg, ir::ScalarType::eF32  },
     { OperandKind::eSrcReg, ir::ScalarType::eF32  },
   }} },
   /* Nop */
-  { 0u },
+  { },
   /* Not */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* Or */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* ResInfo */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* Ret */
-  { 0u },
+  { },
   /* Retc */
-  { 1u, {{
+  { {{
     { OperandKind::eSrcReg, ir::ScalarType::eBool },
   }} },
   /* RoundNe */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* RoundNi */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* RoundPi */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* RoundZ */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* Rsq */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* Sample */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
     { OperandKind::eSrcReg, ir::ScalarType::eSrv      },
     { OperandKind::eSrcReg, ir::ScalarType::eSampler  },
   }} },
   /* SampleC */
-  { 5u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
     { OperandKind::eSrcReg, ir::ScalarType::eSrv      },
@@ -352,7 +352,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
   }} },
   /* SampleClz */
-  { 5u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
     { OperandKind::eSrcReg, ir::ScalarType::eSrv      },
@@ -360,7 +360,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
   }} },
   /* SampleL */
-  { 5u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
     { OperandKind::eSrcReg, ir::ScalarType::eSrv      },
@@ -368,7 +368,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
   }} },
   /* SampleD */
-  { 6u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
     { OperandKind::eSrcReg, ir::ScalarType::eSrv      },
@@ -377,7 +377,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
   }} },
   /* SampleB */
-  { 5u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
     { OperandKind::eSrcReg, ir::ScalarType::eSrv      },
@@ -385,244 +385,244 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
   }} },
   /* Sqrt */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* Switch */
-  { 1u, {{
+  { {{
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* SinCos */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* UDiv */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* ULt */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eBool },
     { OperandKind::eSrcReg, ir::ScalarType::eU32  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32  },
   }} },
   /* UGe */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eBool },
     { OperandKind::eSrcReg, ir::ScalarType::eU32  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32  },
   }} },
   /* UMul */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* UMad */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* UMax */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* UMin */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* UShr */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* UtoF */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* Xor */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* DclResource */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eImm32,  ir::ScalarType::eU32 },
     { OperandKind::eImm32,  ir::ScalarType::eU32 },
   }} },
   /* DclConstantBuffer */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eCbv },
     { OperandKind::eImm32,  ir::ScalarType::eU32 },
     { OperandKind::eImm32,  ir::ScalarType::eU32 },
   }} },
   /* DclSampler */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eSampler  },
     { OperandKind::eImm32,  ir::ScalarType::eU32      },
   }} },
   /* DclIndexRange */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eImm32,  ir::ScalarType::eU32      },
   }} },
   /* DclGsOutputPrimitiveTopology */
-  { 0u },
+  { },
   /* DclGsInputPrimitive */
-  { 0u },
+  { },
   /* DclMaxOutputVertexCount */
-  { 1u, {{
+  { {{
     { OperandKind::eImm32,  ir::ScalarType::eU32 },
   }} },
   /* DclInput */
-  { 1u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
   }} },
   /* DclInputSgv */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eImm32,  ir::ScalarType::eU32      },
   }} },
   /* DclInputSiv */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eImm32,  ir::ScalarType::eU32      },
   }} },
   /* DclInputPs */
-  { 1u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
   }} },
   /* DclInputPsSgv */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eImm32,  ir::ScalarType::eU32      },
   }} },
   /* DclInputPsSiv */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eImm32,  ir::ScalarType::eU32      },
   }} },
   /* DclOutput */
-  { 1u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
   }} },
   /* DclOutputSgv */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eImm32,  ir::ScalarType::eU32      },
   }} },
   /* DclOutputSiv */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eImm32,  ir::ScalarType::eU32      },
   }} },
   /* DclTemps */
-  { 1u, {{
+  { {{
     { OperandKind::eImm32, ir::ScalarType::eU32 },
   }} },
   /* DclIndexableTemp */
-  { 3u, {{
+  { {{
     { OperandKind::eImm32, ir::ScalarType::eU32 },
     { OperandKind::eImm32, ir::ScalarType::eU32 },
     { OperandKind::eImm32, ir::ScalarType::eU32 },
   }} },
   /* DclGlobalFlags */
-  { 0u },
+  { },
   /* Reserved0 */
-  { 0u },
+  { },
   /* Lod */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32      },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
     { OperandKind::eSrcReg, ir::ScalarType::eSrv      },
     { OperandKind::eSrcReg, ir::ScalarType::eSampler  },
   }} },
   /* Gather4 */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
     { OperandKind::eSrcReg, ir::ScalarType::eSrv      },
     { OperandKind::eSrcReg, ir::ScalarType::eSampler  },
   }} },
   /* SamplePos */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32      },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32   },
   }} },
   /* SampleInfo */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* Reserved1 */
   { },
   /* HsDecls */
-  { 0u },
+  { },
   /* HsControlPointPhase */
-  { 0u },
+  { },
   /* HsForkPhase */
-  { 0u },
+  { },
   /* HsJoinPhase */
-  { 0u },
+  { },
   /* EmitStream */
-  { 1u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
   }} },
   /* CutStream */
-  { 1u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
   }} },
   /* EmitThenCutStream */
-  { 1u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
   }} },
   /* InterfaceCall */
   { },
   /* BufInfo */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* DerivRtxCoarse */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* DerivRtxFine */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* DerivRtyCoarse */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* DerivRtyFine */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* Gather4C */
-  { 5u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
     { OperandKind::eSrcReg, ir::ScalarType::eSrv      },
@@ -630,7 +630,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
   }} },
   /* Gather4Po */
-  { 5u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
     { OperandKind::eSrcReg, ir::ScalarType::eI32      },
@@ -638,7 +638,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eSampler  },
   }} },
   /* Gather4PoC */
-  { 6u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
     { OperandKind::eSrcReg, ir::ScalarType::eI32      },
@@ -647,70 +647,70 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
   }} },
   /* Rcp */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* F32toF16 */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* F16toF32 */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* UAddc */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* USubb */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* CountBits */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* FirstBitHi */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eI32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* FirstBitLo */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eI32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* FirstBitShi */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eI32 },
     { OperandKind::eSrcReg, ir::ScalarType::eI32 },
   }} },
   /* UBfe */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* IBfe */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eI32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eI32 },
   }} },
   /* Bfi */
-  { 5u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
@@ -718,12 +718,12 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* BfRev */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* Swapc */
-  { 5u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown },
     { OperandKind::eSrcReg, ir::ScalarType::eBool    },
@@ -731,222 +731,230 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown },
   }} },
   /* DclStream */
-  { 1u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown },
   }} },
   /* DclFunctionBody */
-  { },
+  { {{
+    { OperandKind::eImm32, ir::ScalarType::eUnknown },
+  }} },
   /* DclFunctionTable */
-  { },
+  { {{
+    { OperandKind::eImm32, ir::ScalarType::eUnknown },
+  }} },
   /* DclInterface */
-  { },
+  { {{
+    { OperandKind::eImm32, ir::ScalarType::eUnknown },
+    { OperandKind::eImm32, ir::ScalarType::eUnknown },
+    { OperandKind::eImm32, ir::ScalarType::eUnknown },
+  }} },
   /* DclInputControlPointCount */
-  { 0u },
+  { },
   /* DclOutputControlPointCount */
-  { 0u },
+  { },
   /* DclTessDomain */
-  { 0u },
+  { },
   /* DclTessPartitioning */
-  { 0u },
+  { },
   /* DclTessOutputPrimitive */
-  { 0u },
+  { },
   /* DclHsMaxTessFactor */
-  { 1u, {{
+  { {{
     { OperandKind::eImm32, ir::ScalarType::eF32 },
   }} },
   /* DclHsForkPhaseInstanceCount */
-  { 1u, {{
+  { {{
     { OperandKind::eImm32, ir::ScalarType::eU32 },
   }} },
   /* DclHsJoinPhaseInstanceCount */
-  { 1u, {{
+  { {{
     { OperandKind::eImm32, ir::ScalarType::eU32 },
   }} },
   /* DclThreadGroup */
-  { 3u, {{
+  { {{
     { OperandKind::eImm32, ir::ScalarType::eU32 },
     { OperandKind::eImm32, ir::ScalarType::eU32 },
     { OperandKind::eImm32, ir::ScalarType::eU32 },
   }} },
   /* DclUavTyped */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUav },
     { OperandKind::eImm32,  ir::ScalarType::eU32 },
     { OperandKind::eImm32,  ir::ScalarType::eU32 },
   }} },
   /* DclUavRaw */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUav },
     { OperandKind::eImm32,  ir::ScalarType::eU32 },
   }} },
   /* DclUavStructured */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUav },
     { OperandKind::eImm32,  ir::ScalarType::eU32 },
     { OperandKind::eImm32,  ir::ScalarType::eU32 },
   }} },
   /* DclThreadGroupSharedMemoryRaw */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eImm32,  ir::ScalarType::eU32      },
   }} },
   /* DclThreadGroupSharedMemoryStructured */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eImm32,  ir::ScalarType::eU32      },
     { OperandKind::eImm32,  ir::ScalarType::eU32      },
   }} },
   /* DclResourceRaw */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eImm32,  ir::ScalarType::eU32 },
   }} },
   /* DclResourceStructured */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eSrv },
     { OperandKind::eImm32,  ir::ScalarType::eU32 },
     { OperandKind::eImm32,  ir::ScalarType::eU32 },
   }} },
   /* LdUavTyped */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eI32      },
     { OperandKind::eSrcReg, ir::ScalarType::eUav      },
   }} },
   /* StoreUavTyped */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUav      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* LdRaw */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* StoreRaw */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* LdStructured */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* StoreStructured */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* AtomicAnd */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* AtomicOr */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* AtomicXor */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* AtomicCmpStore */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* AtomicIAdd */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* AtomicIMax */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* AtomicIMin */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* AtomicUMax */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* AtomicUMin */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* ImmAtomicAlloc */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eDstReg, ir::ScalarType::eUav },
   }} },
   /* ImmAtomicConsume */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eDstReg, ir::ScalarType::eUav },
   }} },
   /* ImmAtomicIAdd */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* ImmAtomicAnd */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* ImmAtomicOr */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* ImmAtomicXor */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* ImmAtomicExch */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* ImmAtomicCmpExch */
-  { 5u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
@@ -954,124 +962,124 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* ImmAtomicIMax */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* ImmAtomicIMin */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* ImmAtomicUMax */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* ImmAtomicUMin */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* Sync */
-  { 0u },
+  { },
   /* DAdd */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF64 },
     { OperandKind::eSrcReg, ir::ScalarType::eF64 },
     { OperandKind::eSrcReg, ir::ScalarType::eF64 },
   }} },
   /* DMax */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF64 },
     { OperandKind::eSrcReg, ir::ScalarType::eF64 },
     { OperandKind::eSrcReg, ir::ScalarType::eF64 },
   }} },
   /* DMin */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF64 },
     { OperandKind::eSrcReg, ir::ScalarType::eF64 },
     { OperandKind::eSrcReg, ir::ScalarType::eF64 },
   }} },
   /* DMul */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF64 },
     { OperandKind::eSrcReg, ir::ScalarType::eF64 },
     { OperandKind::eSrcReg, ir::ScalarType::eF64 },
   }} },
   /* DEq */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eBool },
     { OperandKind::eSrcReg, ir::ScalarType::eF64  },
     { OperandKind::eSrcReg, ir::ScalarType::eF64  },
   }} },
   /* DGe */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eBool },
     { OperandKind::eSrcReg, ir::ScalarType::eF64  },
     { OperandKind::eSrcReg, ir::ScalarType::eF64  },
   }} },
   /* DLt */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eBool },
     { OperandKind::eSrcReg, ir::ScalarType::eF64  },
     { OperandKind::eSrcReg, ir::ScalarType::eF64  },
   }} },
   /* DNe */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eBool },
     { OperandKind::eSrcReg, ir::ScalarType::eF64  },
     { OperandKind::eSrcReg, ir::ScalarType::eF64  },
   }} },
   /* DMov */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF64 },
     { OperandKind::eSrcReg, ir::ScalarType::eF64 },
   }} },
   /* DMovc */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF64  },
     { OperandKind::eSrcReg, ir::ScalarType::eBool },
     { OperandKind::eSrcReg, ir::ScalarType::eF64  },
     { OperandKind::eSrcReg, ir::ScalarType::eF64  },
   }} },
   /* DtoF */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF64 },
   }} },
   /* FtoD */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF64 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* EvalSnapped */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eI32 },
   }} },
   /* EvalSampleIndex */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* EvalCentroid */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF32 },
   }} },
   /* DclGsInstanceCount */
-  { 1u, {{
+  { {{
     { OperandKind::eImm32, ir::ScalarType::eU32 },
   }} },
   /* Abort */
@@ -1081,54 +1089,54 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   /* ReservedBegin11_1 */
   { },
   /* DDiv */
-  { 3u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF64 },
     { OperandKind::eSrcReg, ir::ScalarType::eF64 },
     { OperandKind::eSrcReg, ir::ScalarType::eF64 },
   }} },
   /* DFma */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF64 },
     { OperandKind::eSrcReg, ir::ScalarType::eF64 },
     { OperandKind::eSrcReg, ir::ScalarType::eF64 },
     { OperandKind::eSrcReg, ir::ScalarType::eF64 },
   }} },
   /* DRcp */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF64 },
     { OperandKind::eSrcReg, ir::ScalarType::eF64 },
   }} },
   /* Msad */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* DtoI */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eI32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF64 },
   }} },
   /* DtoU */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32 },
     { OperandKind::eSrcReg, ir::ScalarType::eF64 },
   }} },
   /* ItoD */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF64 },
     { OperandKind::eSrcReg, ir::ScalarType::eI32 },
   }} },
   /* UtoD */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eF64 },
     { OperandKind::eSrcReg, ir::ScalarType::eU32 },
   }} },
   /* ReservedBegin11_2 */
   { },
   /* Gather4S */
-  { 5u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
@@ -1136,7 +1144,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eSampler  },
   }} },
   /* Gather4CS */
-  { 6u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
@@ -1145,7 +1153,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
   }} },
   /* Gather4PoS */
-  { 6u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
@@ -1154,7 +1162,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eSampler  },
   }} },
   /* Gather4PoCS */
-  { 7u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
@@ -1164,14 +1172,14 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
   }} },
   /* LdS */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* LdMsS */
-  { 5u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
@@ -1179,21 +1187,21 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* LdUavTypedS */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eUav      },
   }} },
   /* LdRawS */
-  { 4u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eI32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
   }} },
   /* LdStructuredS */
-  { 5u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eU32      },
@@ -1201,7 +1209,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eUnknown  },
   }} },
   /* SampleLS */
-  { 6u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
@@ -1210,7 +1218,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
   }} },
   /* SampleClzS */
-  { 6u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
@@ -1219,7 +1227,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
   }} },
   /* SampleClampS */
-  { 6u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
@@ -1228,7 +1236,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
   }} },
   /* SampleBClampS */
-  { 7u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
@@ -1238,7 +1246,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
   }} },
   /* SampleDClampS */
-  { 8u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
@@ -1249,7 +1257,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
   }} },
   /* SampleCClampS */
-  { 7u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
@@ -1259,7 +1267,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eSrcReg, ir::ScalarType::eF32      },
   }} },
   /* CheckAccessFullyMapped */
-  { 2u, {{
+  { {{
     { OperandKind::eDstReg, ir::ScalarType::eBool },
     { OperandKind::eSrcReg, ir::ScalarType::eU32  },
   }} },
@@ -1714,8 +1722,8 @@ Instruction::Instruction(util::ByteReader& reader, const ShaderInfo& info) {
    * model and opcode, and parse the operands. */
   auto layout = getLayout(info);
 
-  for (uint32_t i = 0u; i < layout.operandCount; i++) {
-    Operand operand(tokenReader, layout.operands[i], *this);
+  for (auto& operandInfo : layout.operands) {
+    Operand operand(tokenReader, operandInfo, *this);
 
     if (!operand) {
       resetOnError();
@@ -1736,10 +1744,19 @@ Instruction::Instruction(util::ByteReader& reader, const ShaderInfo& info) {
 
   }
 
-  /* There shouldn't be any bytes left in the reader, but sometimes
-   * FXC will pad instructions with a zero operand for some reason */
-  if (tokenReader.getRemaining())
-    Logger::debug("Instruction ", token.getOpCode(), " has unhandled operands.");
+  /* Some instructions are padded with a zero dword for no reason, and
+   * others have variable operand counts. Append unhandled operands as
+   * raw dword immediates. */
+  while (tokenReader.getRemaining()) {
+    uint32_t dword = 0u;
+
+    if (!tokenReader.read(dword))
+      Logger::err("Operand token size not aligned to dwords.");
+
+    Operand operand({ OperandKind::eExtra, ir::ScalarType::eU32 }, RegisterType::eImm32, ComponentCount::e1Component);
+    operand.setImmediate(0u, dword);
+    addOperand(operand);
+  }
 }
 
 
@@ -1748,9 +1765,10 @@ uint32_t Instruction::addOperand(const Operand& operand) {
   m_operands.push_back(operand);
 
   switch (operand.getInfo().kind) {
-    case OperandKind::eSrcReg: m_srcOperands.at(m_numSrcOperands++) = index; break;
-    case OperandKind::eDstReg: m_dstOperands.at(m_numDstOperands++) = index; break;
-    case OperandKind::eImm32:  m_immOperands.at(m_numImmOperands++) = index; break;
+    case OperandKind::eSrcReg: m_srcOperands.push_back(index); break;
+    case OperandKind::eDstReg: m_dstOperands.push_back(index); break;
+    case OperandKind::eImm32:  m_immOperands.push_back(index); break;
+    case OperandKind::eExtra:  m_extraOperands.push_back(index); break;
     case OperandKind::eNone:   dxbc_spv_unreachable();
     case OperandKind::eIndex:  break;
   }
@@ -1774,7 +1792,8 @@ InstructionLayout Instruction::getLayout(const ShaderInfo& info) const {
   if (major != 5u || minor != 1u) {
     switch (m_token.getOpCode()) {
       case OpCode::eDclConstantBuffer:
-        result.operandCount -= 2u;
+        result.operands.pop_back();
+        result.operands.pop_back();
         break;
 
       case OpCode::eDclSampler:
@@ -1784,13 +1803,16 @@ InstructionLayout Instruction::getLayout(const ShaderInfo& info) const {
       case OpCode::eDclUavTyped:
       case OpCode::eDclUavRaw:
       case OpCode::eDclUavStructured:
-        result.operandCount -= 1u;
+        result.operands.pop_back();
         break;
 
       default:
         break;
     }
   }
+
+  for (size_t i = 0u; i < m_extraOperands.size(); i++)
+    result.operands.push_back({ OperandKind::eExtra, ir::ScalarType::eU32 });
 
   return result;
 }
@@ -1811,15 +1833,17 @@ bool Instruction::write(util::ByteWriter& writer, const ShaderInfo& info) const 
   uint32_t nDst = 0u;
   uint32_t nSrc = 0u;
   uint32_t nImm = 0u;
+  uint32_t nExtra = 0u;
 
-  for (uint32_t i = 0u; i < layout.operandCount; i++) {
+  for (const auto& operandInfo : layout.operands) {
     const auto* operand = [&] () -> const Operand* {
-      switch (layout.operands[i].kind) {
+      switch (operandInfo.kind) {
         case OperandKind::eNone:
         case OperandKind::eIndex:  break;
         case OperandKind::eDstReg: return nDst < getDstCount() ? &getDst(nDst++) : nullptr;
         case OperandKind::eSrcReg: return nSrc < getSrcCount() ? &getSrc(nSrc++) : nullptr;
         case OperandKind::eImm32:  return nImm < getImmCount() ? &getImm(nImm++) : nullptr;
+        case OperandKind::eExtra:  return nExtra < getExtraCount() ? &getExtra(nExtra++) : nullptr;
       }
 
       return nullptr;

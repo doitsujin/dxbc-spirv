@@ -20,13 +20,16 @@ void Disassembler::disassembleOp(std::ostream& stream, const Instruction& op) {
   uint32_t nDst = 0u;
   uint32_t nSrc = 0u;
   uint32_t nImm = 0u;
+  uint32_t nExtra = 0u;
 
-  for (uint32_t i = 0u; i < layout.operandCount; i++) {
+  bool first = true;
+
+  for (const auto& operand : layout.operands) {
     bool inBounds = false;
 
-    stream << (i ? ", " : " ");
+    stream << (std::exchange(first, false) ? " " : ", ");
 
-    switch (layout.operands[i].kind) {
+    switch (operand.kind) {
       case OperandKind::eDstReg:
         if ((inBounds = (nDst < op.getDstCount())))
           disassembleOperand(stream, op, op.getDst(nDst++));
@@ -44,6 +47,11 @@ void Disassembler::disassembleOp(std::ostream& stream, const Instruction& op) {
 
           nImm++;
         }
+        break;
+
+      case OperandKind::eExtra:
+        if ((inBounds = (nExtra < op.getExtraCount())))
+          disassembleOperand(stream, op, op.getExtra(nExtra++));
         break;
 
       default:

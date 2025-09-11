@@ -732,6 +732,7 @@ enum class OperandKind : uint8_t {
   eSrcReg = 2u,
   eImm32  = 3u,
   eIndex  = 4u,
+  eExtra  = 5u,
 };
 
 
@@ -956,8 +957,7 @@ private:
  *  whether each operand is a source or destination register
  *  or an immediate. */
 struct InstructionLayout {
-  uint16_t operandCount = 0u;
-  std::array<OperandInfo, 8u> operands = { };
+  util::small_vector<OperandInfo, 8u> operands = { };
 };
 
 
@@ -989,35 +989,42 @@ public:
 
   /** Retrieves number of destination operands */
   uint32_t getDstCount() const {
-    return m_numDstOperands;
+    return uint32_t(m_dstOperands.size());
   }
 
   /** Retrieves number of source operands */
   uint32_t getSrcCount() const {
-    return m_numSrcOperands;
+    return uint32_t(m_srcOperands.size());
   }
 
   /** Retrieves number of immediate operands */
   uint32_t getImmCount() const {
-    return m_numImmOperands;
+    return uint32_t(m_immOperands.size());
+  }
+
+  /** Retrieves number of extra operands */
+  uint32_t getExtraCount() const {
+    return uint32_t(m_extraOperands.size());
   }
 
   /** Queries destination operand. */
   const Operand& getDst(uint32_t index) const {
-    dxbc_spv_assert(index < m_numDstOperands);
-    return getRawOperand(m_dstOperands[index]);
+    return getRawOperand(m_dstOperands.at(index));
   }
 
   /** Queries source operand. */
   const Operand& getSrc(uint32_t index) const {
-    dxbc_spv_assert(index < m_numSrcOperands);
-    return getRawOperand(m_srcOperands[index]);
+    return getRawOperand(m_srcOperands.at(index));
   }
 
   /** Queries immediate operand. */
   const Operand& getImm(uint32_t index) const {
-    dxbc_spv_assert(index < m_numImmOperands);
-    return getRawOperand(m_immOperands[index]);
+    return getRawOperand(m_immOperands.at(index));
+  }
+
+  /** Queries extra operand. */
+  const Operand& getExtra(uint32_t index) const {
+    return getRawOperand(m_extraOperands.at(index));
   }
 
   /** Queries raw operand index. Generally used
@@ -1058,13 +1065,10 @@ private:
 
   OpToken m_token = { };
 
-  uint8_t m_numDstOperands = 0u;
-  uint8_t m_numSrcOperands = 0u;
-  uint8_t m_numImmOperands = 0u;
-
-  std::array<uint8_t, 4u> m_dstOperands = { };
-  std::array<uint8_t, 8u> m_srcOperands = { };
-  std::array<uint8_t, 4u> m_immOperands = { };
+  util::small_vector<uint8_t, 4u> m_dstOperands = { };
+  util::small_vector<uint8_t, 8u> m_srcOperands = { };
+  util::small_vector<uint8_t, 4u> m_immOperands = { };
+  util::small_vector<uint8_t, 4u> m_extraOperands = { };
 
   util::small_vector<Operand, 16u> m_operands = { };
 
