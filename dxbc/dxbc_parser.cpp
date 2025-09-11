@@ -595,7 +595,10 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
     { OperandKind::eDstReg, ir::ScalarType::eUnknown  },
   }} },
   /* InterfaceCall */
-  { },
+  { {{
+    { OperandKind::eImm32,  ir::ScalarType::eU32     },
+    { OperandKind::eSrcReg, ir::ScalarType::eUnknown },
+  }} },
   /* BufInfo */
   { {{
     { OperandKind::eDstReg, ir::ScalarType::eU32      },
@@ -740,6 +743,7 @@ static const std::array<InstructionLayout, 235> g_instructionLayouts = {{
   }} },
   /* DclFunctionTable */
   { {{
+    { OperandKind::eImm32, ir::ScalarType::eUnknown },
     { OperandKind::eImm32, ir::ScalarType::eUnknown },
   }} },
   /* DclInterface */

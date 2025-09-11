@@ -3943,7 +3943,7 @@ std::string Converter::makeRegisterDebugName(RegisterType type, uint32_t index, 
     case RegisterType::eCoverageOut:        name << "oCoverage"; break;
     case RegisterType::eFunctionBody:       name << "fb" << index; break;
     case RegisterType::eFunctionTable:      name << "ft" << index; break;
-    case RegisterType::eInterface:          name << "i" << index; break;
+    case RegisterType::eInterface:          name << "fp" << index; break;
     case RegisterType::eFunctionInput:      name << "fi" << index; break;
     case RegisterType::eFunctionOutput:     name << "fo" << index; break;
     case RegisterType::eControlPointId:     name << "vControlPoint"; break;

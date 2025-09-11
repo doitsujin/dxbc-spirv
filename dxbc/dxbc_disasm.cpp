@@ -50,8 +50,12 @@ void Disassembler::disassembleOp(std::ostream& stream, const Instruction& op) {
         break;
 
       case OperandKind::eExtra:
-        if ((inBounds = (nExtra < op.getExtraCount())))
-          disassembleOperand(stream, op, op.getExtra(nExtra++));
+        if ((inBounds = (nExtra < op.getExtraCount()))) {
+          if (!disassembleExtraOperand(stream, op, nExtra))
+            disassembleOperand(stream, op, op.getExtra(nExtra));
+
+          nExtra++;
+        }
         break;
 
       default:
@@ -336,11 +340,56 @@ bool Disassembler::disassembleEnumOperand(std::ostream& stream, const Instructio
       }
     } break;
 
+    case OpCode::eDclFunctionBody: {
+      if (index == 0u) {
+        stream << "fb" << operand.getImmediate<uint32_t>(0u);
+        return true;
+      }
+    } break;
+
+    case OpCode::eDclFunctionTable: {
+      if (index == 0u) {
+        stream << "ft" << operand.getImmediate<uint32_t>(0u);
+        return true;
+      }
+    } break;
+
+    case OpCode::eDclInterface: {
+      if (index == 0u) {
+        stream << "fp" << operand.getImmediate<uint32_t>(0u);
+        return true;
+      }
+
+      if (index == 2u) {
+        auto imm = operand.getImmediate<uint32_t>(0u);
+        stream << "[tbl: " << (imm & 0xffff) << "; len: " << (imm >> 16u) << "]";
+        return true;
+      }
+    } break;
+
     default:
       break;
   }
 
   return false;
+}
+
+
+bool Disassembler::disassembleExtraOperand(std::ostream& stream, const Instruction& op, uint32_t index) const {
+  const auto& operand = op.getExtra(index);
+
+  switch (op.getOpToken().getOpCode()) {
+    case OpCode::eDclFunctionTable: {
+      stream << "fb" << operand.getImmediate<uint32_t>(0u);
+    } return true;
+
+    case OpCode::eDclInterface: {
+      stream << "ft" << operand.getImmediate<uint32_t>(0u);
+    } return true;
+
+    default:
+      return false;
+  }
 }
 
 
@@ -379,7 +428,7 @@ void Disassembler::disassembleOperand(std::ostream& stream, const Instruction& o
     case RegisterType::eStream:             stream << "m"; break;
     case RegisterType::eFunctionBody:       stream << "fb"; break;
     case RegisterType::eFunctionTable:      stream << "ft"; break;
-    case RegisterType::eInterface:          stream << "i"; break;
+    case RegisterType::eInterface:          stream << "fp"; break;
     case RegisterType::eFunctionInput:      stream << "fi"; break;
     case RegisterType::eFunctionOutput:     stream << "fo"; break;
     case RegisterType::eControlPointId:     stream << "vControlPoint"; break;
@@ -418,7 +467,10 @@ void Disassembler::disassembleOperand(std::ostream& stream, const Instruction& o
 
     auto indexType = arg.getIndexType(dim);
 
-    if (i || hasRelativeIndexing(indexType))
+    bool useRelative = hasRelativeIndexing(indexType) ||
+      arg.getRegisterType() == RegisterType::eThis;
+
+    if (i || useRelative)
       stream << "[";
 
     if (hasRelativeIndexing(indexType)) {
@@ -430,7 +482,7 @@ void Disassembler::disassembleOperand(std::ostream& stream, const Instruction& o
       stream << arg.getIndex(dim);
     }
 
-    if (i || hasRelativeIndexing(indexType))
+    if (i || useRelative)
       stream << "]";
   }
 

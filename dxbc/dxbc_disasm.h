@@ -49,6 +49,8 @@ private:
 
   bool disassembleEnumOperand(std::ostream& stream, const Instruction& op, uint32_t index) const;
 
+  bool disassembleExtraOperand(std::ostream& stream, const Instruction& op, uint32_t index) const;
+
   void disassembleOperand(std::ostream& stream, const Instruction& op, const Operand& arg) const;
 
   void disassembleImmediate(std::ostream& stream, const Operand& arg) const;

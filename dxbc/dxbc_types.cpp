@@ -555,7 +555,7 @@ std::ostream& operator << (std::ostream& os, OpCode op) {
     case OpCode::eEmitStream:                           return os << "emit_stream";
     case OpCode::eCutStream:                            return os << "cut_stream";
     case OpCode::eEmitThenCutStream:                    return os << "emit_then_cut_stream";
-    case OpCode::eInterfaceCall:                        return os << "interface_call";
+    case OpCode::eInterfaceCall:                        return os << "fcall";
     case OpCode::eBufInfo:                              return os << "bufinfo";
     case OpCode::eDerivRtxCoarse:                       return os << "deriv_rtx_coarse";
     case OpCode::eDerivRtxFine:                         return os << "deriv_rtx_fine";
