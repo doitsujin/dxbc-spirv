@@ -116,7 +116,7 @@ bool IoMap::handleDclIndexRange(ir::Builder& builder, const Instruction& op) {
       std::tie(mapping.baseType, mapping.baseDef) =
         emitDynamicStoreFunction(builder, mapping, vertexCount);
     } else {
-      /* Copy inputs to scratch array */
+      /* Emit function that forwards input loads */
       std::tie(mapping.baseType, mapping.baseDef) =
         emitDynamicLoadFunction(builder, mapping, vertexCount);
     }
@@ -1175,8 +1175,8 @@ ir::SsaDef IoMap::loadIoRegister(
           case ir::OpCode::eDclOutputBuiltIn:
             return ir::OpCode::eOutputLoad;
 
-          case ir::OpCode::eDclScratch:
-            return ir::OpCode::eScratchLoad;
+          case ir::OpCode::eFunction:
+            return ir::OpCode::eFunctionCall;
 
           default:
             return ir::OpCode::eUnknown;
@@ -1190,12 +1190,40 @@ ir::SsaDef IoMap::loadIoRegister(
         return ir::SsaDef();
       }
 
-      auto loadOp = ir::Op(opCode, varScalarType).addOperand(var->baseDef);
+      ir::SsaDef scalar = { };
 
-      if (opCode != ir::OpCode::eTmpLoad)
-        loadOp.addOperand(addressDef);
+      if (opCode != ir::OpCode::eFunctionCall) {
+        auto loadOp = ir::Op(opCode, varScalarType).addOperand(var->baseDef);
 
-      auto scalar = builder.add(std::move(loadOp));
+        if (opCode != ir::OpCode::eTmpLoad)
+          loadOp.addOperand(addressDef);
+
+        scalar = builder.add(std::move(loadOp));
+      } else {
+        auto loadType = builder.getOp(var->baseDef).getType();
+        auto loadOp = ir::Op(opCode, loadType).addOperand(var->baseDef);
+
+        if (vertexIndex)
+          loadOp.addParam(vertexIndex);
+
+        auto index = m_converter.extractFromVector(builder, addressDef, vertexIndex ? 1u : 0u);
+        loadOp.addParam(index);
+
+        scalar = builder.add(std::move(loadOp));
+
+        if (loadType.isVectorType()) {
+          const auto& addressOp = builder.getOp(addressDef);
+
+          ir::SsaDef component = { };
+
+          if (addressOp.getOpCode() == ir::OpCode::eCompositeConstruct)
+            component = ir::SsaDef(addressOp.getOperand(addressOp.getOperandCount() - 1u));
+          else if (addressOp.isConstant())
+            component = builder.makeConstant(uint32_t(addressOp.getOperand(addressOp.getOperandCount() - 1u)));
+
+          scalar = builder.add(ir::Op::CompositeExtract(loadType.getSubType(0u), scalar, component));
+        }
+      }
 
       /* Fix up pixel shader position.w semantics */
       if (m_shaderType == ShaderType::ePixel && var->sv == Sysval::ePosition && c == ComponentBit::eW)
@@ -1420,71 +1448,76 @@ ir::SsaDef IoMap::computeRegisterAddress(
 std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicLoadFunction(
         ir::Builder&            builder,
   const IoVarInfo&              var,
-        uint32_t                vertexCount) {
+        uint32_t                arraySize) {
   auto codeLocation = getCurrentFunction();
 
-  /* Declare scratch as unknown so that type propagation can flatten
-   * it, since this may otherwise produce multi-dimensional arrays. */
   auto scalarType = ir::ScalarType::eUnknown;
+  auto vectorType = ir::BasicType();
 
-  /* Declare scratch array */
-  auto vectorType = m_converter.makeVectorType(scalarType, var.componentMask);
-  auto scratchType = ir::Type(vectorType).addArrayDimension(var.regCount);
+  /* Start building function, assign proper return type later */
+  ir::SsaDef paramIndex = builder.add(ir::Op::DclParam(ir::ScalarType::eU32));
+  ir::SsaDef paramVertex = { };
 
-  if (vertexCount)
-    scratchType.addArrayDimension(vertexCount);
+  if (arraySize)
+    paramVertex = builder.add(ir::Op::DclParam(ir::ScalarType::eU32));
 
-  auto scratch = builder.add(ir::Op::DclScratch(scratchType, m_converter.getEntryPoint()));
+  ir::Op functionOp(ir::OpCode::eFunction, ir::Type());
 
-  if (m_converter.m_options.includeDebugNames) {
-    auto scratchName = m_converter.makeRegisterDebugName(var.regType, var.regIndex, var.componentMask) + std::string("_indexed");
-    builder.add(ir::Op::DebugName(scratch, scratchName.c_str()));
-  }
+  if (paramVertex)
+    functionOp.addParam(paramVertex);
 
-  /* Start building function */
-  auto function = builder.addBefore(codeLocation, ir::Op::Function(ir::Type()));
+  functionOp.addParam(paramIndex);
+
+  auto function = builder.addBefore(codeLocation, std::move(functionOp));
   auto cursor = builder.setCursor(function);
 
   if (m_converter.m_options.includeDebugNames) {
     auto functionName = std::string("load_range_") +
       m_converter.makeRegisterDebugName(var.regType, var.regIndex, var.componentMask);
     builder.add(ir::Op::DebugName(function, functionName.c_str()));
+    builder.add(ir::Op::DebugName(paramIndex, "index"));
+
+    if (paramVertex)
+      builder.add(ir::Op::DebugName(paramVertex, "vertex"));
   }
 
-  /* In geometry and tessellation shaders, iterate over vertices */
-  auto loopConstruct = ir::SsaDef();
+  ir::SsaDef index = builder.add(ir::Op::ParamLoad(ir::ScalarType::eU32, function, paramIndex));
+  ir::SsaDef vertex = { };
 
-  auto vertexCountDef = determineIncomingVertexCount(builder, vertexCount);
-  auto vertexIndexDef = ir::SsaDef();
-  auto vertexIndex = ir::SsaDef();
+  if (paramVertex)
+    vertex = builder.add(ir::Op::ParamLoad(ir::ScalarType::eU32, function, paramVertex));
 
-  if (vertexCountDef) {
-    vertexIndexDef = builder.add(ir::Op::DclTmp(ir::ScalarType::eU32, m_converter.getEntryPoint()));
-    builder.add(ir::Op::TmpStore(vertexIndexDef, builder.makeConstant(0u)));
-    loopConstruct = builder.add(ir::Op::ScopedLoop(ir::SsaDef()));
-
-    vertexIndex = builder.add(ir::Op::TmpLoad(ir::ScalarType::eU32, vertexIndexDef));
-  }
+  ir::SsaDef result;
 
   /* Iterate over matching input variables and copy scalars over one by one */
+  auto switchConstruct = builder.add(ir::Op::ScopedSwitch(ir::SsaDef(), index));
+
   for (uint32_t i = 0u; i < var.regCount; i++) {
-    uint32_t componentIndex = 0u;
+    builder.add(ir::Op::ScopedSwitchCase(switchConstruct, i));
+
+    util::small_vector<ir::SsaDef, 4u> scalars;
 
     for (auto component : var.componentMask) {
-      auto scalar = ir::SsaDef();
+      auto& scalar = scalars.emplace_back();
       auto srcVar = findIoVar(m_variables, var.regType, var.regIndex + i, var.gsStream, component);
 
       if (!srcVar || !srcVar->baseDef) {
+        if (scalarType == ir::ScalarType::eUnknown)
+          scalarType = ir::ScalarType::eU32;
+
         scalar = builder.makeUndef(scalarType);
       } else {
         auto loadType = srcVar->baseType.getBaseType(0u).getBaseType();
+
+        if (scalarType == ir::ScalarType::eUnknown)
+          scalarType = loadType;
 
         auto opCode = isInputRegister(var.regType)
           ? ir::OpCode::eInputLoad
           : ir::OpCode::eOutputLoad;
 
         auto srcAddress = computeRegisterAddress(builder, *srcVar,
-          vertexIndex, ir::SsaDef(), var.regIndex + i, component);
+          vertex, ir::SsaDef(), var.regIndex + i, component);
 
         scalar = builder.add(ir::Op(opCode, loadType)
           .addOperand(srcVar->baseDef)
@@ -1492,49 +1525,35 @@ std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicLoadFunction(
 
         scalar = convertScalar(builder, scalarType, scalar);
       }
-
-      /* Need to build the address manually since the destination
-       * variable does not yet have its scratch variable assigned */
-      util::small_vector<ir::SsaDef, 3u> dstAddress;
-
-      if (vertexIndex)
-        dstAddress.push_back(vertexIndex);
-
-      dstAddress.push_back(builder.makeConstant(i));
-
-      if (vectorType.isVector())
-        dstAddress.push_back(builder.makeConstant(componentIndex++));
-
-      auto dstAddressDef = m_converter.buildVector(builder, ir::ScalarType::eU32, dstAddress.size(), dstAddress.data());
-      builder.add(ir::Op::ScratchStore(scratch, dstAddressDef, scalar).setFlags(ir::OpFlag::eInBounds));
     }
+
+    /* Build return value from individual scalars */
+    dxbc_spv_assert(scalarType != ir::ScalarType::eUnknown);
+    vectorType = m_converter.makeVectorType(scalarType, var.componentMask);
+
+    if (!result)
+      result = builder.add(ir::Op::DclTmp(vectorType, m_converter.getEntryPoint()));
+
+    auto vector = m_converter.buildVector(builder, scalarType, scalars.size(), scalars.data());
+    builder.add(ir::Op::TmpStore(result, vector));
+    builder.add(ir::Op::ScopedSwitchBreak(switchConstruct));
   }
 
-  if (vertexCountDef) {
-    vertexIndex = builder.add(ir::Op::IAdd(ir::ScalarType::eU32, vertexIndex, builder.makeConstant(1u)));
-    builder.add(ir::Op::TmpStore(vertexIndexDef, vertexIndex));
+  builder.add(ir::Op::ScopedSwitchDefault(switchConstruct));
+  builder.add(ir::Op::TmpStore(result, builder.makeConstantZero(vectorType)));
+  builder.add(ir::Op::ScopedSwitchBreak(switchConstruct));
 
-    auto condConstruct = builder.add(ir::Op::ScopedIf(ir::SsaDef(),
-      builder.add(ir::Op::UGe(ir::ScalarType::eBool, vertexIndex, vertexCountDef))));
-    builder.add(ir::Op::ScopedLoopBreak(loopConstruct));
+  auto switchEnd = builder.add(ir::Op::ScopedEndSwitch(switchConstruct));
+  builder.rewriteOp(switchConstruct, ir::Op(builder.getOp(switchConstruct)).setOperand(0u, switchEnd));
 
-    auto condEnd = builder.add(ir::Op::ScopedEndIf(condConstruct));
-    builder.rewriteOp(condConstruct, ir::Op(builder.getOp(condConstruct)).setOperand(0u, condEnd));
-
-    auto loopEnd = builder.add(ir::Op::ScopedEndLoop(loopConstruct));
-    builder.rewriteOp(loopConstruct, ir::Op(builder.getOp(loopConstruct)).setOperand(0u, loopEnd));
-  }
+  builder.add(ir::Op::Return(vectorType, builder.add(ir::Op::TmpLoad(vectorType, result))));
 
   builder.add(ir::Op::FunctionEnd());
+  builder.setOpType(function, vectorType);
+  builder.setCursor(cursor);
 
-  /* Emit function call at the start of the function */
-  builder.setCursor(codeLocation);
-  builder.add(ir::Op::FunctionCall(ir::Type(), function));
-
-  if (cursor != codeLocation)
-    builder.setCursor(cursor);
-
-  return std::make_pair(scratchType, scratch);
+  auto emulatedType = ir::Type(vectorType).addArrayDimension(var.regCount);
+  return std::make_pair(emulatedType, function);
 }
 
 
