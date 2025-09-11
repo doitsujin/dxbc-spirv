@@ -98,14 +98,6 @@ ir::SsaDef RegisterFile::getFunctionForLabel(
         ir::Builder&            builder,
   const Instruction&            op,
   const Operand&                operand) {
-  /* It is unclear how labels are supposed to interact with the per-phase
-   * register spaces in hull shaders. Since there currently are no known
-   * uses of this in the wild, don't bother supporting this for now. */
-  if (m_converter.m_parser.getShaderInfo().getType() == ShaderType::eHull) {
-    m_converter.logOpError(op, "Subroutines not supported in hull shaders.");
-    return ir::SsaDef();
-  }
-
   auto labelIndex = operand.getIndex(0u);
 
   if (operand.getRegisterType() != RegisterType::eLabel) {
