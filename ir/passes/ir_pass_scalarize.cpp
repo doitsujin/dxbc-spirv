@@ -475,8 +475,10 @@ Builder::iterator ScalarizePass::handlePhi(Builder::iterator op) {
   /* Find last phi instruction in block and create composite */
   auto iter = m_builder.iter(op->getDef());
 
-  while ((++iter)->getOpCode() == OpCode::ePhi)
+  while (iter->getOpCode() == OpCode::ePhi) {
     m_builder.setCursor(iter->getDef());
+    iter++;
+  }
 
   auto resultDef = assembleResultVector(result.size(), result.data());
 
