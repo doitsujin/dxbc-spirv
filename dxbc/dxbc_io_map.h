@@ -330,15 +330,6 @@ private:
           WriteMask               component);
 
 
-  /* Bound-check and, if necessary, rewrite scratch address. This is
-   * necessary to avoid GPU hangs with OOB loads. Returns the clamped
-   * address and the new bound check value, in that order. */
-  std::pair<ir::SsaDef, ir::SsaDef> boundCheckScratchAddress(
-          ir::Builder&            builder,
-          ir::SsaDef              address,
-          ir::SsaDef              boundCheck,
-          ir::SsaDef              baseDef);
-
 
   /* Helper function to load dynamically indexed inputs. */
   std::pair<ir::Type, ir::SsaDef> emitDynamicLoadFunction(

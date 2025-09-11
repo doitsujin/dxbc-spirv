@@ -1190,18 +1190,7 @@ ir::SsaDef IoMap::loadIoRegister(
         return ir::SsaDef();
       }
 
-      /* Bound-check array dimensions of scratch loads */
-      ir::SsaDef boundCheck = vertexIndexInBounds;
-
-      if (opCode == ir::OpCode::eScratchLoad && m_converter.m_options.boundCheckShaderIo) {
-        std::tie(addressDef, boundCheck) = boundCheckScratchAddress(
-          builder, addressDef, boundCheck, var->baseDef);
-      }
-
       auto loadOp = ir::Op(opCode, varScalarType).addOperand(var->baseDef);
-
-      if (opCode == ir::OpCode::eScratchLoad && boundCheck)
-        loadOp.setFlags(ir::OpFlag::eInBounds);
 
       if (opCode != ir::OpCode::eTmpLoad)
         loadOp.addOperand(addressDef);
@@ -1213,8 +1202,8 @@ ir::SsaDef IoMap::loadIoRegister(
         scalar = builder.add(ir::Op(ir::OpCode::eFRcp, varScalarType).addOperand(scalar));
 
       /* If the load was bound-checked, replace with zero if out-of-bounds */
-      if (boundCheck) {
-        scalar = builder.add(ir::Op::Select(varScalarType, boundCheck, scalar,
+      if (vertexIndexInBounds && opCode != ir::OpCode::eScratchLoad) {
+        scalar = builder.add(ir::Op::Select(varScalarType, vertexIndexInBounds, scalar,
           builder.add(ir::Op(ir::OpCode::eConstant, varScalarType).addOperand(ir::Operand()))));
       }
 
@@ -1425,45 +1414,6 @@ ir::SsaDef IoMap::computeRegisterAddress(
   }
 
   return m_converter.buildVector(builder, ir::ScalarType::eU32, address.size(), address.data());
-}
-
-
-std::pair<ir::SsaDef, ir::SsaDef> IoMap::boundCheckScratchAddress(
-        ir::Builder&            builder,
-        ir::SsaDef              address,
-        ir::SsaDef              boundCheck,
-        ir::SsaDef              baseDef) {
-  auto addressType = builder.getOp(address).getType().getBaseType(0u);
-  auto baseType = builder.getOp(baseDef).getType();
-
-  if (!baseType.isArrayType())
-    return std::make_pair(address, boundCheck);
-
-  util::small_vector<ir::SsaDef, 3u> addressScalars = { };
-
-  for (uint32_t i = 0u; i < addressType.getVectorSize(); i++) {
-    auto scalar = m_converter.extractFromVector(builder, address, i);
-    auto dim = baseType.getArrayDimensions();
-
-    if (i < dim) {
-      auto inBounds = builder.add(ir::Op::ULt(ir::ScalarType::eBool, scalar,
-        builder.makeConstant(uint32_t(baseType.getArraySize(dim - i - 1u)))));
-
-      scalar = builder.add(ir::Op::Select(addressType.getBaseType(),
-        inBounds, scalar, builder.makeConstant(0u)));
-
-      boundCheck = boundCheck
-        ? builder.add(ir::Op::BAnd(ir::ScalarType::eBool, boundCheck, inBounds))
-        : inBounds;
-    }
-
-    addressScalars.push_back(scalar);
-  }
-
-  auto addressVector = m_converter.buildVector(builder,
-    addressType.getBaseType(), addressScalars.size(), addressScalars.data());
-
-  return std::make_pair(addressVector, boundCheck);
 }
 
 
