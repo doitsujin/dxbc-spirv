@@ -6,6 +6,8 @@
 #include "../ir.h"
 #include "../ir_builder.h"
 
+#include "../../util/util_hash.h"
+
 namespace dxbc_spv::ir {
 
 /** I/O variable type */
@@ -195,6 +197,20 @@ struct IoXfbInfo {
   uint8_t     buffer = 0u;
   uint16_t    offset = 0u;
   uint16_t    stride = 0u;
+
+  bool operator == (const IoXfbInfo& other) const {
+    return semanticName == other.semanticName
+        && semanticIndex == other.semanticIndex
+        && componentMask == other.componentMask
+        && stream == other.stream
+        && buffer == other.buffer
+        && offset == other.offset
+        && stride == other.stride;
+  }
+
+  bool operator != (const IoXfbInfo& other) const {
+    return !operator == (other);
+  }
 };
 
 
@@ -335,6 +351,24 @@ private:
 
   static bool inputNeedsComponentIndex(const Op& op);
 
+};
+
+}
+
+namespace std {
+
+template<>
+struct hash<dxbc_spv::ir::IoXfbInfo> {
+  size_t operator () (const dxbc_spv::ir::IoXfbInfo& xfb) const {
+    size_t hash = std::hash<std::string>()(xfb.semanticName);
+    hash = dxbc_spv::util::hash_combine(hash, xfb.semanticIndex);
+    hash = dxbc_spv::util::hash_combine(hash, xfb.componentMask);
+    hash = dxbc_spv::util::hash_combine(hash, xfb.stream);
+    hash = dxbc_spv::util::hash_combine(hash, xfb.buffer);
+    hash = dxbc_spv::util::hash_combine(hash, xfb.offset);
+    hash = dxbc_spv::util::hash_combine(hash, xfb.stride);
+    return hash;
+  }
 };
 
 }
