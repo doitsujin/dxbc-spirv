@@ -427,7 +427,7 @@ private:
 
   void setDebugMemberName(uint32_t id, uint32_t member, const char* name);
 
-  void enableCapability(spv::Capability cap);
+  bool enableCapability(spv::Capability cap);
 
   void enableExtension(const char* name);
 

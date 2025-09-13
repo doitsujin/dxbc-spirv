@@ -1017,7 +1017,8 @@ void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
 
 
 void SpirvBuilder::emitDclXfb(const ir::Op& op) {
-  enableCapability(spv::CapabilityTransformFeedback);
+  if (enableCapability(spv::CapabilityTransformFeedback))
+    pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId, spv::ExecutionModeXfb);
 
   auto varId = getIdForDef(ir::SsaDef(op.getOperand(0u)));
 
@@ -4730,9 +4731,9 @@ void SpirvBuilder::setDebugMemberName(uint32_t id, uint32_t member, const char* 
 }
 
 
-void SpirvBuilder::enableCapability(spv::Capability cap) {
+bool SpirvBuilder::enableCapability(spv::Capability cap) {
   if (m_enabledCaps.find(cap) != m_enabledCaps.end())
-    return;
+    return false;
 
   pushOp(m_capabilities, spv::OpCapability, cap);
   m_enabledCaps.insert(cap);
@@ -4762,6 +4763,8 @@ void SpirvBuilder::enableCapability(spv::Capability cap) {
 
     default: ;
   }
+
+  return true;
 }
 
 
