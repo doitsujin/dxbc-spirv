@@ -1296,7 +1296,8 @@ void SpirvBuilder::emitConstantLoad(const ir::Op& op) {
   /* Emit access chain to access private variable */
   auto addressDef = ir::SsaDef(op.getOperand(1u));
 
-  auto accessChainId = emitAccessChain(spv::StorageClassPrivate,
+  auto accessChainId = emitAccessChain(
+    getAccessChainOp(op), spv::StorageClassPrivate,
     constantOp.getType(), varId, addressDef, 0u, false);
 
   auto id = getIdForDef(op.getDef());
@@ -1400,12 +1401,12 @@ void SpirvBuilder::emitBufferLoad(const ir::Op& op) {
       addressedType = accessType;
     } else if (addressedType == accessType) {
       /* Trivial case, we can emit a single load. */
-      loadIds.push_back(emitAccessChain(storageClass, dclOp.getType(),
+      loadIds.push_back(emitAccessChain(spv::OpAccessChain, storageClass, dclOp.getType(),
         getIdForDef(descriptorOp.getDef()), addressDef, 0u, hasWrapperStruct));
     } else {
       /* Need to emit multiple loads and assemble a vector later. */
       for (uint32_t i = 0u; i < accessType.getBaseType(0u).getVectorSize(); i++) {
-        loadIds.push_back(emitAccessChain(storageClass, dclOp.getType(),
+        loadIds.push_back(emitAccessChain(spv::OpAccessChain, storageClass, dclOp.getType(),
           getIdForDef(descriptorOp.getDef()), addressDef, i, hasWrapperStruct));
       }
     }
@@ -1498,15 +1499,15 @@ void SpirvBuilder::emitBufferStore(const ir::Op& op) {
       storeIds.push_back(std::make_pair(accessChainId, getIdForDef(valueOp.getDef())));
     } else if (addressedType == accessType) {
       /* Trivial case, we can emit a single store */
-      auto accessChainId = emitAccessChain(spv::StorageClassStorageBuffer, dclOp.getType(),
-        getIdForDef(descriptorOp.getDef()), addressDef, 0u, hasWrapperStruct);
+      auto accessChainId = emitAccessChain(spv::OpAccessChain, spv::StorageClassStorageBuffer,
+        dclOp.getType(), getIdForDef(descriptorOp.getDef()), addressDef, 0u, hasWrapperStruct);
 
       storeIds.push_back(std::make_pair(accessChainId, getIdForDef(valueOp.getDef())));
     } else {
       /* Extract scalars from vector and scalarize access chains */
       for (uint32_t i = 0u; i < accessType.getBaseType(0u).getVectorSize(); i++) {
-        auto accessChainId = emitAccessChain(spv::StorageClassStorageBuffer, dclOp.getType(),
-          getIdForDef(descriptorOp.getDef()), addressDef, i, hasWrapperStruct);
+        auto accessChainId = emitAccessChain(spv::OpAccessChain, spv::StorageClassStorageBuffer,
+          dclOp.getType(), getIdForDef(descriptorOp.getDef()), addressDef, i, hasWrapperStruct);
 
         storeIds.push_back(std::make_pair(accessChainId,
           emitExtractComponent(valueOp.getDef(), i)));
@@ -1577,8 +1578,8 @@ void SpirvBuilder::emitBufferAtomic(const ir::Op& op) {
     /* Emit access chain, this will always point to a scalar. */
     bool hasWrapperStruct = !dclOp.getType().isStructType();
 
-    auto accessChainId = emitAccessChain(spv::StorageClassStorageBuffer, dclOp.getType(),
-      getIdForDef(descriptorOp.getDef()), addressDef, 0u, hasWrapperStruct);
+    auto accessChainId = emitAccessChain(spv::OpAccessChain, spv::StorageClassStorageBuffer,
+      dclOp.getType(), getIdForDef(descriptorOp.getDef()), addressDef, 0u, hasWrapperStruct);
 
     if (descriptorOp.getFlags() & ir::OpFlag::eNonUniform)
       pushOp(m_decorations, spv::OpDecorate, accessChainId, spv::DecorationNonUniform);
@@ -1625,7 +1626,7 @@ void SpirvBuilder::emitMemoryLoad(const ir::Op& op) {
   /* Emit access chain */
   bool hasWrapperStruct = !ptrOp.getType().isStructType();
 
-  auto accessChainId = emitAccessChain(spv::StorageClassPhysicalStorageBuffer,
+  auto accessChainId = emitAccessChain(spv::OpAccessChain, spv::StorageClassPhysicalStorageBuffer,
     ptrOp.getType(), getIdForDef(ptrOp.getDef()), addressDef, 0u, hasWrapperStruct);
 
   /* Emit load op */
@@ -1660,7 +1661,7 @@ void SpirvBuilder::emitMemoryStore(const ir::Op& op) {
   /* Emit access chain */
   bool hasWrapperStruct = !ptrOp.getType().isStructType();
 
-  auto accessChainId = emitAccessChain(spv::StorageClassPhysicalStorageBuffer,
+  auto accessChainId = emitAccessChain(spv::OpAccessChain, spv::StorageClassPhysicalStorageBuffer,
     ptrOp.getType(), getIdForDef(ptrOp.getDef()), addressDef, 0u, hasWrapperStruct);
 
   /* Emit store op */
@@ -1682,7 +1683,7 @@ void SpirvBuilder::emitMemoryAtomic(const ir::Op& op) {
   /* Emit access chain */
   bool hasWrapperStruct = !ptrOp.getType().isStructType();
 
-  auto accessChainId = emitAccessChain(spv::StorageClassPhysicalStorageBuffer,
+  auto accessChainId = emitAccessChain(spv::OpAccessChain, spv::StorageClassPhysicalStorageBuffer,
     ptrOp.getType(), getIdForDef(ptrOp.getDef()), addressDef, 0u, hasWrapperStruct);
 
   /* Emit atomic */
@@ -1695,7 +1696,7 @@ void SpirvBuilder::emitCounterAtomic(const ir::Op& op) {
   const auto& descriptorOp = m_builder.getOpForOperand(op, 0u);
   const auto& dclOp = m_builder.getOpForOperand(descriptorOp, 0u);
 
-  auto accessChainId = emitAccessChain(spv::StorageClassStorageBuffer,
+  auto accessChainId = emitAccessChain(spv::OpAccessChain, spv::StorageClassStorageBuffer,
     dclOp.getType(), getIdForDef(descriptorOp.getDef()), ir::SsaDef(), 0u, true);
 
   if (descriptorOp.getFlags() & ir::OpFlag::eNonUniform)
@@ -1724,7 +1725,7 @@ void SpirvBuilder::emitLdsAtomic(const ir::Op& op) {
 
   auto type = traverseType(dclOp.getType(), addressDef);
 
-  auto ptrId = emitAccessChain(spv::StorageClassWorkgroup,
+  auto ptrId = emitAccessChain(getAccessChainOp(op), spv::StorageClassWorkgroup,
     dclOp.getType(), getIdForDef(dclOp.getDef()), addressDef, 0u, false);
 
   emitAtomic(op, type, getIdForDef(op.getDef()), operandDef, ptrId,
@@ -2945,7 +2946,7 @@ uint32_t SpirvBuilder::emitAddressOffset(ir::SsaDef def, uint32_t offset) {
 }
 
 
-uint32_t SpirvBuilder::emitAccessChain(spv::StorageClass storageClass, const ir::Type& baseType,
+uint32_t SpirvBuilder::emitAccessChain(spv::Op op, spv::StorageClass storageClass, const ir::Type& baseType,
     uint32_t baseId, ir::SsaDef address, uint32_t offset, bool wrapperStruct) {
   if (!address && !wrapperStruct)
     return baseId;
@@ -3017,7 +3018,7 @@ uint32_t SpirvBuilder::emitAccessChain(spv::StorageClass storageClass, const ir:
   }
 
   /* Emit actual access chain instruction */
-  m_code.push_back(makeOpcodeToken(spv::OpAccessChain, 4u + indexIds.size()));
+  m_code.push_back(makeOpcodeToken(op, 4u + indexIds.size()));
   m_code.push_back(ptrTypeId);
   m_code.push_back(accessChainId);
   m_code.push_back(baseId);
@@ -3191,10 +3192,10 @@ uint32_t SpirvBuilder::emitRawAccessChainNv(spv::StorageClass storageClass, cons
 }
 
 
-uint32_t SpirvBuilder::emitAccessChain(spv::StorageClass storageClass, ir::SsaDef base, ir::SsaDef address, bool wrapped) {
+uint32_t SpirvBuilder::emitAccessChain(spv::Op op, spv::StorageClass storageClass, ir::SsaDef base, ir::SsaDef address, bool wrapped) {
   const auto& baseOp = m_builder.getOp(base);
 
-  return emitAccessChain(storageClass, baseOp.getType(), getIdForDef(baseOp.getDef()), address, 0u, wrapped);
+  return emitAccessChain(op, storageClass, baseOp.getType(), getIdForDef(baseOp.getDef()), address, 0u, wrapped);
 }
 
 
@@ -3251,6 +3252,7 @@ void SpirvBuilder::emitLoadSamplePositionBuiltIn(const ir::Op& op) {
   auto typeId = getIdForType(op.getType());
 
   auto accessChainId = emitAccessChain(
+    getAccessChainOp(op),
     getVariableStorageClass(op),
     ir::SsaDef(op.getOperand(0u)),
     ir::SsaDef(op.getOperand(1u)),
@@ -3327,6 +3329,7 @@ void SpirvBuilder::emitLoadVariable(const ir::Op& op) {
 
   /* Load regular variable */
   auto accessChainId = emitAccessChain(
+    getAccessChainOp(op),
     getVariableStorageClass(op),
     ir::SsaDef(op.getOperand(0u)),
     ir::SsaDef(op.getOperand(1u)),
@@ -3370,6 +3373,7 @@ void SpirvBuilder::emitStoreVariable(const ir::Op& op) {
   }
 
   auto accessChainId = emitAccessChain(
+    getAccessChainOp(op),
     getVariableStorageClass(op),
     ir::SsaDef(op.getOperand(0u)),
     ir::SsaDef(op.getOperand(1u)),
@@ -3700,7 +3704,7 @@ void SpirvBuilder::emitInterpolation(const ir::Op& op) {
   if (addressId) {
     auto accessChainId = allocId();
 
-    m_code.push_back(makeOpcodeToken(spv::OpAccessChain, 5u));
+    m_code.push_back(makeOpcodeToken(spv::OpInBoundsAccessChain, 5u));
     m_code.push_back(getIdForPtrType(typeId, spv::StorageClassInput));
     m_code.push_back(accessChainId);
     m_code.push_back(ptrId);
@@ -4931,6 +4935,14 @@ DescriptorBinding SpirvBuilder::mapDescriptor(const ir::Op& op, const ir::Op& bi
   auto regIndex = uint32_t(bindingOp.getOperand(2u));
 
   return m_mapping.mapDescriptor(type, regSpace, regIndex);
+}
+
+
+spv::Op SpirvBuilder::getAccessChainOp(const ir::Op& op) const {
+  if (op.getFlags() & ir::OpFlag::eInBounds)
+    return spv::OpInBoundsAccessChain;
+
+  return spv::OpAccessChain;
 }
 
 

@@ -302,10 +302,10 @@ private:
 
   uint32_t emitAddressOffset(ir::SsaDef def, uint32_t offset);
 
-  uint32_t emitAccessChain(spv::StorageClass storageClass, const ir::Type& baseType,
+  uint32_t emitAccessChain(spv::Op op, spv::StorageClass storageClass, const ir::Type& baseType,
     uint32_t baseId, ir::SsaDef address, uint32_t offset, bool wrapperStruct);
 
-  uint32_t emitAccessChain(spv::StorageClass storageClass, ir::SsaDef base, ir::SsaDef address, bool wrapped);
+  uint32_t emitAccessChain(spv::Op op, spv::StorageClass storageClass, ir::SsaDef base, ir::SsaDef address, bool wrapped);
 
   uint32_t emitRawStructuredElementAddress(const ir::Op& op, uint32_t stride);
 
@@ -448,6 +448,8 @@ private:
   bool isPatchConstant(const ir::Op& op) const;
 
   DescriptorBinding mapDescriptor(const ir::Op& op, const ir::Op& bindingOp) const;
+
+  spv::Op getAccessChainOp(const ir::Op& op) const;
 
   static uint32_t getFpModeFlags(ir::OpFlags flags);
 
