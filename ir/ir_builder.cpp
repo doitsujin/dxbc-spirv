@@ -97,7 +97,7 @@ SsaDef Builder::remove(SsaDef def) {
   for (uint32_t i = 0u; i < op.getFirstLiteralOperandIndex(); i++)
     removeUse(SsaDef(op.getOperand(i)), def);
 
-  if (op.isConstant())
+  if (op.isConstant() || op.isUndef())
     m_constants.erase(op);
 
   return removeNode(def);
