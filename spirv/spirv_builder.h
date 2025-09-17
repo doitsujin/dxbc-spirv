@@ -46,6 +46,13 @@ public:
     bool supportsZeroInfNanPreserveF16 = false;
     bool supportsZeroInfNanPreserveF32 = false;
     bool supportsZeroInfNanPreserveF64 = false;
+    /** Maximum size for constant buffers. Larger buffers will be emitted
+     *  as storage buffers instead. If 0, constant buffers can have any size. */
+    uint32_t maxCbvSize = 0u;
+    /** Maximum number of constant buffers. Excess buffers will be emitted as
+     *  storage buffers, ordered by space and register numbers. If negative,
+     *  the number of constant buffers is effectively unlimited. */
+    int32_t maxCbvCount = -1;
   };
 
   explicit SpirvBuilder(const ir::Builder& builder, ResourceMapping& mapping, const Options& options);
@@ -87,6 +94,7 @@ private:
   std::unordered_map<ir::SsaDef, uint32_t> m_descriptorTypes;
   std::unordered_map<ir::SsaDef, uint32_t> m_constantVars;
   std::unordered_map<SpirvBdaTypeKey, uint32_t> m_bdaTypeIds;
+  std::unordered_set<ir::SsaDef> m_storageBufferCbv;
 
   std::vector<uint32_t> m_ssaDefsToId;
 
@@ -150,6 +158,10 @@ private:
   uint32_t m_entryPointId = 0u;
 
   void processDebugNames();
+
+  void demoteCbv();
+
+  bool cbvAsSsbo(const ir::Op& op) const;
 
   void finalize();
 

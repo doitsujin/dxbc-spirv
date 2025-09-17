@@ -23,6 +23,9 @@ void SpirvBuilder::buildSpirvBinary() {
   if (m_options.includeDebugNames)
     processDebugNames();
 
+  if (m_options.maxCbvSize || m_options.maxCbvCount >= 0)
+    demoteCbv();
+
   for (const auto& op : m_builder)
     emitInstruction(op);
 
@@ -98,6 +101,61 @@ void SpirvBuilder::processDebugNames() {
     else if (op->getOpCode() == ir::OpCode::eSemantic)
       m_debugNames.insert({ ir::SsaDef(op->getOperand(0u)), op->getDef() });
   }
+}
+
+
+void SpirvBuilder::demoteCbv() {
+  util::small_vector<ir::SsaDef, 16u> cbv;
+
+  auto [a, b] = m_builder.getDeclarations();
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == ir::OpCode::eDclCbv)
+      cbv.push_back(iter->getDef());
+  }
+
+  std::sort(cbv.begin(), cbv.end(), [this] (ir::SsaDef a, ir::SsaDef b) {
+    const auto& aOp = m_builder.getOp(a);
+    const auto& bOp = m_builder.getOp(b);
+
+    auto aSpace = uint32_t(aOp.getOperand(aOp.getFirstLiteralOperandIndex() + 0u));
+    auto bSpace = uint32_t(bOp.getOperand(bOp.getFirstLiteralOperandIndex() + 0u));
+
+    if (aSpace != bSpace)
+      return aSpace < bSpace;
+
+    auto aIndex = uint32_t(aOp.getOperand(aOp.getFirstLiteralOperandIndex() + 1u));
+    auto bIndex = uint32_t(bOp.getOperand(bOp.getFirstLiteralOperandIndex() + 1u));
+    return aIndex < bIndex;
+  });
+
+  int32_t cbvCount = 0;
+
+  for (auto e : cbv) {
+    const auto& op = m_builder.getOp(e);
+    auto descriptorCount = uint32_t(op.getOperand(op.getFirstLiteralOperandIndex() + 2u));
+
+    bool demote = false;
+
+    if (m_options.maxCbvSize)
+      demote = demote || op.getType().byteSize() > m_options.maxCbvSize;
+
+    if (m_options.maxCbvCount >= 0) {
+      demote = demote || !descriptorCount ||
+        int64_t(cbvCount) + int64_t(descriptorCount) >= int64_t(m_options.maxCbvCount);
+    }
+
+    if (demote)
+      m_storageBufferCbv.insert(op.getDef());
+    else
+      cbvCount += descriptorCount;
+  }
+}
+
+
+bool SpirvBuilder::cbvAsSsbo(const ir::Op& op) const {
+  dxbc_spv_assert(op.getOpCode() == ir::OpCode::eDclCbv);
+  return m_storageBufferCbv.find(op.getDef()) != m_storageBufferCbv.end();
 }
 
 
@@ -1052,7 +1110,11 @@ void SpirvBuilder::emitDclCbv(const ir::Op& op) {
 
   pushOp(m_decorations, spv::OpDecorate, structTypeId, spv::DecorationBlock);
 
-  defDescriptor(op, structTypeId, spv::StorageClassUniform);
+  auto storageClass = cbvAsSsbo(op)
+    ? spv::StorageClassStorageBuffer
+    : spv::StorageClassUniform;
+
+  defDescriptor(op, structTypeId, storageClass);
   m_descriptorTypes.insert({ op.getDef(), structTypeId });
 }
 
@@ -1386,7 +1448,7 @@ void SpirvBuilder::emitBufferLoad(const ir::Op& op) {
     /* Emit access chains for loading the requested data. */
     util::small_vector<uint32_t, 4u> loadIds;
 
-    auto storageClass = descriptorOp.getType() == ir::ScalarType::eCbv
+    auto storageClass = descriptorOp.getType() == ir::ScalarType::eCbv && !cbvAsSsbo(dclOp)
       ? spv::StorageClassUniform
       : spv::StorageClassStorageBuffer;
 
@@ -4285,6 +4347,9 @@ uint32_t SpirvBuilder::defDescriptor(const ir::Op& op, uint32_t typeId, spv::Sto
     if (uavFlags & ir::UavFlag::eWriteOnly)
       pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationNonReadable);
   }
+
+  if (op.getOpCode() == ir::OpCode::eDclCbv && cbvAsSsbo(op))
+    pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationNonWritable);
 
   emitDebugName(op.getDef(), varId);
 
