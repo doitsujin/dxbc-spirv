@@ -17,4 +17,6 @@ Builder test_pass_arithmetic_identities_select();
 Builder test_pass_arithmetic_propagate_sign();
 Builder test_pass_arithmetic_fuse_mad();
 
+Builder test_pass_arithmetic_lower_legacy();
+
 }

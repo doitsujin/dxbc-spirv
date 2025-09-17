@@ -370,6 +370,8 @@ void enumeratePassesTests(std::vector<NamedTest>& result, const char* category, 
   ADD_TEST(test_pass_arithmetic_propagate_sign);
   ADD_TEST(test_pass_arithmetic_fuse_mad);
 
+  ADD_TEST(test_pass_arithmetic_lower_legacy);
+
   ADD_TEST(test_pass_buffer_kind_typed_uav_to_raw);
   ADD_TEST(test_pass_buffer_kind_raw_srv_to_typed);
   ADD_TEST(test_pass_buffer_kind_raw_srv_to_typed_sparse);
