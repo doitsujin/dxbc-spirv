@@ -82,6 +82,7 @@ void ArithmeticPass::runEarlyLowering() {
 
 
 void ArithmeticPass::runLateLowering() {
+  fuseMultiplyAdd();
   lowerInstructionsPostTransform();
 
   /* Some instructions operate on composites but
@@ -151,14 +152,6 @@ void ArithmeticPass::lowerInstructionsPostTransform() {
 
   while (iter != m_builder.end()) {
     switch (iter->getOpCode()) {
-      case OpCode::eFAdd:
-      case OpCode::eFSub: {
-        if (m_options.fuseMad) {
-          iter = tryFuseMad(iter);
-          continue;
-        }
-      } break;
-
       case OpCode::eFMin:
       case OpCode::eSMin:
       case OpCode::eUMin: {
@@ -169,6 +162,14 @@ void ArithmeticPass::lowerInstructionsPostTransform() {
       case OpCode::eFDotLegacy: {
         if (m_options.lowerDot) {
           iter = lowerDot(iter);
+          continue;
+        }
+      } break;
+
+      case OpCode::eFMulLegacy:
+      case OpCode::eFMadLegacy: {
+        if (m_options.lowerMulLegacy) {
+          iter = lowerMulLegacy(iter);
           continue;
         }
       } break;
@@ -208,6 +209,38 @@ void ArithmeticPass::lowerInstructionsPostTransform() {
 
     ++iter;
   }
+}
+
+
+void ArithmeticPass::fuseMultiplyAdd() {
+  if (!m_options.fuseMad)
+    return;
+
+  auto iter = m_builder.getCode().first;
+
+  while (iter != m_builder.end()) {
+    switch (iter->getOpCode()) {
+      case OpCode::eFAdd:
+      case OpCode::eFSub: {
+        iter = tryFuseMad(iter);
+      } continue;
+
+      default:
+        ++iter;
+    }
+  }
+}
+
+
+Builder::iterator ArithmeticPass::lowerMulLegacy(Builder::iterator op) {
+  auto function = buildMulLegacyFunc(op->getOpCode(), op->getType().getBaseType(0u));
+  auto functionCall = Op::FunctionCall(op->getType(), function).setFlags(op->getFlags());
+
+  for (uint32_t i = 0u; i < op->getOperandCount(); i++)
+    functionCall.addParam(SsaDef(op->getOperand(i)));
+
+  m_builder.rewriteOp(op->getDef(), std::move(functionCall));
+  return ++op;
 }
 
 
@@ -253,6 +286,9 @@ Builder::iterator ArithmeticPass::lowerDot(Builder::iterator op) {
     if (resultType != vectorType.getBaseType())
       debugName << "_" << vectorType.getBaseType();
 
+    if (op->getOpCode() == OpCode::eFDotLegacy)
+      debugName << "_legacy";
+
     m_builder.add(Op::DebugName(fn.function, debugName.str().c_str()));
 
     m_builder.setCursor(fn.function);
@@ -268,16 +304,25 @@ Builder::iterator ArithmeticPass::lowerDot(Builder::iterator op) {
     auto madOp = isLegacy ? OpCode::eFMadLegacy : OpCode::eFMad;
 
     /* Mark the multiply-add chain as precise so that compilers don't screw around with
-    * it, otherwise we run into rendering issues in e.g. Trails through Daybreak. */
-    auto result = m_builder.add(Op(mulOp, op->getType()).setFlags(OpFlag::ePrecise)
-      .addOperand(m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorA, m_builder.makeConstant(0u))))
-      .addOperand(m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorB, m_builder.makeConstant(0u)))));
+     * it, otherwise we run into rendering issues in e.g. Trails through Daybreak. */
+    SsaDef result = { };
+
+    auto a = m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorA, m_builder.makeConstant(0u)));
+    auto b = m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorB, m_builder.makeConstant(0u)));
+
+    if (isLegacy && m_options.lowerMulLegacy)
+      result = m_builder.add(emitMulLegacy(op->getType(), a, b).setFlags(OpFlag::ePrecise));
+    else
+      result = m_builder.add(Op(mulOp, op->getType()).setFlags(OpFlag::ePrecise).addOperands(a, b));
 
     for (uint32_t i = 1u; i < srcA.getType().getBaseType(0u).getVectorSize(); i++) {
-      result = m_builder.add(Op(madOp, op->getType()).setFlags(OpFlag::ePrecise)
-        .addOperand(m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorA, m_builder.makeConstant(i))))
-        .addOperand(m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorB, m_builder.makeConstant(i))))
-        .addOperand(result));
+      a = m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorA, m_builder.makeConstant(i)));
+      b = m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorB, m_builder.makeConstant(i)));
+
+      if (isLegacy && m_options.lowerMulLegacy)
+        result = m_builder.add(emitMadLegacy(op->getType(), a, b, result).setFlags(OpFlag::ePrecise));
+      else
+        result = m_builder.add(Op(madOp, op->getType()).setFlags(OpFlag::ePrecise).addOperands(a, b, result));
     }
 
     m_builder.add(Op::Return(op->getType(), result));
@@ -752,6 +797,107 @@ Builder::iterator ArithmeticPass::lowerSinCos(Builder::iterator op) {
 }
 
 
+Op ArithmeticPass::emitMulLegacy(const Type& type, SsaDef a, SsaDef b) {
+  /* a * b -> (b == 0 ? 0 : a) * (a == 0 ? 0 : b) */
+  auto zero = m_builder.makeConstantZero(type);
+
+  auto aEq0 = m_builder.add(Op::FEq(ScalarType::eBool, a, zero));
+  auto bEq0 = m_builder.add(Op::FEq(ScalarType::eBool, b, zero));
+
+  auto aOperand = m_builder.add(Op::Select(type, bEq0, zero, a));
+  auto bOperand = m_builder.add(Op::Select(type, aEq0, zero, b));
+
+  return Op::FMul(type, aOperand, bOperand);
+}
+
+
+Op ArithmeticPass::emitMadLegacy(const Type& type, SsaDef a, SsaDef b, SsaDef c) {
+  auto op = emitMulLegacy(type, a, b);
+
+  return Op::FMad(type, SsaDef(op.getOperand(0u)), SsaDef(op.getOperand(1u)), c);
+}
+
+
+SsaDef ArithmeticPass::buildMulLegacyFunc(OpCode opCode, BasicType type) {
+  auto entry = std::find_if(m_mulLegacyFunctions.begin(), m_mulLegacyFunctions.end(),
+    [opCode, type] (const MulLegacyFunc& func) {
+      return func.opCode == opCode && func.type == type;
+    });
+
+  if (entry == m_mulLegacyFunctions.end()) {
+    entry = &m_mulLegacyFunctions.emplace_back();
+    entry->opCode = opCode;
+    entry->type = type;
+
+    SsaDef paramA = m_builder.add(Op::DclParam(type));
+    SsaDef paramB = m_builder.add(Op::DclParam(type));
+    SsaDef paramC = { };
+
+    m_builder.add(Op::DebugName(paramA, "a"));
+    m_builder.add(Op::DebugName(paramB, "b"));
+
+    if (opCode == OpCode::eFMadLegacy) {
+      paramC = m_builder.add(Op::DclParam(type));
+      m_builder.add(Op::DebugName(paramC, "c"));
+    }
+
+    std::stringstream debugName;
+    debugName << (opCode == OpCode::eFMadLegacy ? "mad_legacy_" : "mul_legacy_");
+    debugName << type;
+
+    auto functionOp = Op::Function(type).addParam(paramA).addParam(paramB);
+
+    if (paramC)
+      functionOp.addParam(paramC);
+
+    entry->function = m_builder.addBefore(m_builder.getCode().first->getDef(), std::move(functionOp));
+    m_builder.add(Op::DebugName(entry->function, debugName.str().c_str()));
+
+    m_builder.setCursor(entry->function);
+    m_builder.add(Op::Label());
+
+    SsaDef a = m_builder.add(Op::ParamLoad(type, entry->function, paramA));
+    SsaDef b = m_builder.add(Op::ParamLoad(type, entry->function, paramB));
+    SsaDef c = { };
+
+    if (paramC)
+      c = m_builder.add(Op::ParamLoad(type, entry->function, paramC));
+
+    Op resultOp(OpCode::eCompositeConstruct, type);
+
+    for (uint32_t i = 0u; i < type.getVectorSize(); i++) {
+      auto aScalar = a;
+      auto bScalar = b;
+      auto cScalar = c;
+
+      if (type.isVector()) {
+        aScalar = m_builder.add(Op::CompositeExtract(type.getBaseType(), a, m_builder.makeConstant(i)));
+        bScalar = m_builder.add(Op::CompositeExtract(type.getBaseType(), b, m_builder.makeConstant(i)));
+
+        if (c)
+          cScalar = m_builder.add(Op::CompositeExtract(type.getBaseType(), c, m_builder.makeConstant(i)));
+      }
+
+      auto resultScalar = m_builder.add(opCode == OpCode::eFMadLegacy
+        ? emitMadLegacy(type.getBaseType(), aScalar, bScalar, cScalar)
+        : emitMulLegacy(type.getBaseType(), aScalar, bScalar));
+
+      resultOp.addOperand(resultScalar);
+    }
+
+    auto result = SsaDef(resultOp.getOperand(0u));
+
+    if (type.isVector())
+      result = m_builder.add(std::move(resultOp));
+
+    m_builder.add(Op::Return(type, result));
+    m_builder.add(Op::FunctionEnd());
+  }
+
+  return entry->function;
+}
+
+
 SsaDef ArithmeticPass::buildF32toF16Func() {
   if (!m_f32tof16Function) {
     auto param = m_builder.add(Op::DclParam(BasicType(ScalarType::eF32, 2u)));
@@ -842,7 +988,8 @@ Builder::iterator ArithmeticPass::tryFuseMad(Builder::iterator op) {
   for (uint32_t i = 0u; i < 2u; i++) {
     const auto& operand = m_builder.getOpForOperand(*op, i);
 
-    if (operand.getOpCode() == OpCode::eFMul) {
+    if (operand.getOpCode() == OpCode::eFMul ||
+        operand.getOpCode() == OpCode::eFMulLegacy) {
       if (std::exchange(fmulOperand, i) != -1u)
         return ++op;
 
@@ -876,7 +1023,11 @@ Builder::iterator ArithmeticPass::tryFuseMad(Builder::iterator op) {
   }
 
   /* Emit fused op and constant-fold negations where possible. */
-  auto fusedOp = Op::FMad(op->getType(), a, b, c).setFlags(op->getFlags());
+  auto madOp = m_builder.getOpForOperand(*op, fmulOperand).getOpCode() == OpCode::eFMulLegacy
+    ? OpCode::eFMadLegacy
+    : OpCode::eFMad;
+
+  auto fusedOp = Op(madOp, op->getType()).setFlags(op->getFlags()).addOperands(a, b, c);
   m_builder.rewriteOp(op->getDef(), fusedOp);
 
   for (uint32_t i = 0u; i < fusedOp.getOperandCount(); i++)

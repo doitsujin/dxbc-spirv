@@ -76,6 +76,12 @@ private:
     SsaDef function = { };
   };
 
+  struct MulLegacyFunc {
+    OpCode opCode = { };
+    BasicType type = { };
+    SsaDef function = { };
+  };
+
   Builder& m_builder;
 
   Options m_options;
@@ -86,6 +92,8 @@ private:
 
   util::small_vector<ConvertFunc, 8u> m_convertFunctions;
   util::small_vector<DotFunc, 8u> m_dotFunctions;
+  util::small_vector<MulLegacyFunc, 8u> m_mulLegacyFunctions;
+
   SsaDef m_f32tof16Function = { };
   SsaDef m_msadFunction = { };
   SsaDef m_sincosFunction = { };
@@ -96,6 +104,9 @@ private:
 
   void lowerInstructionsPreTransform();
   void lowerInstructionsPostTransform();
+  void fuseMultiplyAdd();
+
+  Builder::iterator lowerMulLegacy(Builder::iterator op);
 
   Builder::iterator lowerDot(Builder::iterator op);
 
@@ -114,6 +125,12 @@ private:
   Builder::iterator lowerSinCos(Builder::iterator op);
 
   Builder::iterator lowerInputBuiltIn(Builder::iterator op);
+
+  Op emitMulLegacy(const Type& type, SsaDef a, SsaDef b);
+
+  Op emitMadLegacy(const Type& type, SsaDef a, SsaDef b, SsaDef c);
+
+  SsaDef buildMulLegacyFunc(OpCode opCode, BasicType type);
 
   SsaDef buildF32toF16Func();
 
