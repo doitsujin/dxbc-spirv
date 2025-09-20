@@ -1137,9 +1137,9 @@ bool Converter::handleFloatDot(ir::Builder& builder, const Instruction& op) {
    * since the write mask can be literally anything. */
   auto readMask = [opCode] {
     switch (opCode) {
-      case OpCode::eDp2: return makeWriteMaskForComponents(2u);
-      case OpCode::eDp3: return makeWriteMaskForComponents(3u);
-      case OpCode::eDp4: return makeWriteMaskForComponents(4u);
+      case OpCode::eDp2: return util::makeWriteMaskForComponents(2u);
+      case OpCode::eDp3: return util::makeWriteMaskForComponents(3u);
+      case OpCode::eDp4: return util::makeWriteMaskForComponents(4u);
       default: break;
     }
 
@@ -2357,7 +2357,7 @@ bool Converter::handleSample(ir::Builder& builder, const Instruction& op) {
   ir::SsaDef derivY = { };
 
   if (opCode == OpCode::eSampleD || opCode == OpCode::eSampleDClampS) {
-    auto coordComponentMask = makeWriteMaskForComponents(
+    auto coordComponentMask = util::makeWriteMaskForComponents(
       ir::resourceCoordComponentCount(textureInfo.kind));
 
     derivX = loadSrcModified(builder, op, op.getSrc(3u), coordComponentMask, ir::ScalarType::eF32);
@@ -3580,7 +3580,7 @@ ir::SsaDef Converter::getSampleCount(ir::Builder& builder, const Instruction& op
 std::pair<ir::SsaDef, ir::SsaDef> Converter::computeTypedCoordLayer(ir::Builder& builder, const Instruction& op,
     const Operand& operand, ir::ResourceKind kind, ir::ScalarType type) {
   auto coordComponentCount = ir::resourceCoordComponentCount(kind);
-  auto coordComponentMask = makeWriteMaskForComponents(coordComponentCount);
+  auto coordComponentMask = util::makeWriteMaskForComponents(coordComponentCount);
 
   ir::SsaDef coord = loadSrcModified(builder, op, operand, coordComponentMask, type);
   ir::SsaDef layer = { };
@@ -4012,12 +4012,12 @@ WriteMask Converter::convertMaskTo32Bit(WriteMask mask) {
   /* Instructions that operate on both 32-bit and 64-bit types do not
    * match masks in terms of component bits, but instead base it on
    * the number of components set in the write mask. */
-  return makeWriteMaskForComponents(util::popcnt(uint8_t(mask)) / 2u);
+  return util::makeWriteMaskForComponents(util::popcnt(uint8_t(mask)) / 2u);
 }
 
 
 WriteMask Converter::convertMaskTo64Bit(WriteMask mask) {
-  return makeWriteMaskForComponents(util::popcnt(uint8_t(mask)) * 2u);
+  return util::makeWriteMaskForComponents(util::popcnt(uint8_t(mask)) * 2u);
 }
 
 

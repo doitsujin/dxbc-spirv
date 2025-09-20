@@ -703,7 +703,7 @@ bool IoMap::declareIoSignatureVars(
     auto name = m_converter.makeRegisterDebugName(regType, regIndex, componentMask);
 
     while (componentMask) {
-      WriteMask nextMask = extractConsecutiveComponents(componentMask);
+      WriteMask nextMask = util::extractConsecutiveComponents(componentMask);
 
       /* We have no type information. Declare variable as
        * float32 for interpolation purposes */
@@ -913,7 +913,7 @@ bool IoMap::declareDedicatedBuiltIn(
   mapping.regIndex = 0u;
   mapping.regCount = 1u;
   mapping.sv = Sysval::eNone;
-  mapping.componentMask = makeWriteMaskForComponents(type.getVectorSize());
+  mapping.componentMask = util::makeWriteMaskForComponents(type.getVectorSize());
   mapping.baseType = declaration.getType();
   mapping.baseDef = builder.add(std::move(declaration));
   mapping.baseIndex = -1;

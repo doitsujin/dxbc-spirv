@@ -45,6 +45,7 @@ dxbc_spv_files = files([
   'util/util_float16.cpp',
   'util/util_log.cpp',
   'util/util_md5.cpp',
+  'util/util_swizzle.cpp',
 
   'spirv/spirv_builder.cpp',
   'spirv/spirv_mapping.cpp',
