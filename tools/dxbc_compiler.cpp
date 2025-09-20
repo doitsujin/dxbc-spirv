@@ -8,6 +8,7 @@
 #include "../ir/ir.h"
 #include "../ir/ir_builder.h"
 #include "../ir/ir_disasm.h"
+#include "../ir/ir_legalize.h"
 #include "../ir/ir_serialize.h"
 
 #include "../ir/passes/ir_pass_lower_io.h"
@@ -265,12 +266,12 @@ bool compileShader(util::ByteReader reader, const Options& options) {
   timers.tConvertEnd = std::chrono::high_resolution_clock::now();
 
   if (!(options.convertOnly || options.irInput)) {
-    dxbc::CompileOptions compileOptions = { };
+    ir::CompileOptions compileOptions = { };
 
     compileOptions.syncOptions.insertLdsBarriers = options.ldsBarriers;
     compileOptions.syncOptions.insertUavBarriers = options.uavBarriers;
 
-    dxbc::legalizeIr(builder, compileOptions);
+    ir::legalizeIr(builder, compileOptions);
     timers.tAfterPasses = std::chrono::high_resolution_clock::now();
   }
 
