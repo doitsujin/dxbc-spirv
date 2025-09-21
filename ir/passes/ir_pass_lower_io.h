@@ -260,6 +260,11 @@ public:
    *  of any relevant input variable to match the new vertex count. */
   bool changeGsInputPrimitiveType(PrimitiveType primitiveType);
 
+  /** Removes outputs not in the given output set. This is primarily intended for
+   *  pixel shader outputs. If any outputs are removed, all code contributing to
+   *  those outputs will also be removed. */
+  bool resolveUnusedOutputs(const IoMap& consumedOutputs);
+
   /** Adjusts shader outputs for transform feedback. Outputs may be rewritten,
    *  replaced or removed in their entirety, depending on whether they actually
    *  get written to a streamout buffer or are used in the rasterized stream. */

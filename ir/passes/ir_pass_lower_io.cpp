@@ -304,6 +304,39 @@ bool LowerIoPass::changeGsInputPrimitiveType(PrimitiveType primitiveType) {
 }
 
 
+bool LowerIoPass::resolveUnusedOutputs(const IoMap& consumedOutputs) {
+  auto iter = m_builder.getDeclarations().first;
+  bool progress = false;
+
+  while (iter != m_builder.getDeclarations().second) {
+    if (iter->getOpCode() == OpCode::eDclOutput) {
+      auto location = IoMap::getEntryForOp(m_stage, *iter);
+      bool isUsed = false;
+
+      for (const auto& e : consumedOutputs) {
+        if (e.overlaps(location)) {
+          isUsed = true;
+          break;
+        }
+      }
+
+      if (!isUsed) {
+        iter = removeOutput(iter);
+        progress = true;
+        continue;
+      }
+    }
+
+    ++iter;
+  }
+
+  if (progress)
+    RemoveUnusedPass::runPass(m_builder);
+
+  return progress;
+}
+
+
 bool LowerIoPass::resolveXfbOutputs(size_t entryCount, const IoXfbInfo* entries, int32_t rasterizedStream) {
   /* Mask out output locations that we cannot use for xfb */
   XfbComponentMap componentIndices = { };
