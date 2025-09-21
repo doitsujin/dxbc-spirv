@@ -14,8 +14,6 @@ class ArithmeticPass {
 public:
 
   struct Options {
-    /** Whether to unconditionally fuse multiply-add instructions. */
-    bool fuseMad = true;
     /** Whether to lower dot products to a multiply-add chain. */
     bool lowerDot = true;
     /** Whether to lower sin/cos using a custom approximation. */
@@ -104,7 +102,6 @@ private:
 
   void lowerInstructionsPreTransform();
   void lowerInstructionsPostTransform();
-  void fuseMultiplyAdd();
 
   Builder::iterator lowerMulLegacy(Builder::iterator op);
 
@@ -136,8 +133,6 @@ private:
 
   Builder::iterator tryFuseClamp(Builder::iterator op);
 
-  Builder::iterator tryFuseMad(Builder::iterator op);
-
   std::pair<bool, Builder::iterator> selectCompare(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> selectBitOp(Builder::iterator op);
@@ -145,18 +140,6 @@ private:
   std::pair<bool, Builder::iterator> selectPhi(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> selectOp(Builder::iterator op);
-
-  std::pair<bool, Builder::iterator> propagateAbsUnary(Builder::iterator op);
-
-  std::pair<bool, Builder::iterator> propagateAbsBinary(Builder::iterator op);
-
-  std::pair<bool, Builder::iterator> propagateSignUnary(Builder::iterator op);
-
-  std::pair<bool, Builder::iterator> propagateSignBinary(Builder::iterator op);
-
-  std::pair<bool, Builder::iterator> propagateAbsSignSelect(Builder::iterator op);
-
-  std::pair<bool, Builder::iterator> propagateAbsSignPhi(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> resolveCastOp(Builder::iterator op);
 
