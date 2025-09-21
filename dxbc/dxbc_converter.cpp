@@ -1110,17 +1110,18 @@ bool Converter::handleFloatMad(ir::Builder& builder, const Instruction& op) {
   if (!factorA || !factorB || !addend)
     return false;
 
-  ir::SsaDef result;
+  /* Due to inconsistent fxc code gen, we can never actually emit FMad here even
+   * in the precise case. Some games will mix and match SM4 with SM5 shaders and
+   * expect consistent result, where SM4 is implicitly precise in all cases. */
+  auto mul = builder.add(ir::Op::FMul(vectorType, factorA, factorB));
+  auto add = builder.add(ir::Op::FAdd(vectorType, mul, addend));
 
   if (op.getOpToken().getPreciseMask()) {
-    result = builder.add(ir::Op::FMad(vectorType,
-      factorA, factorB, addend).setFlags(ir::OpFlag::ePrecise));
-  } else {
-    auto product = builder.add(ir::Op::FMul(vectorType, factorA, factorB));
-    result = builder.add(ir::Op::FAdd(vectorType, product, addend));
+    builder.setOpFlags(mul, ir::OpFlag::ePrecise);
+    builder.setOpFlags(add, ir::OpFlag::ePrecise);
   }
 
-  return storeDstModified(builder, op, dst, result);
+  return storeDstModified(builder, op, dst, add);
 }
 
 
