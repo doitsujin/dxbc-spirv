@@ -272,7 +272,7 @@ void ConvertBufferKindPass::convertTypedBufferLoadToRaw(SsaDef use) {
   dxbc_spv_assert(vectorType.isBasicType());
 
   loadOp.setType(vectorType.getSubType(0u));
-  loadOp.setOperand(2u, sizeof(uint32_t));
+  loadOp.setOperand(2u, uint32_t(sizeof(uint32_t)));
 
   auto loadDef = m_builder.addBefore(use, std::move(loadOp));
 
@@ -299,7 +299,7 @@ void ConvertBufferKindPass::convertTypedBufferStoreToRaw(SsaDef use) {
     value.getType().getSubType(0u), value.getDef(), m_builder.makeConstant(0u)));
 
   storeOp.setOperand(2u, valueDef);
-  storeOp.setOperand(3u, sizeof(uint32_t));
+  storeOp.setOperand(3u, uint32_t(sizeof(uint32_t)));
 
   m_builder.rewriteOp(use, std::move(storeOp));
 }
