@@ -889,84 +889,93 @@ void CleanupScratchPass::rewriteConstantLoadToSelect(const Op& loadOp) {
 
   /* For each scalar, gather possible values and indices. This resolves
    * some common patterns where fxc will emit a constant matrix as icb. */
-  util::small_vector<SsaDef, 4u> constituents;
+  if (!indexInfo.indexDef) {
+    Op loadConstant(OpCode::eConstant, loadOp.getType());
 
-  for (uint32_t i = 0u; i < loadOp.getType().computeFlattenedScalarCount(); i++) {
-    util::small_vector<EqualRange, 64u> ranges = { };
-    bool emitZeroCase = !(loadOp.getFlags() & OpFlag::eInBounds);
+    for (uint32_t i = 0u; i < loadOp.getType().computeFlattenedScalarCount(); i++)
+      loadConstant.addOperand(uint64_t(constantOp.getOperand(scalarCount * indexInfo.index + indexInfo.component + i)));
 
-    for (uint32_t j = 0u; j < arraySize; j++) {
-      auto operand = uint64_t(constantOp.getOperand(scalarCount * j + indexInfo.component + i));
+    m_builder.rewriteDef(loadOp.getDef(), m_builder.add(std::move(loadConstant)));
+  } else {
+    util::small_vector<SsaDef, 4u> constituents;
 
-      if (!operand) {
-        /* Assume zero as a "default" value */
-        emitZeroCase = true;
-      } else {
-        bool found = false;
+    for (uint32_t i = 0u; i < loadOp.getType().computeFlattenedScalarCount(); i++) {
+      util::small_vector<EqualRange, 64u> ranges = { };
+      bool emitZeroCase = !(loadOp.getFlags() & OpFlag::eInBounds);
 
-        for (auto& e : ranges) {
-          if ((found = (e.value == operand && e.index + e.count == j))) {
-            e.count++;
-            break;
+      for (uint32_t j = 0u; j < arraySize; j++) {
+        auto operand = uint64_t(constantOp.getOperand(scalarCount * j + indexInfo.component + i));
+
+        if (!operand) {
+          /* Assume zero as a "default" value */
+          emitZeroCase = true;
+        } else {
+          bool found = false;
+
+          for (auto& e : ranges) {
+            if ((found = (e.value == operand && e.index + e.count == j))) {
+              e.count++;
+              break;
+            }
+          }
+
+          if (!found) {
+            auto& e = ranges.emplace_back();
+            e.value = operand;
+            e.index = j;
+            e.count = 1u;
           }
         }
-
-        if (!found) {
-          auto& e = ranges.emplace_back();
-          e.value = operand;
-          e.index = j;
-          e.count = 1u;
-        }
       }
-    }
 
-    /* Sort by value. This is mostly done to batch identical values,
-     * so that subsequent passes can optimize further. */
-    std::sort(ranges.begin(), ranges.end(), [] (const EqualRange& a, const EqualRange& b) {
-      if (a.value != b.value)
-        return a.value < b.value;
-      return a.index < b.index;
-    });
+      /* Sort by value. This is mostly done to batch identical values,
+      * so that subsequent passes can optimize further. */
+      std::sort(ranges.begin(), ranges.end(), [] (const EqualRange& a, const EqualRange& b) {
+        if (a.value != b.value)
+          return a.value < b.value;
+        return a.index < b.index;
+      });
 
-    /* If necessary, emit zero operand */
-    auto type = loadOp.getType().resolveFlattenedType(i);
-    auto& scalar = constituents.emplace_back();
+      /* If necessary, emit zero operand */
+      auto type = loadOp.getType().resolveFlattenedType(i);
+      auto& scalar = constituents.emplace_back();
 
-    if (emitZeroCase)
-      scalar = m_builder.makeConstantZero(type);
+      if (emitZeroCase)
+        scalar = m_builder.makeConstantZero(type);
 
-    /* For all non-zero operands, emit a select op with an index range */
-    for (const auto& e : ranges) {
-      auto value = m_builder.add(Op(OpCode::eConstant, type).addOperand(e.value));
+      /* For all non-zero operands, emit a select op with an index range */
+      for (const auto& e : ranges) {
+        auto value = m_builder.add(Op(OpCode::eConstant, type).addOperand(e.value));
 
-      if (scalar) {
-        SsaDef cond = { };
+        if (scalar) {
+          SsaDef cond = { };
 
-        if (e.count > 1u) {
-          cond = m_builder.addBefore(loadOp.getDef(), Op::BAnd(ScalarType::eBool,
-            m_builder.addBefore(loadOp.getDef(), Op::UGe(ScalarType::eBool, indexInfo.indexDef, m_builder.makeConstant(e.index))),
-            m_builder.addBefore(loadOp.getDef(), Op::ULt(ScalarType::eBool, indexInfo.indexDef, m_builder.makeConstant(e.index + e.count)))));
+          if (e.count > 1u) {
+            cond = m_builder.addBefore(loadOp.getDef(), Op::BAnd(ScalarType::eBool,
+              m_builder.addBefore(loadOp.getDef(), Op::UGe(ScalarType::eBool, indexInfo.indexDef, m_builder.makeConstant(e.index))),
+              m_builder.addBefore(loadOp.getDef(), Op::ULt(ScalarType::eBool, indexInfo.indexDef, m_builder.makeConstant(e.index + e.count)))));
+          } else {
+            cond = m_builder.addBefore(loadOp.getDef(), Op::IEq(ScalarType::eBool, indexInfo.indexDef, m_builder.makeConstant(e.index)));
+          }
+
+          scalar = m_builder.addBefore(loadOp.getDef(), Op::Select(type, cond, value, scalar));
         } else {
-          cond = m_builder.addBefore(loadOp.getDef(), Op::IEq(ScalarType::eBool, indexInfo.indexDef, m_builder.makeConstant(e.index)));
+          scalar = value;
         }
-
-        scalar = m_builder.addBefore(loadOp.getDef(), Op::Select(type, cond, value, scalar));
-      } else {
-        scalar = value;
       }
     }
-  }
 
-  /* Assemble vector as necessary */
-  if (constituents.size() > 1u) {
-    Op compositeOp(OpCode::eCompositeConstruct, loadOp.getType());
+    /* Assemble vector as necessary */
+    if (constituents.size() > 1u) {
+      Op compositeOp(OpCode::eCompositeConstruct, loadOp.getType());
 
-    for (auto s : constituents)
-      compositeOp.addOperand(s);
+      for (auto s : constituents)
+        compositeOp.addOperand(s);
 
-    m_builder.rewriteOp(loadOp.getDef(), std::move(compositeOp));
-  } else {
-    m_builder.rewriteDef(loadOp.getDef(), constituents.front());
+      m_builder.rewriteOp(loadOp.getDef(), std::move(compositeOp));
+    } else {
+      m_builder.rewriteDef(loadOp.getDef(), constituents.front());
+    }
   }
 }
 
