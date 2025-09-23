@@ -109,7 +109,11 @@ private:
   void lowerInstructionsPreTransform();
   void lowerInstructionsPostTransform();
 
+  void fuseMultiplyAdd();
+
   void propagateInvariance(const Op& base);
+
+  Builder::iterator fuseMad(Builder::iterator op);
 
   Builder::iterator lowerMulLegacy(Builder::iterator op);
 

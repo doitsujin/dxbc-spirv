@@ -146,6 +146,8 @@ void ArithmeticPass::runPropagateInvariancePass(Builder& builder) {
 
 
 void ArithmeticPass::lowerInstructionsPreTransform() {
+  fuseMultiplyAdd();
+
   auto iter = m_builder.begin();
 
   while (iter != m_builder.end()) {
@@ -249,6 +251,23 @@ void ArithmeticPass::lowerInstructionsPostTransform() {
 }
 
 
+void ArithmeticPass::fuseMultiplyAdd() {
+  auto iter = m_builder.getCode().first;
+
+  while (iter != m_builder.end()) {
+    switch (iter->getOpCode()) {
+      case OpCode::eFAdd:
+      case OpCode::eFSub: {
+        iter = fuseMad(iter);
+      } continue;
+
+      default:
+        ++iter;
+    }
+  }
+}
+
+
 void ArithmeticPass::propagateInvariance(const Op& base) {
   util::small_vector<SsaDef, 1024> queue;
   queue.push_back(base.getDef());
@@ -298,6 +317,64 @@ void ArithmeticPass::propagateInvariance(const Op& base) {
         break;
     }
   }
+}
+
+
+Builder::iterator ArithmeticPass::fuseMad(Builder::iterator op) {
+  if (getFpFlags(*op) & (OpFlag::ePrecise | OpFlag::eInvariant))
+    return ++op;
+
+  std::optional<uint32_t> fmulOperand = { };
+
+  for (uint32_t i = 0u; i < op->getFirstLiteralOperandIndex(); i++) {
+    const auto& operand = m_builder.getOpForOperand(*op, i);
+
+    if (operand.getOpCode() == OpCode::eFMul ||
+        operand.getOpCode() == OpCode::eFMulLegacy) {
+      if (getFpFlags(operand) & (OpFlag::ePrecise | OpFlag::eInvariant))
+        return ++op;
+
+      if (!fmulOperand && isOnlyUse(m_builder, operand.getDef(), op->getDef()))
+        fmulOperand = i;
+    }
+  }
+
+  if (!fmulOperand)
+    return ++op;
+
+  /* c + a * b -> FMad(a, b, c)
+     a * b + c -> FMad(a, b, c) */
+  auto a = SsaDef(m_builder.getOpForOperand(*op, *fmulOperand).getOperand(0u));
+  auto b = SsaDef(m_builder.getOpForOperand(*op, *fmulOperand).getOperand(1u));
+  auto c = SsaDef(op->getOperand(1u - *fmulOperand));
+
+  if (op->getOpCode() == OpCode::eFSub) {
+    if (!(*fmulOperand)) {
+      /* a * b - c -> a * b + (-c) */
+      c = m_builder.addBefore(op->getDef(), Op::FNeg(m_builder.getOp(c).getType(), c));
+    } else {
+      /* c - a * b -> -a * b + c. Try to eliminate any existing negations. */
+      if (m_builder.getOp(a).getOpCode() == OpCode::eFNeg)
+        a = SsaDef(m_builder.getOp(a).getOperand(0u));
+      else if (m_builder.getOp(b).getOpCode() == OpCode::eFNeg)
+        b = SsaDef(m_builder.getOp(b).getOperand(0u));
+      else
+        a = m_builder.addBefore(op->getDef(), Op::FNeg(m_builder.getOp(a).getType(), a));
+    }
+  }
+
+  /* Emit fused op and constant-fold negations where possible. */
+  auto madOp = m_builder.getOpForOperand(*op, *fmulOperand).getOpCode() == OpCode::eFMulLegacy
+    ? OpCode::eFMadLegacy
+    : OpCode::eFMad;
+
+  auto fusedOp = Op(madOp, op->getType()).setFlags(op->getFlags()).addOperands(a, b, c);
+  m_builder.rewriteOp(op->getDef(), fusedOp);
+
+  for (uint32_t i = 0u; i < fusedOp.getOperandCount(); i++)
+    constantFoldOp(m_builder.iter(SsaDef(fusedOp.getOperand(i))));
+
+  return ++op;
 }
 
 
