@@ -423,6 +423,8 @@ private:
 
   static bool isRegularIoRegister(RegisterType type);
 
+  static bool isInvariant(ir::BuiltIn builtIn);
+
 };
 
 }

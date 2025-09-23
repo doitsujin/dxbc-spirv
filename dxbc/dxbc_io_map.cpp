@@ -869,6 +869,9 @@ bool IoMap::declareSimpleBuiltIn(
 
   addDeclarationArgs(declaration, regType, interpolation);
 
+  if (!isInputRegister(regType) && isInvariant(builtIn))
+    declaration.setFlags(ir::OpFlag::eInvariant);
+
   auto& mapping = m_variables.emplace_back();
   mapping.regType = regType;
   mapping.regIndex = regIndex;
@@ -906,6 +909,9 @@ bool IoMap::declareDedicatedBuiltIn(
     .addOperand(builtIn);
 
   addDeclarationArgs(declaration, regType, interpolation);
+
+  if (!isInputRegister(regType) && isInvariant(builtIn))
+    declaration.setFlags(ir::OpFlag::eInvariant);
 
   /* Add mapping. These registers are assumed to not be indexed. */
   auto& mapping = m_variables.emplace_back();
@@ -997,6 +1003,9 @@ bool IoMap::declareClipCullDistance(
 
     addDeclarationArgs(declaration, regType, interpolation);
 
+    if (!isInputRegister(regType))
+      declaration.setFlags(ir::OpFlag::eInvariant);
+
     def = builder.add(std::move(declaration));
 
     if (entries != signature->end()) {
@@ -1086,6 +1095,9 @@ bool IoMap::declareTessFactor(
     auto declaration = ir::Op(opCode, type)
       .addOperand(m_converter.getEntryPoint())
       .addOperand(builtIn);
+
+    if (!isInputRegister(regType))
+      declaration.setFlags(ir::OpFlag::eInvariant);
 
     def = builder.add(std::move(declaration));
 
@@ -2214,6 +2226,16 @@ bool IoMap::isRegularIoRegister(RegisterType type) {
          type == RegisterType::eControlPointIn ||
          type == RegisterType::eControlPointOut ||
          type == RegisterType::ePatchConstant;
+}
+
+
+bool IoMap::isInvariant(ir::BuiltIn builtIn) {
+  return builtIn == ir::BuiltIn::ePosition ||
+         builtIn == ir::BuiltIn::eClipDistance ||
+         builtIn == ir::BuiltIn::eCullDistance ||
+         builtIn == ir::BuiltIn::eTessFactorInner ||
+         builtIn == ir::BuiltIn::eTessFactorOuter ||
+         builtIn == ir::BuiltIn::eDepth;
 }
 
 }
