@@ -94,6 +94,37 @@ void ArithmeticPass::runLateLowering() {
 }
 
 
+void ArithmeticPass::propagateInvariance() {
+  bool feedback = false;
+  auto [a, b] = m_builder.getDeclarations();
+
+  for (auto iter = a; iter != b; iter++) {
+    if ((iter->getOpCode() == OpCode::eDclOutput || iter->getOpCode() == OpCode::eDclOutputBuiltIn) &&
+        (iter->getFlags() & OpFlag::eInvariant)) {
+      auto [useA, useB] = m_builder.getUses(iter->getDef());
+
+      for (auto use = useA; use != useB; use++) {
+        if (use->getOpCode() == OpCode::eOutputStore) {
+          propagateInvariance(*use);
+          feedback = true;
+        }
+      }
+    }
+  }
+
+  if (!feedback)
+    return;
+
+  /* Remove flag from non-float ops */
+  std::tie(a, b) = m_builder.getCode();
+
+  for (auto iter = a; iter != b; iter++) {
+    if ((iter->getFlags() & OpFlag::eInvariant) && !(iter->getType().isBasicType() && iter->getType().getBaseType(0u).isFloatType()))
+      m_builder.setOpFlags(iter->getDef(), iter->getFlags() - OpFlag::eInvariant);
+  }
+}
+
+
 bool ArithmeticPass::runPass(Builder& builder, const Options& options) {
   return ArithmeticPass(builder, options).runPass();
 }
@@ -106,6 +137,11 @@ void ArithmeticPass::runEarlyLoweringPasses(Builder& builder, const Options& opt
 
 void ArithmeticPass::runLateLoweringPasses(Builder& builder, const Options& options) {
   ArithmeticPass(builder, options).runLateLowering();
+}
+
+
+void ArithmeticPass::runPropagateInvariancePass(Builder& builder) {
+  ArithmeticPass(builder, Options()).propagateInvariance();
 }
 
 
@@ -209,6 +245,58 @@ void ArithmeticPass::lowerInstructionsPostTransform() {
     }
 
     ++iter;
+  }
+}
+
+
+void ArithmeticPass::propagateInvariance(const Op& base) {
+  util::small_vector<SsaDef, 1024> queue;
+  queue.push_back(base.getDef());
+
+  while (!queue.empty()) {
+    const auto& next = m_builder.getOp(queue.back());
+    queue.pop_back();
+
+    if (next.getFlags() & OpFlag::eInvariant)
+      continue;
+
+    m_builder.setOpFlags(next.getDef(), next.getFlags() | OpFlag::eInvariant);
+
+    for (uint32_t i = 0u; i < next.getFirstLiteralOperandIndex(); i++) {
+      const auto& arg = m_builder.getOpForOperand(next, i);
+
+      if (!arg.isDeclarative() && !arg.getType().isVoidType())
+        queue.push_back(arg.getDef());
+    }
+
+    switch (next.getOpCode()) {
+      case OpCode::eScratchLoad: {
+        /* Declare all scratch stores as invariant too */
+        const auto& scratch = m_builder.getOpForOperand(next, 0u);
+        auto [a, b] = m_builder.getUses(scratch.getDef());
+
+        for (auto iter = a; iter != b; iter++) {
+          if (iter->getOpCode() == OpCode::eScratchStore)
+            queue.push_back(iter->getDef());
+        }
+      } break;
+
+      case OpCode::ePhi: {
+        /* Branch conditions must be invariant too */
+        forEachPhiOperand(next, [&] (SsaDef block, SsaDef) {
+          auto [a, b] = m_builder.getUses(block);
+
+          for (auto iter = a; iter != b; iter++) {
+            if (iter->getOpCode() == OpCode::eBranchConditional ||
+                iter->getOpCode() == OpCode::eSwitch)
+              queue.push_back(m_builder.getOpForOperand(*iter, 0u).getDef());
+          }
+        });
+      } break;
+
+      default:
+        break;
+    }
   }
 }
 
@@ -2665,7 +2753,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::vectorizeF32toF16(Builder::it
   auto mask = m_builder.addBefore(op->getDef(), Op::IBitInsert(op->getType(),
     loMask, hiMask, m_builder.makeConstant(16u), m_builder.makeConstant(16u)));
 
-  m_builder.rewriteOp(op->getDef(), Op::IAnd(op->getType(), result, mask));
+  m_builder.rewriteOp(op->getDef(), Op::IAnd(op->getType(), result, mask).setFlags(op->getFlags()));
   return std::make_pair(true, m_builder.iter(loValue));
 }
 

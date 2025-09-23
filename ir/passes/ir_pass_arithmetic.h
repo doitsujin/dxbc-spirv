@@ -52,12 +52,18 @@ public:
   void runEarlyLowering();
   void runLateLowering();
 
+  /** Runs pass to propagate invariance property */
+  void propagateInvariance();
+
   /** Initializes and runs optimization pass on the given builder. */
   static bool runPass(Builder& builder, const Options& options);
 
   /** Initializes and runs lowering passes on the given builder. */
   static void runEarlyLoweringPasses(Builder& builder, const Options& options);
   static void runLateLoweringPasses(Builder& builder, const Options& options);
+
+  /** Initializes and runs invariance pass */
+  static void runPropagateInvariancePass(Builder& builder);
 
 private:
 
@@ -102,6 +108,8 @@ private:
 
   void lowerInstructionsPreTransform();
   void lowerInstructionsPostTransform();
+
+  void propagateInvariance(const Op& base);
 
   Builder::iterator lowerMulLegacy(Builder::iterator op);
 
