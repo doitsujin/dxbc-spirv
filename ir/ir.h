@@ -1114,23 +1114,28 @@ enum class OpFlag : uint8_t {
   /** Flag to indicate that the instruction cannot be used
    *  in transforms that would affect the result. */
   ePrecise = (1u << 0),
+  /** Flag to indicate that any transforms performed on the given
+   *  expression must be invariant, i.e. must be the performed the
+   *  same way in all shaders, and must not take usage of similar
+   *  expressions within the same shader into account. */
+  eInvariant = (1u << 1),
   /** Instruction is explicitly marked as non-uniform.
    *  May be used for descriptor access. */
-  eNonUniform = (1u << 1),
+  eNonUniform = (1u << 2),
   /** Flag to indicate that the operation returns
    *  sparse feedback rather than raw data. */
-  eSparseFeedback = (1u << 2),
+  eSparseFeedback = (1u << 3),
   /** Flag to indicate that a floating point operation
    *  will never have a NaN result. */
-  eNoNan = (1u << 3),
+  eNoNan = (1u << 4),
   /** Flag to indicate that a floating point operation
    *  will never return a positive or negative infinity. */
-  eNoInf = (1u << 4),
+  eNoInf = (1u << 5),
   /** Flag to indicate that the sign of a zero result
    *  does not need to be preserved. */
-  eNoSz = (1u << 5),
+  eNoSz = (1u << 6),
   /** Flag to indicate that an array access is in bounds */
-  eInBounds = (1u << 6u),
+  eInBounds = (1u << 7u),
 
   eFlagEnum = 0
 };
