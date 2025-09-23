@@ -139,6 +139,12 @@ private:
 
   std::pair<bool, Builder::iterator> selectPhi(Builder::iterator op);
 
+  std::pair<bool, Builder::iterator> selectFDot(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> selectFMul(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> selectFAdd(Builder::iterator op);
+
   std::pair<bool, Builder::iterator> selectOp(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> resolveCastOp(Builder::iterator op);
@@ -201,9 +207,13 @@ private:
 
   double getConstantAsFloat(const Op& op, uint32_t index) const;
 
+  bool isFloatSelect(const Op& op) const;
+
   bool isConstantSelect(const Op& op) const;
 
   bool isConstantValue(const Op& op, int64_t value) const;
+
+  std::optional<bool> evalBAnd(const Op& a, const Op& b) const;
 
   bool shouldFlipOperands(const Op& op) const;
 

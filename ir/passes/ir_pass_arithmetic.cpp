@@ -9,6 +9,8 @@
 
 #include "../ir_utils.h"
 
+#include "../../util/util_log.h"
+
 namespace dxbc_spv::ir {
 
 ArithmeticPass::ArithmeticPass(Builder& builder, const Options& options)
@@ -1222,6 +1224,147 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectPhi(Builder::iterator o
 }
 
 
+std::pair<bool, Builder::iterator> ArithmeticPass::selectFDot(Builder::iterator op) {
+  /* A common pattern in DXBC shaders is dot(v, vec4(i == 0, i == 1, i == 2, i == 3)),
+   * where the latter is the result of an immediate constant buffer optimization.
+   * Jump Space relies on us further optimizing this pattern in order to avoid an
+   * inf * 0 = nan situation. */
+  if (op->getOpCode() != OpCode::eFDotLegacy && (getFpFlags(*op) & OpFlag::ePrecise))
+    return std::make_pair(false, ++op);
+
+  std::optional<uint32_t> selectOperand = { };
+
+  for (uint32_t i = 0u; i < op->getOperandCount(); i++) {
+    const auto& arg = m_builder.getOpForOperand(*op, i);
+
+    if (arg.getOpCode() != OpCode::eCompositeConstruct)
+      continue;
+
+    bool isSelectOperand = true;
+
+    for (uint32_t j = 0u; j < arg.getOperandCount(); j++) {
+      if (!isFloatSelect(m_builder.getOpForOperand(arg, j))) {
+        isSelectOperand = false;
+        break;
+      }
+    }
+
+    if (isSelectOperand) {
+      selectOperand = i;
+      break;
+    }
+  }
+
+  if (!selectOperand)
+    return std::make_pair(false, ++op);
+
+  /* Rewrite dot product as a plain sequence of multiply and add
+   * operations that we can then optimize individually. */
+  const auto& select = m_builder.getOpForOperand(*op, *selectOperand);
+  const auto& values = m_builder.getOpForOperand(*op, *selectOperand ^ 1u);
+
+  dxbc_spv_assert(select.getOpCode() == OpCode::eCompositeConstruct);
+
+  SsaDef reference = { };
+  SsaDef result = { };
+
+  bool isLegacy = op->getOpCode() == OpCode::eFDotLegacy;
+
+  for (uint32_t i = 0u; i < select.getOperandCount(); i++) {
+    auto a = m_builder.addBefore(op->getDef(), Op::CompositeExtract(op->getType(), values.getDef(), m_builder.makeConstant(i)));
+    auto b = m_builder.getOpForOperand(select, i).getDef();
+
+    auto product = m_builder.addBefore(op->getDef(), isLegacy
+      ? Op::FMulLegacy(op->getType(), a, b).setFlags(op->getFlags())
+      : Op::FMul(op->getType(), a, b).setFlags(op->getFlags()));
+
+    if (result) {
+      result = m_builder.addBefore(op->getDef(),
+        Op::FAdd(op->getType(), result, product).setFlags(op->getFlags()));
+    } else {
+      result = product;
+      reference = product;
+    }
+  }
+
+  m_builder.rewriteDef(op->getDef(), result);
+  return std::make_pair(true, m_builder.iter(reference));
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::selectFMul(Builder::iterator op) {
+  if (getFpFlags(*op) & OpFlag::ePrecise)
+    return std::make_pair(false, ++op);
+
+  /* This transform avoids generating new NaNs if a is infinite.
+   * a * select(cond, b, 0) -> select(cond, a * b, 0 * b)
+   * a * select(cond, 0, b) -> select(cond, 0 * b, a * b) */
+  std::optional<uint32_t> selectOperand = { };
+
+  for (uint32_t i = 0u; i < 2u; i++) {
+    if (isFloatSelect(m_builder.getOpForOperand(*op, i))) {
+      selectOperand = i;
+      break;
+    }
+  }
+
+  if (!selectOperand)
+    return std::make_pair(false, ++op);
+
+  const auto& select = m_builder.getOpForOperand(*op, *selectOperand);
+  const auto& value = m_builder.getOpForOperand(*op, *selectOperand ^ 1u);
+
+  auto cond = m_builder.getOpForOperand(select, 0u).getDef();
+  auto a = m_builder.getOpForOperand(select, 1u).getDef();
+  auto b = m_builder.getOpForOperand(select, 2u).getDef();
+
+  a = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType()).addOperands(value.getDef(), a).setFlags(op->getFlags()));
+  b = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType()).addOperands(value.getDef(), b).setFlags(op->getFlags()));
+
+  m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), cond, a, b).setFlags(op->getFlags()));
+  return std::make_pair(true, op);
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::selectFAdd(Builder::iterator op) {
+  if (getFpFlags(*op) & OpFlag::ePrecise)
+    return std::make_pair(false, ++op);
+
+  /* If we can statically prove that c0 and c1 are mutually exclusive:
+   * select(c0, a, 0) + select(c1, b, c) -> select(c0, a, select(c1, b, c))
+   * select(c0, a, b) + select(c1, c, 0) -> select(c1, c, select(c0, a, b))
+   * Note that this optimization may eliminate a denorm flush. */
+  const auto& selectA = m_builder.getOpForOperand(*op, 0u);
+  const auto& selectB = m_builder.getOpForOperand(*op, 1u);
+
+  if (selectA.getOpCode() != OpCode::eSelect || selectB.getOpCode() != OpCode::eSelect)
+    return std::make_pair(false, ++op);
+
+  const auto& ac = m_builder.getOpForOperand(selectA, 0u);
+  const auto& at = m_builder.getOpForOperand(selectA, 1u);
+  const auto& af = m_builder.getOpForOperand(selectA, 2u);
+
+  const auto& bc = m_builder.getOpForOperand(selectB, 0u);
+  const auto& bt = m_builder.getOpForOperand(selectB, 1u);
+  const auto& bf = m_builder.getOpForOperand(selectB, 2u);
+
+  if (evalBAnd(ac, bc) != std::make_optional(false))
+    return std::make_pair(false, ++op);
+
+  if (isConstantValue(bf, 0)) {
+    m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), bc.getDef(), bt.getDef(), selectA.getDef()).setFlags(op->getFlags()));
+    return std::make_pair(true, op);
+  }
+
+  if (isConstantValue(af, 0)) {
+    m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), ac.getDef(), at.getDef(), selectB.getDef()).setFlags(op->getFlags()));
+    return std::make_pair(true, op);
+  }
+
+  return std::make_pair(false, ++op);
+}
+
+
 std::pair<bool, Builder::iterator> ArithmeticPass::selectOp(Builder::iterator op) {
   switch (op->getOpCode()) {
     case OpCode::eIAbs:
@@ -1250,6 +1393,17 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectOp(Builder::iterator op
 
     case OpCode::ePhi:
       return selectPhi(op);
+
+    case OpCode::eFDot:
+    case OpCode::eFDotLegacy:
+      return selectFDot(op);
+
+    case OpCode::eFMul:
+    case OpCode::eFMulLegacy:
+      return selectFMul(op);
+
+    case OpCode::eFAdd:
+      return selectFAdd(op);
 
     default:
       return std::make_pair(false, ++op);
@@ -1399,6 +1553,33 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
         if (a.getOpCode() == OpCode::eFRcp) {
           auto next = m_builder.rewriteDef(op->getDef(), SsaDef(a.getOperand(0u)));
           return std::make_pair(true, m_builder.iter(next));
+        }
+      }
+    } break;
+
+    case OpCode::eFMul:
+    case OpCode::eFMulLegacy: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+      const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+      if (!(getFpFlags(*op) & OpFlag::ePrecise) &&  b.isConstant() &&
+          op->getType().getBaseType(0u).isScalar()) {
+        /* a * 0 -> 0 */
+        if (getConstantAsFloat(b, 0u) == 0.0) {
+          auto next = m_builder.rewriteDef(op->getDef(), m_builder.makeConstantZero(op->getType()));
+          return std::make_pair(true, m_builder.iter(next));
+        }
+
+        /* a * 1 -> a */
+        if (getConstantAsFloat(b, 0u) == 1.0) {
+          auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
+          return std::make_pair(true, m_builder.iter(next));
+        }
+
+        /* a * -1 -> -a */
+        if (getConstantAsFloat(b, 0u) == 1.0) {
+          m_builder.rewriteOp(op->getDef(), Op::FNeg(op->getType(), a.getDef()).setFlags(a.getFlags()));
+          return std::make_pair(true, op);
         }
       }
     } break;
@@ -1914,7 +2095,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityCompareOp(Buil
   if (op->getOpCode() == OpCode::eFIsNan) {
     const auto& a = m_builder.getOpForOperand(*op, 0u);
 
-    if (a.getFlags() & OpFlag::eNoNan) {
+    if (getFpFlags(a) & OpFlag::eNoNan) {
       auto next = m_builder.rewriteDef(op->getDef(), m_builder.makeConstant(false));
       return std::make_pair(true, m_builder.iter(next));
     }
@@ -2268,6 +2449,8 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityOp(Builder::it
     case OpCode::eFNeg:
     case OpCode::eFAdd:
     case OpCode::eFSub:
+    case OpCode::eFMul:
+    case OpCode::eFMulLegacy:
     case OpCode::eFDiv:
     case OpCode::eFMin:
     case OpCode::eFMax:
@@ -3411,6 +3594,20 @@ double ArithmeticPass::getConstantAsFloat(const Op& op, uint32_t index) const {
 }
 
 
+bool ArithmeticPass::isFloatSelect(const Op& op) const {
+  if (op.getOpCode() != OpCode::eSelect)
+    return false;
+
+  const auto& a = m_builder.getOpForOperand(op, 1u);
+  const auto& b = m_builder.getOpForOperand(op, 2u);
+
+  if (!isConstantValue(a, 0) && !isConstantValue(b, 0))
+    return false;
+
+  return true;
+}
+
+
 bool ArithmeticPass::isConstantSelect(const Op& op) const {
   if (op.getOpCode() != OpCode::eSelect)
     return false;
@@ -3431,6 +3628,22 @@ bool ArithmeticPass::isConstantValue(const Op& op, int64_t value) const {
   }
 
   return true;
+}
+
+
+std::optional<bool> ArithmeticPass::evalBAnd(const Op& a, const Op& b) const {
+  if ((a.isConstant() && !bool(a.getOperand(0u))) ||
+      (b.isConstant() && !bool(b.getOperand(0u))))
+    return std::make_optional(false);
+
+  /* av == c0 && av == c1 where c0 != c1 */
+  if (a.getOpCode() == OpCode::eIEq && b.getOpCode() == OpCode::eIEq &&
+      m_builder.getOpForOperand(a, 0u).getDef() == m_builder.getOpForOperand(b, 0u).getDef() &&
+      m_builder.getOpForOperand(a, 1u).isConstant() && m_builder.getOpForOperand(b, 1u).isConstant() &&
+      m_builder.getOpForOperand(a, 1u).getDef() != m_builder.getOpForOperand(b, 1u).getDef())
+    return std::make_optional(false);
+
+  return std::nullopt;
 }
 
 
