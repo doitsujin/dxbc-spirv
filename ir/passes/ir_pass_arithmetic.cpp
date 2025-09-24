@@ -1742,7 +1742,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
         }
 
         /* a * -1 -> -a */
-        if (getConstantAsFloat(b, 0u) == 1.0) {
+        if (getConstantAsFloat(b, 0u) == -1.0) {
           m_builder.rewriteOp(op->getDef(), Op::FNeg(op->getType(), a.getDef()).setFlags(a.getFlags()));
           return std::make_pair(true, op);
         }
