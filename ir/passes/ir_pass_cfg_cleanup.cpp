@@ -414,23 +414,25 @@ SsaDef CleanupControlFlowPass::removeFunctionCall(SsaDef call) {
 
 
 bool CleanupControlFlowPass::removeUnusedBlocks() {
-  bool progress = false;
+  if (m_unusedBlocks.empty())
+    return false;
 
   while (!m_unusedBlocks.empty()) {
     auto block = m_unusedBlocks.back();
     m_unusedBlocks.pop_back();
 
-    if (m_builder.getOp(block)) {
-      removeBlock(block);
-      progress = true;
-    }
+    removeBlock(block);
   }
 
-  return progress;
+  return true;
 }
 
 
 SsaDef CleanupControlFlowPass::removeBlock(SsaDef block) {
+  dxbc_spv_assert(m_builder.getOp(block).getOpCode() == OpCode::eLabel);
+
+  removeBlockFromUnusedList(block);
+
   auto iter = m_builder.iter(block);
   rewriteBlockInPhiUses(m_builder, block, SsaDef());
 
@@ -445,6 +447,18 @@ SsaDef CleanupControlFlowPass::removeBlock(SsaDef block) {
 
   /* Remove actual block terminator */
   return removeBlockTerminator(iter->getDef());
+}
+
+
+void CleanupControlFlowPass::removeBlockFromUnusedList(SsaDef block) {
+  for (size_t i = 0u; i < m_unusedBlocks.size(); ) {
+    if (m_unusedBlocks[i] == block) {
+      m_unusedBlocks[i] = m_unusedBlocks.back();
+      m_unusedBlocks.pop_back();
+    } else {
+      i++;
+    }
+  }
 }
 
 

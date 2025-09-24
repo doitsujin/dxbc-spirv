@@ -70,6 +70,8 @@ private:
 
   bool removeUnusedBlocks();
 
+  void removeBlockFromUnusedList(SsaDef block);
+
   SsaDef removeBlock(SsaDef block);
 
   SsaDef removeBlockTerminator(SsaDef block);
