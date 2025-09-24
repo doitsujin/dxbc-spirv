@@ -437,8 +437,10 @@ SsaDef CleanupControlFlowPass::removeBlock(SsaDef block) {
   while (!isBlockTerminator(iter->getOpCode())) {
     if (iter->getOpCode() == OpCode::eFunctionCall)
       iter = m_builder.iter(removeFunctionCall(iter->getDef()));
-    else
+    else if (iter->getType().isVoidType())
       iter = m_builder.iter(m_builder.removeOp(*iter));
+    else
+      iter = m_builder.iter(m_builder.rewriteDef(iter->getDef(), m_builder.makeUndef(iter->getType())));
   }
 
   /* Remove actual block terminator */
