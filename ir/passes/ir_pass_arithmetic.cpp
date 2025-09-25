@@ -2499,6 +2499,27 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentitySelect(Builder
     }
   }
 
+  /* select(x != 0, ufindmsb(x), -1) -> ufindmsb(x) */
+  if (isConstantValue(b, -1u)) {
+    SsaDef msbOperand = { };
+
+    if (a.getOpCode() == OpCode::eUFindMsb) {
+      msbOperand = m_builder.getOpForOperand(a, 0u).getDef();
+    } else if (a.getOpCode() == OpCode::eCast) {
+      const auto& castOperand = m_builder.getOpForOperand(a, 0u);
+
+      if (castOperand.getOpCode() == OpCode::eUFindMsb)
+        msbOperand = m_builder.getOpForOperand(castOperand, 0u).getDef();
+    }
+
+    if (msbOperand && cond.getOpCode() == OpCode::eINe &&
+        m_builder.getOpForOperand(cond, 0u).getDef() == msbOperand &&
+        isConstantValue(m_builder.getOpForOperand(cond, 1u), 0)) {
+      auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
+      return std::make_pair(true, m_builder.iter(next));
+    }
+  }
+
   return std::make_pair(false, ++op);
 }
 
