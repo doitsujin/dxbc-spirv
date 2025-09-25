@@ -2918,23 +2918,40 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIntSignCompareOp(Build
   const auto& a = m_builder.getOpForOperand(*op, 0u);
   const auto& b = m_builder.getOpForOperand(*op, 1u);
 
-  if (a.getOpCode() != OpCode::eCast || b.getOpCode() != OpCode::eCast)
+  if (a.getOpCode() != OpCode::eCast)
     return std::make_pair(false, ++op);
 
-  /* Ensure that the operand types are compatible with the
-   * respective cast type and both are the same type */
-  const auto& aSrc = m_builder.getOpForOperand(a, 0u);
-  const auto& bSrc = m_builder.getOpForOperand(b, 0u);
+  if (b.getOpCode() == OpCode::eCast) {
+    /* Ensure that the operand types are compatible with the
+     * respective cast type and both are the same type */
+    const auto& aSrc = m_builder.getOpForOperand(a, 0u);
+    const auto& bSrc = m_builder.getOpForOperand(b, 0u);
 
-  if (aSrc.getType() != bSrc.getType() ||
-      !checkIntTypeCompatibility(a.getType(), aSrc.getType()) ||
-      !checkIntTypeCompatibility(b.getType(), bSrc.getType()))
-    return std::make_pair(false, ++op);
+    if (aSrc.getType() != bSrc.getType() ||
+        !checkIntTypeCompatibility(a.getType(), aSrc.getType()) ||
+        !checkIntTypeCompatibility(b.getType(), bSrc.getType()))
+      return std::make_pair(false, ++op);
 
-  m_builder.rewriteOp(op->getDef(), Op(op->getOpCode(), op->getType())
-    .addOperands(aSrc.getDef(), bSrc.getDef()));
+    m_builder.rewriteOp(op->getDef(), Op(op->getOpCode(), op->getType())
+      .addOperands(aSrc.getDef(), bSrc.getDef()));
+    return std::make_pair(true, op);
+  }
 
-  return std::make_pair(true, op);
+  if (b.isConstant()) {
+    /* If the second operand is a constant, simply cast it */
+    const auto& aSrc = m_builder.getOpForOperand(a, 0u);
+
+    if (!checkIntTypeCompatibility(a.getType(), aSrc.getType()))
+      return std::make_pair(false, ++op);
+
+    auto bSrc = m_builder.add(castConstant(b, aSrc.getType().getBaseType(0u)));
+
+    m_builder.rewriteOp(op->getDef(), Op(op->getOpCode(), op->getType())
+      .addOperands(aSrc.getDef(), bSrc));
+    return std::make_pair(true, op);
+  }
+
+  return std::make_pair(false, ++op);
 }
 
 
