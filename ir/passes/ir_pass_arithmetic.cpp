@@ -2353,6 +2353,29 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityCompareOp(Buil
     }
   }
 
+  /* (a + c0) == c1 -> a == c1 - c0
+   * (a - c0) == c1 -> a == c1 + c0
+   * (c0 - a) == c1 -> a == c0 - c1 */
+  if (b.isConstant() && (a.getOpCode() == OpCode::eIAdd || a.getOpCode() == OpCode::eISub) && (isOnlyUse(m_builder, a.getDef(), op->getDef()))) {
+    const auto& a0 = m_builder.getOpForOperand(a, 0u);
+    const auto& a1 = m_builder.getOpForOperand(a, 1u);
+
+    if (a1.isConstant()) {
+      auto constDef = m_builder.addBefore(op->getDef(), a.getOpCode() == OpCode::eIAdd
+        ? Op::ISub(b.getType(), b.getDef(), a1.getDef())
+        : Op::IAdd(b.getType(), b.getDef(), a1.getDef()));
+
+      m_builder.rewriteOp(op->getDef(), Op(op->getOpCode(), op->getType()).addOperands(a0.getDef(), constDef).setFlags(op->getFlags()));
+      return std::make_pair(true, m_builder.iter(constDef));
+    }
+
+    if (a0.isConstant() && a.getOpCode() == OpCode::eISub) {
+      auto constDef = m_builder.addBefore(op->getDef(), Op::ISub(b.getType(), a0.getDef(), b.getDef()));
+      m_builder.rewriteOp(op->getDef(), Op(op->getOpCode(), op->getType()).addOperands(a1.getDef(), constDef).setFlags(op->getFlags()));
+      return std::make_pair(true, m_builder.iter(constDef));
+    }
+  }
+
   /* For comparisons, we can only really do anything
    * if the operands are the same */
   if (a.getDef() != b.getDef())
