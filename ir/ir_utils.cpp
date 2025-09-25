@@ -249,6 +249,22 @@ Op castConstant(const Op& op, BasicType dstType) {
       result.addOperand(op.getOperand(i));
   }
 
+  /* Mask or sign-extend operands as necessary */
+  for (uint32_t i = 0u; i < op.getOperandCount(); i++) {
+    auto scalarType = result.getType().getBaseType(0u);
+
+    uint64_t sign = uint64_t(1u) << ((8u * scalarType.byteSize()) - 1u);
+    uint64_t mask = sign | (sign - 1u);
+
+    uint64_t value = uint64_t(result.getOperand(i));
+    value &= mask;
+
+    if (scalarType.isSignedIntType())
+      value |= -(value & sign);
+
+    result.setOperand(i, Operand(value));
+  }
+
   return result;
 }
 
