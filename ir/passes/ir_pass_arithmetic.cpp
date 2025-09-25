@@ -2398,6 +2398,25 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityCompareOp(Buil
     }
   }
 
+  /* op(-a, const) = op(-const, a) */
+  if (a.getOpCode() == OpCode::eINeg && b.isConstant()) {
+    /* For inequalities, this is only valid if the type is signed */
+    if (a.getType().getBaseType(0u).isSignedIntType() || (op->getOpCode() == OpCode::eIEq || op->getOpCode() == OpCode::eINe)) {
+      auto valueDef = m_builder.getOpForOperand(a, 0u).getDef();
+
+      if (!isOnlyUse(m_builder, valueDef, a.getDef())) {
+        auto constDef = m_builder.addBefore(op->getDef(), Op::INeg(b.getType(), b.getDef()));
+
+        m_builder.rewriteOp(op->getDef(), Op(op->getOpCode(), op->getType())
+          .setFlags(op->getFlags())
+          .addOperand(constDef)
+          .addOperand(valueDef));
+
+        return std::make_pair(true, m_builder.iter(constDef));
+      }
+    }
+  }
+
   /* For comparisons, we can only really do anything
    * if the operands are the same */
   if (a.getDef() != b.getDef())
