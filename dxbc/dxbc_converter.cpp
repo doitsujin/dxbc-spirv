@@ -1776,14 +1776,20 @@ bool Converter::handleBitOp(ir::Builder& builder, const Instruction& op) {
   if (opCode == OpCode::eFirstBitHi || opCode == OpCode::eFirstBitShi) {
     auto condType = makeVectorType(ir::ScalarType::eBool, dst.getWriteMask());
 
-    auto zero = makeTypedConstant(builder, srcVectorType, 0u);
-    auto neg1 = makeTypedConstant(builder, dstVectorType, -1);
+    auto bitCnt = makeTypedConstant(builder, dstVectorType, 32);
     auto maxBit = makeTypedConstant(builder, dstVectorType, 31);
 
-    result = builder.add(ir::Op::ISub(dstVectorType, maxBit, result));
-    result = builder.add(ir::Op::Select(dstVectorType,
-      builder.add(ir::Op::INe(condType, srcValue, zero)),
-      result, neg1));
+    if (opCode == OpCode::eFirstBitShi) {
+      auto cond = builder.add(ir::Op::INe(condType, result, makeTypedConstant(builder, dstVectorType, -1)));
+
+      result = builder.add(ir::Op::Select(dstVectorType, cond, result, bitCnt));
+      result = builder.add(ir::Op::ISub(dstVectorType, maxBit, result));
+    } else {
+      auto cond = builder.add(ir::Op::INe(condType, srcValue, makeTypedConstant(builder, srcVectorType, 0)));
+
+      result = builder.add(ir::Op::Select(dstVectorType, cond, result, bitCnt));
+      result = builder.add(ir::Op::ISub(dstVectorType, maxBit, result));
+    }
   }
 
   return storeDstModified(builder, op, dst, result);
