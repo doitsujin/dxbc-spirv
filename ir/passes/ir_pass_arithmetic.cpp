@@ -2376,6 +2376,28 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityCompareOp(Buil
     }
   }
 
+  if (op->getOpCode() == OpCode::eIEq || op->getOpCode() == OpCode::eINe) {
+    /* ufindmsb(x) == -1 -> x == 0 */
+    if ((a.getOpCode() == OpCode::eUFindMsb || a.getOpCode() == OpCode::eIFindLsb) && isConstantValue(b, -1)) {
+      m_builder.rewriteOp(op->getDef(), Op(op->getOpCode(), op->getType())
+        .setFlags(op->getFlags())
+        .addOperand(m_builder.getOpForOperand(a, 0u).getDef())
+        .addOperand(m_builder.makeConstantZero(a.getType())));
+      return std::make_pair(true, op);
+    }
+
+    /* findmsb(x) == 32 -> false. Happens while optimizing findmsb patterns. */
+    if (a.getOpCode() == OpCode::eUFindMsb || a.getOpCode() == OpCode::eSFindMsb || a.getOpCode() == OpCode::eIFindLsb) {
+      dxbc_spv_assert(a.getType().isScalarType());
+      int64_t bitCount = 8u * a.getType().getBaseType(0u).byteSize();
+
+      if (getConstantAsSint(b, 0u) >= bitCount) {
+        m_builder.rewriteDef(op->getDef(), m_builder.makeConstant(op->getOpCode() == OpCode::eINe));
+        return std::make_pair(true, op);
+      }
+    }
+  }
+
   /* For comparisons, we can only really do anything
    * if the operands are the same */
   if (a.getDef() != b.getDef())
