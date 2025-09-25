@@ -1851,10 +1851,67 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
       }
     } break;
 
-    case OpCode::eFAdd:
-    case OpCode::eIAdd:
-    case OpCode::eFSub:
     case OpCode::eISub: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+      const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+      if (a.isConstant() && (b.getOpCode() == OpCode::eIAdd || b.getOpCode() == OpCode::eISub)) {
+        const auto& b0 = m_builder.getOpForOperand(b, 0u);
+        const auto& b1 = m_builder.getOpForOperand(b, 1u);
+
+        /* c0 - (c1 + a) -> (c0 - c1) - a
+         * c0 - (c1 - a) -> (c0 - c1) + a */
+        if (b0.isConstant()) {
+          auto constDef = m_builder.addBefore(op->getDef(), Op::ISub(op->getType(), a.getDef(), b0.getDef()));
+
+          m_builder.rewriteOp(op->getDef(), b.getOpCode() == OpCode::eIAdd
+            ? Op::ISub(op->getType(), constDef, b1.getDef())
+            : Op::IAdd(op->getType(), constDef, b1.getDef()));
+
+          return std::make_pair(true, m_builder.iter(constDef));
+        }
+
+        /* c0 - (a + c1) -> (c0 - c1) - a
+         * c0 - (a - c1) -> (c0 + c1) - a */
+        if (b1.isConstant()) {
+          auto constDef = m_builder.addBefore(op->getDef(), b.getOpCode() == OpCode::eIAdd
+            ? Op::ISub(op->getType(), a.getDef(), b1.getDef())
+            : Op::IAdd(op->getType(), a.getDef(), b1.getDef()));
+
+          m_builder.rewriteOp(op->getDef(), Op::ISub(op->getType(), constDef, b0.getDef()));
+          return std::make_pair(true, m_builder.iter(constDef));
+        }
+      }
+    } [[fallthrough]];
+
+    case OpCode::eIAdd: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+      const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+      /* (a + const) + b -> a + (const + b)
+       * (a + const) - b -> a + (const - b)
+       * (a - const) + b -> a - (const - b)
+       * (a - const) - b -> a - (const + b) */
+      if (b.isConstant() && (a.getOpCode() == OpCode::eIAdd || a.getOpCode() == OpCode::eISub)) {
+        const auto& a0 = m_builder.getOpForOperand(a, 0u);
+        const auto& a1 = m_builder.getOpForOperand(a, 1u);
+
+        if (a1.isConstant()) {
+          auto constDef = m_builder.addBefore(op->getDef(), a.getOpCode() == op->getOpCode()
+            ? Op::IAdd(op->getType(), a1.getDef(), b.getDef())
+            : Op::ISub(op->getType(), a1.getDef(), b.getDef()));
+
+          m_builder.rewriteOp(op->getDef(), a.getOpCode() == OpCode::eISub
+            ? Op::ISub(op->getType(), a0.getDef(), constDef)
+            : Op::IAdd(op->getType(), a0.getDef(), constDef));
+
+          return std::make_pair(true, m_builder.iter(constDef));
+        }
+      }
+    } [[fallthrough]];
+
+    case OpCode::eFAdd:
+    case OpCode::eFSub: {
       bool isInt = op->getOpCode() == OpCode::eIAdd || op->getOpCode() == OpCode::eISub;
       bool isSub = op->getOpCode() == OpCode::eISub || op->getOpCode() == OpCode::eFSub;
 
