@@ -230,5 +230,16 @@ Builder test_spirv_cbv_srv_uav_structs() {
   return builder;
 }
 
+Builder test_spirv_point_size() {
+  Builder builder;
+  auto entryPoint = setupTestFunction(builder, ShaderStage::eVertex);
+  builder.add(Op::Label());
+
+  auto pointSize = builder.add(Op::DclOutputBuiltIn(ScalarType::eF32, entryPoint, BuiltIn::ePointSize));
+  builder.add(Op::Semantic(pointSize, 0u, "PSIZE"));
+  builder.add(Op::OutputStore(pointSize, SsaDef(), builder.makeConstant(2.0f)));
+  builder.add(Op::Return());
+  return builder;
+}
 
 }
