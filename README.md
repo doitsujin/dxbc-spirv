@@ -37,7 +37,7 @@ ninja
 
 ## Tools
 
-### Disassebler
+### Disassembler
 
 This project provides a custom DXBC disassembler for debugging purposes. Its output does
 **not** match that of d3dcompiler in that it does not parse resource metadata or shader
