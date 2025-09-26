@@ -1032,6 +1032,9 @@ void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
       case ir::BuiltIn::eLocalThreadIndex:
         return spv::BuiltInLocalInvocationIndex;
 
+      case ir::BuiltIn::ePointSize:
+        return spv::BuiltInPointSize;
+
       case ir::BuiltIn::eGsVertexCountIn:
         /* Handled elsewhere */
         break;

@@ -487,8 +487,10 @@ Scope DivergenceAnalysis::determineScopeForBuiltIn(const Op& op) {
     interpolation = InterpolationModes(op.getOperand(op.getFirstLiteralOperandIndex() + 1u));
 
   switch (builtIn) {
-    /* Treat position as a regular input, but ignore interpolation */
-    case BuiltIn::ePosition: {
+    /* Treat position as a regular input, but ignore interpolation.
+     * Point size cannot be read in pixel shaders anyway. */
+    case BuiltIn::ePosition:
+    case BuiltIn::ePointSize: {
       if (m_stage == ShaderStage::eHull ||
           m_stage == ShaderStage::eGeometry)
         return Scope::eQuad;

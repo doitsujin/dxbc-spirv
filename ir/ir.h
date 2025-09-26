@@ -711,6 +711,8 @@ enum class BuiltIn : uint32_t {
   /** Flattened local thread ID in compute shader. Must be declared
    *  as a scalar unsigned integer. */
   eLocalThreadIndex   = 26u,
+  /** Point size, used in pre-raster stages. */
+  ePointSize          = 27u,
 };
 
 

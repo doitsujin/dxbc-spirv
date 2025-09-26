@@ -501,6 +501,7 @@ std::ostream& operator << (std::ostream& os, const BuiltIn& builtIn) {
     case BuiltIn::eGlobalThreadId:      return os << "GlobalThreadId";
     case BuiltIn::eLocalThreadId:       return os << "LocalThreadId";
     case BuiltIn::eLocalThreadIndex:    return os << "LocalThreadIndex";
+    case BuiltIn::ePointSize:           return os << "PointSize";
   }
 
   return os << "BuiltIn(" << uint32_t(builtIn) << ")";
