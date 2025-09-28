@@ -271,6 +271,8 @@ bool compileShader(util::ByteReader reader, const Options& options) {
     compileOptions.syncOptions.insertLdsBarriers = options.ldsBarriers;
     compileOptions.syncOptions.insertUavBarriers = options.uavBarriers;
 
+    compileOptions.cseOptions.relocateDescriptorLoad = true;
+
     ir::legalizeIr(builder, compileOptions);
     timers.tAfterPasses = std::chrono::high_resolution_clock::now();
   }

@@ -102,8 +102,8 @@ SsaDef DominanceGraph::getImmediatePostDominator(SsaDef def) const {
 
 
 bool DominanceGraph::defDominates(SsaDef a, SsaDef b) const {
-  if (m_builder.getOp(a).isDeclarative()) return true;
-  if (m_builder.getOp(b).isDeclarative()) return false;
+  if (!a || m_builder.getOp(a).isDeclarative()) return true;
+  if (!b || m_builder.getOp(b).isDeclarative()) return false;
 
   auto aBlock = m_nodeInfos.at(a).blockDef;
   auto bBlock = m_nodeInfos.at(b).blockDef;
@@ -115,6 +115,26 @@ bool DominanceGraph::defDominates(SsaDef a, SsaDef b) const {
     b = m_builder.getPrev(b);
 
   return b == a;
+}
+
+
+SsaDef DominanceGraph::getClosestCommonDominator(SsaDef a, SsaDef b) const {
+  util::small_vector<SsaDef, 256u> blocks;
+  blocks.push_back(a);
+  blocks.push_back(b);
+
+  for (size_t i = 0u; i < blocks.size(); i++) {
+    auto dom = getImmediateDominator(blocks[i]);
+
+    if (dom) {
+      if (std::find(blocks.begin(), blocks.end(), dom) != blocks.end())
+        return dom;
+
+      blocks.push_back(dom);
+    }
+  }
+
+  return SsaDef();
 }
 
 

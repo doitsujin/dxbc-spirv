@@ -44,9 +44,16 @@ public:
    * defined before b. */
   bool defDominates(SsaDef a, SsaDef b) const;
 
+  /* Finds closest block that dominates both blocks. */
+  SsaDef getClosestCommonDominator(SsaDef a, SsaDef b) const;
+
   /* Queries containing block for a definition. */
   SsaDef getBlockForDef(SsaDef def) const {
     return m_nodeInfos[def].blockDef;
+  }
+
+  void setBlockForDef(SsaDef def, SsaDef block) {
+    m_nodeInfos[def].blockDef = block;
   }
 
   /* Queries terminator instruction for a given block. */

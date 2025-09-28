@@ -26,7 +26,12 @@ class CsePass {
 
 public:
 
-  CsePass(Builder& builder);
+  struct Options {
+    /* Whether relocating descriptor loads is safe */
+    bool relocateDescriptorLoad = false;
+  };
+
+  CsePass(Builder& builder, const Options& options);
 
   ~CsePass();
 
@@ -37,11 +42,12 @@ public:
   bool run();
 
   /** Initializes and runs pass on the given builder. */
-  static bool runPass(Builder& builder);
+  static bool runPass(Builder& builder, const Options& options);
 
 private:
 
-  Builder& m_builder;
+  Builder&  m_builder;
+  Options   m_options;
 
   DominanceGraph m_dom;
 
@@ -63,6 +69,8 @@ private:
   std::unordered_multiset<Op, OpHash, OpEq> m_defs;
 
   CseOpFlags classifyOp(const Op& op) const;
+
+  bool isTrivialOp(const Op& op) const;
 
 };
 

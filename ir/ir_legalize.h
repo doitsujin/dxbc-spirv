@@ -47,6 +47,8 @@ struct CompileOptions {
   ir::SyncPass::Options syncOptions = { };
   /* Options for the derivative pass */
   ir::DerivativePass::Options derivativeOptions = { };
+  /* Options for the common subexpression pass */
+  ir::CsePass::Options cseOptions = { };
 };
 
 /** Invokes all required lowering passes on the IR on the given builder. */

@@ -5,8 +5,8 @@
 
 namespace dxbc_spv::ir {
 
-CsePass::CsePass(Builder& builder)
-: m_builder(builder), m_dom(builder) {
+CsePass::CsePass(Builder& builder, const Options& options)
+: m_builder(builder), m_options(options), m_dom(builder) {
 
 }
 
@@ -29,6 +29,7 @@ bool CsePass::run() {
       m_functionIsPure = false;
 
     if (opType & CseOpFlag::eCanDeduplicate) {
+      bool isTrivial = isTrivialOp(*iter);
       auto [a, b] = m_defs.equal_range(*iter);
 
       SsaDef next = { };
@@ -37,6 +38,51 @@ bool CsePass::run() {
         if (m_dom.defDominates(i->getDef(), iter->getDef())) {
           next = m_builder.rewriteDef(iter->getDef(), i->getDef());
           break;
+        }
+
+        /* If this is a trivial instruction and there is a common block
+         * dominating both instructions, relocate it to that block */
+        if (isTrivial) {
+          auto dom = m_dom.getClosestCommonDominator(
+            m_dom.getBlockForDef(i->getDef()),
+            m_dom.getBlockForDef(iter->getDef()));
+
+          /* If the new block post-dominates a loop header but not the corresponding
+           * merge block, i.e. if the instruction is located inside a loop but before
+           * the loop exit, move it out of the loop to avoid code gen issues */
+          if (dom) {
+            auto loop = dom;
+
+            while (loop) {
+              const auto& loopOp = m_builder.getOp(loop);
+              auto pred = m_dom.getImmediateDominator(loop);
+
+              if (Construct(loopOp.getOperand(loopOp.getFirstLiteralOperandIndex())) == Construct::eStructuredLoop) {
+                auto merge = m_builder.getOpForOperand(loopOp, 0u).getDef();
+
+                if (m_dom.postDominates(dom, loop) && !m_dom.postDominates(dom, merge)) {
+                  bool canRelocate = true;
+
+                  for (uint32_t i = 0u; i < iter->getFirstLiteralOperandIndex(); i++)
+                    canRelocate = canRelocate && m_dom.defDominates(SsaDef(iter->getOperand(i)), loop);
+
+                  dom = canRelocate ? pred : SsaDef();
+                  break;
+                }
+              }
+
+              loop = pred;
+            }
+          }
+
+          if (dom) {
+            auto terminator = m_dom.getBlockTerminator(dom);
+
+            m_dom.setBlockForDef(i->getDef(), dom);
+            m_builder.reorderBefore(terminator, i->getDef(), i->getDef());
+            next = m_builder.rewriteDef(iter->getDef(), i->getDef());
+            break;
+          }
         }
       }
 
@@ -100,8 +146,8 @@ bool CsePass::run() {
 }
 
 
-bool CsePass::runPass(Builder& builder) {
-  return CsePass(builder).run();
+bool CsePass::runPass(Builder& builder, const Options& options) {
+  return CsePass(builder, options).run();
 }
 
 
@@ -354,6 +400,19 @@ CseOpFlags CsePass::classifyOp(const Op& op) const {
 
   dxbc_spv_unreachable();
   return CseOpFlag();
+}
+
+
+bool CsePass::isTrivialOp(const Op& op) const {
+  if (op.getOpCode() == OpCode::eDescriptorLoad)
+    return m_options.relocateDescriptorLoad;
+
+  return op.getOpCode() == OpCode::eCast ||
+         op.getOpCode() == OpCode::eCompositeConstruct ||
+         op.getOpCode() == OpCode::eCompositeExtract ||
+         op.getOpCode() == OpCode::eCompositeInsert ||
+         op.getOpCode() == OpCode::eInputLoad ||
+         op.getOpCode() == OpCode::ePushDataLoad;
 }
 
 }
