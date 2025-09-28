@@ -76,6 +76,15 @@ inline SsaDef findContainingBlock(const Builder& builder, SsaDef op) {
 }
 
 
+/** Finds block terminator for given instruction */
+inline SsaDef findBlockTerminator(const Builder& builder, SsaDef op) {
+  while (op && !isBlockTerminator(builder.getOp(op).getOpCode()))
+    op = builder.getNext(op);
+
+  return op;
+}
+
+
 /** Removes instruction if it goes unused. If the instruction gets
  *  removed, this will return (true, next), where next is the next
  *  instruction in line. Otherwise, the return value is (false, def). */
