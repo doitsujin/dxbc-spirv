@@ -273,6 +273,8 @@ bool compileShader(util::ByteReader reader, const Options& options) {
 
     compileOptions.cseOptions.relocateDescriptorLoad = true;
 
+    compileOptions.descriptorIndexing.optimizeDescriptorIndexing = true;
+
     ir::legalizeIr(builder, compileOptions);
     timers.tAfterPasses = std::chrono::high_resolution_clock::now();
   }

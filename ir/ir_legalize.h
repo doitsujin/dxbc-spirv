@@ -9,6 +9,7 @@
 #include "./passes/ir_pass_cfg_convert.h"
 #include "./passes/ir_pass_cse.h"
 #include "./passes/ir_pass_derivative.h"
+#include "./passes/ir_pass_descriptor_indexing.h"
 #include "./passes/ir_pass_function.h"
 #include "./passes/ir_pass_lower_consume.h"
 #include "./passes/ir_pass_lower_min16.h"
@@ -49,6 +50,8 @@ struct CompileOptions {
   ir::DerivativePass::Options derivativeOptions = { };
   /* Options for the common subexpression pass */
   ir::CsePass::Options cseOptions = { };
+  /* Options for the descriptor indexing pass */
+  ir::DescriptorIndexingPass::Options descriptorIndexing = { };
 };
 
 /** Invokes all required lowering passes on the IR on the given builder. */

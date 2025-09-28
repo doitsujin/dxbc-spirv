@@ -73,8 +73,10 @@ void legalizeIr(ir::Builder& builder, const CompileOptions& options) {
     if (!progress && !std::exchange(derivativePassRun, true)) {
       ir::SsaConstructionPass::runInsertExitPhiPass(builder);
 
-      if (!(progress = ir::DerivativePass::runPass(builder, options.derivativeOptions)))
-        ir::SsaConstructionPass::runResolveTrivialPhiPass(builder);
+      progress |= ir::DescriptorIndexingPass::runPass(builder, options.descriptorIndexing);
+      progress |= ir::DerivativePass::runPass(builder, options.derivativeOptions);
+
+      ir::SsaConstructionPass::runResolveTrivialPhiPass(builder);
     }
 
     if (!progress)
