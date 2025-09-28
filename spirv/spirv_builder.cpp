@@ -1805,6 +1805,12 @@ uint32_t SpirvBuilder::emitSampledImage(const ir::SsaDef& imageDef, const ir::Ss
   pushOp(m_code, spv::OpSampledImage, resultTypeId, resultId,
     getIdForDef(imageDef), getIdForDef(samplerDef));
 
+  auto flags = m_builder.getOp(imageDef).getFlags() |
+               m_builder.getOp(samplerDef).getFlags();
+
+  if (flags & ir::OpFlag::eNonUniform)
+    pushOp(m_decorations, spv::OpDecorate, resultId, spv::DecorationNonUniform);
+
   return resultId;
 }
 
