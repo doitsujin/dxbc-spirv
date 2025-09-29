@@ -30,6 +30,8 @@ bool DescriptorIndexingPass::run() {
     rewriteIndexedResource(e);
 
   deduplicateBindings();
+
+  Logger::err("indexing");
   return true;
 }
 
