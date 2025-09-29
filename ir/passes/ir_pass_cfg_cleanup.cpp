@@ -40,6 +40,12 @@ bool CleanupControlFlowPass::run() {
         iter = next;
       } break;
 
+      case OpCode::eSwitch: {
+        auto [status, next] = handleSwitch(iter);
+        progress |= status;
+        iter = next;
+      } break;
+
       default:
         ++iter;
     }
@@ -53,6 +59,89 @@ bool CleanupControlFlowPass::run() {
   /* Remove any functions that may have been removed */
   progress |= removeUnusedFunctions();
   return progress;
+}
+
+
+std::pair<bool, Builder::iterator> CleanupControlFlowPass::handleSwitch(Builder::iterator op) {
+  const auto& construct = m_builder.getOp(findContainingBlock(m_builder, op->getDef()));
+  dxbc_spv_assert(construct && Construct(construct.getOperand(construct.getFirstLiteralOperandIndex())) == Construct::eStructuredSelection);
+
+  const auto& mergeBlock = m_builder.getOpForOperand(construct, 0u);
+
+  /* Eliminate cases that only branch to another case and are not used in any
+   * phi operands, and deduplicate cases that branch to the merge block.*/
+  SsaDef mergeCase = { };
+
+  for (uint32_t i = 1u; i < op->getOperandCount(); i += 2u) {
+    const auto& caseBlock = m_builder.getOpForOperand(*op, i);
+    dxbc_spv_assert(caseBlock.getOpCode() == OpCode::eLabel);
+
+    if (isBlockUsedInPhi(caseBlock.getDef()) || caseBlock.getDef() == mergeBlock.getDef())
+      continue;
+
+    const auto& branch = m_builder.getOp(m_builder.getNext(caseBlock.getDef()));
+
+    if (branch.getOpCode() != OpCode::eBranch)
+      continue;
+
+    const auto& target = m_builder.getOpForOperand(branch, 0u);
+
+    if (target.getDef() == mergeBlock.getDef()) {
+      if (!mergeCase) {
+        mergeCase = caseBlock.getDef();
+      } else if (mergeCase != caseBlock.getDef()) {
+        m_builder.removeOp(branch);
+        m_builder.rewriteDef(caseBlock.getDef(), mergeCase);
+        return std::make_pair(true, op);
+      }
+    } else {
+      for (uint32_t j = i + 2u; j < op->getOperandCount(); j += 2u) {
+        const auto& nextCase = m_builder.getOpForOperand(*op, j);
+        dxbc_spv_assert(nextCase.getOpCode() == OpCode::eLabel);
+
+        if (target.getDef() == nextCase.getDef()) {
+          m_builder.removeOp(branch);
+          m_builder.rewriteDef(caseBlock.getDef(), nextCase.getDef());
+          return std::make_pair(true, op);
+        }
+      }
+    }
+  }
+
+  /* Eliminate case labels that point to the default block */
+  auto defaultCase = m_builder.getOpForOperand(*op, 1u).getDef();
+
+  Op switchOp(OpCode::eSwitch, Type());
+  switchOp.setFlags(op->getFlags());
+  switchOp.addOperands(SsaDef(op->getOperand(0u)));
+  switchOp.addOperands(defaultCase);
+
+  for (uint32_t i = 2u; i < op->getOperandCount(); i += 2u) {
+    const auto& caseValue = m_builder.getOpForOperand(*op, i);
+    const auto& caseBlock = m_builder.getOpForOperand(*op, i + 1u);
+
+    if (caseBlock.getDef() != defaultCase) {
+      switchOp.addOperand(caseValue.getDef());
+      switchOp.addOperand(caseBlock.getDef());
+    }
+  }
+
+  if (!switchOp.isEquivalent(*op)) {
+    /* If the new switch block doesn't have any non-default blocks,
+     * eliminate it and branch to the default block directly */
+    bool hasNonDefaultLabel = switchOp.getOperandCount() > 2u;
+
+    if (hasNonDefaultLabel) {
+      m_builder.rewriteOp(op->getDef(), std::move(switchOp));
+      return std::make_pair(true, op);
+    } else {
+      m_builder.rewriteOp(op->getDef(), Op::Branch(defaultCase));
+      m_builder.rewriteOp(construct.getDef(), Op::Label());
+      return std::make_pair(true, op);
+    }
+  }
+
+  return std::make_pair(false, ++op);
 }
 
 
@@ -583,6 +672,18 @@ bool CleanupControlFlowPass::isBlockUsed(SsaDef block) const {
    * merge block, it will be removed if the construct itself is unreachable and gets
    * removed. */
   return isBlockReachable(block) || isContinueBlock(block) || isMergeBlock(block);
+}
+
+
+bool CleanupControlFlowPass::isBlockUsedInPhi(SsaDef def) const {
+  auto [a, b] = m_builder.getUses(def);
+
+  for (auto i = a; i != b; i++) {
+    if (i->getOpCode() == OpCode::ePhi)
+      return true;
+  }
+
+  return false;
 }
 
 

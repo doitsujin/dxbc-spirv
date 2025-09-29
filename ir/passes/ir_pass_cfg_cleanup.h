@@ -60,6 +60,8 @@ private:
 
   std::pair<bool, Builder::iterator> handleBranchConditional(Builder::iterator op);
 
+  std::pair<bool, Builder::iterator> handleSwitch(Builder::iterator op);
+
   bool removeUnusedFunctions();
 
   SsaDef removeFunction(SsaDef function);
@@ -83,6 +85,8 @@ private:
   bool isBlockReachable(SsaDef block) const;
 
   bool isBlockUsed(SsaDef block) const;
+
+  bool isBlockUsedInPhi(SsaDef def) const;
 
   Construct getConstructForBlock(SsaDef block) const;
 
