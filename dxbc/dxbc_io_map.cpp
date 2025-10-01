@@ -91,8 +91,8 @@ bool IoMap::handleDclIndexRange(ir::Builder& builder, const Instruction& op) {
     return m_converter.logOpError(op, "Output range declared as per-vertex array.");
 
   /* As a special case, if the underlying declaration already is an
-    * array and the declared range maps perfectly to it, we can address
-    * it directly. Common for tessellation factors. */
+   * array and the declared range maps perfectly to it, we can address
+   * it directly. Common for tessellation factors. */
   auto first = findIoVar(m_variables, mapping.regType, mapping.regIndex, -1, mapping.componentMask);
 
   if (first && first->baseType.isArrayType() && first->componentMask == mapping.componentMask && !vertexCount) {
@@ -1565,6 +1565,10 @@ std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicLoadFunction(
   builder.setCursor(cursor);
 
   auto emulatedType = ir::Type(vectorType).addArrayDimension(var.regCount);
+
+  if (arraySize)
+    emulatedType.addArrayDimension(arraySize);
+
   return std::make_pair(emulatedType, function);
 }
 
