@@ -6,6 +6,7 @@
 
 #include "../dxbc/dxbc_container.h"
 #include "../dxbc/dxbc_disasm.h"
+#include "../dxbc/dxbc_interface.h"
 #include "../dxbc/dxbc_parser.h"
 #include "../dxbc/dxbc_signature.h"
 
@@ -18,11 +19,27 @@ bool printSignature(util::ByteReader reader) {
   dxbc::Signature sig(reader);
 
   if (!sig) {
-    std::cout << "Failed to parse signature" << std::endl;
+    std::cerr << "Failed to parse signature" << std::endl;
     return false;
   }
 
   std::cout << sig << std::endl;
+  return true;
+}
+
+
+bool printInterface(util::ByteReader reader) {
+  if (!reader)
+    return true;
+
+  dxbc::InterfaceChunk iface(reader);
+
+  if (!iface) {
+    std::cerr << "Failed to parse input signature chunk" << std::endl;
+    return false;
+  }
+
+  std::cout << iface << std::endl;
   return true;
 }
 
@@ -65,6 +82,7 @@ bool disassembleShader(util::ByteReader reader) {
   return printSignature(container.getInputSignatureChunk()) &&
          printSignature(container.getOutputSignatureChunk()) &&
          printSignature(container.getPatchConstantSignatureChunk()) &&
+         printInterface(container.getInterfaceChunk()) &&
          printCode(container.getCodeChunk());
 }
 
