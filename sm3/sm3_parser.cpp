@@ -456,6 +456,11 @@ ShaderInfo::ShaderInfo(util::ByteReader& reader) {
 }
 
 
+bool ShaderInfo::write(util::ByteWriter& writer) const {
+  return writer.write(m_token);
+}
+
+
 void ShaderInfo::resetOnError() {
   *this = ShaderInfo();
 }
@@ -580,6 +585,45 @@ Operand::Operand(util::ByteReader& reader, const OperandInfo& info, Instruction&
   }
 
   m_isValid = true;
+}
+
+
+bool Operand::write(util::ByteWriter& writer, const ShaderInfo& info) const {
+  if (m_info.kind == OperandKind::eImm32) {
+    auto componentCount = isScalar(info) ? 1u : 4u;
+    for (uint32_t i = 0u; i < uint32_t(componentCount); i++) {
+      bool lastWrite;
+      if (m_info.type == ir::ScalarType::eBool)
+        lastWrite = writer.write(getImmediate<bool>(i));
+      else if (m_info.type == ir::ScalarType::eF32)
+        lastWrite = writer.write(getImmediate<float>(i));
+      else
+        lastWrite = writer.write(getImmediate<uint32_t>(i));
+
+      if (!lastWrite)
+        return false;
+    }
+    return true;
+  }
+
+  if (!writer.write(m_token))
+    return false;
+
+  if ((m_info.kind == OperandKind::eSrcReg || m_info.kind == OperandKind::eDstReg)
+    && hasRelativeAddressing()
+    && hasExtraRelativeAddressingToken(m_info.kind, info)) {
+    if (!writer.write(m_addressToken.value())) {
+      return false;
+    }
+  }
+
+  if (m_info.kind == OperandKind::eDstReg && isPredicated()) {
+    if (!writer.write(m_predicateToken.value())) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 
@@ -726,6 +770,35 @@ InstructionLayout Instruction::getLayout(const ShaderInfo& info) const {
 }
 
 
+bool Instruction::write(util::ByteWriter& writer, const ShaderInfo& info) const {
+  if (!writer.write(m_token))
+    return false;
+
+  /* Emit operands */
+  auto layout = getLayout(info);
+
+  if (layout.operands.size() != m_operands.size()) {
+    Logger::err("Number of operands does not match layout.");
+    return false;
+  }
+
+  for (uint32_t i = 0u; i < m_operands.size(); i++) {
+    const auto& operandInfo = layout.operands[i];
+    const auto& operand = m_operands[i];
+
+    if (operandInfo.kind != operand.getInfo().kind) {
+      Logger::err("Unexpected operand kind at position ", i);
+      return false;
+    }
+
+    if (!operand.write(writer, info))
+      return false;
+  }
+
+  return true;
+}
+
+
 void Instruction::resetOnError() {
   m_isValid = false;
 }
@@ -746,6 +819,38 @@ Instruction Parser::parseInstruction() {
     m_isPastEnd = true;
   }
   return instruction;
+}
+
+
+
+
+Builder::Builder(ShaderType type, uint32_t major, uint32_t minor)
+: m_info(type, major, minor) {
+
+}
+
+
+Builder::~Builder() {
+
+}
+
+
+void Builder::add(Instruction ins) {
+  m_instructions.push_back(std::move(ins));
+}
+
+
+bool Builder::write(util::ByteWriter& writer) const {
+  if (!m_info.write(writer))
+    return false;
+
+  /* Emit instructions */
+  for (const auto& e : m_instructions) {
+    if (!e.write(writer, m_info))
+      return false;
+  }
+
+  return true;
 }
 
 
