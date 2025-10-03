@@ -95,6 +95,8 @@ public:
     return m_header.hash;
   }
 
+  static bool checkFourCC(util::ByteReader reader);
+
   /** Checks whether parser successfully parsed header and
    *  chunk metadata */
   explicit operator bool () const {
