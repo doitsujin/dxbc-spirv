@@ -39,6 +39,11 @@ public:
           ir::Builder&            builder,
     const Instruction&            op);
 
+  /** Declares a function table consisting of one or more function bodies */
+  bool handleDclFunctionTable(
+          ir::Builder&            builder,
+    const Instruction&            op);
+
   /* Reserves and declares function for label. Labels occur last in the
    * DXBC binary, so their declarations are not known at the time the
    * calls are made from the entry point function. */
@@ -92,11 +97,15 @@ private:
 
   Converter& m_converter;
 
+  using FunctionTable = util::small_vector<ir::SsaDef, 16u>;
+
   util::small_vector<ir::SsaDef, 256u> m_rRegs;
   util::small_vector<ir::SsaDef,  16u> m_xRegs;
   util::small_vector<ir::SsaDef,  16u> m_gRegs;
   util::small_vector<ir::SsaDef,  16u> m_labels;
   util::small_vector<ir::SsaDef,  16u> m_functionBodies;
+
+  util::small_vector<FunctionTable, 16u> m_functionTables;
 
   ir::SsaDef loadArrayIndex(ir::Builder& builder, const Instruction& op, const Operand& operand);
 

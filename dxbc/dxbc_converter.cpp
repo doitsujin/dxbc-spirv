@@ -468,8 +468,10 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclFunctionBody:
       return m_regFile.handleDclFunctionBody(builder, op);
 
-    case OpCode::eInterfaceCall:
     case OpCode::eDclFunctionTable:
+      return m_regFile.handleDclFunctionTable(builder, op);
+
+    case OpCode::eInterfaceCall:
     case OpCode::eDclInterface:
     case OpCode::eAbort:
     case OpCode::eDebugBreak:

@@ -112,6 +112,32 @@ bool RegisterFile::handleDclFunctionBody(
 }
 
 
+bool RegisterFile::handleDclFunctionTable(
+        ir::Builder&            builder,
+  const Instruction&            op) {
+  uint32_t ftIndex = op.getImm(0u).getImmediate<uint32_t>(0u);
+  uint32_t ftSize = op.getImm(1u).getImmediate<uint32_t>(0u);
+
+  if (ftIndex >= m_functionTables.size())
+    m_functionTables.resize(ftIndex + 1u);
+
+  auto& ft = m_functionTables.at(ftIndex);
+  ft.resize(ftSize);
+
+  for (uint32_t i = 0u; i < ftSize; i++) {
+    Operand operand(OperandInfo(), RegisterType::eFunctionBody, ComponentCount::e0Component);
+    operand.addIndex(op.getExtra(i).getImmediate<uint32_t>(0u));
+
+    ft.at(i) = getFunctionForLabel(builder, op, operand);
+
+    if (!ft.at(i))
+      return false;
+  }
+
+  return true;
+}
+
+
 ir::SsaDef RegisterFile::getFunctionForLabel(
         ir::Builder&            builder,
   const Instruction&            op,
