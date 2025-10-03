@@ -159,6 +159,12 @@ bool Container::validateHash() const {
 }
 
 
+bool Container::checkFourCC(util::ByteReader reader) {
+  util::FourCC magic;
+  return reader.read(magic) && magic == util::FourCC("DXBC");
+}
+
+
 bool Container::parseHeader() {
   /* Read and validate file header */
   size_t fileSize = m_reader.getSize();

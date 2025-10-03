@@ -10,6 +10,9 @@
 #include "../dxbc/dxbc_parser.h"
 #include "../dxbc/dxbc_signature.h"
 
+#include "../sm3/sm3_disasm.h"
+#include "../sm3/sm3_parser.h"
+
 using namespace dxbc_spv;
 
 bool printSignature(util::ByteReader reader) {
@@ -76,7 +79,43 @@ bool printCode(util::ByteReader reader) {
 }
 
 
+bool printCodeSM3(util::ByteReader reader) {
+  if (!reader) {
+    std::cout << "(no code)" << std::endl;
+    return true;
+  }
+
+  sm3::Parser parser(reader);
+
+  sm3::Disassembler::Options options = { };
+  options.lineNumbers = true;
+  options.indent = true;
+
+  sm3::Disassembler disasm(options, parser.getShaderInfo());
+
+  std::cout << parser.getShaderInfo() << ":" << std::endl;
+
+  while (parser) {
+    auto op = parser.parseInstruction();
+
+    if (!op) {
+      std::cerr << "Failed to parse instruction" << std::endl;
+      return false;
+    }
+
+    disasm.disassembleOp(std::cout, op);
+    std::cout << std::endl;
+  }
+
+  return true;
+}
+
+
 bool disassembleShader(util::ByteReader reader) {
+  if (!dxbc::Container::checkFourCC(reader)) {
+    return printCodeSM3(reader);
+  }
+
   dxbc::Container container(reader);
 
   return printSignature(container.getInputSignatureChunk()) &&
