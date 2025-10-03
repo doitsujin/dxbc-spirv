@@ -51,6 +51,9 @@ public:
     return util::bextract(m_token, 17u, 15u) == 0x7fff;
   }
 
+  /** Writes code header to binary blob. */
+  bool write(util::ByteWriter& writer) const;
+
   uint32_t getToken() const {
     return m_token;
   }
@@ -297,6 +300,9 @@ public:
     return result;
   }
 
+  /** Writes code header to binary blob. */
+  bool write(util::ByteWriter& writer, const ShaderInfo& info) const;
+
   /** Checks operand info is valid. */
   explicit operator bool () const {
     return m_isValid;
@@ -441,6 +447,9 @@ public:
    *  changes the layout of resource declaration ops. */
   InstructionLayout getLayout(const ShaderInfo& info) const;
 
+  /** Writes instruction and all its operands to a binary blob. */
+  bool write(util::ByteWriter& writer, const ShaderInfo& info) const;
+
   /** Queries the comparison mode of the instruction.
     * Only relevant for a few control flow instructions. */
   ComparisonMode getComparisonMode() const {
@@ -504,6 +513,32 @@ private:
   ShaderInfo m_info = { };
 
   bool m_isPastEnd = false;
+
+};
+
+
+/** Builder. Provides a simple way to create an instruction sequence
+ *  and generate a valid shader out of it. */
+class Builder {
+
+public:
+
+  /** Initializes builder with shader type info */
+  Builder(ShaderType type, uint32_t major, uint32_t minor);
+
+  ~Builder();
+
+  /** Appends an instruction to the list */
+  void add(Instruction ins);
+
+  /** Writes the instructions. */
+  bool write(util::ByteWriter& writer) const;
+
+private:
+
+  ShaderInfo m_info;
+
+  std::vector<Instruction> m_instructions;
 
 };
 
