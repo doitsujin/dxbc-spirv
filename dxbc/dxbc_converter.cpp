@@ -471,8 +471,10 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDclFunctionTable:
       return m_regFile.handleDclFunctionTable(builder, op);
 
-    case OpCode::eInterfaceCall:
     case OpCode::eDclInterface:
+      return m_regFile.handleDclInterface(builder, op);
+
+    case OpCode::eInterfaceCall:
     case OpCode::eAbort:
     case OpCode::eDebugBreak:
       break;

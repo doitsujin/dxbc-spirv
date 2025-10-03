@@ -17,6 +17,7 @@ class Converter;
  * loads and stores to x# and r# registers. */
 class RegisterFile {
   constexpr static uint32_t MaxTgsmSize = 32768u;
+  constexpr static uint32_t ThisCbSize = 256u;
 public:
 
   explicit RegisterFile(Converter& converter);
@@ -41,6 +42,11 @@ public:
 
   /** Declares a function table consisting of one or more function bodies */
   bool handleDclFunctionTable(
+          ir::Builder&            builder,
+    const Instruction&            op);
+
+  /** Declares an interface referencing one or more function tables */
+  bool handleDclInterface(
           ir::Builder&            builder,
     const Instruction&            op);
 
@@ -99,6 +105,12 @@ private:
 
   using FunctionTable = util::small_vector<ir::SsaDef, 16u>;
 
+  struct Interface {
+    uint32_t index = 0u;
+    uint32_t count = 0u;
+    util::small_vector<ir::SsaDef, 16u> functions;
+  };
+
   util::small_vector<ir::SsaDef, 256u> m_rRegs;
   util::small_vector<ir::SsaDef,  16u> m_xRegs;
   util::small_vector<ir::SsaDef,  16u> m_gRegs;
@@ -106,6 +118,9 @@ private:
   util::small_vector<ir::SsaDef,  16u> m_functionBodies;
 
   util::small_vector<FunctionTable, 16u> m_functionTables;
+  util::small_vector<Interface, 16u> m_interfaces;
+
+  ir::SsaDef m_thisCb;
 
   ir::SsaDef loadArrayIndex(ir::Builder& builder, const Instruction& op, const Operand& operand);
 
@@ -118,6 +133,10 @@ private:
   bool declareLds(ir::Builder& builder, const Instruction& op, const Operand& operand, const ir::Type& type);
 
   ir::SsaDef declareEmptyFunction(ir::Builder& builder, const Operand& operand);
+
+  ir::SsaDef loadThisCb(ir::Builder& builder);
+
+  ir::SsaDef buildFcallFunction(ir::Builder& builder, const Instruction& op, uint32_t fpIndex, uint32_t fpCount, uint32_t function);
 
 };
 

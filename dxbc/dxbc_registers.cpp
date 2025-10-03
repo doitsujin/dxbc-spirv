@@ -138,6 +138,27 @@ bool RegisterFile::handleDclFunctionTable(
 }
 
 
+bool RegisterFile::handleDclInterface(
+        ir::Builder&            builder,
+  const Instruction&            op) {
+  auto& iface = m_interfaces.emplace_back();
+  iface.index = op.getImm(0u).getImmediate<uint32_t>(0u);
+
+  auto ftSize = op.getImm(1u).getImmediate<uint32_t>(0u);
+  auto metadata = op.getImm(2u).getImmediate<uint32_t>(0u);
+
+  iface.count = util::bextract(metadata, 16u, 16u);
+  iface.functions.resize(ftSize);
+
+  for (uint32_t i = 0u; i < ftSize; i++) {
+    if (!(iface.functions.at(i) = buildFcallFunction(builder, op, iface.index, iface.count, i)))
+      return false;
+  }
+
+  return true;
+}
+
+
 ir::SsaDef RegisterFile::getFunctionForLabel(
         ir::Builder&            builder,
   const Instruction&            op,
@@ -443,7 +464,7 @@ ir::SsaDef RegisterFile::declareEmptyFunction(ir::Builder& builder, const Operan
   auto code = builder.getCode().first;
 
   /* Declare new function at the top of the code section and immediately
-    * end it. We will emit code to it once the label is actually declared. */
+   * end it. We will emit code to it once the label is actually declared. */
   auto def = builder.addBefore(code->getDef(), ir::Op::Function(ir::ScalarType::eVoid));
   builder.addBefore(code->getDef(), ir::Op::FunctionEnd());
 
@@ -453,6 +474,84 @@ ir::SsaDef RegisterFile::declareEmptyFunction(ir::Builder& builder, const Operan
   }
 
   return def;
+}
+
+
+ir::SsaDef RegisterFile::loadThisCb(ir::Builder& builder) {
+  if (!m_thisCb) {
+    auto type = ir::Type()
+      .addStructMember(ir::ScalarType::eU32)
+      .addStructMember(ir::ScalarType::eU32)
+      .addArrayDimension(ThisCbSize);
+
+    m_thisCb = builder.add(ir::Op::DclCbv(type,
+      m_converter.getEntryPoint(),
+      m_converter.m_options.classInstanceRegisterSpace,
+      m_converter.m_options.classInstanceRegisterIndex, 1u));
+
+    builder.add(ir::Op::DebugName(m_thisCb, "class_instances"));
+    builder.add(ir::Op::DebugMemberName(m_thisCb, 0u, "data"));
+    builder.add(ir::Op::DebugMemberName(m_thisCb, 1u, "ft"));
+  }
+
+  return builder.add(ir::Op::DescriptorLoad(ir::ScalarType::eCbv, m_thisCb, builder.makeConstant(0u)));
+}
+
+
+ir::SsaDef RegisterFile::buildFcallFunction(ir::Builder& builder, const Instruction& op, uint32_t fpIndex, uint32_t fpCount, uint32_t function) {
+  auto code = builder.getCode().first;
+
+  /* Absolute function pointer index */
+  auto param = builder.add(ir::Op::DclParam(ir::ScalarType::eU32));
+  builder.add(ir::Op::DebugName(param, "index"));
+
+  /* Declare actual function */
+  std::stringstream debugName;
+  debugName << "fcall_" << function << "_fp" << fpIndex;
+
+  auto functionDef = builder.addBefore(code->getDef(),
+    ir::Op::Function(ir::ScalarType::eVoid).addParam(param));
+
+  auto cursor = builder.setCursor(functionDef);
+  builder.add(ir::Op::DebugName(functionDef, debugName.str().c_str()));
+
+  /* Load function table index */
+  auto thisIndex = (fpCount > 1u)
+    ? builder.add(ir::Op::ParamLoad(ir::ScalarType::eU32, functionDef, param))
+    : builder.makeConstant(0u);
+
+  auto ftIndex = builder.add(ir::Op::BufferLoad(ir::ScalarType::eU32, loadThisCb(builder),
+    builder.add(ir::Op::CompositeConstruct(ir::BasicType(ir::ScalarType::eU32, 2u), thisIndex, builder.makeConstant(1u))), 4u));
+
+  /* Select function body to call */
+  auto switchConstruct = builder.add(ir::Op::ScopedSwitch(ir::SsaDef(), ftIndex));
+
+  for (uint32_t i = 0u; i < op.getExtraCount(); i++) {
+    uint32_t ftIndex = op.getExtra(i).getImmediate<uint32_t>(0u);
+
+    if (ftIndex >= m_functionTables.size() || m_functionTables.at(ftIndex).empty()) {
+      m_converter.logOpError(op, "Function table ", ftIndex, " not declared.");
+      return ir::SsaDef();
+    }
+
+    const auto& ft = m_functionTables.at(ftIndex);
+
+    if (function >= ft.size()) {
+      m_converter.logOpError(op, "Function index ", function, " exceeds function count in function table ", ftIndex, ".");
+      return ir::SsaDef();
+    }
+
+    builder.add(ir::Op::ScopedSwitchCase(switchConstruct, ftIndex));
+    builder.add(ir::Op::FunctionCall(ir::ScalarType::eVoid, ft.at(function)));
+    builder.add(ir::Op::ScopedSwitchBreak(switchConstruct));
+  }
+
+  auto switchEnd = builder.add(ir::Op::ScopedEndSwitch(switchConstruct));
+  builder.rewriteOp(switchConstruct, ir::Op(builder.getOp(switchConstruct)).setOperand(0u, switchEnd));
+
+  builder.add(ir::Op::FunctionEnd());
+  builder.setCursor(cursor);
+  return functionDef;
 }
 
 }
