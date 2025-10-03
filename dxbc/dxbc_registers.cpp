@@ -417,6 +417,33 @@ bool RegisterFile::emitFcall(
 }
 
 
+ir::SsaDef RegisterFile::emitThisLoad(
+        ir::Builder&            builder,
+  const Instruction&            op,
+  const Operand&                operand,
+        WriteMask               componentMask,
+        ir::ScalarType          scalarType) {
+  auto thisFunction = buildThisFunction(builder);
+
+  auto thisIndex = m_converter.loadOperandIndex(builder, op, operand, 0u);
+  auto thisType = ir::BasicType(ir::ScalarType::eU32, 4u);
+
+  auto result = builder.add(ir::Op::FunctionCall(thisType, thisFunction).addParam(thisIndex));
+
+  util::small_vector<ir::SsaDef, 4u> scalars = { };
+
+  for (auto c : componentMask) {
+    uint32_t idx = uint8_t(operand.getSwizzle().map(c));
+
+    auto& scalar = scalars.emplace_back();
+    scalar = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eU32, result, builder.makeConstant(idx)));
+    scalar = builder.add(ir::Op::ConsumeAs(scalarType, scalar));
+  }
+
+  return m_converter.buildVector(builder, scalarType, scalars.size(), scalars.data());
+}
+
+
 ir::SsaDef RegisterFile::loadArrayIndex(ir::Builder& builder, const Instruction& op, const Operand& operand) {
   if (operand.getRegisterType() != RegisterType::eIndexableTemp)
     return ir::SsaDef();
@@ -575,6 +602,40 @@ ir::SsaDef RegisterFile::buildFcallFunction(ir::Builder& builder, const Instruct
   builder.add(ir::Op::FunctionEnd());
   builder.setCursor(cursor);
   return functionDef;
+}
+
+
+ir::SsaDef RegisterFile::buildThisFunction(ir::Builder& builder) {
+  if (m_thisFunction)
+    return m_thisFunction;
+
+  auto code = builder.getCode().first;
+
+  /* Absolute function pointer index */
+  auto param = builder.add(ir::Op::DclParam(ir::ScalarType::eU32));
+  builder.add(ir::Op::DebugName(param, "idx"));
+
+  m_thisFunction = builder.addBefore(code->getDef(), ir::Op::Function(
+    ir::BasicType(ir::ScalarType::eU32, 4u)).addParam(param));
+
+  auto cursor = builder.setCursor(m_thisFunction);
+  builder.add(ir::Op::DebugName(m_thisFunction, "this"));
+
+  auto thisIndex = builder.add(ir::Op::ParamLoad(ir::ScalarType::eU32, m_thisFunction, param));
+  auto packedData = builder.add(ir::Op::BufferLoad(ir::ScalarType::eU32, loadThisCb(builder),
+    builder.add(ir::Op::CompositeConstruct(ir::BasicType(ir::ScalarType::eU32, 2u), thisIndex, builder.makeConstant(0u))), 4u));
+
+  ir::Op compositeOp(ir::OpCode::eCompositeConstruct, ir::BasicType(ir::ScalarType::eU32, 4u));
+  compositeOp.addOperand(builder.add(ir::Op::UBitExtract(ir::ScalarType::eU32, packedData, builder.makeConstant(0u), builder.makeConstant(4u))));
+  compositeOp.addOperand(builder.add(ir::Op::UBitExtract(ir::ScalarType::eU32, packedData, builder.makeConstant(16u), builder.makeConstant(16u))));
+  compositeOp.addOperand(builder.add(ir::Op::UBitExtract(ir::ScalarType::eU32, packedData, builder.makeConstant(8u), builder.makeConstant(8u))));
+  compositeOp.addOperand(builder.add(ir::Op::UBitExtract(ir::ScalarType::eU32, packedData, builder.makeConstant(4u), builder.makeConstant(4u))));
+
+  builder.add(ir::Op::Return(compositeOp.getType(), builder.add(compositeOp)));
+  builder.add(ir::Op::FunctionEnd());
+  builder.setCursor(cursor);
+
+  return m_thisFunction;
 }
 
 }

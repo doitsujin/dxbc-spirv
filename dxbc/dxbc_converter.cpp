@@ -3402,6 +3402,10 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
       loadDef = m_ioMap.emitLoad(builder, op, operand, mask, loadType);
       break;
 
+    case RegisterType::eThis:
+      loadDef = m_regFile.emitThisLoad(builder, op, operand, mask, loadType);
+      break;
+
     default:
       break;
   }

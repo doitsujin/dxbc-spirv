@@ -104,6 +104,14 @@ public:
           ir::Builder&            builder,
     const Instruction&            op);
 
+  /** Emits load for indexed 'this' register. */
+  ir::SsaDef emitThisLoad(
+          ir::Builder&            builder,
+    const Instruction&            op,
+    const Operand&                operand,
+          WriteMask               componentMask,
+          ir::ScalarType          scalarType);
+
 private:
 
   Converter& m_converter;
@@ -126,6 +134,7 @@ private:
   util::small_vector<Interface, 16u> m_interfaces;
 
   ir::SsaDef m_thisCb;
+  ir::SsaDef m_thisFunction;
 
   ir::SsaDef loadArrayIndex(ir::Builder& builder, const Instruction& op, const Operand& operand);
 
@@ -142,6 +151,8 @@ private:
   ir::SsaDef loadThisCb(ir::Builder& builder);
 
   ir::SsaDef buildFcallFunction(ir::Builder& builder, const Instruction& op, uint32_t fpIndex, uint32_t fpCount, uint32_t function);
+
+  ir::SsaDef buildThisFunction(ir::Builder& builder);
 
 };
 
