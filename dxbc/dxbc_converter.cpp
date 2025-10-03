@@ -465,8 +465,10 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eLabel:
       return handleLabel(builder, op);
 
-    case OpCode::eInterfaceCall:
     case OpCode::eDclFunctionBody:
+      return m_regFile.handleDclFunctionBody(builder, op);
+
+    case OpCode::eInterfaceCall:
     case OpCode::eDclFunctionTable:
     case OpCode::eDclInterface:
     case OpCode::eAbort:

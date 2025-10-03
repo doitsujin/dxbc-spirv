@@ -34,6 +34,11 @@ public:
   bool handleDclTgsmRaw(ir::Builder& builder, const Instruction& op);
   bool handleDclTgsmStructured(ir::Builder& builder, const Instruction& op);
 
+  /** Declares a function body for use with interfaces */
+  bool handleDclFunctionBody(
+          ir::Builder&            builder,
+    const Instruction&            op);
+
   /* Reserves and declares function for label. Labels occur last in the
    * DXBC binary, so their declarations are not known at the time the
    * calls are made from the entry point function. */
@@ -91,6 +96,7 @@ private:
   util::small_vector<ir::SsaDef,  16u> m_xRegs;
   util::small_vector<ir::SsaDef,  16u> m_gRegs;
   util::small_vector<ir::SsaDef,  16u> m_labels;
+  util::small_vector<ir::SsaDef,  16u> m_functionBodies;
 
   ir::SsaDef loadArrayIndex(ir::Builder& builder, const Instruction& op, const Operand& operand);
 
@@ -101,6 +107,8 @@ private:
   ir::SsaDef getTgsmRegister(const Instruction& op, const Operand& operand);
 
   bool declareLds(ir::Builder& builder, const Instruction& op, const Operand& operand, const ir::Type& type);
+
+  ir::SsaDef declareEmptyFunction(ir::Builder& builder, const Operand& operand);
 
 };
 

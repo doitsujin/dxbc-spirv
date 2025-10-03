@@ -94,11 +94,32 @@ bool RegisterFile::handleDclTgsmStructured(ir::Builder& builder, const Instructi
 }
 
 
+bool RegisterFile::handleDclFunctionBody(
+        ir::Builder&            builder,
+  const Instruction&            op) {
+  uint32_t fbIndex = op.getImm(0u).getImmediate<uint32_t>(0u);
+
+  Operand operand(OperandInfo(), RegisterType::eFunctionBody, ComponentCount::e0Component);
+  operand.addIndex(fbIndex);
+
+  auto fbDef = declareEmptyFunction(builder, operand);
+
+  if (fbIndex >= m_functionBodies.size())
+    m_functionBodies.resize(fbIndex + 1u);
+
+  m_functionBodies.at(fbIndex) = fbDef;
+  return true;
+}
+
+
 ir::SsaDef RegisterFile::getFunctionForLabel(
         ir::Builder&            builder,
   const Instruction&            op,
   const Operand&                operand) {
   auto labelIndex = operand.getIndex(0u);
+
+  if (operand.getRegisterType() == RegisterType::eFunctionBody && labelIndex < m_functionBodies.size())
+    return m_functionBodies.at(labelIndex);
 
   if (operand.getRegisterType() != RegisterType::eLabel) {
     auto name = m_converter.makeRegisterDebugName(operand.getRegisterType(), labelIndex, WriteMask());
@@ -109,21 +130,8 @@ ir::SsaDef RegisterFile::getFunctionForLabel(
   if (labelIndex >= m_labels.size())
     m_labels.resize(labelIndex + 1u);
 
-  if (!m_labels.at(labelIndex)) {
-    auto code = builder.getCode().first;
-
-    /* Declare new function at the top of the code section and immediately
-     * end it. We will emit code to it once the label is actually declared. */
-    m_labels.at(labelIndex) = builder.addBefore(
-      code->getDef(), ir::Op::Function(ir::ScalarType::eVoid));
-
-    builder.addBefore(code->getDef(), ir::Op::FunctionEnd());
-
-    if (m_converter.m_options.includeDebugNames) {
-      builder.add(ir::Op::DebugName(m_labels.at(labelIndex),
-        (std::string("l") + std::to_string(labelIndex)).c_str()));
-    }
-  }
+  if (!m_labels.at(labelIndex))
+    m_labels.at(labelIndex) = declareEmptyFunction(builder, operand);
 
   return m_labels.at(labelIndex);
 }
@@ -402,6 +410,23 @@ bool RegisterFile::declareLds(ir::Builder& builder, const Instruction& op, const
   }
 
   return true;
+}
+
+
+ir::SsaDef RegisterFile::declareEmptyFunction(ir::Builder& builder, const Operand& operand) {
+  auto code = builder.getCode().first;
+
+  /* Declare new function at the top of the code section and immediately
+    * end it. We will emit code to it once the label is actually declared. */
+  auto def = builder.addBefore(code->getDef(), ir::Op::Function(ir::ScalarType::eVoid));
+  builder.addBefore(code->getDef(), ir::Op::FunctionEnd());
+
+  if (m_converter.m_options.includeDebugNames) {
+    builder.add(ir::Op::DebugName(def, m_converter.makeRegisterDebugName(
+      operand.getRegisterType(), operand.getIndex(0u), WriteMask()).c_str()));
+  }
+
+  return def;
 }
 
 }
