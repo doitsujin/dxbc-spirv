@@ -394,6 +394,29 @@ std::pair<ir::SsaDef, ir::SsaDef> RegisterFile::computeTgsmAddress(
 }
 
 
+bool RegisterFile::emitFcall(
+        ir::Builder&            builder,
+  const Instruction&            op) {
+  uint32_t function = op.getImm(0u).getImmediate<uint32_t>(0u);
+  uint32_t baseIndex = op.getSrc(0u).getIndex(0u);
+
+  for (const auto& iface : m_interfaces) {
+    if (baseIndex >= iface.index && baseIndex < iface.index + iface.count) {
+      if (function >= iface.functions.size())
+        return m_converter.logOpError(op, "Invalid function index ", function, " for fp", baseIndex, ".");
+
+      /* Compute absolute interface index */
+      auto fpIndex = m_converter.loadOperandIndex(builder, op, op.getSrc(0u), 1u);
+      fpIndex = builder.add(ir::Op::IAdd(ir::ScalarType::eU32, fpIndex, builder.makeConstant(baseIndex)));
+      builder.add(ir::Op::FunctionCall(ir::ScalarType::eVoid, iface.functions.at(function)).addParam(fpIndex));
+      return true;
+    }
+  }
+
+  return m_converter.logOpError(op, "Undeclared interface ", baseIndex);
+}
+
+
 ir::SsaDef RegisterFile::loadArrayIndex(ir::Builder& builder, const Instruction& op, const Operand& operand) {
   if (operand.getRegisterType() != RegisterType::eIndexableTemp)
     return ir::SsaDef();
@@ -503,7 +526,7 @@ ir::SsaDef RegisterFile::buildFcallFunction(ir::Builder& builder, const Instruct
 
   /* Absolute function pointer index */
   auto param = builder.add(ir::Op::DclParam(ir::ScalarType::eU32));
-  builder.add(ir::Op::DebugName(param, "index"));
+  builder.add(ir::Op::DebugName(param, "fp"));
 
   /* Declare actual function */
   std::stringstream debugName;
@@ -518,7 +541,7 @@ ir::SsaDef RegisterFile::buildFcallFunction(ir::Builder& builder, const Instruct
   /* Load function table index */
   auto thisIndex = (fpCount > 1u)
     ? builder.add(ir::Op::ParamLoad(ir::ScalarType::eU32, functionDef, param))
-    : builder.makeConstant(0u);
+    : builder.makeConstant(fpIndex);
 
   auto ftIndex = builder.add(ir::Op::BufferLoad(ir::ScalarType::eU32, loadThisCb(builder),
     builder.add(ir::Op::CompositeConstruct(ir::BasicType(ir::ScalarType::eU32, 2u), thisIndex, builder.makeConstant(1u))), 4u));

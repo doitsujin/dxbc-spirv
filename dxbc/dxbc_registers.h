@@ -99,6 +99,11 @@ public:
     const Operand&                operand,
     const Operand&                address);
 
+  /** Emits interface call */
+  bool emitFcall(
+          ir::Builder&            builder,
+    const Instruction&            op);
+
 private:
 
   Converter& m_converter;

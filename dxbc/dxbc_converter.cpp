@@ -475,6 +475,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return m_regFile.handleDclInterface(builder, op);
 
     case OpCode::eInterfaceCall:
+      return m_regFile.emitFcall(builder, op);
+
     case OpCode::eAbort:
     case OpCode::eDebugBreak:
       break;
