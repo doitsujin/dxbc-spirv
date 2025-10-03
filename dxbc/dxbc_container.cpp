@@ -148,6 +148,11 @@ util::ByteReader Container::getCodeChunk() const {
 }
 
 
+util::ByteReader Container::getInterfaceChunk() const {
+  return findChunk(util::FourCC("IFCE"));
+}
+
+
 bool Container::validateHash() const {
   auto digest = hashDxbcBinary(m_reader.getData(0u), m_reader.getSize());
   return m_header.hash == digest;

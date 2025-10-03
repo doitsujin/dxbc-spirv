@@ -84,6 +84,9 @@ public:
   /** Finds shader code chunk */
   util::ByteReader getCodeChunk() const;
 
+  /** Finds interface chunk */
+  util::ByteReader getInterfaceChunk() const;
+
   /** Checks whether the binary hash is valid */
   bool validateHash() const;
 
