@@ -207,8 +207,8 @@ bool ResourceMap::handleDclSampler(ir::Builder& builder, const Instruction& op) 
 }
 
 
-void ResourceMap::setUavFlagsForLoad(ir::Builder& builder, const Operand& operand) {
-  auto resource = findResource(operand);
+void ResourceMap::setUavFlagsForLoad(ir::Builder& builder, const Instruction& op, const Operand& operand) {
+  auto resource = getResourceInfo(op, operand);
 
   dxbc_spv_assert(resource && resource->regType == RegisterType::eUav);
 
@@ -219,8 +219,8 @@ void ResourceMap::setUavFlagsForLoad(ir::Builder& builder, const Operand& operan
 }
 
 
-void ResourceMap::setUavFlagsForStore(ir::Builder& builder, const Operand& operand) {
-  auto resource = findResource(operand);
+void ResourceMap::setUavFlagsForStore(ir::Builder& builder, const Instruction& op, const Operand& operand) {
+  auto resource = getResourceInfo(op, operand);
 
   dxbc_spv_assert(resource && resource->regType == RegisterType::eUav);
 
@@ -231,8 +231,8 @@ void ResourceMap::setUavFlagsForStore(ir::Builder& builder, const Operand& opera
 }
 
 
-void ResourceMap::setUavFlagsForAtomic(ir::Builder& builder, const Operand& operand) {
-  auto resource = findResource(operand);
+void ResourceMap::setUavFlagsForAtomic(ir::Builder& builder, const Instruction& op, const Operand& operand) {
+  auto resource = getResourceInfo(op, operand);
 
   dxbc_spv_assert(resource && resource->regType == RegisterType::eUav);
 
@@ -251,11 +251,11 @@ void ResourceMap::normalizeUavFlags(ir::Builder& builder) {
    * would set both ReadOnly and WriteOnly. This does not make any sense, so
    * treat such a UAV as read-only. */
   for (const auto& e : m_resources) {
-    if (e.second.regType == RegisterType::eUav) {
-      auto flags = getUavFlags(builder, e.second);
+    if (e.regType == RegisterType::eUav) {
+      auto flags = getUavFlags(builder, e);
 
       if ((flags & ir::UavFlag::eReadOnly) && (flags & ir::UavFlag::eWriteOnly))
-        setUavFlags(builder, e.second, flags - ir::UavFlag::eWriteOnly);
+        setUavFlags(builder, e, flags - ir::UavFlag::eWriteOnly);
     }
   }
 }
@@ -503,7 +503,7 @@ std::pair<ir::SsaDef, const ResourceInfo*> ResourceMap::loadDescriptor(
   const Instruction&            op,
   const Operand&                operand,
         bool                    uavCounter) {
-  auto resourceInfo = findResource(operand);
+  auto resourceInfo = getResourceInfo(op, operand);
 
   if (!resourceInfo)
     return std::make_pair(ir::SsaDef(), resourceInfo);
@@ -569,21 +569,15 @@ std::pair<ir::SsaDef, const ResourceInfo*> ResourceMap::loadDescriptor(
 ResourceInfo* ResourceMap::insertResourceInfo(
   const Instruction&            op,
   const Operand&                operand) {
-  ResourceKey key = { };
-  key.regType = operand.getRegisterType();
-  key.regIndex = operand.getIndex(0u);
-
-  auto entry = m_resources.emplace(std::piecewise_construct, std::tuple(key), std::tuple());
-
-  if (!entry.second) {
-    auto name = m_converter.makeRegisterDebugName(key.regType, key.regIndex, WriteMask());
+  if (getResourceInfo(op, operand)) {
+    auto name = m_converter.makeRegisterDebugName(operand.getRegisterType(), operand.getIndex(0u), WriteMask());
     m_converter.logOpError(op, "Resource ", name, " already declared.");
     return nullptr;
   }
 
-  auto& info = entry.first->second;
-  info.regType = key.regType;
-  info.regIndex = key.regIndex;
+  auto& info = m_resources.emplace_back();
+  info.regType = operand.getRegisterType();
+  info.regIndex = operand.getIndex(0u);
 
   if (m_converter.isSm51()) {
     dxbc_spv_assert(op.getImmCount());
@@ -630,21 +624,18 @@ void ResourceMap::emitDebugName(ir::Builder& builder, const ResourceInfo* info) 
 }
 
 
-ResourceInfo* ResourceMap::findResource(
+ResourceInfo* ResourceMap::getResourceInfo(
+  const Instruction&            op,
   const Operand&                operand) {
-  ResourceKey key = { };
-  key.regType = operand.getRegisterType();
-  key.regIndex = operand.getIndex(0u);
-
-  auto entry = m_resources.find(key);
-
-  if (entry == m_resources.end()) {
-    auto name = m_converter.makeRegisterDebugName(key.regType, key.regIndex, WriteMask());
-    Logger::err("Resource ", name, " not declared.");
-    return nullptr;
+  for (auto& e : m_resources) {
+    if (e.regType == operand.getRegisterType() &&
+        e.regIndex == operand.getIndex(0u))
+      return &e;
   }
 
-  return &entry->second;
+  auto name = m_converter.makeRegisterDebugName(operand.getRegisterType(), operand.getIndex(0u), WriteMask());
+  Logger::err("Resource ", name, " not declared.");
+  return nullptr;
 }
 
 

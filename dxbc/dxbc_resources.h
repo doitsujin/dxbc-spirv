@@ -105,9 +105,9 @@ public:
   bool handleDclSampler(ir::Builder& builder, const Instruction& op);
 
   /** Adjusts UAV flags for the given UAV based on usage. */
-  void setUavFlagsForLoad(ir::Builder& builder, const Operand& operand);
-  void setUavFlagsForStore(ir::Builder& builder, const Operand& operand);
-  void setUavFlagsForAtomic(ir::Builder& builder, const Operand& operand);
+  void setUavFlagsForLoad(ir::Builder& builder, const Instruction& op, const Operand& operand);
+  void setUavFlagsForStore(ir::Builder& builder, const Instruction& op, const Operand& operand);
+  void setUavFlagsForAtomic(ir::Builder& builder, const Instruction& op, const Operand& operand);
 
   void normalizeUavFlags(ir::Builder& builder);
 
@@ -161,7 +161,7 @@ private:
 
   Converter&      m_converter;
 
-  std::map<ResourceKey, ResourceInfo> m_resources;
+  util::small_vector<ResourceInfo, 256u> m_resources;
 
   std::pair<ir::SsaDef, const ResourceInfo*> loadDescriptor(
           ir::Builder&            builder,
@@ -181,7 +181,8 @@ private:
           ir::Builder&            builder,
     const ResourceInfo*           info);
 
-  ResourceInfo* findResource(
+  ResourceInfo* getResourceInfo(
+    const Instruction&            op,
     const Operand&                operand);
 
   static ir::UavFlags getUavFlags(
