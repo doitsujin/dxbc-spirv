@@ -52,7 +52,7 @@ bool ResourceMap::handleDclConstantBuffer(ir::Builder& builder, const Instructio
   }
 
   if (!arraySize)
-    arraySize = 65536u / 16u;
+    arraySize = MaxCbvSize;
 
   info->kind = ir::ResourceKind::eBufferStructured;
   info->type = ir::Type(ir::ScalarType::eUnknown, 4u).addArrayDimension(arraySize);
@@ -208,7 +208,7 @@ bool ResourceMap::handleDclSampler(ir::Builder& builder, const Instruction& op) 
 
 
 void ResourceMap::setUavFlagsForLoad(ir::Builder& builder, const Instruction& op, const Operand& operand) {
-  auto resource = getResourceInfo(op, operand);
+  auto resource = getResourceInfo(builder, op, operand);
 
   dxbc_spv_assert(resource && resource->regType == RegisterType::eUav);
 
@@ -220,7 +220,7 @@ void ResourceMap::setUavFlagsForLoad(ir::Builder& builder, const Instruction& op
 
 
 void ResourceMap::setUavFlagsForStore(ir::Builder& builder, const Instruction& op, const Operand& operand) {
-  auto resource = getResourceInfo(op, operand);
+  auto resource = getResourceInfo(builder, op, operand);
 
   dxbc_spv_assert(resource && resource->regType == RegisterType::eUav);
 
@@ -232,7 +232,7 @@ void ResourceMap::setUavFlagsForStore(ir::Builder& builder, const Instruction& o
 
 
 void ResourceMap::setUavFlagsForAtomic(ir::Builder& builder, const Instruction& op, const Operand& operand) {
-  auto resource = getResourceInfo(op, operand);
+  auto resource = getResourceInfo(builder, op, operand);
 
   dxbc_spv_assert(resource && resource->regType == RegisterType::eUav);
 
@@ -503,7 +503,7 @@ std::pair<ir::SsaDef, const ResourceInfo*> ResourceMap::loadDescriptor(
   const Instruction&            op,
   const Operand&                operand,
         bool                    uavCounter) {
-  auto resourceInfo = getResourceInfo(op, operand);
+  auto resourceInfo = getResourceInfo(builder, op, operand);
 
   if (!resourceInfo)
     return std::make_pair(ir::SsaDef(), resourceInfo);
@@ -569,12 +569,6 @@ std::pair<ir::SsaDef, const ResourceInfo*> ResourceMap::loadDescriptor(
 ResourceInfo* ResourceMap::insertResourceInfo(
   const Instruction&            op,
   const Operand&                operand) {
-  if (getResourceInfo(op, operand)) {
-    auto name = m_converter.makeRegisterDebugName(operand.getRegisterType(), operand.getIndex(0u), WriteMask());
-    m_converter.logOpError(op, "Resource ", name, " already declared.");
-    return nullptr;
-  }
-
   auto& info = m_resources.emplace_back();
   info.regType = operand.getRegisterType();
   info.regIndex = operand.getIndex(0u);
@@ -624,18 +618,231 @@ void ResourceMap::emitDebugName(ir::Builder& builder, const ResourceInfo* info) 
 }
 
 
+bool ResourceMap::matchesResource(
+  const Instruction&            op,
+  const Operand&                operand,
+  const ResourceInfo&           info) const {
+  if (info.regType != operand.getRegisterType())
+    return false;
+
+  if (!hasRelativeIndexing(operand.getIndexType(0u)) && info.regIndex == operand.getIndex(0u))
+    return true;
+
+  /* For SM5.1, the first index is the variable index, which must match */
+  if (m_converter.isSm51())
+    return false;
+
+  /* For SM5.0 dynamic indexing, check if the entry is a descriptor array
+   * covering the entire register space with matching properties. */
+  if (info.resourceIndex || info.resourceCount == 1u)
+    return false;
+
+  switch (info.regType) {
+    case RegisterType::eSampler:
+    case RegisterType::eCbv:
+      return true;
+
+    case RegisterType::eResource:
+    case RegisterType::eUav: {
+      auto resourceType = getResourceTypeForToken(op.getOpToken());
+
+      if (!resourceType) {
+        m_converter.logOpError(op, "No resource type tokens found");
+        return false;
+      }
+
+      return info.kind == resourceType->first &&
+             info.type == resourceType->second;
+    };
+
+    default:
+      return false;
+  }
+}
+
+
+void ResourceMap::rewriteSm50ResourceAccess(
+        ir::Builder&            builder,
+  const ResourceInfo&           oldResource,
+  const ResourceInfo&           newResource) {
+  /* Rewrite descriptor loads to use the newly declared array */
+  util::small_vector<ir::SsaDef, 256u> uses;
+
+  if (oldResource.resourceDef)
+    builder.getUses(oldResource.resourceDef, uses);
+
+  if (oldResource.counterDef)
+    builder.getUses(oldResource.counterDef, uses);
+
+  for (auto use : uses) {
+    auto op = builder.getOp(use);
+
+    if (op.getOpCode() == ir::OpCode::eDescriptorLoad) {
+      auto resource = builder.getOpForOperand(op, 0u).getDef();
+
+      resource = (resource == oldResource.counterDef)
+        ? newResource.counterDef
+        : newResource.resourceDef;
+
+      auto index = builder.getOpForOperand(op, 1u).getDef();
+      index = builder.addBefore(use, ir::Op::IAdd(ir::ScalarType::eU32,
+        index, builder.makeConstant(oldResource.resourceIndex - newResource.resourceIndex)));
+
+      op.setOperand(0u, resource);
+      op.setOperand(1u, index);
+
+      builder.rewriteOp(use, std::move(op));
+    }
+  }
+
+  /* Adjust UAV flags */
+  if (newResource.regType == RegisterType::eUav) {
+    auto andFlags = ir::UavFlag::eReadOnly | ir::UavFlag::eWriteOnly;
+
+    auto oldFlags = getUavFlags(builder, oldResource);
+    auto newFlags = getUavFlags(builder, newResource);
+
+    auto mergedFlags = oldFlags | newFlags;
+    mergedFlags -= andFlags;
+    mergedFlags |= andFlags & oldFlags & newFlags;
+
+    setUavFlags(builder, newResource, mergedFlags);
+  }
+}
+
+
+ResourceInfo* ResourceMap::declareSm50ResourceArray(
+        ir::Builder&            builder,
+  const Instruction&            op,
+  const Operand&                operand) {
+  auto resourceType = getResourceTypeForToken(op.getOpToken());
+
+  ResourceInfo info = { };
+  info.regType = operand.getRegisterType();
+  info.resourceCount = determineSm50ResourceArraySize(info.regType);
+
+  switch (info.regType) {
+    case RegisterType::eSampler: {
+      info.resourceDef = builder.add(ir::Op::DclSampler(
+        m_converter.getEntryPoint(), 0u, 0u, info.resourceCount));
+
+      builder.add(ir::Op::DebugName(info.resourceDef, "s"));
+    } break;
+
+    case RegisterType::eCbv: {
+      info.kind = ir::ResourceKind::eBufferStructured;
+      info.type = ir::Type(ir::ScalarType::eUnknown, 4u).addArrayDimension(MaxCbvSize);
+      info.resourceDef = builder.add(ir::Op::DclCbv(info.type,
+        m_converter.getEntryPoint(), 0u, 0u, info.resourceCount));
+
+      builder.add(ir::Op::DebugName(info.resourceDef, "cb"));
+    } break;
+
+    case RegisterType::eResource: {
+      if (!resourceType) {
+        m_converter.logOpError(op, "No resource type tokens found");
+        return nullptr;
+      }
+
+      info.kind = resourceType->first;
+      info.type = resourceType->second;
+      info.resourceDef = builder.add(ir::Op::DclSrv(info.type,
+        m_converter.getEntryPoint(), 0u, 0u, info.resourceCount, info.kind));
+
+      builder.add(ir::Op::DebugName(info.resourceDef, "t"));
+    } break;
+
+    case RegisterType::eUav: {
+      if (!resourceType) {
+        m_converter.logOpError(op, "No resource type tokens found");
+        return nullptr;
+      }
+
+      info.kind = resourceType->first;
+      info.type = resourceType->second;
+      info.resourceDef = builder.add(ir::Op::DclUav(info.type,
+        m_converter.getEntryPoint(), 0u, 0u, info.resourceCount, info.kind,
+        ir::UavFlag::eWriteOnly | ir::UavFlag::eReadOnly));
+
+      if (!ir::resourceIsTyped(info.kind)) {
+        info.counterDef = builder.add(ir::Op::DclUavCounter(
+          m_converter.getEntryPoint(), info.resourceDef));
+        builder.add(ir::Op::DebugName(info.resourceDef, "u_ctr"));
+      }
+
+      builder.add(ir::Op::DebugName(info.resourceDef, "u"));
+    } break;
+
+    default:
+      return nullptr;
+  }
+
+  /* For constant buffers, we only care about the element type.
+   * We declare all of them as arrays, so this is safe to do. */
+  bool isCbv = info.regType == RegisterType::eCbv;
+  auto dstType = isCbv ? info.type.getSubType(0u) : info.type;
+
+  for (size_t i = 0u; i < m_resources.size(); ) {
+    auto& e = m_resources.at(i);
+    auto srcType = isCbv ? info.type.getSubType(0u) : info.type;
+
+    if (e.regType == info.regType &&
+        e.regSpace == info.regSpace &&
+        e.resourceIndex + e.resourceCount > info.resourceIndex &&
+        e.resourceIndex < info.resourceIndex + info.resourceCount &&
+        e.kind == info.kind && srcType == dstType) {
+      rewriteSm50ResourceAccess(builder, e, info);
+
+      e = m_resources.back();
+      m_resources.pop_back();
+    } else {
+      i++;
+    }
+  }
+
+  return &m_resources.emplace_back(info);
+}
+
+
 ResourceInfo* ResourceMap::getResourceInfo(
+        ir::Builder&            builder,
   const Instruction&            op,
   const Operand&                operand) {
   for (auto& e : m_resources) {
-    if (e.regType == operand.getRegisterType() &&
-        e.regIndex == operand.getIndex(0u))
+    if (matchesResource(op, operand, e))
       return &e;
+  }
+
+  /* For SM5.0, we only expect to encounter undeclared resources in
+   * combination with class linkage dynamic indexing, so declare a
+   * resource array and merge any overlapping bindings into it. */
+  if (!m_converter.isSm51()) {
+    auto info = declareSm50ResourceArray(builder, op, operand);
+
+    if (info)
+      return info;
   }
 
   auto name = m_converter.makeRegisterDebugName(operand.getRegisterType(), operand.getIndex(0u), WriteMask());
   Logger::err("Resource ", name, " not declared.");
   return nullptr;
+}
+
+
+uint32_t ResourceMap::determineSm50ResourceArraySize(
+        RegisterType            type) {
+  switch (type) {
+    case RegisterType::eCbv:
+      return Sm50CbvCount;
+    case RegisterType::eSampler:
+      return Sm50SamplerCount;
+    case RegisterType::eResource:
+      return Sm50SrvCount;
+    case RegisterType::eUav:
+      return Sm50UavCount;
+    default:
+      return 0u;
+  }
 }
 
 
@@ -655,6 +862,45 @@ void ResourceMap::setUavFlags(
   op.setOperand(5u, flags);
 
   builder.rewriteOp(info.resourceDef, std::move(op));
+}
+
+
+std::optional<std::pair<ir::ResourceKind, ir::Type>> ResourceMap::getResourceTypeForToken(
+  const OpToken&                tok) {
+  auto resourceDim = tok.getResourceDimToken();
+
+  if (!resourceDim)
+    return std::nullopt;
+
+  auto kind = resolveResourceDim(resourceDim.getDim());
+
+  if (!kind)
+    return std::nullopt;
+
+  ir::Type type = { };
+
+  switch (*kind) {
+    case ir::ResourceKind::eBufferRaw: {
+      type = ir::Type(ir::ScalarType::eUnknown).addArrayDimension(0u);
+    } break;
+
+    case ir::ResourceKind::eBufferStructured: {
+      type = ir::Type(ir::ScalarType::eUnknown)
+        .addArrayDimension(resourceDim.getStructureStride() / sizeof(uint32_t))
+        .addArrayDimension(0u);
+    } break;
+
+    default: {
+      auto resourceType = tok.getResourceTypeToken();
+
+      if (!resourceType)
+        return std::nullopt;
+
+      type = resolveSampledType(resourceType.x());
+    } break;
+  }
+
+  return std::make_pair(*kind, std::move(type));
 }
 
 

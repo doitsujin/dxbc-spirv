@@ -81,7 +81,12 @@ struct ResourceKey {
 /** Resource variable map. Handles both resource declaration and access,
  *  abstracting away the differences between Shader Model 5.0 and 5.1. */
 class ResourceMap {
+  static constexpr uint32_t Sm50CbvCount = 14u;
+  static constexpr uint32_t Sm50SamplerCount = 16u;
+  static constexpr uint32_t Sm50SrvCount = 128u;
+  static constexpr uint32_t Sm50UavCount = 64u;
 
+  static constexpr uint32_t MaxCbvSize = 4096u;
 public:
 
   explicit ResourceMap(Converter& converter);
@@ -181,9 +186,28 @@ private:
           ir::Builder&            builder,
     const ResourceInfo*           info);
 
-  ResourceInfo* getResourceInfo(
+  bool matchesResource(
+    const Instruction&            op,
+    const Operand&                operand,
+    const ResourceInfo&           info) const;
+
+  void rewriteSm50ResourceAccess(
+          ir::Builder&            builder,
+    const ResourceInfo&           oldResource,
+    const ResourceInfo&           newResource);
+
+  ResourceInfo* declareSm50ResourceArray(
+          ir::Builder&            builder,
     const Instruction&            op,
     const Operand&                operand);
+
+  ResourceInfo* getResourceInfo(
+          ir::Builder&            builder,
+    const Instruction&            op,
+    const Operand&                operand);
+
+  static uint32_t determineSm50ResourceArraySize(
+          RegisterType            type);
 
   static ir::UavFlags getUavFlags(
           ir::Builder&            builder,
@@ -193,6 +217,9 @@ private:
           ir::Builder&            builder,
     const ResourceInfo&           info,
           ir::UavFlags            flags);
+
+  static std::optional<std::pair<ir::ResourceKind, ir::Type>> getResourceTypeForToken(
+    const OpToken&                tok);
 
   static uint32_t computeRawStructuredAlignment(
           ir::Builder&            builder,
