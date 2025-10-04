@@ -139,7 +139,7 @@ inline int32_t findmsb(uint64_t number) {
 }
 
 
-/** Inserts bit range from bit field */
+/** Extracts bit range from bit field */
 template<typename T>
 T bextract(T op, uint32_t first, uint32_t count) {
   if (!count)
@@ -149,6 +149,16 @@ T bextract(T op, uint32_t first, uint32_t count) {
   return (op >> first) & mask;
 }
 
+/** Extracts bit range from bit field as a signed integer */
+template<typename T, typename T2>
+T bextractSigned(T2 op, uint32_t first, uint32_t count) {
+  if (!count)
+    return 0;
+
+  T mask = (T(1) << (count - 1)) - T(1);
+  T signMask = T(1) << (count - 1);
+  return (T(op >> first) & mask) - (T(op >> first) & signMask);
+}
 
 /** Inserts bits into bit field */
 template<typename T>
