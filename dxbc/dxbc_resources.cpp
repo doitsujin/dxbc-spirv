@@ -536,24 +536,18 @@ std::pair<ir::SsaDef, const ResourceInfo*> ResourceMap::loadDescriptor(
     /* Second index contains the actual index, but as an absolute register
      * index. Deal with it the same way we do for I/O registers and split
      * the index into its absolute and relative parts. */
-    uint32_t absIndex = operand.getIndex(1u) - resourceInfo->resourceIndex;
-
-    if (hasRelativeIndexing(operand.getIndexType(1u))) {
-      descriptorIndex = m_converter.loadSrcModified(builder, op,
-        op.getRawOperand(operand.getIndexOperand(1u)),
-        ComponentBit::eX, ir::ScalarType::eU32);
-
-      if (absIndex) {
-        descriptorIndex = builder.add(ir::Op::IAdd(
-          ir::ScalarType::eU32, descriptorIndex, builder.makeConstant(absIndex)));
-      }
-    } else {
-      descriptorIndex = builder.makeConstant(absIndex);
-    }
-
+    descriptorIndex = m_converter.loadOperandIndex(builder, op, operand, 1u);
   } else {
-    /* No descriptor indexing in SM5.0 */
-    descriptorIndex = builder.makeConstant(0u);
+    /* First index is the resource index. In most cases these are going to
+     * be constant, but shaders may also use uniform indexing together with
+     * class linkage. */
+    if (resourceInfo->resourceCount > 1u) {
+      descriptorIndex = m_converter.loadOperandIndex(builder, op, operand, 0u);
+      descriptorIndex = builder.add(ir::Op::ISub(ir::ScalarType::eU32,
+        descriptorIndex, builder.makeConstant(resourceInfo->resourceIndex)));
+    } else {
+      descriptorIndex = builder.makeConstant(0u);
+    }
   }
 
   /* Retrieve resource definition. If necessary, declare the UAV counter. */
