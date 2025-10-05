@@ -35,7 +35,7 @@ public:
     /** Shader name. If non-null, this will be set as the entry point
      *  name, which is interpreted as the overall name of the shader. */
     const char* name = nullptr;
-    /** Whether to emit any debg names besides the shader name. This
+    /** Whether to emit any debug names besides the shader name. This
      *  includes resources, scratch and shared variables, as well as
      *  semantic names for I/O variables. */
     bool includeDebugNames = false;

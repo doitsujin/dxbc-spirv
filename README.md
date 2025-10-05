@@ -9,7 +9,7 @@ instruction reference.
 ## Feature support
 
 ### DXBC
-- Minimum precison is supported, with both `min10float` and `min16float` being lowered to
+- Minimum precision is supported, with both `min10float` and `min16float` being lowered to
 a 16-bit or 32-bit floating point type depending on the provided compile options.
 Min-precision integer types are lowered to 16 or 32-bit integers accordingly.
 
@@ -37,7 +37,7 @@ ninja
 
 ## Tools
 
-### Disassebler
+### Disassembler
 
 This project provides a custom DXBC disassembler for debugging purposes. Its output does
 **not** match that of d3dcompiler in that it does not parse resource metadata or shader
