@@ -700,8 +700,6 @@ bool IoMap::declareIoSignatureVars(
   }
 
   if (componentMask) {
-    auto name = m_converter.makeRegisterDebugName(regType, regIndex, componentMask);
-
     while (componentMask) {
       WriteMask nextMask = util::extractConsecutiveComponents(componentMask);
 
