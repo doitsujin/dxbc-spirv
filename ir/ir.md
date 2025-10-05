@@ -17,7 +17,7 @@ Each instruction is stored in a `ir::Op` with the following properties:
 ### Types
 Instruction return types have the following properties, as a top-down structure:
 - Number of array dimensions. If 0, the type is not an array type.
-- Number of array elements in each dimension. If the element count in the last valid dimension is 0, the array is unnbounded.
+- Number of array elements in each dimension. If the element count in the last valid dimension is 0, the array is unbounded.
 - Number of structure members. If the type is an array, each element will be one instance of the given structure. If the struct
   member count is 1, the element type is a scalar or vector. If the member count is 0, the type is considered `void` and the
   instruction does not return a value. In this case, the array dimension count must also be 0.
@@ -128,7 +128,7 @@ These instructions provide additional information that may affect the execution 
 
 All operands bar the `%EntryPoint` operand are literal constants.
 
-The `SetFpMode` applies default optmization properties and denorm behaviour for all instructions that produce floating point results
+The `SetFpMode` applies default optimization properties and denorm behaviour for all instructions that produce floating point results
 of the type declared via the instruction's return type. Optimization flags are declared via `OpFlags`.
 
 Per-instruction `OpFlags` that affect floating point instructions are additive to the default mode, i.e. if the default mode specifies
@@ -195,11 +195,11 @@ with a scalar type of `ir::Type::Unknown`. In the final shader binary, no `Consu
 | `DclXfb`             | `void`           | `%DclOutput*`    | xfb buffer       | stride    | offset         |                     |                 |
 | `DclParam`           | scalar           |                  |                  |           |                |                     |                 |
 
-The `count` parameter for `DclSampler`, `DclSrv`, `DclCbv` and `DclUav` instructions is a literal constant declareing the size of the
+The `count` parameter for `DclSampler`, `DclSrv`, `DclCbv` and `DclUav` instructions is a literal constant declaring the size of the
 descriptor array, If the size is `0`, the array is unbounded. If `1`, the declaration consists of only a single descriptor, and the
 address operand of any `DescriptorLoad` instruction accessing this descriptor will reference a constant `0`.
 
-For `DclSrv` and `DclUav`, if the resource is is `ir::ResourceKind::Structured`, the return type is a two-dimensional array of a scalar type,
+For `DclSrv` and `DclUav`, if the resource is `ir::ResourceKind::Structured`, the return type is a two-dimensional array of a scalar type,
 where the inner array represents one structure.
 
 The `DclUavCounter` references the `DclUav` instruction to declare a UAV counter for. Any UAV that is not referenced by such an instruction
@@ -654,7 +654,7 @@ Each instruction is encoded as follows:
 - The operand count
 - A list of tokens declaring the return type. Types are encoded as follows:
   - A single header token declaring array dimensionality (2 bits) and struct member count (remaining bits).
-  - For each array dimension, one token storing the array size in that dumension.
+  - For each array dimension, one token storing the array size in that dimension.
   - For each struct type, a bit field consisting of the scalar type (5 bits) and vector size (2 bits).
 - The argument tokens. All non-literal argument tokens are encoded as signed integers relative to the current instruction ID in order to optimize the common case of accessing
   previous instruction results, with the exception of the special value `0`. Since self-references are impossible, this special value indicates a null argument.

@@ -144,7 +144,7 @@ bool IoMap::handleEmitVertex(ir::Builder& builder, uint32_t stream) {
   }
 
   /* Invalidate all emitted temporaries. Not *strictly* necessary,
-   * but may avoid some inconsistet behaviour with broken app code. */
+   * but may avoid some inconsistent behaviour with broken app code. */
   for (const auto& v : m_variables) {
     if (v.gsStream != int32_t(stream))
       continue;
