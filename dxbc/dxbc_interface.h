@@ -9,7 +9,7 @@
 namespace dxbc_spv::dxbc {
 
 /** Data layout of 'this' entries */
-struct ThisLayout {
+struct InstanceData {
   constexpr static uint32_t CbvIndexShift = 0u;
   constexpr static uint32_t CbvIndexCount = 4u;
   constexpr static uint32_t CbvOffsetShift = 16u;
@@ -18,13 +18,16 @@ struct ThisLayout {
   constexpr static uint32_t SrvIndexCount = 8u;
   constexpr static uint32_t SamplerIndexShift = 4u;
   constexpr static uint32_t SamplerIndexCount = 4u;
+  constexpr static uint32_t DefaultFunctionTable = -1u;
 
-  static uint32_t pack(uint32_t cbv, uint32_t offset, uint32_t srv, uint32_t sampler) {
-    return (cbv     << CbvIndexShift) |
-           (offset  << CbvOffsetShift) |
-           (srv     << SrvIndexShift) |
-           (sampler << SamplerIndexShift);
-  }
+  InstanceData() = default;
+
+  InstanceData(uint32_t cbv, uint32_t offset, uint32_t srv, uint32_t sampler, uint32_t ft)
+  : data((cbv << CbvIndexShift) | (offset  << CbvOffsetShift) | (srv << SrvIndexShift) | (sampler << SamplerIndexShift))
+  , functionTable(ft) { }
+
+  uint32_t data = 0u;
+  uint32_t functionTable = DefaultFunctionTable;
 };
 
 
