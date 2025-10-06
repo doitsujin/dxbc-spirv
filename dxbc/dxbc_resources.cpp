@@ -537,6 +537,8 @@ std::pair<ir::SsaDef, const ResourceInfo*> ResourceMap::loadDescriptor(
      * index. Deal with it the same way we do for I/O registers and split
      * the index into its absolute and relative parts. */
     descriptorIndex = m_converter.loadOperandIndex(builder, op, operand, 1u);
+    descriptorIndex = builder.add(ir::Op::ISub(ir::ScalarType::eU32,
+        descriptorIndex, builder.makeConstant(resourceInfo->resourceIndex)));
   } else {
     /* First index is the resource index. In most cases these are going to
      * be constant, but shaders may also use uniform indexing together with
