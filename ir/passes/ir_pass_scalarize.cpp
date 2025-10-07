@@ -568,13 +568,19 @@ std::pair<bool, Builder::iterator> ScalarizePass::resolveCompositeConstruct(Buil
 
 
 std::pair<bool, Builder::iterator> ScalarizePass::resolveCompositeConstructFromExtract(Builder::iterator op) {
+  /* We only know for sure that one operand is an extract, check all the others. */
+  for (uint32_t i = 0u; i < op->getOperandCount(); i++) {
+    if (m_builder.getOpForOperand(*op, i).getOpCode() != OpCode::eCompositeExtract)
+      return std::make_pair(false, ++op);
+  }
+
   /* This can obviously only work if the source type is the same */
   auto baseComposite = SsaDef(m_builder.getOpForOperand(*op, 0u).getOperand(0u));
 
   if (m_builder.getOp(baseComposite).getType() != op->getType())
     return std::make_pair(false, ++op);
 
-  for (uint32_t i = 0u; i < op->getType().computeTopLevelMemberCount(); i++) {
+  for (uint32_t i = 0u; i < op->getOperandCount(); i++) {
     /* Check that the base composite is the same for all oprands */
     const auto& extractOp = m_builder.getOpForOperand(*op, i);
     auto composite = SsaDef(extractOp.getOperand(0u));
