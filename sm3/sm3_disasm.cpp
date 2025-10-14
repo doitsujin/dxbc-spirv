@@ -277,6 +277,16 @@ void Disassembler::disassembleRegisterAddressing(std::ostream& stream, const Ope
     } else {
       stream << "(unhandled misc register index " << arg.getIndex() << ")";
     }
+  } else if (arg.getRegisterType() == RegisterType::eRasterizerOut) {
+    if (arg.getIndex() == uint32_t(RasterizerOutIndex::eRasterOutFog)) {
+      stream << "oFog";
+    } else if (arg.getIndex() == uint32_t(RasterizerOutIndex::eRasterOutPointSize)) {
+      stream << "oPSize";
+    } else if (arg.getIndex() == uint32_t(RasterizerOutIndex::eRasterOutPosition)) {
+      stream << "oPos";
+    } else {
+      stream << "(unhandled raster out index " << arg.getIndex() << ")";
+    }
   } else if (arg.getRegisterType() != RegisterType::eLoop) {
     if (arg.hasRelativeAddressing()) {
       stream << "[";
@@ -310,7 +320,9 @@ void Disassembler::disassembleRegisterType(std::ostream& stream, RegisterType re
     // case RegisterType::eTexture: Same value
       stream << (m_info.getType() == ShaderType::eVertex ? "a" : "t");
       break;
-    case RegisterType::eRasterizerOut: stream << "oPos";   break;
+    case RegisterType::eRasterizerOut:
+      // Handled when printing the register index
+      break;
     case RegisterType::eAttributeOut:  stream << "o";      break;
     case RegisterType::eTexCoordOut:
     // case RegisterType::eOutput: Same value.
