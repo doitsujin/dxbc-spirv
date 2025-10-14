@@ -402,13 +402,11 @@ public:
 
   /** Queries destination operand. */
   const Operand& getDst() const {
-    if (!m_operands.empty() && m_operands[0u].getInfo().kind == OperandKind::eDstReg)
-      return getRawOperand(0u);
-
     if (m_operands.size() > 1u && m_operands[1u].getInfo().kind == OperandKind::eDstReg)
       return getRawOperand(1u);
 
-    dxbc_spv_unreachable();
+    dxbc_spv_assert(!m_operands.empty() && m_operands[0u].getInfo().kind == OperandKind::eDstReg);
+    return getRawOperand(0u);
   }
 
   /** Queries destination operand. */
