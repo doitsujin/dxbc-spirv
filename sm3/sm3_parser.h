@@ -13,12 +13,6 @@ namespace dxbc_spv::sm3 {
 
 class Instruction;
 
-/** Program type */
-enum class ShaderType : uint32_t {
-  eVertex   = 0u,
-  ePixel    = 1u,
-};
-
 /** Shader code header */
 class ShaderInfo {
 

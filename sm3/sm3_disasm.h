@@ -43,8 +43,6 @@ private:
 
   void disassembleOperand(std::ostream& stream, const Instruction& op, const Operand& arg) const;
 
-  void disassembleRegisterType(std::ostream& stream, RegisterType registerType) const;
-
   void disassembleRegisterAddressing(std::ostream& stream, const Operand& arg) const;
 
   void disassembleSwizzleWriteMask(std::ostream& stream, const Instruction& op, const Operand& arg) const;
