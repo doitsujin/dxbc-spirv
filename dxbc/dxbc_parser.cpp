@@ -1570,7 +1570,8 @@ Swizzle Operand::getSwizzle() const {
       return Swizzle(c, c, c, c);
     }
 
-    return Swizzle();
+    Logger::err("Unhandled selection mode for swizzle: ", uint32_t(mode));
+    return Swizzle::identity();
   }
 
   /* Scalar operand  */
