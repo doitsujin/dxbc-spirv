@@ -150,7 +150,7 @@ void Disassembler::disassembleOpcodeToken(std::ostream& stream, const Instructio
 
 void Disassembler::disassembleOperand(std::ostream& stream, const Instruction& op, const Operand& arg) const {
   if (op.getOpCode() == OpCode::eDcl) {
-    disassembleRegisterType(stream, arg.getRegisterType());
+    stream << UnambiguousRegisterType { arg.getRegisterType(), m_info.getType(), m_info.getVersion().first };
     disassembleRegisterAddressing(stream, arg);
     return;
   }
@@ -229,14 +229,14 @@ void Disassembler::disassembleOperand(std::ostream& stream, const Instruction& o
     }
   }
 
-  disassembleRegisterType(stream, arg.getRegisterType());
+  stream << UnambiguousRegisterType { arg.getRegisterType(), m_info.getType(), m_info.getVersion().first };
   disassembleRegisterAddressing(stream, arg);
   disassembleSwizzleWriteMask(stream, op, arg);
 
   if (arg.getInfo().kind == OperandKind::eSrcReg
     && (modifier == OperandModifier::eDz || modifier == OperandModifier::eDw)) {
     stream << " / ";
-    disassembleRegisterType(stream, arg.getRegisterType());
+    stream << UnambiguousRegisterType { arg.getRegisterType(), m_info.getType(), m_info.getVersion().first };
     disassembleRegisterAddressing(stream, arg);
     disassembleSwizzleWriteMask(stream, op, arg);
   }
@@ -270,23 +270,9 @@ void Disassembler::disassembleSwizzleWriteMask(std::ostream& stream, const Instr
 
 void Disassembler::disassembleRegisterAddressing(std::ostream& stream, const Operand& arg) const {
   if (arg.getRegisterType() == RegisterType::eMiscType) {
-    if (arg.getIndex() == uint32_t(MiscTypeIndex::eMiscTypeFace)) {
-      stream << "vFace";
-    } else if (arg.getIndex() == uint32_t(MiscTypeIndex::eMiscTypePosition)) {
-      stream << "vPosition";
-    } else {
-      stream << "(unhandled misc register index " << arg.getIndex() << ")";
-    }
+    stream << MiscTypeIndex(arg.getIndex());
   } else if (arg.getRegisterType() == RegisterType::eRasterizerOut) {
-    if (arg.getIndex() == uint32_t(RasterizerOutIndex::eRasterOutFog)) {
-      stream << "oFog";
-    } else if (arg.getIndex() == uint32_t(RasterizerOutIndex::eRasterOutPointSize)) {
-      stream << "oPSize";
-    } else if (arg.getIndex() == uint32_t(RasterizerOutIndex::eRasterOutPosition)) {
-      stream << "oPos";
-    } else {
-      stream << "(unhandled raster out index " << arg.getIndex() << ")";
-    }
+    stream << RasterizerOutIndex(arg.getIndex());
   } else if (arg.getRegisterType() != RegisterType::eLoop) {
     if (arg.hasRelativeAddressing()) {
       stream << "[";
@@ -295,7 +281,7 @@ void Disassembler::disassembleRegisterAddressing(std::ostream& stream, const Ope
         stream << " + ";
       }
       RegisterType relAddrRegisterType = arg.getRelativeAddressingRegisterType();
-      disassembleRegisterType(stream, relAddrRegisterType);
+      stream << UnambiguousRegisterType { relAddrRegisterType, m_info.getType(), m_info.getVersion().first };
       if (relAddrRegisterType == RegisterType::eAddr) {
         stream << "0";
       }
@@ -308,110 +294,43 @@ void Disassembler::disassembleRegisterAddressing(std::ostream& stream, const Ope
   }
 }
 
-void Disassembler::disassembleRegisterType(std::ostream& stream, RegisterType registerType) const {
-  switch (registerType) {
-    case RegisterType::eTemp:          stream << "r";      break;
-    case RegisterType::eInput:         stream << "v";      break;
-    case RegisterType::eConst:
-    case RegisterType::eConst2:
-    case RegisterType::eConst3:
-    case RegisterType::eConst4:        stream << "c";      break;
-    case RegisterType::eAddr:
-    // case RegisterType::eTexture: Same value
-      stream << (m_info.getType() == ShaderType::eVertex ? "a" : "t");
-      break;
-    case RegisterType::eRasterizerOut:
-      // Handled when printing the register index
-      break;
-    case RegisterType::eAttributeOut:  stream << "o";      break;
-    case RegisterType::eTexCoordOut:
-    // case RegisterType::eOutput: Same value.
-      stream << (m_info.getVersion().first == 3 ? "o" : "oT");
-      break;
-    case RegisterType::eConstBool:     stream << "b";      break;
-    case RegisterType::eLoop:          stream << "aL";     break;
-    case RegisterType::eMiscType:
-      // Handled when printing the register index
-      break;
-    case RegisterType::ePredicate:     stream << "p";      break;
-    case RegisterType::ePixelTexCoord: stream << "t";      break;
-    case RegisterType::eConstInt:      stream << "i";      break;
-    case RegisterType::eColorOut:      stream << "oC";     break;
-    case RegisterType::eDepthOut:      stream << "oDepth"; break;
-    case RegisterType::eSampler:       stream << "s";      break;
-    case RegisterType::eTempFloat16:   stream << "half";   break;
-    case RegisterType::eLabel:         stream << "l";      break;
-
-    default:
-      stream << "(unhandled register type " << uint32_t(registerType) << ")";
-      break;
-  }
-}
-
 
 void Disassembler::disassembleDeclaration(std::ostream& stream, const Instruction& op, const Operand& operand) const {
   const Operand& dst = op.getRawOperand(1u);
   auto registerType = dst.getRegisterType();
   if (registerType == RegisterType::eSampler) {
-    switch (operand.getTextureType()) {
-      case TextureType::eTexture2D:   stream << "_2d";   break;
-      case TextureType::eTextureCube: stream << "_cube"; break;
-      case TextureType::eTexture3D:   stream << "_3d";   break;
-    }
+    stream << "_" << operand.getTextureType();
     return;
   }
 
   if (registerType == RegisterType::eOutput
     || registerType == RegisterType::eInput) {
-    switch (operand.getSemanticUsage()) {
-      case SemanticUsage::ePosition:
-        stream << "_position" << operand.getSemanticIndex();
-        break;
-      case SemanticUsage::eBlendWeight:
-        stream << "_weight";
-        break;
-      case SemanticUsage::eBlendIndices:
-        stream << "_blend";
-        break;
-      case SemanticUsage::eNormal:
-        stream << "_normal" << operand.getSemanticIndex();
-        break;
-      case SemanticUsage::ePointSize:
-        stream << "_psize";
-        break;
-      case SemanticUsage::eTexCoord:
-        stream << "_texcoord" << operand.getSemanticIndex();
-        break;
-      case SemanticUsage::eTangent:
-        stream << "_tangent";
-        break;
-      case SemanticUsage::eBinormal:
-        stream << "_binormal";
-        break;
-      case SemanticUsage::eTessFactor:
-        stream << "_tessfactor";
-        break;
-      case SemanticUsage::ePositionT:
-        stream << "_positiont";
-        break;
-      case SemanticUsage::eColor:
-        if (operand.getSemanticIndex() == 0) {
-          stream << "_color";
-        } else {
-          stream << "_specular" << (operand.getSemanticIndex() - 1u);
-        }
-        break;
-      case SemanticUsage::eFog:
-        stream << "_fog";
-        break;
-      case SemanticUsage::eDepth:
-        stream << "_depth";
-        break;
-      case SemanticUsage::eSample:
-        stream << "_sample" << operand.getSemanticIndex();
-        break;
-      default:
-        stream << "_unknown" << operand.getSemanticIndex();
+    stream << "_";
+    SemanticUsage usage = operand.getSemanticUsage();
+    uint32_t index = operand.getSemanticIndex();
+    if (usage != SemanticUsage::eColor) {
+      stream << usage;
+    } else {
+      if (index == 0) {
+        stream << "_color";
+      } else {
+        stream << "_specular" << (index - 1u);
+      }
+    }
+
+    if (usage == SemanticUsage::ePosition
+      || usage == SemanticUsage::eNormal
+      || usage == SemanticUsage::eTexCoord
+      || usage == SemanticUsage::eSample
+      || (usage != SemanticUsage::eBlendWeight
+        && usage != SemanticUsage::eBlendIndices
+        && usage != SemanticUsage::ePointSize
+        && usage != SemanticUsage::eTangent
+        && usage != SemanticUsage::eBinormal
+        && usage != SemanticUsage::ePositionT
+        && usage != SemanticUsage::eFog
+        && usage != SemanticUsage::eDepth)) {
+      stream << std::to_string(index);
     }
   }
 }

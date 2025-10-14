@@ -855,17 +855,6 @@ bool Builder::write(util::ByteWriter& writer) const {
 
 
 
-
-std::ostream& operator << (std::ostream& os, ShaderType type) {
-  switch (type) {
-    case ShaderType::eVertex: os << "vs";  break;
-    case ShaderType::ePixel:  os << "ps";   break;
-    default:                  os << "unknown"; break;
-  }
-  return os;
-}
-
-
 std::ostream& operator << (std::ostream& os, const ShaderInfo& shaderInfo) {
   return os << shaderInfo.getType() << "_" << shaderInfo.getVersion().first << "_" << shaderInfo.getVersion().second;
 }

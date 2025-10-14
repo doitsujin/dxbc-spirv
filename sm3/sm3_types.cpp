@@ -2,6 +2,15 @@
 
 namespace dxbc_spv::sm3 {
 
+std::ostream& operator << (std::ostream& os, ShaderType type) {
+  switch (type) {
+    case ShaderType::eVertex: return os << "vs";
+    case ShaderType::ePixel:  return os << "ps";
+  }
+
+  return os << "ShaderType(" << uint32_t(type) << ")";
+}
+
 std::ostream& operator << (std::ostream& os, OpCode op) {
   switch (op) {
     case OpCode::eNop:          return os << "nop";
@@ -98,30 +107,30 @@ std::ostream& operator << (std::ostream& os, OpCode op) {
 
 std::ostream& operator << (std::ostream& os, SemanticUsage usage) {
   switch (usage) {
-    case SemanticUsage::ePosition:     return os << "Position";
-    case SemanticUsage::eBlendWeight:  return os << "BlendWeight";
-    case SemanticUsage::eBlendIndices: return os << "BlendIndices";
-    case SemanticUsage::eNormal:       return os << "Normal";
-    case SemanticUsage::ePointSize:    return os << "PointSize";
-    case SemanticUsage::eTexCoord:     return os << "TexCoord";
-    case SemanticUsage::eTangent:      return os << "Tangent";
-    case SemanticUsage::eBinormal:     return os << "Binormal";
-    case SemanticUsage::eTessFactor:   return os << "TessFactor";
-    case SemanticUsage::ePositionT:    return os << "PositionT";
-    case SemanticUsage::eColor:        return os << "Color";
-    case SemanticUsage::eFog:          return os << "Fog";
-    case SemanticUsage::eDepth:        return os << "Depth";
-    case SemanticUsage::eSample:       return os << "Sample";
+    case SemanticUsage::ePosition:     return os << "position";
+    case SemanticUsage::eBlendWeight:  return os << "weight";
+    case SemanticUsage::eBlendIndices: return os << "blend";
+    case SemanticUsage::eNormal:       return os << "normal";
+    case SemanticUsage::ePointSize:    return os << "psize";
+    case SemanticUsage::eTexCoord:     return os << "texcoord";
+    case SemanticUsage::eTangent:      return os << "tangent";
+    case SemanticUsage::eBinormal:     return os << "binormal";
+    case SemanticUsage::eTessFactor:   return os << "tessfactor";
+    case SemanticUsage::ePositionT:    return os << "position_t";
+    case SemanticUsage::eColor:        return os << "color";
+    case SemanticUsage::eFog:          return os << "fog";
+    case SemanticUsage::eDepth:        return os << "depth";
+    case SemanticUsage::eSample:       return os << "sample";
   }
 
-  return os << "Usage(" << uint32_t(usage) << ")";
+  return os << "SemanticUsage(" << uint32_t(usage) << ")";
 }
 
 std::ostream& operator << (std::ostream& os, TextureType textureType) {
   switch (textureType) {
-    case TextureType::eTexture2D:   return os << "Texture2D";
-    case TextureType::eTextureCube: return os << "TextureCube";
-    case TextureType::eTexture3D:   return os << "Texture3D";
+    case TextureType::eTexture2D:   return os << "2d";
+    case TextureType::eTextureCube: return os << "cube";
+    case TextureType::eTexture3D:   return os << "3d";
   }
 
   return os << "TextureType(" << uint32_t(textureType) << ")";
@@ -129,21 +138,55 @@ std::ostream& operator << (std::ostream& os, TextureType textureType) {
 
 std::ostream& operator << (std::ostream& os, RasterizerOutIndex outIndex) {
   switch (outIndex) {
-    case RasterizerOutIndex::eRasterOutPosition:  return os << "RasterizerOutPosition";
-    case RasterizerOutIndex::eRasterOutFog:       return os << "RasterizerOutFog";
-    case RasterizerOutIndex::eRasterOutPointSize: return os << "RasterizerOutPointSize";
+    case RasterizerOutIndex::eRasterOutPosition:  return os << "Pos";
+    case RasterizerOutIndex::eRasterOutFog:       return os << "Fog";
+    case RasterizerOutIndex::eRasterOutPointSize: return os << "PointSize";
   }
 
-  return os << "RasterizerOutIndex(" << uint32_t(outIndex) << ")";
+  return os << "RasterizerOutValue(" << uint32_t(outIndex) << ")";
 }
 
 std::ostream& operator << (std::ostream& os, MiscTypeIndex miscTypeIndex) {
   switch (miscTypeIndex) {
-    case MiscTypeIndex::eMiscTypePosition: return os << "MiscTypePosition";
-    case MiscTypeIndex::eMiscTypeFace:     return os << "MiscTypeFace";
+    case MiscTypeIndex::eMiscTypePosition: return os << "Pos";
+    case MiscTypeIndex::eMiscTypeFace:     return os << "Face";
   }
 
   return os << "MiscTypeIndex(" << uint32_t(miscTypeIndex) << ")";
 }
+
+
+std::ostream& operator << (std::ostream& os, UnambiguousRegisterType registerType) {
+  switch (registerType.registerType) {
+    case RegisterType::eTemp:          return os << "r";
+    case RegisterType::eMiscType:
+    case RegisterType::eInput:         return os << "v";
+    case RegisterType::eConst:
+    case RegisterType::eConst2:
+    case RegisterType::eConst3:
+    case RegisterType::eConst4:        return os << "c";
+    case RegisterType::eAddr:
+    // case RegisterType::eTexture: Same value
+      return os << (registerType.shaderType == ShaderType::eVertex ? "a" : "t");
+    case RegisterType::eRasterizerOut:
+    case RegisterType::eAttributeOut:  return os << "o";
+    case RegisterType::eTexCoordOut:
+    // case RegisterType::eOutput: Same value.
+      return os << (registerType.shaderVersionMajor == 3 ? "o" : "oT");
+    case RegisterType::eConstBool:     return os << "b";
+    case RegisterType::eLoop:          return os << "aL";
+    case RegisterType::ePredicate:     return os << "p";
+    case RegisterType::ePixelTexCoord: return os << "t";
+    case RegisterType::eConstInt:      return os << "i";
+    case RegisterType::eColorOut:      return os << "oC";
+    case RegisterType::eDepthOut:      return os << "oDepth";
+    case RegisterType::eSampler:       return os << "s";
+    case RegisterType::eTempFloat16:   return os << "half";
+    case RegisterType::eLabel:         return os << "l";
+  }
+
+  return os << "Register(" << uint32_t(registerType.registerType) << ")";
+}
+
 
 }
