@@ -6,18 +6,6 @@
 
 namespace dxbc_spv::ir {
 
-/** Block properties */
-struct SsaPassBlockState {
-  /* Block is considered 'filled' and can provide
-   * variable definitions for its successors */
-  bool isFilled = false;
-  /* Block is considered 'sealed' and can provide variable
-   * definitions for its predecessors. This is the case when
-   * all its predecessors are 'filled'. */
-  bool isSealed = false;
-};
-
-
 /** Key to look up temporary definitions per block. */
 struct SsaPassTempKey {
   SsaPassTempKey() = default;

@@ -64,8 +64,8 @@ private:
    * - For phi instructions, this points to the temporary variable. */
   Container<SsaDef> m_metadata;
 
-  /* Per-block state */
-  Container<SsaPassBlockState> m_blocks;
+  /* List of phis to resolve */
+  std::vector<std::pair<SsaDef, SsaDef>> m_phi;
 
   /* Global look-up table that stores the last valid definition of each
    * temporary variable for each block where it is used, including phis. */
@@ -94,12 +94,6 @@ private:
   SsaDef insertPhi(SsaDef block, SsaDef var);
 
   SsaDef evaluatePhi(SsaDef block, SsaDef phi);
-
-  void fillBlock(SsaDef block, SsaDef terminator);
-
-  void sealBlock(SsaDef block);
-
-  bool canSealBlock(SsaDef block);
 
   SsaDef findOnlyPredecessor(SsaDef block);
 

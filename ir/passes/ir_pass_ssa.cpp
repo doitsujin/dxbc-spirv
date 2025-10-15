@@ -209,6 +209,13 @@ void SsaConstructionPass::resolveTempLoadStore() {
         ++iter;
     }
   }
+
+  while (!m_phi.empty()) {
+    auto [block, def] = m_phi.back();
+    m_phi.pop_back();
+
+    evaluatePhi(block, def);
+  }
 }
 
 
@@ -237,11 +244,6 @@ void SsaConstructionPass::removeTempDecls() {
 
 Builder::iterator SsaConstructionPass::handleLabel(Builder::iterator op) {
   m_block = op->getDef();
-
-  /* If a block has no predecessor, seal it immediately */
-  if (!m_blocks[m_block].isSealed && canSealBlock(m_block))
-    sealBlock(m_block);
-
   return ++op;
 }
 
@@ -251,10 +253,6 @@ Builder::iterator SsaConstructionPass::handleBlockTerminator(Builder::iterator o
    * up the block for a given branch */
   auto block = std::exchange(m_block, SsaDef());
   m_metadata[op->getDef()] = block;
-
-  /* Mark block as filled and recursively seal blocks. This
-   * requires that the active block is set to null. */
-  fillBlock(block, op->getDef());
   return ++op;
 }
 
@@ -308,15 +306,8 @@ SsaDef SsaConstructionPass::lookupVariableInBlock(SsaDef block, SsaDef var) {
     return def;
   }
 
-  /* Insert operand-less phi. If the block is sealed, resolve it right away. */
-  def = insertPhi(block, var);
-
-  if (m_blocks[block].isSealed) {
-    def = evaluatePhi(block, def);
-    insertDef(block, var, def);
-  }
-
-  return def;
+  /* Insert operand-less phi, resolve later */
+  return insertPhi(block, var);
 }
 
 
@@ -334,6 +325,8 @@ SsaDef SsaConstructionPass::insertPhi(SsaDef block, SsaDef var) {
   m_metadata[phi] = var;
 
   insertDef(block, var, phi);
+
+  m_phi.emplace_back(block, phi);
   return phi;
 }
 
@@ -360,55 +353,6 @@ SsaDef SsaConstructionPass::evaluatePhi(SsaDef block, SsaDef phi) {
 
   m_builder.rewriteOp(phi, std::move(op));
   return phi;
-}
-
-
-void SsaConstructionPass::fillBlock(SsaDef block, SsaDef terminator) {
-  m_blocks[block].isFilled = true;
-
-  /* Mark successors as sealed if all their predecessors are */
-  const auto& terminatorOp = m_builder.getOp(terminator);
-
-  forEachBranchTarget(terminatorOp, [this] (SsaDef target) {
-    if (canSealBlock(target))
-      sealBlock(target);
-  });
-}
-
-
-void SsaConstructionPass::sealBlock(SsaDef block) {
-  /* All phi instructions immediately follow the label. Since all predecessors
-   * are filled, we can now gather phi operands. Trivial phis may get removed. */
-  auto iter = m_builder.iter(m_builder.getNext(block));
-
-  while (iter->getOpCode() == OpCode::ePhi) {
-    auto phi = iter++;
-
-    if (!phi->getOperandCount())
-      evaluatePhi(block, phi->getDef());
-  }
-
-  m_blocks[block].isSealed = true;
-}
-
-
-bool SsaConstructionPass::canSealBlock(SsaDef block) {
-  dxbc_spv_assert(m_builder.getOp(block).getOpCode() == OpCode::eLabel);
-
-  auto [a, b] = m_builder.getUses(block);
-
-  for (auto use = a; use != b; use++) {
-    if (isBranchInstruction(use->getOpCode())) {
-      /* Look up containing block for branch instruction. If this is null,
-       * we haven't processed the block yet and it cannot be filled. */
-      auto pred = m_metadata[use->getDef()];
-
-      if (!pred || !m_blocks[pred].isFilled)
-        return false;
-    }
-  }
-
-  return true;
 }
 
 
