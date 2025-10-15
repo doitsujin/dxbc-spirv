@@ -286,28 +286,38 @@ Builder::iterator SsaConstructionPass::handleTmpStore(Builder::iterator op) {
 
 
 SsaDef SsaConstructionPass::lookupVariableInBlock(SsaDef block, SsaDef var) {
-  SsaDef def = { };
+  util::small_vector<SsaDef, 16u> blockQueue;
 
   /* Query global look-up table */
-  auto entry = m_globalDefs.find(SsaPassTempKey(block, var));
+  SsaDef def = { };
 
-  if (entry != m_globalDefs.end())
-    def = entry->second;
+  while (block) {
+    auto entry = m_globalDefs.find(SsaPassTempKey(block, var));
 
-  if (def)
-    return def;
+    if (entry != m_globalDefs.end())
+      def = entry->second;
 
-  /* If the block only has one predecessor, use its definition directly */
-  SsaDef pred = findOnlyPredecessor(block);
+    if (def)
+      break;
 
-  if (pred) {
-    def = lookupVariableInBlock(pred, var);
-    insertDef(block, var, def);
-    return def;
+    /* If the block only has one predecessor, use
+     * its definition of the variable directly */
+    SsaDef pred = findOnlyPredecessor(block);
+
+    if (!pred) {
+      def = insertPhi(block, var);
+      break;
+    }
+
+    blockQueue.push_back(std::exchange(block, pred));
   }
 
-  /* Insert operand-less phi, resolve later */
-  return insertPhi(block, var);
+  while (!blockQueue.empty()) {
+    insertDef(blockQueue.back(), var, def);
+    blockQueue.pop_back();
+  }
+
+  return def;
 }
 
 
