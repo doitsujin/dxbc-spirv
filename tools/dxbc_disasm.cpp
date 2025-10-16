@@ -117,9 +117,9 @@ bool printCodeSM3(util::ByteReader reader, bool useDebugNames) {
 }
 
 
-bool disassembleShader(util::ByteReader reader) {
+bool disassembleShader(util::ByteReader reader, bool useDebugNames) {
   if (!dxbc::Container::checkFourCC(reader)) {
-    return printCodeSM3(reader, false);
+    return printCodeSM3(reader, useDebugNames);
   }
 
   dxbc::Container container(reader);
@@ -143,7 +143,31 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  const char* fileName = argv[1u];
+  bool useDebugNames = false;
+  const char* fileName = nullptr;
+
+  for (int32_t i = 1; i < argc; i++) {
+    const char* arg = argv[i];
+
+    if (strlen(arg) < 2u
+      || arg[0u] != '-'
+      || arg[1u] != '-') {
+      fileName = arg;
+      continue;
+    }
+
+    if (strcmp(arg, "--debug-names") == 0) {
+      useDebugNames = true;
+    } else {
+      std::cerr << "Unknown option: " << arg << std::endl;
+      return 1;
+    }
+  }
+
+  if (fileName == nullptr) {
+    std::cerr << "No file path provided" << std::endl;
+    return 1;
+  }
 
   std::ifstream file(fileName, std::ios_base::in | std::ios_base::binary);
 
@@ -157,7 +181,7 @@ int main(int argc, char** argv) {
   file.seekg(0u, std::ios_base::beg);
   file.read(data.data(), data.size());
 
-  if (!disassembleShader(util::ByteReader(data.data(), data.size())))
+  if (!disassembleShader(util::ByteReader(data.data(), data.size()), useDebugNames))
     return 1;
 
   return 0;
