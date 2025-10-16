@@ -8,7 +8,7 @@
 
 namespace dxbc_spv::sm3 {
 
-void Disassembler::disassembleOp(std::ostream& stream, const Instruction& op) {
+void Disassembler::disassembleOp(std::ostream& stream, const Instruction& op, const ConstantTable& ctab) {
   if (op.getOpCode() == OpCode::eComment) {
     return;
   }
@@ -45,12 +45,12 @@ void Disassembler::disassembleOp(std::ostream& stream, const Instruction& op) {
     switch (operand.kind) {
       case OperandKind::eDstReg:
         if ((inBounds = nDst++ == 0u && op.hasDst()))
-          disassembleOperand(stream, op, op.getDst());
+          disassembleOperand(stream, op, op.getDst(), ctab);
         break;
 
       case OperandKind::eSrcReg:
         if ((inBounds = (nSrc < op.getSrcCount())))
-          disassembleOperand(stream, op, op.getSrc(nSrc++));
+          disassembleOperand(stream, op, op.getSrc(nSrc++), ctab);
         break;
 
       case OperandKind::eDcl:
@@ -76,9 +76,9 @@ void Disassembler::disassembleOp(std::ostream& stream, const Instruction& op) {
 }
 
 
-std::string Disassembler::disassembleOp(const Instruction& op) {
+std::string Disassembler::disassembleOp(const Instruction& op, const ConstantTable& ctab) {
   std::stringstream str;
-  disassembleOp(str, op);
+  disassembleOp(str, op, ctab);
   return str.str();
 }
 
@@ -147,10 +147,10 @@ void Disassembler::disassembleOpcodeToken(std::ostream& stream, const Instructio
 }
 
 
-void Disassembler::disassembleOperand(std::ostream& stream, const Instruction& op, const Operand& arg) const {
+void Disassembler::disassembleOperand(std::ostream& stream, const Instruction& op, const Operand& arg, const ConstantTable& ctab) const {
   if (op.getOpCode() == OpCode::eDcl) {
     stream << UnambiguousRegisterType { arg.getRegisterType(), m_info.getType(), m_info.getVersion().first };
-    disassembleRegisterAddressing(stream, arg);
+    disassembleRegisterAddressing(stream, arg, ctab);
     return;
   }
 
@@ -229,14 +229,14 @@ void Disassembler::disassembleOperand(std::ostream& stream, const Instruction& o
   }
 
   stream << UnambiguousRegisterType { arg.getRegisterType(), m_info.getType(), m_info.getVersion().first };
-  disassembleRegisterAddressing(stream, arg);
+  disassembleRegisterAddressing(stream, arg, ctab);
   disassembleSwizzleWriteMask(stream, op, arg);
 
   if (arg.getInfo().kind == OperandKind::eSrcReg
     && (modifier == OperandModifier::eDz || modifier == OperandModifier::eDw)) {
     stream << " / ";
     stream << UnambiguousRegisterType { arg.getRegisterType(), m_info.getType(), m_info.getVersion().first };
-    disassembleRegisterAddressing(stream, arg);
+    disassembleRegisterAddressing(stream, arg, ctab);
     disassembleSwizzleWriteMask(stream, op, arg);
   }
 
@@ -267,16 +267,23 @@ void Disassembler::disassembleSwizzleWriteMask(std::ostream& stream, const Instr
   }
 }
 
-void Disassembler::disassembleRegisterAddressing(std::ostream& stream, const Operand& arg) const {
+void Disassembler::disassembleRegisterAddressing(std::ostream& stream, const Operand& arg, const ConstantTable& ctab) const {
   if (arg.getRegisterType() == RegisterType::eMiscType) {
     stream << MiscTypeIndex(arg.getIndex());
   } else if (arg.getRegisterType() == RegisterType::eRasterizerOut) {
     stream << RasterizerOutIndex(arg.getIndex());
   } else if (arg.getRegisterType() != RegisterType::eLoop) {
     if (arg.hasRelativeAddressing()) {
+      const ConstantInfo* constantInfo = ctab.findConstantInfo(arg.getRegisterType(), arg.getIndex());
+      if (constantInfo != nullptr) {
+        dxbc_spv_assert(constantInfo->count > 1u);
+        stream << arg.getIndex() << "_" << constantInfo->name;
+      }
+
       stream << "[";
       if (arg.getIndex() != 0u) {
-        stream << arg.getIndex();
+        stream << (constantInfo ? arg.getIndex() - constantInfo->index : arg.getIndex());
+
         stream << " + ";
       }
       RegisterType relAddrRegisterType = arg.getRelativeAddressingRegisterType();
@@ -289,6 +296,13 @@ void Disassembler::disassembleRegisterAddressing(std::ostream& stream, const Ope
       stream << "]";
     } else {
       stream << arg.getIndex();
+      const ConstantInfo* constantInfo = ctab.findConstantInfo(arg.getRegisterType(), arg.getIndex());
+      if (constantInfo != nullptr) {
+        stream << "_" << constantInfo->name;
+        if (constantInfo->count > 1u) {
+          stream << "[" << (arg.getIndex() - constantInfo->index) << "]";
+        }
+      }
     }
   }
 }

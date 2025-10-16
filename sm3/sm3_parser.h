@@ -548,11 +548,6 @@ public:
     return m_commentData.size();
   }
 
-  ConstantTable parseConstantTable() const {
-    auto reader = util::ByteReader(getCommentData(), getCommentDataSize());
-    return ConstantTable(reader);
-  }
-
   /** Checks whether instruction is valid */
   explicit operator bool () const {
     return m_isValid;

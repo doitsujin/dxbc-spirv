@@ -22,10 +22,10 @@ public:
   : m_options(options), m_info(info) { }
 
   /** Disassemble instruction to the given stream. */
-  void disassembleOp(std::ostream& stream, const Instruction& op);
+  void disassembleOp(std::ostream& stream, const Instruction& op, const ConstantTable& ctab);
 
   /** Disassemble instruction into a string. */
-  std::string disassembleOp(const Instruction& op);
+  std::string disassembleOp(const Instruction& op, const ConstantTable& ctab);
 
 private:
 
@@ -41,9 +41,9 @@ private:
 
   void disassembleImmediate(std::ostream& stream, const Instruction& op, const Operand& arg) const;
 
-  void disassembleOperand(std::ostream& stream, const Instruction& op, const Operand& arg) const;
+  void disassembleOperand(std::ostream& stream, const Instruction& op, const Operand& arg, const ConstantTable& ctab) const;
 
-  void disassembleRegisterAddressing(std::ostream& stream, const Operand& arg) const;
+  void disassembleRegisterAddressing(std::ostream& stream, const Operand& arg, const ConstantTable& ctab) const;
 
   void disassembleSwizzleWriteMask(std::ostream& stream, const Instruction& op, const Operand& arg) const;
 
