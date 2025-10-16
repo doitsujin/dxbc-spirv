@@ -194,9 +194,9 @@ enum class ComparisonMode : uint32_t {
 };
 
 enum class TexLdMode : uint32_t {
-  Regular      = 0u,
-  Project      = 1u,
-  Bias         = 2u,
+  eRegular = 0u,
+  eProject = 1u,
+  eBias    = 2u,
 };
 
 enum class ShaderType : uint32_t {
