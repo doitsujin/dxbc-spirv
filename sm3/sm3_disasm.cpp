@@ -275,9 +275,19 @@ void Disassembler::disassembleRegisterAddressing(std::ostream& stream, const Ope
     stream << RasterizerOutIndex(arg.getIndex());
   } else if (arg.getRegisterType() != RegisterType::eLoop) {
     if (arg.hasRelativeAddressing()) {
+      const ConstantInfo* constantInfo = m_ctab.findConstantInfo(arg.getRegisterType(), arg.getIndex());
+      if (constantInfo != nullptr) {
+        dxbc_spv_assert(constantInfo->count > 1u);
+        stream << "_" << constantInfo->name;
+      }
+
       stream << "[";
       if (arg.getIndex() != 0u) {
-        stream << arg.getIndex();
+        if (constantInfo != nullptr) {
+          stream << arg.getIndex() - constantInfo->index;
+        } else {
+          stream << arg.getIndex();
+        }
         stream << " + ";
       }
       RegisterType relAddrRegisterType = arg.getRelativeAddressingRegisterType();
@@ -289,7 +299,15 @@ void Disassembler::disassembleRegisterAddressing(std::ostream& stream, const Ope
       stream << arg.getRelativeAddressingSwizzle().x();
       stream << "]";
     } else {
-      stream << arg.getIndex();
+      const ConstantInfo* constantInfo = m_ctab.findConstantInfo(arg.getRegisterType(), arg.getIndex());
+      if (constantInfo != nullptr) {
+        stream << "_" << constantInfo->name;
+        if (constantInfo->count > 1u) {
+          stream << "[" << (arg.getIndex() - constantInfo->index) << "]";
+        }
+      } else {
+        stream << arg.getIndex();
+      }
     }
   }
 }
