@@ -805,7 +805,6 @@ void Instruction::resetOnError() {
 
 
 
-
 Parser::Parser(util::ByteReader reader) {
   m_info   = ShaderInfo(reader);
   m_reader = util::ByteReader(reader);
@@ -821,6 +820,96 @@ Instruction Parser::parseInstruction() {
   return instruction;
 }
 
+
+
+ConstantTable::ConstantTable(const std::string& comment) {
+  if (comment.substr(0u, 4u) != "CTAB") {
+    return;
+  }
+
+  uint32_t ctabOffset = 4u;
+  CommentConstantTable commentCtab;
+  memcpy(&commentCtab, comment.c_str() + ctabOffset, sizeof(CommentConstantTable));
+
+  if (commentCtab.size != sizeof(CommentConstantTable)) {
+    return;
+  }
+
+  std::string creator(comment.c_str() + ctabOffset + commentCtab.creatorOffset);
+
+  if (creator.substr(0u, strlen("Microsoft")) != "Microsoft") {
+    // Don't trust debug info in shaders that weren't compiled by FXC
+    return;
+  }
+
+  for (uint32_t i = 0u; i < commentCtab.constantsCount; i++) {
+    uint32_t constInfoStructOffset = ctabOffset + commentCtab.constantInfoOffset + sizeof(CommentConstantInfo) * i;
+    CommentConstantInfo commentConstantInfo;
+    memcpy(&commentConstantInfo, comment.c_str() + constInfoStructOffset, sizeof(CommentConstantInfo));
+    std::string constantName(comment.c_str() + ctabOffset + commentConstantInfo.nameOffset);
+
+    ConstantInfo& constantInfo = m_constants[uint32_t(commentConstantInfo.registerSet)].emplace_back();
+    constantInfo.name = constantName;
+    constantInfo.index = commentConstantInfo.registerIndex;
+    constantInfo.registerSet = commentConstantInfo.registerSet;
+    constantInfo.count = commentConstantInfo.registerCount;
+  }
+
+  for (uint32_t i = 0u; i < m_constants.size(); i++) {
+    std::sort(m_constants[i].begin(), m_constants[i].end(), [] (const ConstantInfo& a, const ConstantInfo& b) {
+      return a.index < b.index || (a.index == b.index && a.count < b.count);
+    });
+  }
+}
+
+
+const ConstantInfo* ConstantTable::findConstantInfo(RegisterType registerType, uint32_t index) const {
+  ConstantType constantType;
+  switch (registerType) {
+    case RegisterType::eConst:
+    case RegisterType::eConst2:
+    case RegisterType::eConst3:
+    case RegisterType::eConst4:
+      constantType = ConstantType::eFloat4;
+      break;
+
+    case RegisterType::eConstInt:
+      constantType = ConstantType::eInt4;
+      break;
+
+    case RegisterType::eConstBool:
+      constantType = ConstantType::eBool;
+      break;
+
+    case RegisterType::eSampler:
+      constantType = ConstantType::eSampler;
+      break;
+
+    default:
+      return nullptr;
+  }
+
+  const auto& ctab = m_constants[uint32_t(constantType)];
+  if (ctab.empty()) {
+    return nullptr;
+  }
+
+  uint32_t ctabIndex = 0u;
+  for (uint32_t i = 0u; i < ctab.size(); i++) {
+    if (ctab[i].index > index) {
+      break;
+    }
+    ctabIndex = i;
+  }
+
+  const ConstantInfo& ctabEntry = ctab[ctabIndex];
+
+  if (ctabEntry.index > index || ctabEntry.index + ctabEntry.count <= index) {
+    return { };
+  }
+
+  return &ctabEntry;
+}
 
 
 
