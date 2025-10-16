@@ -61,6 +61,91 @@ private:
 };
 
 
+/** The constant table data structure embedded into comments in the shader */
+struct CommentConstantTable {
+  /** Size of the struct, has to be `sizeof(CommentConstantTable)` */
+  uint32_t size;
+  /** Offset of the null-terminated creator string in bytes from the start of this struct */
+  uint32_t creatorOffset;
+  /** Version of the shader */
+  uint32_t shaderVersion;
+  /** The number of constants in the following array of CommentConstantInfo structs */
+  uint32_t constantsCount;
+  /** Offset of the array of CommentConstantInfo structs in bytes from the start of this struct */
+  uint32_t constantInfoOffset;
+  /** Flags that were used for compiling the HLSL code of this shader */
+  uint32_t flags;
+  /** Offset of the null-terminated target shader model string in bytes from the start of this struct */
+  uint32_t targetOffset;
+};
+
+enum class ConstantType : uint16_t {
+  eBool    = 0u,
+  eInt4    = 1u,
+  eFloat4  = 2u,
+  eSampler = 3u
+};
+
+/** A single constant entry embedded into comments in the shader */
+struct CommentConstantInfo {
+  /** Offset of the null-terminated name string in bytes from the start of this struct */
+  uint32_t nameOffset;
+  /** Type of the constants */
+  ConstantType registerSet;
+  /** Index of the constants in the register array */
+  uint16_t registerIndex;
+  /** The number of constants associated with this entry */
+  uint16_t registerCount;
+  uint16_t padding;
+  /** Offset of the type info in bytes from the start of this struct */
+  uint32_t typeInfoOffset;
+  /** Offset of the default value in bytes from the start of this struct */
+  uint32_t defaultValueOffset;
+};
+
+/** A constant entry */
+struct ConstantInfo {
+  /** Name of the constants */
+  std::string name;
+  /** Type of the constants */
+  ConstantType registerSet;
+  /** Index of the constants in the register array */
+  uint32_t index;
+  /** The number of constants */
+  uint32_t count;
+};
+
+/** Stores debug information about constant registers */
+class ConstantTable {
+
+public:
+
+  ConstantTable() = default;
+
+  explicit ConstantTable(util::ByteReader reader);
+
+  /** Looks up debug information for the given constant register.
+   *  Will return null if no entry is found for the given constant register.
+   *  Passing other non-constant register types is fine, it will just return null. */
+  const ConstantInfo* findConstantInfo(RegisterType registerType, uint32_t index) const;
+
+  /** Whether it contains debug information for any constant */
+  explicit operator bool () const {
+    for (uint32_t i = 0; i < m_constants.size(); i++) {
+      if (!m_constants[i].empty()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+private:
+
+  std::array<std::vector<ConstantInfo>, uint32_t(ConstantType::eSampler) + 1u> m_constants = { };
+
+};
+
+
 /** Operand type. Used internally in order to set up the instruction
  *  layout and to distinguish operand tokens from immediate values
  *  when parsing instructions. */
@@ -461,6 +546,11 @@ public:
   /** Get the size of the comment in bytes. */
   uint32_t getCommentDataSize() const {
     return m_commentData.size();
+  }
+
+  ConstantTable parseConstantTable() const {
+    auto reader = util::ByteReader(getCommentData(), getCommentDataSize());
+    return ConstantTable(reader);
   }
 
   /** Checks whether instruction is valid */
