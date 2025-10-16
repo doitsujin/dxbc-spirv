@@ -79,7 +79,7 @@ bool printCode(util::ByteReader reader) {
 }
 
 
-bool printCodeSM3(util::ByteReader reader) {
+bool printCodeSM3(util::ByteReader reader, bool useDebugNames) {
   if (!reader) {
     std::cout << "(no code)" << std::endl;
     return true;
@@ -91,19 +91,25 @@ bool printCodeSM3(util::ByteReader reader) {
   options.lineNumbers = true;
   options.indent = true;
 
+  sm3::ConstantTable ctab;
+
   sm3::Disassembler disasm(options, parser.getShaderInfo());
 
   std::cout << parser.getShaderInfo() << ":" << std::endl;
 
   while (parser) {
     auto op = parser.parseInstruction();
+    if (useDebugNames && op.getOpCode() == sm3::OpCode::eComment && !ctab) {
+      auto ctabReader = util::ByteReader(op.getCommentData(), op.getCommentDataSize());
+      ctab = sm3::ConstantTable(ctabReader);
+    }
 
     if (!op) {
       std::cerr << "Failed to parse instruction" << std::endl;
       return false;
     }
 
-    disasm.disassembleOp(std::cout, op);
+    disasm.disassembleOp(std::cout, op, ctab);
     std::cout << std::endl;
   }
 
@@ -113,7 +119,7 @@ bool printCodeSM3(util::ByteReader reader) {
 
 bool disassembleShader(util::ByteReader reader) {
   if (!dxbc::Container::checkFourCC(reader)) {
-    return printCodeSM3(reader);
+    return printCodeSM3(reader, false);
   }
 
   dxbc::Container container(reader);
