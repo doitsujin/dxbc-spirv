@@ -148,6 +148,19 @@ enum class SemanticUsage : uint32_t {
   eSample          = 13u,
 };
 
+struct Semantic {
+  SemanticUsage usage;
+  uint32_t      index;
+
+  bool operator==(const Semantic& other) const {
+    return usage == other.usage && index == other.index;
+  }
+
+  bool operator!=(const Semantic& other) const {
+    return !(*this == other);
+  }
+};
+
 /** Texture type */
 enum class TextureType : uint32_t {
   eTexture2D   = 2u,
@@ -181,11 +194,18 @@ enum class ComparisonMode : uint32_t {
 };
 
 enum class TexLdMode : uint32_t {
-  Regular      = 0u,
-  Project      = 1u,
-  Bias         = 2u,
+  eRegular = 0u,
+  eProject = 1u,
+  eBias    = 2u,
 };
 
+enum class ShaderType : uint32_t {
+  eVertex   = 0u,
+  ePixel    = 1u,
+};
+
+std::ostream& operator << (std::ostream& os, ShaderType type);
+std::ostream& writeToStream (std::ostream& os, RegisterType registerType, ShaderType shaderType, uint32_t shaderVersionMajor);
 std::ostream& operator << (std::ostream& os, OpCode op);
 std::ostream& operator << (std::ostream& os, SemanticUsage usage);
 std::ostream& operator << (std::ostream& os, TextureType textureType);

@@ -27,10 +27,16 @@ public:
   /** Disassemble instruction into a string. */
   std::string disassembleOp(const Instruction& op);
 
+  void setConstantTable(ConstantTable&& ctab) {
+    m_ctab = std::move(ctab);
+  }
+
 private:
 
   Options m_options = { };
   ShaderInfo m_info = { };
+
+  ConstantTable m_ctab = { };
 
   uint32_t    m_lineNumber = 0u;
   uint32_t    m_indentDepth = 0u;
@@ -42,8 +48,6 @@ private:
   void disassembleImmediate(std::ostream& stream, const Instruction& op, const Operand& arg) const;
 
   void disassembleOperand(std::ostream& stream, const Instruction& op, const Operand& arg) const;
-
-  void disassembleRegisterType(std::ostream& stream, RegisterType registerType) const;
 
   void disassembleRegisterAddressing(std::ostream& stream, const Operand& arg) const;
 
