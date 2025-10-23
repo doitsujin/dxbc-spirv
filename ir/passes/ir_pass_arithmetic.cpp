@@ -1149,8 +1149,15 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectCompare(Builder::iterat
   tDef = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType()).addOperands(tDef, b.getDef()));
   fDef = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType()).addOperands(fDef, b.getDef()));
 
+  /* Avoid looping indefinitely if we create a new instance of the same pattern */
+  auto ref = op->getDef();
+
+  if (m_builder.getOpForOperand(tDef, 0u).getOpCode() != OpCode::eSelect &&
+      m_builder.getOpForOperand(fDef, 0u).getOpCode() != OpCode::eSelect)
+    ref = tDef;
+
   m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), condDef, tDef, fDef));
-  return std::make_pair(true, m_builder.iter(tDef));
+  return std::make_pair(true, m_builder.iter(ref));
 }
 
 
