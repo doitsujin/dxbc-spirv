@@ -10,7 +10,6 @@ namespace dxbc_spv::sm3 {
 
 void Disassembler::disassembleOp(std::ostream& stream, const Instruction& op) {
   if (op.getOpCode() == OpCode::eComment) {
-    disassembleComment(stream, op);
     return;
   }
 
@@ -457,11 +456,6 @@ void Disassembler::decrementIndentation() {
     m_indentDepth--;
   else
     std::cout << "Underflow" << '\n';
-}
-
-
-void Disassembler::disassembleComment(std::ostream& stream, const Instruction& op) {
-  stream << " Comment: " << op.getComment() << std::endl;
 }
 
 

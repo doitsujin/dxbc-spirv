@@ -664,7 +664,8 @@ Instruction::Instruction(util::ByteReader& reader, const ShaderInfo& info) {
   }
 
   if (getOpCode() == OpCode::eComment) {
-    m_comment.emplace(static_cast<const char*>(tokenReader.getData(0u)), tokenReader.getRemaining());
+    m_commentData.resize(tokenReader.getRemaining());
+    memcpy(m_commentData.data(), tokenReader.getData(0u), tokenReader.getRemaining());
   }
 
   dxbc_spv_assert(getOpCode() == OpCode::eComment || tokenReader.getRemaining() == 0u);

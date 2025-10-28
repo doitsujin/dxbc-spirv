@@ -453,8 +453,14 @@ public:
     return TexLdMode(util::bextract(m_token, 16u, 8u));
   }
 
-  const std::string& getComment() const {
-    return m_comment.value();
+  /** Get the comment data. Must only be called for comment instructions. */
+  const unsigned char* getCommentData() const {
+    return m_commentData.data();
+  }
+
+  /** Get the size of the comment in bytes. */
+  uint32_t getCommentDataSize() const {
+    return m_commentData.size();
   }
 
   /** Checks whether instruction is valid */
@@ -470,7 +476,7 @@ private:
 
   util::small_vector<Operand, 16u> m_operands = { };
 
-  std::optional<std::string> m_comment = { };
+  std::vector<unsigned char> m_commentData = { };
 
   void resetOnError();
 
