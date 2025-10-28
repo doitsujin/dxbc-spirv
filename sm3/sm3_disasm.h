@@ -55,8 +55,6 @@ private:
 
   void decrementIndentation();
 
-  void disassembleComment(std::ostream& stream, const Instruction& op);
-
   static bool opBeginsNestedBlock(const Instruction& op);
 
   static bool opEndsNestedBlock(const Instruction& op);
