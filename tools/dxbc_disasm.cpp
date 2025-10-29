@@ -79,7 +79,7 @@ bool printCode(util::ByteReader reader) {
 }
 
 
-bool printCodeSM3(util::ByteReader reader) {
+bool printCodeSM3(util::ByteReader reader, bool useDebugInfo) {
   if (!reader) {
     std::cout << "(no code)" << std::endl;
     return true;
@@ -91,19 +91,25 @@ bool printCodeSM3(util::ByteReader reader) {
   options.lineNumbers = true;
   options.indent = true;
 
+  sm3::ConstantTable ctab;
+
   sm3::Disassembler disasm(options, parser.getShaderInfo());
 
   std::cout << parser.getShaderInfo() << ":" << std::endl;
 
   while (parser) {
     auto op = parser.parseInstruction();
+    if (useDebugInfo && op.getOpCode() == sm3::OpCode::eComment && !ctab) {
+      auto ctabReader = util::ByteReader(op.getCommentData(), op.getCommentDataSize());
+      ctab = sm3::ConstantTable(ctabReader);
+    }
 
     if (!op) {
       std::cerr << "Failed to parse instruction" << std::endl;
       return false;
     }
 
-    disasm.disassembleOp(std::cout, op);
+    disasm.disassembleOp(std::cout, op, ctab);
     std::cout << std::endl;
   }
 
@@ -111,9 +117,9 @@ bool printCodeSM3(util::ByteReader reader) {
 }
 
 
-bool disassembleShader(util::ByteReader reader) {
+bool disassembleShader(util::ByteReader reader, bool useDebugInfo) {
   if (!dxbc::Container::checkFourCC(reader)) {
-    return printCodeSM3(reader);
+    return printCodeSM3(reader, useDebugInfo);
   }
 
   dxbc::Container container(reader);
@@ -137,7 +143,31 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  const char* fileName = argv[1u];
+  bool useDebugInfo = false;
+  const char* fileName = nullptr;
+
+  for (int32_t i = 1; i < argc; i++) {
+    const char* arg = argv[i];
+
+    if (strlen(arg) < 2u
+      || arg[0u] != '-'
+      || arg[1u] != '-') {
+      fileName = arg;
+      continue;
+    }
+
+    if (strcmp(arg, "--use-debug") == 0) {
+      useDebugInfo = true;
+    } else {
+      std::cerr << "Unknown option: " << arg << std::endl;
+      return 1;
+    }
+  }
+
+  if (fileName == nullptr) {
+    std::cerr << "No file path provided" << std::endl;
+    return 1;
+  }
 
   std::ifstream file(fileName, std::ios_base::in | std::ios_base::binary);
 
@@ -151,7 +181,7 @@ int main(int argc, char** argv) {
   file.seekg(0u, std::ios_base::beg);
   file.read(data.data(), data.size());
 
-  if (!disassembleShader(util::ByteReader(data.data(), data.size())))
+  if (!disassembleShader(util::ByteReader(data.data(), data.size()), useDebugInfo))
     return 1;
 
   return 0;

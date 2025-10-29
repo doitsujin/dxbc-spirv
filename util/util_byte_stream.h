@@ -35,6 +35,11 @@ public:
     return &m_data[offset];
   }
 
+  /** Retrieves raw data pointer at the current position with an additional offset */
+  const void* getDataRelative(size_t offset) const {
+    return &m_data[m_offset + offset];
+  }
+
   /** Queries total size of the byte array */
   size_t getSize() const {
     return m_size;
@@ -59,6 +64,14 @@ public:
   /** Retrieves range starting from current offset. */
   ByteReader getRangeRelative(size_t offset, size_t size) const {
     return getRange(m_offset + offset, size);
+  }
+
+  /** Retrieves range starting from current offset that extends to the end of this reader. */
+  ByteReader getRangeRelativeRemaining(size_t offset) const {
+    if (m_offset + offset >= m_size)
+      return ByteReader(nullptr, 0u);
+
+    return getRange(m_offset + offset, m_size - m_offset - offset);
   }
 
   /** Jumps to given byte offset */
