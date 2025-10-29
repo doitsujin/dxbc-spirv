@@ -194,8 +194,18 @@ void DerivativePass::relocateInstructions() {
       if (m_dominance->dominates(argBlock, block))
         continue;
 
+      /* Don't queue up same op multiple times in a row. We still need to make
+       * sure that arguments are relocated before the consuming instruction. */
       dxbc_spv_assert(arg.getOpCode() != OpCode::ePhi);
-      queue.push_back({ arg.getDef(), block });
+
+      DefBlockKey key = { };
+      key.def = arg.getDef();
+      key.block = block;
+
+      if (std::find(queue.begin() + i, queue.end(), key) != queue.end())
+        continue;
+
+      queue.push_back(key);
     }
   }
 
@@ -291,12 +301,15 @@ bool DerivativePass::canHoistDerivativeOp(const Op& derivOp, SsaDef dstBlock) co
       return false;
   }
 
-  while (!queue.empty()) {
-    const auto& arg = m_builder.getOp(queue.back());
-    queue.pop_back();
+  for (size_t i = 0u; i < queue.size(); i++) {
+    const auto& arg = m_builder.getOp(queue.at(i));
 
     /* Null operand, can happen */
     if (!arg)
+      continue;
+
+    /* Don't redundantly process the same instruction multiple times */
+    if (std::find(queue.begin(), queue.begin() + i, arg.getDef()) != queue.begin() + i)
       continue;
 
     /* Check whether operand already dominates target block's terminator */
