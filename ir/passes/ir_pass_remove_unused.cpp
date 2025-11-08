@@ -346,6 +346,7 @@ bool RemoveUnusedPass::hasSideEffect(OpCode opCode) {
     case OpCode::eFCos:
     case OpCode::eFPow:
     case OpCode::eFPowLegacy:
+    case OpCode::eFSgn:
 
     case OpCode::eIAnd:
     case OpCode::eIOr:
