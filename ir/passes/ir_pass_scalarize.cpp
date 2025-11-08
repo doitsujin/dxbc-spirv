@@ -169,6 +169,7 @@ void ScalarizePass::scalarizeVectorOps() {
       case OpCode::eUMin:
       case OpCode::eUMax:
       case OpCode::eUClamp:
+      case OpCode::eFSgn:
         iter = handleGenericOp(iter, true);
         continue;
 

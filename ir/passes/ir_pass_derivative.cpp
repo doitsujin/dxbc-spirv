@@ -452,6 +452,7 @@ bool DerivativePass::canHoistDerivativeOp(const Op& derivOp, SsaDef dstBlock) co
       case OpCode::eFCos:
       case OpCode::eFPow:
       case OpCode::eFPowLegacy:
+      case OpCode::eFSgn:
       case OpCode::eIAnd:
       case OpCode::eIOr:
       case OpCode::eIXor:
