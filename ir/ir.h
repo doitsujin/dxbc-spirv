@@ -1066,6 +1066,8 @@ enum class OpCode : uint16_t {
   eFClamp                       = 692u,
   eFSin                         = 693u,
   eFCos                         = 694u,
+  eFPow                         = 695u,
+  eFPowLegacy                   = 696u,
 
   eIAnd                         = 704u,
   eIOr                          = 705u,
@@ -2490,6 +2492,18 @@ public:
   static Op FCos(Type type, SsaDef a) {
     return Op(OpCode::eFCos, type)
       .addOperand(a);
+  }
+
+  static Op FPow(Type type, SsaDef base, SsaDef exp) {
+    return Op(OpCode::eFPow, type)
+      .addOperand(base)
+      .addOperand(exp);
+  }
+
+  static Op FPowLegacy(Type type, SsaDef base, SsaDef exp) {
+    return Op(OpCode::eFPowLegacy, type)
+      .addOperand(base)
+      .addOperand(exp);
   }
 
   static Op IAnd(Type type, SsaDef a, SsaDef b) {

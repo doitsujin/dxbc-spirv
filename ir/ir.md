@@ -582,6 +582,8 @@ Maps boolean values to values of any other type.
 | `FClamp`                  | float        | `%a`         | `%lo`   | `%hi` |
 | `FSin`                    | `f32`        | `%a`         |         |       |
 | `FCos`                    | `f32`        | `%a`         |         |       |
+| `FPow`                    | `f32`        | `%base`      | `%exp`  |       |
+| `FPowLegacy`              | `f32`        | `%base`      | `%exp`  |       |
 
 Note that `FDot*` instructions takes vector arguments and returns a scalar. This instruction
 **must** be lowered to a sequence of `FMul*` and `FMad*` instructions.
