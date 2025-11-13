@@ -206,9 +206,10 @@ void ArithmeticPass::lowerInstructionsPostTransform() {
       } break;
 
       case OpCode::eFMulLegacy:
-      case OpCode::eFMadLegacy: {
+      case OpCode::eFMadLegacy:
+      case OpCode::eFPowLegacy: {
         if (m_options.lowerMulLegacy) {
-          iter = lowerMulLegacy(iter);
+          iter = lowerLegacyOp(iter);
           continue;
         }
       } break;
@@ -378,8 +379,11 @@ Builder::iterator ArithmeticPass::fuseMad(Builder::iterator op) {
 }
 
 
-Builder::iterator ArithmeticPass::lowerMulLegacy(Builder::iterator op) {
-  auto function = buildMulLegacyFunc(op->getOpCode(), op->getType().getBaseType(0u));
+Builder::iterator ArithmeticPass::lowerLegacyOp(Builder::iterator op) {
+  auto function = op->getOpCode() == OpCode::eFPowLegacy
+    ? buildPowLegacyFunc(op->getType().getBaseType(0u))
+    : buildMulLegacyFunc(op->getOpCode(), op->getType().getBaseType(0u));
+
   auto functionCall = Op::FunctionCall(op->getType(), function).setFlags(op->getFlags());
 
   for (uint32_t i = 0u; i < op->getOperandCount(); i++)
@@ -1035,6 +1039,50 @@ SsaDef ArithmeticPass::buildMulLegacyFunc(OpCode opCode, BasicType type) {
 
     if (type.isVector())
       result = m_builder.add(std::move(resultOp));
+
+    m_builder.add(Op::Return(type, result));
+    m_builder.add(Op::FunctionEnd());
+  }
+
+  return entry->function;
+}
+
+
+SsaDef ArithmeticPass::buildPowLegacyFunc(BasicType type) {
+  auto entry = std::find_if(m_powLegacyFunctions.begin(), m_powLegacyFunctions.end(),
+    [type] (const PowLegacyFunc& func) {
+      return func.type == type;
+    });
+
+  if (entry == m_powLegacyFunctions.end()) {
+    dxbc_spv_assert(type.isScalar());
+
+    entry = &m_powLegacyFunctions.emplace_back();
+    entry->type = type;
+
+    SsaDef paramA = m_builder.add(Op::DclParam(type));
+    SsaDef paramB = m_builder.add(Op::DclParam(type));
+
+    m_builder.add(Op::DebugName(paramA, "a"));
+    m_builder.add(Op::DebugName(paramB, "b"));
+
+    std::stringstream debugName;
+    debugName << "pow_legacy_" << type;
+
+    entry->function = m_builder.addBefore(m_builder.getCode().first->getDef(),
+      Op::Function(type).addParam(paramA).addParam(paramB));
+
+    m_builder.add(Op::DebugName(entry->function, debugName.str().c_str()));
+
+    m_builder.setCursor(entry->function);
+    m_builder.add(Op::Label());
+
+    SsaDef a = m_builder.add(Op::ParamLoad(type, entry->function, paramA));
+    SsaDef b = m_builder.add(Op::ParamLoad(type, entry->function, paramB));
+
+    SsaDef result = m_builder.add(Op::FLog2(type, a));
+    result = m_builder.add(emitMulLegacy(type, b, result));
+    result = m_builder.add(Op::FExp2(type, result));
 
     m_builder.add(Op::Return(type, result));
     m_builder.add(Op::FunctionEnd());
