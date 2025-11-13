@@ -223,6 +223,8 @@ Builder test_arithmetic_fp32_special() {
       .setFlags(e.second).addOperand(Operand(component)));
   }
 
+  component = builder.add(Op::FPow(ScalarType::eF32, component, builder.makeConstant(2.4f)));
+
   builder.add(Op::BufferStore(uavDescriptor, indexDef, component, 4u));
   builder.add(Op::Return());
   return builder;

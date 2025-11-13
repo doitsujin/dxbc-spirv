@@ -1389,6 +1389,13 @@ Builder test_pass_arithmetic_lower_legacy() {
   a = b.add(Op::FMadLegacy(BasicType(ScalarType::eF16, 2u), v0, v1, v2));
   emit_store(b, uav, test++, a);
 
+  /* pow_legacy */
+  v0 = emit_load(b, srv, 3u * test + 0u, ScalarType::eF32);
+  v1 = emit_load(b, srv, 3u * test + 1u, ScalarType::eF32);
+
+  a = b.add(Op::FPowLegacy(ScalarType::eF32, v0, v1));
+  emit_store(b, uav, test++, a);
+
   return run_passes(b);
 }
 
