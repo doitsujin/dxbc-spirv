@@ -86,6 +86,11 @@ private:
     SsaDef function = { };
   };
 
+  struct PowLegacyFunc {
+    BasicType type = { };
+    SsaDef function = { };
+  };
+
   Builder& m_builder;
 
   Options m_options;
@@ -97,6 +102,7 @@ private:
   util::small_vector<ConvertFunc, 8u> m_convertFunctions;
   util::small_vector<DotFunc, 8u> m_dotFunctions;
   util::small_vector<MulLegacyFunc, 8u> m_mulLegacyFunctions;
+  util::small_vector<PowLegacyFunc, 8u> m_powLegacyFunctions;
 
   SsaDef m_f32tof16Function = { };
   SsaDef m_msadFunction = { };
@@ -115,7 +121,7 @@ private:
 
   Builder::iterator fuseMad(Builder::iterator op);
 
-  Builder::iterator lowerMulLegacy(Builder::iterator op);
+  Builder::iterator lowerLegacyOp(Builder::iterator op);
 
   Builder::iterator lowerDot(Builder::iterator op);
 
@@ -140,6 +146,8 @@ private:
   Op emitMadLegacy(const Type& type, SsaDef a, SsaDef b, SsaDef c);
 
   SsaDef buildMulLegacyFunc(OpCode opCode, BasicType type);
+
+  SsaDef buildPowLegacyFunc(BasicType type);
 
   SsaDef buildF32toF16Func();
 
