@@ -269,6 +269,8 @@ Scope DivergenceAnalysis::determineScope(const Op& op) {
     case OpCode::eFClamp:
     case OpCode::eFSin:
     case OpCode::eFCos:
+    case OpCode::eFPow:
+    case OpCode::eFPowLegacy:
     case OpCode::eIAnd:
     case OpCode::eIOr:
     case OpCode::eIXor:

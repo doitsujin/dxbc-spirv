@@ -840,6 +840,8 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eFClamp: return os << "FClamp";
     case OpCode::eFSin: return os << "FSin";
     case OpCode::eFCos: return os << "FCos";
+    case OpCode::eFPow: return os << "FPow";
+    case OpCode::eFPowLegacy: return os << "FPowLegacy";
     case OpCode::eIAnd: return os << "IAnd";
     case OpCode::eIOr: return os << "IOr";
     case OpCode::eIXor: return os << "IXor";
