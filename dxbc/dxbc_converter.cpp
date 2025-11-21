@@ -4004,7 +4004,9 @@ bool Converter::initParser(Parser& parser, util::ByteReader reader) {
     return false;
   }
 
-  if (!(parser = Parser(reader))) {
+  parser = Parser(reader);
+
+  if (!parser.getShaderInfo().getDwordCount()) {
     Logger::err("Failed to parse code chunk.");
     return false;
   }
