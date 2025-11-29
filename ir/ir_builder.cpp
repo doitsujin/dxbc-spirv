@@ -36,7 +36,7 @@ SsaDef Builder::add(Op op) {
   if (isDeclarative && m_codeBlockStart) {
     metadata.next = m_codeBlockStart;
     metadata.prev = m_ops.at(m_codeBlockStart).prev;
-  } else if (m_cursor && m_cursor != m_code.tail) {
+  } else if (m_cursor) {
     metadata.next = m_ops.at(m_cursor).next;
     metadata.prev = m_cursor;
 
