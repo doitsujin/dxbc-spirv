@@ -285,4 +285,121 @@ Op consumeConstant(const Op& op, BasicType dstType) {
   return result;
 }
 
+
+SsaDef broadcastScalar(Builder& builder, SsaDef def, util::WriteMask mask) {
+  if (mask == mask.first())
+    return def;
+
+  /* Determine vector type */
+  auto type = builder.getOp(def).getType().getBaseType(0u);
+  dxbc_spv_assert(type.isScalar());
+
+  type = makeVectorType(type.getBaseType(), mask);
+
+  if (type.isScalar())
+    return def;
+
+  /* Create vector */
+  Op op(OpCode::eCompositeConstruct, type);
+
+  for (uint32_t i = 0u; i < type.getVectorSize(); i++)
+    op.addOperand(def);
+
+  return builder.add(std::move(op));
+}
+
+
+SsaDef swizzleVector(Builder& builder, SsaDef value, util::Swizzle swizzle, util::WriteMask writeMask) {
+  const auto& valueOp = builder.getOp(value);
+  dxbc_spv_assert(valueOp.getType().isBasicType());
+
+  auto type = valueOp.getType().getBaseType(0u);
+
+  if (type.isScalar())
+    return broadcastScalar(builder, value, writeMask);
+
+  /* Extract components one by one and then re-assemble vector */
+  util::small_vector<SsaDef, 4u> components;
+
+  for (auto c : writeMask) {
+    uint32_t componentIndex = uint8_t(swizzle.map(c));
+
+    components.push_back(builder.add(Op::CompositeExtract(type.getBaseType(),
+      value, builder.makeConstant(componentIndex))));
+  }
+
+  return buildVector(builder, type.getBaseType(), components.size(), components.data());
+}
+
+
+SsaDef composite(Builder& builder, BasicType type,
+  const SsaDef* components, util::Swizzle swizzle, util::WriteMask mask) {
+  /* Apply swizzle and mask and get components in the right order. */
+  std::array<SsaDef, 4u> scalars = { };
+
+  uint32_t index = 0u;
+
+  for (auto c : mask) {
+    auto scalar = components[uint8_t(swizzle.map(c))];
+    scalars[index++] = scalar;
+
+    dxbc_spv_assert(scalar);
+  }
+
+  /* Component count must match, or be exactly 1 so that
+   * we can broadcast a single component. */
+  dxbc_spv_assert(index == type.getVectorSize() || index == 1u);
+
+  if (type.isScalar())
+    return scalars.at(0u);
+
+  /* Build actual composite op */
+  Op op(OpCode::eCompositeConstruct, type);
+
+  for (uint32_t i = 0u; i < type.getVectorSize(); i++)
+    op.addOperand(scalars.at(std::min(i, index - 1u)));
+
+  return builder.add(std::move(op));
+}
+
+
+SsaDef buildVector(Builder& builder, ScalarType scalarType, size_t count, const SsaDef* scalars) {
+  if (!count)
+    return SsaDef();
+
+  if (count == 1u)
+    return scalars[0u];
+
+  BasicType type(scalarType, count);
+
+  Op op(OpCode::eCompositeConstruct, type);
+
+  for (uint32_t i = 0u; i < type.getVectorSize(); i++)
+    op.addOperand(scalars[i]);
+
+  return builder.add(std::move(op));
+}
+
+
+SsaDef extractFromVector(Builder& builder, SsaDef def, uint32_t component) {
+  const auto& op = builder.getOp(def);
+
+  if (op.getType().isScalarType())
+    return def;
+
+  if (op.getOpCode() == OpCode::eCompositeConstruct)
+    return SsaDef(op.getOperand(component));
+
+  return builder.add(Op::CompositeExtract(op.getType().getSubType(component), def, builder.makeConstant(component)));
+}
+
+
+bool is64BitType(BasicType type) {
+  auto scalarType = type.getBaseType();
+
+  return scalarType == ScalarType::eF64 ||
+         scalarType == ScalarType::eU64 ||
+         scalarType == ScalarType::eI64;
+}
+
 }
