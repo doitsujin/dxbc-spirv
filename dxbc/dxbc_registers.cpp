@@ -1,6 +1,8 @@
 #include "dxbc_registers.h"
 #include "dxbc_converter.h"
 
+#include "../ir/ir_utils.h"
+
 namespace dxbc_spv::dxbc {
 
 RegisterFile::RegisterFile(Converter& converter)
@@ -191,7 +193,7 @@ ir::SsaDef RegisterFile::emitLoad(
         WriteMask               componentMask,
         ir::ScalarType          type) {
   auto swizzle = operand.getSwizzle();
-  auto returnType = m_converter.makeVectorType(type, componentMask);
+  auto returnType = makeVectorType(type, componentMask);
 
   if (operand.getIndexType(0u) != IndexType::eImm32) {
     m_converter.logOpError(op, "Register index must be immediate.");
@@ -240,7 +242,7 @@ ir::SsaDef RegisterFile::emitLoad(
     components[uint8_t(component)] = scalar;
   }
 
-  return m_converter.composite(builder, returnType, components.data(), swizzle, componentMask);
+  return composite(builder, returnType, components.data(), swizzle, componentMask);
 }
 
 
@@ -272,7 +274,7 @@ bool RegisterFile::emitStore(
     auto component = componentFromBit(c);
 
     /* Extract scalar and 'convert' to unknown type */
-    auto scalar = m_converter.extractFromVector(builder, value, componentIndex++);
+    auto scalar = extractFromVector(builder, value, componentIndex++);
 
     if (!valueType.isUnknownType())
       scalar = builder.add(ir::Op::ConsumeAs(ir::ScalarType::eUnknown, scalar));
@@ -329,8 +331,8 @@ ir::SsaDef RegisterFile::emitTgsmLoad(
   }
 
   /* Create result vector */
-  return m_converter.composite(builder,
-    m_converter.makeVectorType(scalarType, componentMask),
+  return composite(builder,
+    makeVectorType(scalarType, componentMask),
     components.data(), operand.getSwizzle(), componentMask);
 }
 
@@ -362,7 +364,7 @@ bool RegisterFile::emitTgsmStore(
       ? m_converter.computeStructuredAddress(builder, elementIndex, elementOffset, c)
       : m_converter.computeRawAddress(builder, elementIndex, c);
 
-    auto scalar = m_converter.extractFromVector(builder, data, srcIndex++);
+    auto scalar = extractFromVector(builder, data, srcIndex++);
 
     if (scalarType != dataType)
       scalar = builder.add(ir::Op::ConsumeAs(scalarType, scalar));
@@ -440,7 +442,7 @@ ir::SsaDef RegisterFile::emitThisLoad(
     scalar = builder.add(ir::Op::ConsumeAs(scalarType, scalar));
   }
 
-  return m_converter.buildVector(builder, scalarType, scalars.size(), scalars.data());
+  return buildVector(builder, scalarType, scalars.size(), scalars.data());
 }
 
 

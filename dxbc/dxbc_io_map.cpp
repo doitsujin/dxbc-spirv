@@ -4,6 +4,7 @@
 #include "dxbc_io_map.h"
 
 #include "../util/util_log.h"
+#include "../ir/ir_utils.h"
 
 namespace dxbc_spv::dxbc {
 
@@ -1139,7 +1140,7 @@ ir::SsaDef IoMap::loadIoRegister(
         uint32_t                regIndexAbsolute,
         Swizzle                 swizzle,
         WriteMask               writeMask) {
-  auto returnType = m_converter.makeVectorType(scalarType, writeMask);
+  auto returnType = makeVectorType(scalarType, writeMask);
 
   /* Bound-check vertex index. Don't bother clamping it since there are
    * no known instances of out-of-bounds index reads causing trouble. */
@@ -1216,7 +1217,7 @@ ir::SsaDef IoMap::loadIoRegister(
         if (vertexIndex)
           loadOp.addParam(vertexIndex);
 
-        auto index = m_converter.extractFromVector(builder, addressDef, vertexIndex ? 1u : 0u);
+        auto index = extractFromVector(builder, addressDef, vertexIndex ? 1u : 0u);
         loadOp.addParam(index);
 
         scalar = builder.add(std::move(loadOp));
@@ -1249,7 +1250,7 @@ ir::SsaDef IoMap::loadIoRegister(
     }
   }
 
-  return m_converter.composite(builder, returnType, components.data(), swizzle, writeMask);
+  return composite(builder, returnType, components.data(), swizzle, writeMask);
 }
 
 
@@ -1271,7 +1272,7 @@ bool IoMap::storeIoRegister(
     bool foundVar = false;
 
     /* Extract scalar to store */
-    ir::SsaDef baseScalar = m_converter.extractFromVector(builder, value, componentIndex++);
+    ir::SsaDef baseScalar = extractFromVector(builder, value, componentIndex++);
 
     /* There may be multiple output variables for the same value. Iterate
      * over all matching vars and duplicate the stores as necessary. */
@@ -1304,7 +1305,7 @@ bool IoMap::storeIoRegister(
         auto callOp = ir::Op::FunctionCall(ir::Type(), var.baseDef);
 
         for (uint32_t i = 0u; i < addressOp.getType().getBaseType(0u).getVectorSize(); i++)
-          callOp.addParam(m_converter.extractFromVector(builder, addressDef, i));
+          callOp.addParam(extractFromVector(builder, addressDef, i));
 
         callOp.addParam(scalar);
 
@@ -1364,9 +1365,9 @@ ir::SsaDef IoMap::interpolateIoRegister(
 
         /* Build function call, passing the register index first and then
          * the extra arguments. */
-        auto functionType = m_converter.makeVectorType(scalarType, var->componentMask);
+        auto functionType = makeVectorType(scalarType, var->componentMask);
         auto callOp = ir::Op::FunctionCall(functionType, functionDef);
-        callOp.addParam(m_converter.extractFromVector(builder, address, 0u));
+        callOp.addParam(extractFromVector(builder, address, 0u));
 
         if (argument)
           callOp.addParam(argument);
@@ -1378,7 +1379,7 @@ ir::SsaDef IoMap::interpolateIoRegister(
           auto indexInSrc = util::popcnt(uint8_t(var->componentMask) & (uint8_t(c) - 1u));
 
           auto componentIndex = uint8_t(componentFromBit(c));
-          components[componentIndex] = m_converter.extractFromVector(builder, functionResult, indexInSrc);
+          components[componentIndex] = extractFromVector(builder, functionResult, indexInSrc);
         }
       } else {
         /* If we can address registers directly, just process
@@ -1403,8 +1404,8 @@ ir::SsaDef IoMap::interpolateIoRegister(
     }
   }
 
-  auto returnType = m_converter.makeVectorType(scalarType, writeMask);
-  return m_converter.composite(builder, returnType, components.data(), swizzle, writeMask);
+  auto returnType = makeVectorType(scalarType, writeMask);
+  return composite(builder, returnType, components.data(), swizzle, writeMask);
 }
 
 
@@ -1451,7 +1452,7 @@ ir::SsaDef IoMap::computeRegisterAddress(
     address.push_back(builder.makeConstant(componentIndex));
   }
 
-  return m_converter.buildVector(builder, ir::ScalarType::eU32, address.size(), address.data());
+  return buildVector(builder, ir::ScalarType::eU32, address.size(), address.data());
 }
 
 
@@ -1539,12 +1540,12 @@ std::pair<ir::Type, ir::SsaDef> IoMap::emitDynamicLoadFunction(
 
     /* Build return value from individual scalars */
     dxbc_spv_assert(scalarType != ir::ScalarType::eUnknown);
-    vectorType = m_converter.makeVectorType(scalarType, var.componentMask);
+    vectorType = makeVectorType(scalarType, var.componentMask);
 
     if (!result)
       result = builder.add(ir::Op::DclTmp(vectorType, m_converter.getEntryPoint()));
 
-    auto vector = m_converter.buildVector(builder, scalarType, scalars.size(), scalars.data());
+    auto vector = buildVector(builder, scalarType, scalars.size(), scalars.data());
     builder.add(ir::Op::TmpStore(result, vector));
     builder.add(ir::Op::ScopedSwitchBreak(switchConstruct));
   }
@@ -1736,7 +1737,7 @@ ir::SsaDef IoMap::emitInterpolationFunction(
   const IoVarInfo&              var,
         ir::OpCode              opCode) {
   /* Build function declaration op */
-  auto functionType = m_converter.makeVectorType(ir::ScalarType::eF32, var.componentMask);
+  auto functionType = makeVectorType(ir::ScalarType::eF32, var.componentMask);
   auto functionOp = ir::Op::Function(functionType);
 
   /* Register index relative to start of indexed range */
@@ -1964,7 +1965,7 @@ bool IoMap::handleGsOutputStreams(ir::Builder& builder) {
           mapping.regCount = 1u;
           mapping.gsStream = -1;
           mapping.componentMask = c;
-          mapping.baseType = m_converter.makeVectorType(var.baseType.getBaseType(0u).getBaseType(), c);
+          mapping.baseType = makeVectorType(var.baseType.getBaseType(0u).getBaseType(), c);
           mapping.baseDef = builder.add(ir::Op::DclTmp(mapping.baseType, m_converter.getEntryPoint()));
           mapping.baseIndex = -1;
         }

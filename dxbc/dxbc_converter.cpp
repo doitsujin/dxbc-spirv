@@ -1,6 +1,8 @@
 #include "dxbc_converter.h"
 #include "dxbc_disasm.h"
 
+#include "../ir/ir_utils.h"
+
 namespace dxbc_spv::dxbc {
 
 Converter::Converter(Container container, const Options& options)
@@ -3671,52 +3673,6 @@ ir::SsaDef Converter::getImmediateTextureOffset(ir::Builder& builder, const Inst
 }
 
 
-ir::SsaDef Converter::broadcastScalar(ir::Builder& builder, ir::SsaDef def, WriteMask mask) {
-  if (mask == mask.first())
-    return def;
-
-  /* Determine vector type */
-  auto type = builder.getOp(def).getType().getBaseType(0u);
-  dxbc_spv_assert(type.isScalar());
-
-  type = makeVectorType(type.getBaseType(), mask);
-
-  if (type.isScalar())
-    return def;
-
-  /* Create vector */
-  ir::Op op(ir::OpCode::eCompositeConstruct, type);
-
-  for (uint32_t i = 0u; i < type.getVectorSize(); i++)
-    op.addOperand(def);
-
-  return builder.add(std::move(op));
-}
-
-
-ir::SsaDef Converter::swizzleVector(ir::Builder& builder, ir::SsaDef value, Swizzle swizzle, WriteMask writeMask) {
-  const auto& valueOp = builder.getOp(value);
-  dxbc_spv_assert(valueOp.getType().isBasicType());
-
-  auto type = valueOp.getType().getBaseType(0u);
-
-  if (type.isScalar())
-    return broadcastScalar(builder, value, writeMask);
-
-  /* Extract components one by one and then re-assemble vector */
-  util::small_vector<ir::SsaDef, 4u> components;
-
-  for (auto c : writeMask) {
-    uint32_t componentIndex = uint8_t(swizzle.map(c));
-
-    components.push_back(builder.add(ir::Op::CompositeExtract(type.getBaseType(),
-      value, builder.makeConstant(componentIndex))));
-  }
-
-  return buildVector(builder, type.getBaseType(), components.size(), components.data());
-}
-
-
 std::pair<ir::SsaDef, ir::SsaDef> Converter::decomposeResourceReturn(ir::Builder& builder, ir::SsaDef value) {
   /* Sparse feedback first if applicable, then the value to match the type */
   const auto& valueOp = builder.getOp(value);
@@ -3765,103 +3721,6 @@ ir::ScalarType Converter::determineOperandType(const Operand& operand, ir::Scala
     type = fallback;
 
   return type;
-}
-
-
-ir::SsaDef Converter::composite(ir::Builder& builder, ir::BasicType type,
-  const ir::SsaDef* components, Swizzle swizzle, WriteMask mask) {
-  /* Apply swizzle and mask and get components in the right order. */
-  std::array<ir::SsaDef, 4u> scalars = { };
-
-  uint32_t index = 0u;
-
-  for (auto c : mask) {
-    auto scalar = components[uint8_t(swizzle.map(c))];
-    scalars[index++] = scalar;
-
-    dxbc_spv_assert(scalar);
-  }
-
-  /* Component count must match, or be exactly 1 so that
-   * we can broadcast a single component. */
-  dxbc_spv_assert(index == type.getVectorSize() || index == 1u);
-
-  if (type.isScalar())
-    return scalars.at(0u);
-
-  /* Build actual composite op */
-  ir::Op op(ir::OpCode::eCompositeConstruct, type);
-
-  for (uint32_t i = 0u; i < type.getVectorSize(); i++)
-    op.addOperand(scalars.at(std::min(i, index - 1u)));
-
-  return builder.add(std::move(op));
-}
-
-
-ir::SsaDef Converter::buildVector(ir::Builder& builder, ir::ScalarType scalarType, size_t count, const ir::SsaDef* scalars) {
-  if (!count)
-    return ir::SsaDef();
-
-  if (count == 1u)
-    return scalars[0u];
-
-  ir::BasicType type(scalarType, count);
-
-  ir::Op op(ir::OpCode::eCompositeConstruct, type);
-
-  for (uint32_t i = 0u; i < type.getVectorSize(); i++)
-    op.addOperand(scalars[i]);
-
-  return builder.add(std::move(op));
-}
-
-
-ir::SsaDef Converter::extractFromVector(ir::Builder& builder, ir::SsaDef def, uint32_t component) {
-  const auto& op = builder.getOp(def);
-
-  if (op.getType().isScalarType())
-    return def;
-
-  if (op.getOpCode() == ir::OpCode::eCompositeConstruct)
-    return ir::SsaDef(op.getOperand(component));
-
-  return builder.add(ir::Op::CompositeExtract(op.getType().getSubType(component), def, builder.makeConstant(component)));
-}
-
-
-template<typename T>
-ir::SsaDef Converter::makeTypedConstant(ir::Builder& builder, ir::BasicType type, T value) {
-  ir::Op op(ir::OpCode::eConstant, type);
-
-  ir::Operand scalar = [type, value] {
-    switch (type.getBaseType()) {
-      case ir::ScalarType::eBool: return ir::Operand(bool(value));
-      case ir::ScalarType::eU8:   return ir::Operand(uint8_t(value));
-      case ir::ScalarType::eU16:  return ir::Operand(uint16_t(value));
-      case ir::ScalarType::eMinU16:
-      case ir::ScalarType::eU32:  return ir::Operand(uint32_t(value));
-      case ir::ScalarType::eU64:  return ir::Operand(uint64_t(value));
-      case ir::ScalarType::eI8:   return ir::Operand(int8_t(value));
-      case ir::ScalarType::eI16:  return ir::Operand(int16_t(value));
-      case ir::ScalarType::eMinI16:
-      case ir::ScalarType::eI32:  return ir::Operand(int32_t(value));
-      case ir::ScalarType::eI64:  return ir::Operand(int64_t(value));
-      case ir::ScalarType::eF16:  return ir::Operand(util::float16_t(value));
-      case ir::ScalarType::eMinF16:
-      case ir::ScalarType::eF32:  return ir::Operand(float(value));
-      case ir::ScalarType::eF64:  return ir::Operand(double(value));
-      default: break;
-    }
-
-    dxbc_spv_unreachable();
-    return ir::Operand();
-  } ();
-
-  for (uint32_t i = 0u; i < type.getVectorSize(); i++)
-    op.addOperand(scalar);
-
-  return builder.add(std::move(op));
 }
 
 
@@ -4060,15 +3919,6 @@ bool Converter::isValidControlPointCount(uint32_t n) {
 
 bool Converter::isValidTessFactor(float f) {
   return f >= 1.0f && f <= 64.0f;
-}
-
-
-bool Converter::is64BitType(ir::BasicType type) {
-  auto scalarType = type.getBaseType();
-
-  return scalarType == ir::ScalarType::eF64 ||
-         scalarType == ir::ScalarType::eU64 ||
-         scalarType == ir::ScalarType::eI64;
 }
 
 

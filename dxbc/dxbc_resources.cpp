@@ -1,6 +1,8 @@
 #include "dxbc_converter.h"
 #include "dxbc_resources.h"
 
+#include "../ir/ir_utils.h"
+
 namespace dxbc_spv::dxbc {
 
 ResourceMap::ResourceMap(Converter& converter)
@@ -324,7 +326,7 @@ ir::SsaDef ResourceMap::emitConstantBufferLoad(
       ir::BasicType(bufferType, 4u), descriptor, index, 16u));
 
     for (uint32_t i = 0u; i < components.size(); i++)
-      components[i] = m_converter.extractFromVector(builder, result, i);
+      components[i] = extractFromVector(builder, result, i);
   } else {
     /* Absolute component alignment, in dwords */
     constexpr uint32_t ComponentAlignments = 0x1214;
@@ -347,7 +349,7 @@ ir::SsaDef ResourceMap::emitConstantBufferLoad(
       auto result = builder.add(ir::Op::BufferLoad(blockType, descriptor, address, blockAlignment));
 
       for (uint32_t i = 0u; i < blockType.getVectorSize(); i++)
-        components[componentIndex + i] = m_converter.extractFromVector(builder, result, i);
+        components[componentIndex + i] = extractFromVector(builder, result, i);
 
       readMask -= block;
     }
@@ -360,8 +362,8 @@ ir::SsaDef ResourceMap::emitConstantBufferLoad(
   }
 
   /* Build result vector */
-  return m_converter.composite(builder,
-    m_converter.makeVectorType(scalarType, componentMask),
+  return composite(builder,
+    makeVectorType(scalarType, componentMask),
     components.data(), operand.getSwizzle(), componentMask);
 }
 
@@ -429,7 +431,7 @@ std::pair<ir::SsaDef, ir::SsaDef> ResourceMap::emitRawStructuredLoad(
     /* For regular loads, split the vector into scalars */
     for (uint32_t i = 0u; i < blockType.getVectorSize(); i++) {
       auto index = uint8_t(componentFromBit(block.first())) + i;
-      components[index] = m_converter.extractFromVector(builder, result, i);
+      components[index] = extractFromVector(builder, result, i);
 
       if (scalarType != bufferType)
         components[index] = builder.add(ir::Op::ConsumeAs(scalarType, components[index]));
@@ -439,8 +441,8 @@ std::pair<ir::SsaDef, ir::SsaDef> ResourceMap::emitRawStructuredLoad(
   }
 
   /* Build result vector */
-  auto data = m_converter.composite(builder,
-    m_converter.makeVectorType(scalarType, componentMask),
+  auto data = composite(builder,
+    makeVectorType(scalarType, componentMask),
     components.data(), operand.getSwizzle(), componentMask);
 
   return std::make_pair(data, sparseFeedback);
@@ -470,7 +472,7 @@ bool ResourceMap::emitRawStructuredStore(
 
   for (auto c : writeMask) {
     auto dstIndex = uint8_t(componentFromBit(c));
-    components[dstIndex] = m_converter.extractFromVector(builder, data, srcIndex++);
+    components[dstIndex] = extractFromVector(builder, data, srcIndex++);
 
     if (dataType != bufferType)
       components[dstIndex] = builder.add(ir::Op::ConsumeAs(bufferType, components[dstIndex]));
@@ -481,8 +483,8 @@ bool ResourceMap::emitRawStructuredStore(
     auto block = extractConsecutiveComponents(writeMask);
     auto blockAlignment = computeRawStructuredAlignment(builder, *resource, elementOffset, block);
 
-    auto blockVector = m_converter.composite(builder,
-      m_converter.makeVectorType(bufferType, block),
+    auto blockVector = composite(builder,
+      makeVectorType(bufferType, block),
       components.data(), Swizzle::identity(), block);
 
     auto address = resource->kind == ir::ResourceKind::eBufferStructured
