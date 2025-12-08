@@ -358,26 +358,12 @@ private:
 
   ir::SsaDef getImmediateTextureOffset(ir::Builder& builder, const Instruction& op, ir::ResourceKind kind);
 
-  ir::SsaDef broadcastScalar(ir::Builder& builder, ir::SsaDef def, WriteMask mask);
-
-  ir::SsaDef swizzleVector(ir::Builder& builder, ir::SsaDef value, Swizzle swizzle, WriteMask writeMask);
-
   std::pair<ir::SsaDef, ir::SsaDef> decomposeResourceReturn(ir::Builder& builder, ir::SsaDef value);
 
   ir::ScalarType determineOperandType(
     const Operand&                operand,
           ir::ScalarType          fallback          = ir::ScalarType::eUnknown,
           bool                    allowMinPrecision = true) const;
-
-  ir::SsaDef composite(ir::Builder& builder, ir::BasicType type,
-    const ir::SsaDef* components, Swizzle swizzle, WriteMask mask);
-
-  ir::SsaDef buildVector(ir::Builder& builder, ir::ScalarType scalarType, size_t count, const ir::SsaDef* scalars);
-
-  ir::SsaDef extractFromVector(ir::Builder& builder, ir::SsaDef def, uint32_t component);
-
-  template<typename T>
-  ir::SsaDef makeTypedConstant(ir::Builder& builder, ir::BasicType type, T value);
 
   ir::SsaDef declareRasterizerSampleCount(ir::Builder& builder);
 
@@ -407,11 +393,6 @@ private:
     return logOpMessage(LogLevel::eError, op, args...);
   }
 
-  static ir::BasicType makeVectorType(ir::ScalarType type, WriteMask mask) {
-    uint8_t shift = is64BitType(type) ? 1u : 0u;
-    return ir::BasicType(type, util::popcnt(uint8_t(mask)) >> shift);
-  }
-
   static ir::Type makeSparseFeedbackType(ir::BasicType valueType) {
     return ir::Type().addStructMember(ir::ScalarType::eU32).addStructMember(valueType);
   }
@@ -425,8 +406,6 @@ private:
   static bool isValidControlPointCount(uint32_t n);
 
   static bool isValidTessFactor(float f);
-
-  static bool is64BitType(ir::BasicType type);
 
   static bool hasAbsNegModifiers(const Operand& operand);
 
