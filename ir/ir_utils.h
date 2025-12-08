@@ -5,6 +5,8 @@
 #include "ir.h"
 #include "ir_builder.h"
 
+#include "../util/util_swizzle.h"
+
 namespace dxbc_spv::ir {
 
 /** Checks whether an instruction is a branch */
@@ -131,5 +133,57 @@ Op castConstant(const Op& op, BasicType dstType);
 
 /** Converts constant op using ConsumeAs semantics */
 Op consumeConstant(const Op& op, BasicType dstType);
+
+SsaDef broadcastScalar(Builder& builder, SsaDef def, util::WriteMask mask);
+
+SsaDef swizzleVector(Builder& builder, SsaDef value, util::Swizzle swizzle, util::WriteMask writeMask);
+
+SsaDef composite(Builder& builder, BasicType type,
+  const SsaDef* components, util::Swizzle swizzle, util::WriteMask mask);
+
+SsaDef buildVector(Builder& builder, ScalarType scalarType, size_t count, const SsaDef* scalars);
+
+SsaDef extractFromVector(Builder& builder, SsaDef def, uint32_t component);
+
+bool is64BitType(BasicType type);
+
+inline BasicType makeVectorType(ScalarType type, util::WriteMask mask) {
+  uint8_t shift = is64BitType(type) ? 1u : 0u;
+  return BasicType(type, util::popcnt(uint8_t(mask)) >> shift);
+}
+
+template<typename T>
+SsaDef makeTypedConstant(Builder& builder, BasicType type, T value) {
+  Op op(OpCode::eConstant, type);
+
+  Operand scalar = [type, value] {
+    switch (type.getBaseType()) {
+      case ScalarType::eBool: return Operand(bool(value));
+      case ScalarType::eU8:   return Operand(uint8_t(value));
+      case ScalarType::eU16:  return Operand(uint16_t(value));
+      case ScalarType::eMinU16:
+      case ScalarType::eU32:  return Operand(uint32_t(value));
+      case ScalarType::eU64:  return Operand(uint64_t(value));
+      case ScalarType::eI8:   return Operand(int8_t(value));
+      case ScalarType::eI16:  return Operand(int16_t(value));
+      case ScalarType::eMinI16:
+      case ScalarType::eI32:  return Operand(int32_t(value));
+      case ScalarType::eI64:  return Operand(int64_t(value));
+      case ScalarType::eF16:  return Operand(util::float16_t(value));
+      case ScalarType::eMinF16:
+      case ScalarType::eF32:  return Operand(float(value));
+      case ScalarType::eF64:  return Operand(double(value));
+      default: break;
+    }
+
+    dxbc_spv_unreachable();
+    return Operand();
+  } ();
+
+  for (uint32_t i = 0u; i < type.getVectorSize(); i++)
+    op.addOperand(scalar);
+
+  return builder.add(std::move(op));
+}
 
 }
