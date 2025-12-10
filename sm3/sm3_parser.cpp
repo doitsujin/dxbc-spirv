@@ -546,7 +546,7 @@ Operand::Operand(util::ByteReader& reader, const OperandInfo& info, Instruction&
       }
     } else {
       // Always use a0
-      util::binsert(m_addressToken.value(), uint32_t(RegisterType::eAddr), 28u, 3u);
+      m_addressToken.value() = util::binsert(m_addressToken.value(), uint32_t(RegisterType::eAddr), 28u, 3u);
     }
   }
 
