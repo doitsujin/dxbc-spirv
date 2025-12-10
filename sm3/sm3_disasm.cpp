@@ -325,9 +325,9 @@ void Disassembler::disassembleDeclaration(std::ostream& stream, const Instructio
       stream << usage;
     } else {
       if (index == 0) {
-        stream << "_color";
+        stream << "color";
       } else {
-        stream << "_specular" << (index - 1u);
+        stream << "specular" << (index - 1u);
       }
     }
 
