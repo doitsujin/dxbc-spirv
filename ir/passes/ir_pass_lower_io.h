@@ -111,6 +111,10 @@ public:
     return sameLocation && !(~getComponentMask() & other.getComponentMask());
   }
 
+  /** Checks for equality */
+  bool operator == (const IoLocation& other) const { return m_info == other.m_info && m_mask == other.m_mask; }
+  bool operator != (const IoLocation& other) const { return m_info != other.m_info || m_mask != other.m_mask; }
+
 private:
 
   uint8_t m_info = 0u;
@@ -127,6 +131,20 @@ private:
 };
 
 
+/** Semantic info */
+struct IoSemantic {
+  std::string name  = { };
+  uint32_t    index = 0u;
+
+  bool operator == (const IoSemantic& other) const { return name == other.name && index == other.index; }
+  bool operator != (const IoSemantic& other) const { return name != other.name || index != other.index; }
+
+  explicit operator bool () const {
+    return !name.empty();
+  }
+};
+
+
 /** I/O map of a given shader. Can also be used to represent vertex input,
  *  in which case every entry must be a vec4 at a unique location. */
 class IoMap {
@@ -138,7 +156,14 @@ public:
   ~IoMap();
 
   /** Adds an I/O location to the map. */
-  void add(IoLocation entry);
+  void add(IoLocation entry, IoSemantic semantic);
+
+  /** Looks up semantic based for an I/O location, Returns
+   *  empty semantic if the given location is not defined. */
+  IoSemantic getSemanticForEntry(IoLocation entry) const;
+
+  /** Looks up I/O entry based on the semantic. */
+  std::optional<IoLocation> getLocationForSemantic(const IoSemantic& semantic) const;
 
   /** Number of entries */
   uint32_t getCount() const {
@@ -164,7 +189,7 @@ public:
   /** Validates I/O compatibility. Returns true if every entry of
    *  the input map is covered by an entry of the output map. */
   static bool checkCompatibility(ShaderStage prevStage, const IoMap& prevStageOut,
-          ShaderStage stage, const IoMap& stageIn);
+          ShaderStage stage, const IoMap& stageIn, bool matchSemantics);
 
   /** Checks whether a built-in is system generated. */
   static bool builtInIsGenerated(BuiltIn builtIn, ShaderStage prevStage, ShaderStage stage);
@@ -175,7 +200,16 @@ public:
   /** Encodes I/O variable */
   static IoLocation getEntryForOp(ShaderStage stage, const Op& op);
 
+  /** Queries semantic info for an I/O variable */
+  static IoSemantic getSemanticForOp(const Builder& builder, const Op& op);
+
 private:
+
+  struct IoSemanticEntry {
+    IoLocation location = { };
+    uint16_t index = 0u;
+    std::string name = { };
+  };
 
   /** Encodes built-in I/O variable */
   static IoLocation getEntryForBuiltIn(const Op& op);
@@ -184,6 +218,8 @@ private:
   static IoLocation getEntryForLocation(ShaderStage stage, const Op& op);
 
   util::small_vector<IoLocation, 32> m_entries;
+
+  util::small_vector<IoSemanticEntry, 16> m_semantics;
 
 };
 
@@ -273,6 +309,10 @@ public:
   /** Adjusts patch constant locations for tessellation shaders. Takes pre-computed
    *  output map info of the hull shader to find unused locations. */
   bool resolvePatchConstantLocations(const IoMap& hullOutput);
+
+  /** Adjusts I/O location and component indices based on semantic names. Does not
+   *  touch built-ins in any way. */
+  bool resolveSemanticIo(const IoMap& prevStageOut);
 
   /** Rewrites undefined input variables as constant zero based on the output map of
    *  the previous stage. Can be used for vertex shader inputs as well. Also fixes up
