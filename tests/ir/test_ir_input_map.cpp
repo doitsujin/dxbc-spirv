@@ -256,72 +256,72 @@ void testIrInputMapEntryFromBuilder() {
 
 void testIrInputMapCompatibility() {
   IoMap outMap;
-  outMap.add(IoLocation(BuiltIn::eClipDistance, 0x3fu));
-  outMap.add(IoLocation(BuiltIn::ePosition, 0xfu));
-  outMap.add(IoLocation(IoEntryType::ePerVertex, 0u, 0x7u));
-  outMap.add(IoLocation(IoEntryType::ePerVertex, 0u, 0x8u));
-  outMap.add(IoLocation(IoEntryType::ePerVertex, 1u, 0xfu));
-  outMap.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x1u));
-  outMap.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x2u));
-  outMap.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x4u));
+  outMap.add(IoLocation(BuiltIn::eClipDistance, 0x3fu), IoSemantic { });
+  outMap.add(IoLocation(BuiltIn::ePosition, 0xfu), IoSemantic { });
+  outMap.add(IoLocation(IoEntryType::ePerVertex, 0u, 0x7u), IoSemantic { });
+  outMap.add(IoLocation(IoEntryType::ePerVertex, 0u, 0x8u), IoSemantic { });
+  outMap.add(IoLocation(IoEntryType::ePerVertex, 1u, 0xfu), IoSemantic { });
+  outMap.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x1u), IoSemantic { });
+  outMap.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x2u), IoSemantic { });
+  outMap.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x4u), IoSemantic { });
 
   IoMap inMap;
-  ok(IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap));
+  ok(IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap, false));
 
   /* Basic match */
-  inMap.add(IoLocation(BuiltIn::ePosition, 0xfu));
-  ok(IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap));
+  inMap.add(IoLocation(BuiltIn::ePosition, 0xfu), IoSemantic { });
+  ok(IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap, false));
 
   /* Always defined when consuming vertex shader */
-  inMap.add(IoLocation(BuiltIn::ePrimitiveId, 0xfu));
-  ok(IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap));
+  inMap.add(IoLocation(BuiltIn::ePrimitiveId, 0xfu), IoSemantic { });
+  ok(IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap, false));
 
   /* GS must explicitly write it */
-  inMap.add(IoLocation(BuiltIn::ePrimitiveId, 0xfu));
-  ok(!IoMap::checkCompatibility(ShaderStage::eGeometry, outMap, ShaderStage::ePixel, inMap));
+  inMap.add(IoLocation(BuiltIn::ePrimitiveId, 0xfu), IoSemantic { });
+  ok(!IoMap::checkCompatibility(ShaderStage::eGeometry, outMap, ShaderStage::ePixel, inMap, false));
 
   /* Full and partial matches for regular I/O locations */
-  inMap.add(IoLocation(IoEntryType::ePerVertex, 0u, 0x8u));
-  ok(IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap));
+  inMap.add(IoLocation(IoEntryType::ePerVertex, 0u, 0x8u), IoSemantic { });
+  ok(IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap, false));
 
-  inMap.add(IoLocation(IoEntryType::ePerVertex, 0u, 0x3u));
-  ok(IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap));
+  inMap.add(IoLocation(IoEntryType::ePerVertex, 0u, 0x3u), IoSemantic { });
+  ok(IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap, false));
 
-  inMap.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x1u));
-  ok(IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap));
+  inMap.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x1u), IoSemantic { });
+  ok(IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap, false));
 
   /* Straddling multiple outputs */
   inMap = IoMap();
-  inMap.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x6u));
-  ok(!IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap));
+  inMap.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x6u), IoSemantic { });
+  ok(!IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap, false));
 
   /* Cull distance is not written at all */
   inMap = IoMap();
-  inMap.add(IoLocation(BuiltIn::eCullDistance, 0x3u));
-  ok(!IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap));
+  inMap.add(IoLocation(BuiltIn::eCullDistance, 0x3u), IoSemantic { });
+  ok(!IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap, false));
 
   /* Clip distance mask must match exactly */
   inMap = IoMap();
-  inMap.add(IoLocation(BuiltIn::eClipDistance, 0x3fu));
-  ok(IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap));
+  inMap.add(IoLocation(BuiltIn::eClipDistance, 0x3fu), IoSemantic { });
+  ok(IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap, false));
 
   inMap = IoMap();
-  inMap.add(IoLocation(BuiltIn::eClipDistance, 0xfu));
-  ok(!IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap));
+  inMap.add(IoLocation(BuiltIn::eClipDistance, 0xfu), IoSemantic { });
+  ok(!IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap, false));
 
   inMap = IoMap();
-  inMap.add(IoLocation(BuiltIn::eClipDistance, 0xffu));
-  ok(!IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap));
+  inMap.add(IoLocation(BuiltIn::eClipDistance, 0xffu), IoSemantic { });
+  ok(!IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap, false));
 
   /* Different starting components */
   inMap = IoMap();
-  inMap.add(IoLocation(IoEntryType::ePerVertex, 0u, 0x6u));
-  ok(!IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap));
+  inMap.add(IoLocation(IoEntryType::ePerVertex, 0u, 0x6u), IoSemantic { });
+  ok(!IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap, false));
 
   /* Unwritten location */
   inMap = IoMap();
-  inMap.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x1u));
-  ok(!IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap));
+  inMap.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x1u), IoSemantic { });
+  ok(!IoMap::checkCompatibility(ShaderStage::eVertex, outMap, ShaderStage::ePixel, inMap, false));
 }
 
 
