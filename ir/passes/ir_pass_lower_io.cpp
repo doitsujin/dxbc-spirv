@@ -18,7 +18,7 @@ IoMap::~IoMap() {
 }
 
 
-void IoMap::add(IoLocation entry) {
+void IoMap::add(IoLocation entry, IoSemantic semantic) {
   /* Maintain order based on type, location etc */
   auto iter = m_entries.begin();
 
@@ -26,6 +26,37 @@ void IoMap::add(IoLocation entry) {
     iter++;
 
   m_entries.insert(iter, entry);
+
+  if (semantic) {
+    auto& s = m_semantics.emplace_back();
+    s.location = entry;
+    s.index = semantic.index;
+    s.name = std::move(semantic.name);
+  }
+}
+
+
+IoSemantic IoMap::getSemanticForEntry(IoLocation entry) const {
+  for (const auto& e : m_semantics) {
+    if (e.location == entry) {
+      IoSemantic result;
+      result.name = e.name;
+      result.index = e.index;
+      return result;
+    }
+  }
+
+  return IoSemantic();
+}
+
+
+std::optional<IoLocation> IoMap::getLocationForSemantic(const IoSemantic& semantic) const {
+  for (const auto& e : m_semantics) {
+    if (util::compareCaseInsensitive(e.name.c_str(), semantic.name.c_str()) && e.index == semantic.index)
+      return e.location;
+  }
+
+  return std::nullopt;
 }
 
 
@@ -37,9 +68,9 @@ IoMap IoMap::forInputs(const Builder& builder) {
 
   for (auto iter = a; iter != b; iter++) {
     if (iter->getOpCode() == OpCode::eDclInput)
-      result.add(getEntryForLocation(stage, *iter));
+      result.add(getEntryForLocation(stage, *iter), getSemanticForOp(builder, *iter));
     else if (iter->getOpCode() == OpCode::eDclInputBuiltIn)
-      result.add(getEntryForBuiltIn(*iter));
+      result.add(getEntryForBuiltIn(*iter), getSemanticForOp(builder, *iter));
   }
 
   return result;
@@ -55,10 +86,10 @@ IoMap IoMap::forOutputs(const Builder& builder, uint32_t stream) {
   for (auto iter = a; iter != b; iter++) {
     if (iter->getOpCode() == OpCode::eDclOutput) {
       if (stage != ShaderStage::eGeometry || stream == uint32_t(iter->getOperand(3u)))
-        result.add(getEntryForLocation(stage, *iter));
+        result.add(getEntryForLocation(stage, *iter), getSemanticForOp(builder, *iter));
     } else if (iter->getOpCode() == OpCode::eDclOutputBuiltIn) {
       if (stage != ShaderStage::eGeometry || stream == uint32_t(iter->getOperand(2u)))
-        result.add(getEntryForBuiltIn(*iter));
+        result.add(getEntryForBuiltIn(*iter), getSemanticForOp(builder, *iter));
     }
   }
 
@@ -66,7 +97,7 @@ IoMap IoMap::forOutputs(const Builder& builder, uint32_t stream) {
 }
 
 
-bool IoMap::checkCompatibility(ShaderStage prevStage, const IoMap& prevStageOut, ShaderStage stage, const IoMap& stageIn) {
+bool IoMap::checkCompatibility(ShaderStage prevStage, const IoMap& prevStageOut, ShaderStage stage, const IoMap& stageIn, bool matchSemantics) {
   auto w = prevStageOut.m_entries.begin();
 
   for (const auto& r : stageIn.m_entries) {
@@ -95,6 +126,15 @@ bool IoMap::checkCompatibility(ShaderStage prevStage, const IoMap& prevStageOut,
     /* Check whether there are any components read but not written */
     if (!w->covers(r))
       return false;
+
+    /* Check whether semantics match between entries */
+    if (matchSemantics) {
+      auto rSemantic = stageIn.getSemanticForEntry(r);
+      auto wSemantic = prevStageOut.getSemanticForEntry(*w);
+
+      if (!rSemantic.matches(wSemantic))
+        return false;
+    }
   }
 
   return true;
@@ -176,6 +216,22 @@ IoLocation IoMap::getEntryForLocation(ShaderStage stage, const Op& op) {
   }
 
   return IoLocation(type, locationIndex, componentMask <<componentIndex);
+}
+
+
+IoSemantic IoMap::getSemanticForOp(const Builder& builder, const Op& op) {
+  auto [a, b] = builder.getUses(op.getDef());
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::eSemantic) {
+      IoSemantic semantic = { };
+      semantic.name = iter->getLiteralString(iter->getFirstLiteralOperandIndex() + 1u);
+      semantic.index = uint32_t(iter->getOperand(iter->getFirstLiteralOperandIndex()));
+      return semantic;
+    }
+  }
+
+  return IoSemantic();
 }
 
 
@@ -420,6 +476,45 @@ bool LowerIoPass::resolvePatchConstantLocations(const IoMap& hullOutput) {
   }
 
   return true;
+}
+
+
+bool LowerIoPass::resolveSemanticIo(const IoMap& prevStageOut) {
+  bool hasRemovedInputs = false;
+  bool hasRewrittenLocation = false;
+
+  auto [a, b] = m_builder.getDeclarations();
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::eDclInput) {
+      auto semantic = IoMap::getSemanticForOp(m_builder, *iter);
+
+      if (semantic) {
+        auto outLocation = prevStageOut.getLocationForSemantic(semantic);
+        auto inLocation = IoMap::getEntryForOp(m_stage, *iter);
+
+        if (!outLocation || inLocation.getType() != outLocation->getType()) {
+          /* Nuke variable if there is no matching semantic */
+          for (uint32_t i = 0u; i < inLocation.computeComponentCount(); i++)
+            resolveMismatchedIoVar(*iter, i, SsaDef(), SsaDef());
+
+          hasRemovedInputs = true;
+        } else if (inLocation.getLocationIndex() != outLocation->getLocationIndex() ||
+                   inLocation.getFirstComponentIndex() != outLocation->getFirstComponentIndex()) {
+          m_builder.rewriteOp(iter->getDef(), Op(*iter)
+            .setOperand(iter->getFirstLiteralOperandIndex() + 0u, outLocation->getLocationIndex())
+            .setOperand(iter->getFirstLiteralOperandIndex() + 1u, outLocation->getFirstComponentIndex()));
+
+          hasRewrittenLocation = true;
+        }
+      }
+    }
+  }
+
+  if (hasRemovedInputs)
+    RemoveUnusedPass::runPass(m_builder);
+
+  return hasRemovedInputs || hasRewrittenLocation;
 }
 
 

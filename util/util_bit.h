@@ -209,4 +209,14 @@ inline bool compareCharsCaseInsensitive(char a, char b) {
   return a == b;
 }
 
+/** Compare ASCII string in a case-insensitive way */
+inline bool compareCaseInsensitive(const char* a, const char* b) {
+  for (size_t i = 0u; a[i] || b[i]; i++) {
+    if (!compareCharsCaseInsensitive(a[i], b[i]))
+      return false;
+  }
+
+  return true;
+}
+
 }
