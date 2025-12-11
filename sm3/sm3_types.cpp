@@ -168,8 +168,8 @@ std::ostream& operator << (std::ostream& os, UnambiguousRegisterType registerTyp
     case RegisterType::eAddr:
     // case RegisterType::eTexture: Same value
       return os << (registerType.shaderType == ShaderType::eVertex ? "a" : "t");
-    case RegisterType::eRasterizerOut:
-    case RegisterType::eAttributeOut:  return os << "o";
+    case RegisterType::eRasterizerOut: return os << "o";
+    case RegisterType::eAttributeOut:  return os << "oD";
     case RegisterType::eTexCoordOut:
     // case RegisterType::eOutput: Same value.
       return os << (registerType.shaderVersionMajor == 3 ? "o" : "oT");
