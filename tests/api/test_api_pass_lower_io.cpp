@@ -708,12 +708,12 @@ Builder test_pass_lower_io_mismatch_vs_basic() {
   IoMap inputs = { };
 
   /* regular inputs */
-  inputs.add(IoLocation(IoEntryType::ePerVertex, 0u, 0xfu));
-  inputs.add(IoLocation(IoEntryType::ePerVertex, 1u, 0xfu));
-  inputs.add(IoLocation(IoEntryType::ePerVertex, 2u, 0xfu));
+  inputs.add(IoLocation(IoEntryType::ePerVertex, 0u, 0xfu), IoSemantic { });
+  inputs.add(IoLocation(IoEntryType::ePerVertex, 1u, 0xfu), IoSemantic { });
+  inputs.add(IoLocation(IoEntryType::ePerVertex, 2u, 0xfu), IoSemantic { });
 
   /* unused input */
-  inputs.add(IoLocation(IoEntryType::ePerVertex, 3u, 0xfu));
+  inputs.add(IoLocation(IoEntryType::ePerVertex, 3u, 0xfu), IoSemantic { });
 
   return test_io_mismatch_vs(inputs);
 }
@@ -723,11 +723,11 @@ Builder test_pass_lower_io_mismatch_vs_missing_input() {
   IoMap inputs = { };
 
   /* Omit input 1 */
-  inputs.add(IoLocation(IoEntryType::ePerVertex, 0u, 0xfu));
-  inputs.add(IoLocation(IoEntryType::ePerVertex, 2u, 0xfu));
+  inputs.add(IoLocation(IoEntryType::ePerVertex, 0u, 0xfu), IoSemantic { });
+  inputs.add(IoLocation(IoEntryType::ePerVertex, 2u, 0xfu), IoSemantic { });
 
   /* unused input */
-  inputs.add(IoLocation(IoEntryType::ePerVertex, 3u, 0xfu));
+  inputs.add(IoLocation(IoEntryType::ePerVertex, 3u, 0xfu), IoSemantic { });
 
   return test_io_mismatch_vs(inputs);
 }
@@ -738,14 +738,14 @@ Builder test_pass_lower_io_mismatch_hs_basic() {
   IoMap prevOut = { };
 
   /* Exact match for everything */
-  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu));
+  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu), IoSemantic { });
 
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0x7u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x7u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x1u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x2u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0xfu));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0xfu));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0x7u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x7u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x1u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x2u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0xfu), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0xfu), IoSemantic { });
 
   return test_io_mismatch_hs(prevOut);
 }
@@ -755,22 +755,22 @@ Builder test_pass_lower_io_mismatch_hs_missing_input() {
   IoMap prevOut = { };
 
   /* Omit position, add unused builtin instead */
-  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0xfu));
+  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0xfu), IoSemantic { });
 
   /* Split up vec3 into two vec2s */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0x3u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0xcu));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0x3u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0xcu), IoSemantic { });
 
   /* Scalarize and omit one component */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x1u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x4u));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x1u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x4u), IoSemantic { });
 
   /* Omit first component, enlarge second */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x6u));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x6u), IoSemantic { });
 
   /* Use partial component masks for these */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0x3u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0xcu));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0x3u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0xcu), IoSemantic { });
 
   return test_io_mismatch_hs(prevOut);
 }
@@ -780,17 +780,17 @@ Builder test_pass_lower_io_mismatch_ds_basic() {
   IoMap prevOut = { };
 
   /* Irrelevant, kind of */
-  prevOut.add(IoLocation(BuiltIn::eTessFactorOuter, 0xfu));
-  prevOut.add(IoLocation(BuiltIn::eTessFactorInner, 0x3u));
+  prevOut.add(IoLocation(BuiltIn::eTessFactorOuter, 0xfu), IoSemantic { });
+  prevOut.add(IoLocation(BuiltIn::eTessFactorInner, 0x3u), IoSemantic { });
 
   /* Exact match for everything */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 0u, 0xfu));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x7u));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 0u, 0xfu), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x7u), IoSemantic { });
 
-  prevOut.add(IoLocation(IoEntryType::ePerPatch, 0u, 0x1u));
-  prevOut.add(IoLocation(IoEntryType::ePerPatch, 0u, 0x2u));
-  prevOut.add(IoLocation(IoEntryType::ePerPatch, 1u, 0xfu));
-  prevOut.add(IoLocation(IoEntryType::ePerPatch, 8u, 0xfu));
+  prevOut.add(IoLocation(IoEntryType::ePerPatch, 0u, 0x1u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerPatch, 0u, 0x2u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerPatch, 1u, 0xfu), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerPatch, 8u, 0xfu), IoSemantic { });
 
   return test_io_mismatch_ds(prevOut);
 }
@@ -800,20 +800,20 @@ Builder test_pass_lower_io_mismatch_ds_missing_input() {
   IoMap prevOut = { };
 
   /* Irrelevant, kind of */
-  prevOut.add(IoLocation(BuiltIn::eTessFactorOuter, 0xfu));
-  prevOut.add(IoLocation(BuiltIn::eTessFactorInner, 0x3u));
+  prevOut.add(IoLocation(BuiltIn::eTessFactorOuter, 0xfu), IoSemantic { });
+  prevOut.add(IoLocation(BuiltIn::eTessFactorInner, 0x3u), IoSemantic { });
 
   /* Omit position components and color input */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 0u, 0x3u));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 0u, 0x3u), IoSemantic { });
 
   /* Missing second component */
-  prevOut.add(IoLocation(IoEntryType::ePerPatch, 0u, 0x1u));
+  prevOut.add(IoLocation(IoEntryType::ePerPatch, 0u, 0x1u), IoSemantic { });
 
   /* Partially defined components */
-  prevOut.add(IoLocation(IoEntryType::ePerPatch, 1u, 0x6u));
+  prevOut.add(IoLocation(IoEntryType::ePerPatch, 1u, 0x6u), IoSemantic { });
 
   /* Wrong class of input */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 8u, 0xfu));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 8u, 0xfu), IoSemantic { });
 
   return test_io_mismatch_ds(prevOut);
 }
@@ -823,26 +823,26 @@ Builder test_pass_lower_io_mismatch_ds_straddle_input() {
   IoMap prevOut = { };
 
   /* Irrelevant, kind of */
-  prevOut.add(IoLocation(BuiltIn::eTessFactorOuter, 0xfu));
-  prevOut.add(IoLocation(BuiltIn::eTessFactorInner, 0x3u));
+  prevOut.add(IoLocation(BuiltIn::eTessFactorOuter, 0xfu), IoSemantic { });
+  prevOut.add(IoLocation(BuiltIn::eTessFactorInner, 0x3u), IoSemantic { });
 
   /* Split up input */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 0u, 0x1u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 0u, 0x4u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 0u, 0x8u));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 0u, 0x1u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 0u, 0x4u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 0u, 0x8u), IoSemantic { });
 
   /* Full component mismatch */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0xeu));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0xeu), IoSemantic { });
 
   /* Merged into one vector */
-  prevOut.add(IoLocation(IoEntryType::ePerPatch, 0u, 0xfu));
+  prevOut.add(IoLocation(IoEntryType::ePerPatch, 0u, 0xfu), IoSemantic { });
 
   /* Split up patch constant */
-  prevOut.add(IoLocation(IoEntryType::ePerPatch, 1u, 0x3u));
-  prevOut.add(IoLocation(IoEntryType::ePerPatch, 1u, 0x8u));
+  prevOut.add(IoLocation(IoEntryType::ePerPatch, 1u, 0x3u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerPatch, 1u, 0x8u), IoSemantic { });
 
   /* Another partial input test */
-  prevOut.add(IoLocation(IoEntryType::ePerPatch, 8u, 0xeu));
+  prevOut.add(IoLocation(IoEntryType::ePerPatch, 8u, 0xeu), IoSemantic { });
 
   return test_io_mismatch_ds(prevOut);
 }
@@ -853,19 +853,19 @@ Builder test_pass_lower_io_mismatch_gs_basic() {
   IoMap prevOut = { };
 
   /* Exact match for outputs */
-  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu));
-  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0x3u));
+  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu), IoSemantic { });
+  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0x3u), IoSemantic { });
 
   /* Unused built-in */
-  prevOut.add(IoLocation(BuiltIn::eLayerIndex, 0x1u));
+  prevOut.add(IoLocation(BuiltIn::eLayerIndex, 0x1u), IoSemantic { });
 
   /* Exact match */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0x3u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0xcu));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0xfu));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0x3u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0xcu), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0xfu), IoSemantic { });
 
   /* Unused location */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0xfu));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0xfu), IoSemantic { });
 
   return test_io_mismatch_gs(ShaderStage::eVertex, prevOut);
 }
@@ -875,11 +875,11 @@ Builder test_pass_lower_io_mismatch_gs_missing_input() {
   IoMap prevOut = { };
 
   /* Omit position input */
-  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0x3u));
+  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0x3u), IoSemantic { });
 
   /* Omit one of the regular inputs */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0x3u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0xfu));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0x3u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0xfu), IoSemantic { });
 
   return test_io_mismatch_gs(ShaderStage::eVertex, prevOut);
 }
@@ -889,13 +889,13 @@ Builder test_pass_lower_io_mismatch_gs_partial_input() {
   IoMap prevOut = { };
 
   /* Make clip distance smol */
-  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu));
-  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0x1u));
+  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu), IoSemantic { });
+  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0x1u), IoSemantic { });
 
   /* Omit components for each input */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0x2u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0x4u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x6u));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0x2u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0x4u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x6u), IoSemantic { });
 
   return test_io_mismatch_gs(ShaderStage::eVertex, prevOut);
 }
@@ -905,17 +905,17 @@ Builder test_pass_lower_io_mismatch_gs_straddle() {
   IoMap prevOut = { };
 
   /* Make clip distance larger */
-  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu));
-  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0xfu));
+  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu), IoSemantic { });
+  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0xfu), IoSemantic { });
 
   /* Rewrite split input as scalar + vec3 */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0x1u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0xeu));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0x1u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 1u, 0xeu), IoSemantic { });
 
   /* Rewrite vec4 input as vec2 + two scalars */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x3u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x4u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x8u));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x3u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x4u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0x8u), IoSemantic { });
 
   return test_io_mismatch_gs(ShaderStage::eVertex, prevOut);
 }
@@ -926,32 +926,32 @@ Builder test_pass_lower_io_mismatch_ps_basic() {
   IoMap prevOut = { };
 
   /* Irrelevant */
-  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu));
+  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu), IoSemantic { });
 
   /* Exact matches for built-ins */
-  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0x1fu));
-  prevOut.add(IoLocation(BuiltIn::eCullDistance, 0x3u));
-  prevOut.add(IoLocation(BuiltIn::ePrimitiveId, 0x1u));
+  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0x1fu), IoSemantic { });
+  prevOut.add(IoLocation(BuiltIn::eCullDistance, 0x3u), IoSemantic { });
+  prevOut.add(IoLocation(BuiltIn::ePrimitiveId, 0x1u), IoSemantic { });
 
   /* Unused built-in */
-  prevOut.add(IoLocation(BuiltIn::eLayerIndex, 0x1u));
+  prevOut.add(IoLocation(BuiltIn::eLayerIndex, 0x1u), IoSemantic { });
 
   /* Unused location */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0xfu));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 2u, 0xfu), IoSemantic { });
 
   /* Exact match */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x7u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x8u));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x7u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x8u), IoSemantic { });
 
   /* Oversized output, this is fine */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 4u, 0x7u));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 4u, 0x7u), IoSemantic { });
 
   /* Exact match */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0xfu));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0xfu), IoSemantic { });
 
   /* One unused coord, one used part */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0x3u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0xcu));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0x3u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0xcu), IoSemantic { });
 
   return test_io_mismatch_ps(ShaderStage::eGeometry, prevOut);
 }
@@ -961,21 +961,21 @@ Builder test_pass_lower_io_mismatch_ps_missing_input() {
   IoMap prevOut = { };
 
   /* Irrelevant */
-  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu));
+  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu), IoSemantic { });
 
   /* Exact matches for built-ins */
-  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0x1fu));
-  prevOut.add(IoLocation(BuiltIn::eCullDistance, 0x3u));
+  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0x1fu), IoSemantic { });
+  prevOut.add(IoLocation(BuiltIn::eCullDistance, 0x3u), IoSemantic { });
 
   /* Omit normal part */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x8u));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x8u), IoSemantic { });
 
   /* Exact match */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 4u, 0x1u));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 4u, 0x1u), IoSemantic { });
 
   /* Omit location 5 entirely */
   /* Unused coord, omit used part */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0x3u));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0x3u), IoSemantic { });
 
   return test_io_mismatch_ps(ShaderStage::eVertex, prevOut);
 }
@@ -985,24 +985,24 @@ Builder test_pass_lower_io_mismatch_ps_partial_input() {
   IoMap prevOut = { };
 
   /* Irrelevant */
-  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu));
+  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu), IoSemantic { });
 
   /* Exact matches for built-ins */
-  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0x1fu));
-  prevOut.add(IoLocation(BuiltIn::eCullDistance, 0x3u));
+  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0x1fu), IoSemantic { });
+  prevOut.add(IoLocation(BuiltIn::eCullDistance, 0x3u), IoSemantic { });
 
   /* Omit two components of normal part */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x1u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x8u));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x1u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x8u), IoSemantic { });
 
   /* Oversized output, this is fine */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 4u, 0x7u));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 4u, 0x7u), IoSemantic { });
 
   /* Omit first component of color input */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0xeu));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0xeu), IoSemantic { });
 
   /* Mismatch and omit last component of coord */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0x7u));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0x7u), IoSemantic { });
 
   return test_io_mismatch_ps(ShaderStage::eVertex, prevOut);
 }
@@ -1012,20 +1012,20 @@ Builder test_pass_lower_io_mismatch_ps_missing_builtin() {
   IoMap prevOut = { };
 
   /* Irrelevant */
-  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu));
+  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu), IoSemantic { });
 
   /* Omit clip distance and primitive ID */
-  prevOut.add(IoLocation(BuiltIn::eCullDistance, 0x3u));
+  prevOut.add(IoLocation(BuiltIn::eCullDistance, 0x3u), IoSemantic { });
 
   /* Unused built-in */
-  prevOut.add(IoLocation(BuiltIn::eLayerIndex, 0x1u));
+  prevOut.add(IoLocation(BuiltIn::eLayerIndex, 0x1u), IoSemantic { });
 
   /* Exact match */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x7u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x8u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 4u, 0x1u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0xfu));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0xcu));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x7u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x8u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 4u, 0x1u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0xfu), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0xcu), IoSemantic { });
 
   return test_io_mismatch_ps(ShaderStage::eGeometry, prevOut);
 }
@@ -1035,27 +1035,27 @@ Builder test_pass_lower_io_mismatch_ps_straddle() {
   IoMap prevOut = { };
 
   /* Irrelevant */
-  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu));
+  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu), IoSemantic { });
 
   /* Exact matches for built-ins */
-  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0x1fu));
-  prevOut.add(IoLocation(BuiltIn::eCullDistance, 0x3u));
-  prevOut.add(IoLocation(BuiltIn::ePrimitiveId, 0x1u));
+  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0x1fu), IoSemantic { });
+  prevOut.add(IoLocation(BuiltIn::eCullDistance, 0x3u), IoSemantic { });
+  prevOut.add(IoLocation(BuiltIn::ePrimitiveId, 0x1u), IoSemantic { });
 
   /* Rewrite vec3 + scalar as scalar + vec3 */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x1u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0xeu));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x1u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0xeu), IoSemantic { });
 
   /* Oversized output, this is fine */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 4u, 0xfu));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 4u, 0xfu), IoSemantic { });
 
   /* Scalarize output and omit 3rd component */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0x1u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0x2u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0x8u));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0x1u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0x2u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0x8u), IoSemantic { });
 
   /* Rewrite input as full vec4 */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0xfu));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0xfu), IoSemantic { });
 
   return test_io_mismatch_ps(ShaderStage::eGeometry, prevOut);
 }
@@ -1065,18 +1065,18 @@ Builder test_pass_lower_io_mismatch_ps_clip_distance_small() {
   IoMap prevOut = { };
 
   /* Irrelevant */
-  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu));
+  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu), IoSemantic { });
 
   /* Make clip distance smaller but cull distance larger */
-  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0x7u));
-  prevOut.add(IoLocation(BuiltIn::eCullDistance, 0xfu));
+  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0x7u), IoSemantic { });
+  prevOut.add(IoLocation(BuiltIn::eCullDistance, 0xfu), IoSemantic { });
 
   /* Exact match */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x7u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x8u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 4u, 0x1u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0xfu));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0xcu));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x7u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x8u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 4u, 0x1u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0xfu), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0xcu), IoSemantic { });
 
   return test_io_mismatch_ps(ShaderStage::eVertex, prevOut);
 }
@@ -1086,18 +1086,18 @@ Builder test_pass_lower_io_mismatch_ps_clip_distance_large() {
   IoMap prevOut = { };
 
   /* Irrelevant */
-  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu));
+  prevOut.add(IoLocation(BuiltIn::ePosition, 0xfu), IoSemantic { });
 
   /* Make clip distance larger but cull distance smaller */
-  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0x7fu));
-  prevOut.add(IoLocation(BuiltIn::eCullDistance, 0x1u));
+  prevOut.add(IoLocation(BuiltIn::eClipDistance, 0x7fu), IoSemantic { });
+  prevOut.add(IoLocation(BuiltIn::eCullDistance, 0x1u), IoSemantic { });
 
   /* Exact match */
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x7u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x8u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 4u, 0x1u));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0xfu));
-  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0xcu));
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x7u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 3u, 0x8u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 4u, 0x1u), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 5u, 0xfu), IoSemantic { });
+  prevOut.add(IoLocation(IoEntryType::ePerVertex, 6u, 0xcu), IoSemantic { });
 
   return test_io_mismatch_ps(ShaderStage::eVertex, prevOut);
 }
