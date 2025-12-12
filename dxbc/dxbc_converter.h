@@ -52,6 +52,8 @@ public:
     /** Maximum tessellation factor override. Shaders may specify a
      *  different value, but any higher values will be ignored. */
     float maxTessFactor = 0.0f;
+    /** Whether to externally limit tessellation factors */
+    bool limitTessFactor = false;
   };
 
   Converter(Container container, const Options& options);

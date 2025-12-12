@@ -406,22 +406,31 @@ bool IoMap::applyMaxTessFactor(ir::Builder& builder) {
     return false;
   }
 
+  auto maxTessFactor = builder.makeConstant(m_converter.m_hs.maxTessFactor);
+
+  if (m_converter.m_options.limitTessFactor) {
+    auto builtIn = builder.add(ir::Op::DclInputBuiltIn(ir::ScalarType::eF32,
+      m_converter.getEntryPoint(), ir::BuiltIn::eTessFactorLimit, ir::InterpolationModes()));
+
+    if (m_converter.m_options.includeDebugNames)
+      builder.add(ir::Op::DebugName(builtIn, "vMaxTessFactor"));
+
+    maxTessFactor = builder.add(ir::Op::FMin(ir::ScalarType::eF32, maxTessFactor,
+      builder.add(ir::Op::InputLoad(ir::ScalarType::eF32, builtIn, ir::SsaDef()))));
+  }
+
   if (m_tessFactorOuter) {
     for (uint32_t i = 0u; i < outer; i++) {
-      auto scalar = builder.add(ir::Op::OutputLoad(ir::ScalarType::eF32,
-        m_tessFactorOuter, builder.makeConstant(i)));
-      scalar = builder.add(ir::Op::FClamp(ir::ScalarType::eF32, scalar,
-        builder.makeConstant(0.0f), builder.makeConstant(m_converter.m_hs.maxTessFactor)));
+      auto scalar = builder.add(ir::Op::OutputLoad(ir::ScalarType::eF32, m_tessFactorOuter, builder.makeConstant(i)));
+      scalar = builder.add(ir::Op::FClamp(ir::ScalarType::eF32, scalar, builder.makeConstant(0.0f), maxTessFactor));
       builder.add(ir::Op::OutputStore(m_tessFactorOuter, builder.makeConstant(i), scalar));
     }
   }
 
   if (m_tessFactorInner) {
     for (uint32_t i = 0u; i < inner; i++) {
-      auto scalar = builder.add(ir::Op::OutputLoad(ir::ScalarType::eF32,
-        m_tessFactorInner, builder.makeConstant(i)));
-      scalar = builder.add(ir::Op::FClamp(ir::ScalarType::eF32, scalar,
-        builder.makeConstant(0.0f), builder.makeConstant(m_converter.m_hs.maxTessFactor)));
+      auto scalar = builder.add(ir::Op::OutputLoad(ir::ScalarType::eF32, m_tessFactorInner, builder.makeConstant(i)));
+      scalar = builder.add(ir::Op::FClamp(ir::ScalarType::eF32, scalar, builder.makeConstant(0.0f), maxTessFactor));
       builder.add(ir::Op::OutputStore(m_tessFactorInner, builder.makeConstant(i), scalar));
     }
   }
