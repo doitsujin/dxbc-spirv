@@ -893,7 +893,8 @@ uint32_t SpirvBuilder::emitBuiltInDrawParameter(spv::BuiltIn builtIn) {
 void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
   auto builtIn = ir::BuiltIn(op.getOperand(1u));
 
-  if (builtIn == ir::BuiltIn::eGsVertexCountIn)
+  if (builtIn == ir::BuiltIn::eGsVertexCountIn ||
+      builtIn == ir::BuiltIn::eTessFactorLimit)
     return;
 
   bool isInput = op.getOpCode() == ir::OpCode::eDclInputBuiltIn;
@@ -1039,6 +1040,7 @@ void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
         return spv::BuiltInPointSize;
 
       case ir::BuiltIn::eGsVertexCountIn:
+      case ir::BuiltIn::eTessFactorLimit:
         /* Handled elsewhere */
         break;
     }
@@ -3315,6 +3317,20 @@ void SpirvBuilder::emitLoadGsVertexCountBuiltIn(const ir::Op& op) {
 }
 
 
+void SpirvBuilder::emitLoadTessFactorLimitBuiltIn(const ir::Op& op) {
+  auto constantId = makeConstF32(m_options.maxTessFactor);
+
+  if (hasIdForDef(op.getDef())) {
+    auto id = getIdForDef(op.getDef());
+
+    auto uintTypeId = getIdForType(ir::ScalarType::eF32);
+    pushOp(m_code, spv::OpCopyObject, uintTypeId, id, constantId);
+  } else {
+    setIdForDef(op.getDef(), constantId);
+  }
+}
+
+
 void SpirvBuilder::emitLoadSamplePositionBuiltIn(const ir::Op& op) {
   /* Load requested components */
   auto type = op.getType().getBaseType(0u);
@@ -3380,6 +3396,10 @@ void SpirvBuilder::emitLoadVariable(const ir::Op& op) {
 
         case ir::BuiltIn::eGsVertexCountIn:
           emitLoadGsVertexCountBuiltIn(op);
+          return;
+
+        case ir::BuiltIn::eTessFactorLimit:
+          emitLoadTessFactorLimitBuiltIn(op);
           return;
 
         case ir::BuiltIn::eSamplePosition:
@@ -4769,6 +4789,15 @@ uint32_t SpirvBuilder::makeConstI32(int32_t value) {
   constant.op = spv::OpConstant;
   constant.typeId = getIdForType(ir::ScalarType::eI32);
   constant.constituents[0u] = value;
+  return getIdForConstant(constant, 1u);
+}
+
+
+uint32_t SpirvBuilder::makeConstF32(float value) {
+  SpirvConstant constant = { };
+  constant.op = spv::OpConstant;
+  constant.typeId = getIdForType(ir::ScalarType::eF32);
+  std::memcpy(&constant.constituents[0u], &value, sizeof(value));
   return getIdForConstant(constant, 1u);
 }
 

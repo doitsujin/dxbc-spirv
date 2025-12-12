@@ -713,6 +713,8 @@ enum class BuiltIn : uint32_t {
   eLocalThreadIndex   = 26u,
   /** Point size, used in pre-raster stages. */
   ePointSize          = 27u,
+  /** Maximum tessellation factor */
+  eTessFactorLimit    = 28u,
 };
 
 

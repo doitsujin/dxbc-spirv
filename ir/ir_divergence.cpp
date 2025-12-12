@@ -533,6 +533,7 @@ Scope DivergenceAnalysis::determineScopeForBuiltIn(const Op& op) {
     case BuiltIn::eGsVertexCountIn:
     case BuiltIn::eTessControlPointCountIn:
     case BuiltIn::eSampleCount:
+    case BuiltIn::eTessFactorLimit:
       return Scope::eGlobal;
 
     /* Quads all compute the same sample in different pixels */

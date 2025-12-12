@@ -53,6 +53,8 @@ public:
      *  storage buffers, ordered by space and register numbers. If negative,
      *  the number of constant buffers is effectively unlimited. */
     int32_t maxCbvCount = -1;
+    /** Maximum tessellation factor supported by the device. */
+    float maxTessFactor = 64.0f;
   };
 
   explicit SpirvBuilder(const ir::Builder& builder, ResourceMapping& mapping, const Options& options);
@@ -331,6 +333,8 @@ private:
 
   void emitLoadGsVertexCountBuiltIn(const ir::Op& op);
 
+  void emitLoadTessFactorLimitBuiltIn(const ir::Op& op);
+
   void emitLoadSamplePositionBuiltIn(const ir::Op& op);
 
   void emitLoadVariable(const ir::Op& op);
@@ -430,6 +434,8 @@ private:
   uint32_t makeConstU32(uint32_t value);
 
   uint32_t makeConstI32(int32_t value);
+
+  uint32_t makeConstF32(float value);
 
   uint32_t makeConstNull(uint32_t typeId);
 
