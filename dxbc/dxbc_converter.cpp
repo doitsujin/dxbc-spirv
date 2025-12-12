@@ -11,12 +11,7 @@ Converter::Converter(Container container, const Options& options)
 , m_regFile   (*this)
 , m_ioMap     (*this)
 , m_resources (*this) {
-  if (options.maxTessFactor != 0.0f) {
-    if (isValidTessFactor(options.maxTessFactor))
-      m_hs.maxTessFactor = options.maxTessFactor;
-    else
-      Logger::warn("Invalid tess factor ", options.maxTessFactor, ", ignoring option.");
-  }
+
 }
 
 

@@ -49,9 +49,6 @@ public:
     /** Constant buffer binding for class instance data */
     uint8_t classInstanceRegisterSpace = 0u;
     uint8_t classInstanceRegisterIndex = 0u;
-    /** Maximum tessellation factor override. Shaders may specify a
-     *  different value, but any higher values will be ignored. */
-    float maxTessFactor = 0.0f;
     /** Whether to externally limit tessellation factors */
     bool limitTessFactor = false;
   };
