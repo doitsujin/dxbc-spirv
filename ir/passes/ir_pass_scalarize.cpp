@@ -457,6 +457,7 @@ Builder::iterator ScalarizePass::handlePhi(Builder::iterator op) {
         /* If the operand is also a phi, insert extract op after
          * the phi section of the block */
         auto location = value;
+        auto cursor = m_builder.setCursor(location);
 
         while (m_builder.getOp(location).getOpCode() == OpCode::ePhi) {
           m_builder.setCursor(location);
@@ -465,6 +466,8 @@ Builder::iterator ScalarizePass::handlePhi(Builder::iterator op) {
 
         def = extractOperandComponents(value, index, vectorSize);
         operandMap.push_back(std::make_pair(value, def));
+
+        m_builder.setCursor(cursor);
       }
 
       phi.addPhi(block, def);
