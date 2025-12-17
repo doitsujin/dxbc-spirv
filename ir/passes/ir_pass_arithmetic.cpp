@@ -1782,12 +1782,30 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
       }
     } break;
 
-    case OpCode::eFMul:
     case OpCode::eFMulLegacy: {
       const auto& a = m_builder.getOpForOperand(*op, 0u);
       const auto& b = m_builder.getOpForOperand(*op, 1u);
 
-      if (!(getFpFlags(*op) & OpFlag::ePrecise) &&  b.isConstant() &&
+      if (b.isConstant()) {
+        bool replaceFmul = true;
+
+        for (uint32_t i = 0u; i < b.getOperandCount(); i++) {
+          auto fpClass = std::fpclassify(getConstantAsFloat(b, i));
+          replaceFmul = replaceFmul && fpClass == FP_NORMAL;
+        }
+
+        if (replaceFmul) {
+          m_builder.rewriteOp(op->getDef(), Op::FMul(op->getType(), a.getDef(), b.getDef()));
+          return std::make_pair(true, op);
+        }
+      }
+    } [[fallthrough]];
+
+    case OpCode::eFMul: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+      const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+      if (!(getFpFlags(*op) & OpFlag::ePrecise) && b.isConstant() &&
           op->getType().getBaseType(0u).isScalar()) {
         /* a * 0 -> 0 */
         if (getConstantAsFloat(b, 0u) == 0.0) {
