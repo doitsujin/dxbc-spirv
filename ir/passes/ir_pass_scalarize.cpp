@@ -108,8 +108,6 @@ void ScalarizePass::scalarizeVectorOps() {
       case OpCode::eBNe:
       case OpCode::eBNot:
       case OpCode::eSelect:
-      case OpCode::eFMulLegacy:
-      case OpCode::eFMadLegacy:
       case OpCode::eFSqrt:
       case OpCode::eFRsq:
       case OpCode::eFExp2:
@@ -141,6 +139,8 @@ void ScalarizePass::scalarizeVectorOps() {
       case OpCode::eFMin:
       case OpCode::eFMax:
       case OpCode::eFClamp:
+      case OpCode::eFMulLegacy:
+      case OpCode::eFMadLegacy:
       case OpCode::eIAnd:
       case OpCode::eIOr:
       case OpCode::eIXor:

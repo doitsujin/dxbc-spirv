@@ -948,16 +948,44 @@ Builder::iterator ArithmeticPass::lowerSinCos(Builder::iterator op) {
 
 
 Op ArithmeticPass::emitMulLegacy(const Type& type, SsaDef a, SsaDef b) {
+  auto vectorType = type.getBaseType(0u);
+  auto scalarType = vectorType.getBaseType();
+
   /* a * b -> (b == 0 ? 0 : a) * (a == 0 ? 0 : b) */
-  auto zero = m_builder.makeConstantZero(type);
+  auto zero = m_builder.makeConstantZero(scalarType);
 
-  auto aEq0 = m_builder.add(Op::FEq(ScalarType::eBool, a, zero));
-  auto bEq0 = m_builder.add(Op::FEq(ScalarType::eBool, b, zero));
+  util::small_vector<SsaDef, 4u> aScalars;
+  util::small_vector<SsaDef, 4u> bScalars;
 
-  auto aOperand = m_builder.add(Op::Select(type, bEq0, zero, a));
-  auto bOperand = m_builder.add(Op::Select(type, aEq0, zero, b));
+  /* Need to scalarize the zero check and select */
+  Op aComposite(OpCode::eCompositeConstruct, vectorType);
+  Op bComposite(OpCode::eCompositeConstruct, vectorType);
 
-  return Op::FMul(type, aOperand, bOperand);
+  for (uint32_t i = 0u; i < vectorType.getVectorSize(); i++) {
+    auto aScalar = a;
+    auto bScalar = b;
+
+    if (vectorType.isVector()) {
+      aScalar = m_builder.add(Op::CompositeExtract(scalarType, a, m_builder.makeConstant(i)));
+      bScalar = m_builder.add(Op::CompositeExtract(scalarType, b, m_builder.makeConstant(i)));
+    }
+
+    auto aEq0 = m_builder.add(Op::FEq(ScalarType::eBool, aScalar, zero));
+    auto bEq0 = m_builder.add(Op::FEq(ScalarType::eBool, bScalar, zero));
+
+    aComposite.addOperand(m_builder.add(Op::Select(scalarType, bEq0, zero, aScalar)));
+    bComposite.addOperand(m_builder.add(Op::Select(scalarType, aEq0, zero, bScalar)));
+  }
+
+  a = SsaDef(aComposite.getOperand(0u));
+  b = SsaDef(bComposite.getOperand(0u));
+
+  if (vectorType.isVector()) {
+    a = m_builder.add(std::move(aComposite));
+    b = m_builder.add(std::move(bComposite));
+  }
+
+  return Op::FMul(type, a, b);
 }
 
 
@@ -1013,32 +1041,9 @@ SsaDef ArithmeticPass::buildMulLegacyFunc(OpCode opCode, BasicType type) {
     if (paramC)
       c = m_builder.add(Op::ParamLoad(type, entry->function, paramC));
 
-    Op resultOp(OpCode::eCompositeConstruct, type);
-
-    for (uint32_t i = 0u; i < type.getVectorSize(); i++) {
-      auto aScalar = a;
-      auto bScalar = b;
-      auto cScalar = c;
-
-      if (type.isVector()) {
-        aScalar = m_builder.add(Op::CompositeExtract(type.getBaseType(), a, m_builder.makeConstant(i)));
-        bScalar = m_builder.add(Op::CompositeExtract(type.getBaseType(), b, m_builder.makeConstant(i)));
-
-        if (c)
-          cScalar = m_builder.add(Op::CompositeExtract(type.getBaseType(), c, m_builder.makeConstant(i)));
-      }
-
-      auto resultScalar = m_builder.add(opCode == OpCode::eFMadLegacy
-        ? emitMadLegacy(type.getBaseType(), aScalar, bScalar, cScalar)
-        : emitMulLegacy(type.getBaseType(), aScalar, bScalar));
-
-      resultOp.addOperand(resultScalar);
-    }
-
-    auto result = SsaDef(resultOp.getOperand(0u));
-
-    if (type.isVector())
-      result = m_builder.add(std::move(resultOp));
+    auto result = m_builder.add(opCode == OpCode::eFMadLegacy
+      ? emitMadLegacy(type, a, b, c)
+      : emitMulLegacy(type, a, b));
 
     m_builder.add(Op::Return(type, result));
     m_builder.add(Op::FunctionEnd());
