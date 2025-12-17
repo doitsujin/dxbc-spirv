@@ -1093,8 +1093,7 @@ bool Converter::handleFloatMad(ir::Builder& builder, const Instruction& op) {
    * (dst2) Number to add to the product
    *
    * FXC is inconsistent in whether it emits Mad or separate multiply and
-   * add instructions, which causes invariance issues. Default to separate
-   * instructions, unless a precise modifier is used.
+   * add instructions, which causes invariance issues.
    */
   dxbc_spv_assert(op.getDstCount() == 1u);
   dxbc_spv_assert(op.getSrcCount() == 3u);
