@@ -215,6 +215,171 @@ bool Converter::initParser(Parser& parser, util::ByteReader reader) {
 }
 
 
+ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, Swizzle swizzle, ir::ScalarType type) {
+  auto loadDef = ir::SsaDef();
+
+  dxbc_spv_assert(!operand.hasRelativeAddressing()
+    || operand.getRegisterType() == RegisterType::eInput
+    || operand.getRegisterType() == RegisterType::eConst
+    || operand.getRegisterType() == RegisterType::eConst2
+    || operand.getRegisterType() == RegisterType::eConst3
+    || operand.getRegisterType() == RegisterType::eConst4
+    || (operand.getRegisterType() == RegisterType::eOutput && getShaderInfo().getType() == ShaderType::eVertex));
+
+  switch (operand.getRegisterType()) {
+    case RegisterType::eInput:
+    case RegisterType::ePixelTexCoord:
+    case RegisterType::eMiscType:
+    case RegisterType::eAddr:
+    case RegisterType::eTemp:
+    case RegisterType::eLoop:
+    case RegisterType::ePredicate:
+    case RegisterType::eConst:
+    case RegisterType::eConst2:
+    case RegisterType::eConst3:
+    case RegisterType::eConst4:
+    case RegisterType::eConstInt:
+    case RegisterType::eConstBool:
+      break;
+
+    default:
+      break;
+  }
+
+  if (!loadDef) {
+    auto name = makeRegisterDebugName(operand.getRegisterType(), 0u, WriteMask());
+    logOpError(op, "Failed to load operand: ", name);
+    return loadDef;
+  }
+
+  return loadDef;
+}
+
+
+ir::SsaDef Converter::applySrcModifiers(ir::Builder& builder, ir::SsaDef def, const Instruction& instruction, const Operand& operand, WriteMask mask) {
+  auto modifiedDef = def;
+
+  const auto& op = builder.getOp(def);
+  auto type = op.getType().getBaseType(0u);
+  bool isUnknown = type.isUnknownType();
+  bool partialPrecision = instruction.hasDst() && instruction.getDst().isPartialPrecision();
+
+  if (!type.isFloatType()) {
+    type = ir::BasicType(partialPrecision ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32, type.getVectorSize());
+    modifiedDef = builder.add(ir::Op::ConsumeAs(type, modifiedDef));
+  }
+
+  auto mod = operand.getModifier();
+
+  switch (mod) {
+    case OperandModifier::eAbs: /* abs(r) */
+    case OperandModifier::eAbsNeg: /* -abs(r) */
+      modifiedDef = builder.add(ir::Op::FAbs(type, modifiedDef));
+
+      if (mod == OperandModifier::eAbsNeg)
+        modifiedDef = builder.add(ir::Op::FNeg(type, modifiedDef));
+      break;
+
+    case OperandModifier::eBias: /* r - 0.5 */
+    case OperandModifier::eBiasNeg: { /* -(r - 0.5) */
+      auto halfConst = ir::makeTypedConstant(builder, type, 0.5f);
+      modifiedDef = builder.add(ir::Op::FSub(type, modifiedDef, halfConst));
+
+      if (mod == OperandModifier::eBiasNeg)
+        modifiedDef = builder.add(ir::Op::FNeg(type, modifiedDef));
+    } break;
+
+    case OperandModifier::eSign: /* fma(r, 2.0, -1.0) */
+    case OperandModifier::eSignNeg: { /* -fma(r, 2.0, -1.0) */
+      auto twoConst = ir::makeTypedConstant(builder, type, 2.0f);
+      auto minusOneConst = ir::makeTypedConstant(builder, type, -1.0f);
+      modifiedDef = builder.add(ir::Op::FMad(type, modifiedDef, twoConst, minusOneConst));
+
+      if (mod == OperandModifier::eSignNeg)
+        modifiedDef = builder.add(ir::Op::FNeg(type, modifiedDef));
+    } break;
+
+    case OperandModifier::eComp: { /* 1.0 - r */
+      ir::SsaDef oneConst = ir::makeTypedConstant(builder, type, 1.0f);
+      modifiedDef = builder.add(ir::Op::FSub(type, oneConst, modifiedDef));
+    } break;
+
+    case OperandModifier::eX2: /* r * 2.0 */
+    case OperandModifier::eX2Neg: { /* -(r * 2.0) */
+      ir::SsaDef twoConst = ir::makeTypedConstant(builder, type, 2.0f);
+      modifiedDef = builder.add(ir::Op::FMul(type, modifiedDef, twoConst));
+
+      if (mod == OperandModifier::eX2Neg)
+        modifiedDef = builder.add(ir::Op::FAbs(type, modifiedDef));
+    } break;
+
+    case OperandModifier::eDz:
+    case OperandModifier::eDw: {
+      /* The Dz and Dw modifiers can only be applied to SM1.4 TexLd & TexCrd instructions.
+       * Both of those only accept a texture coord register as argument and that is always
+       * a float vec4. */
+      uint32_t fullVec4ComponentIndex = mod == OperandModifier::eDz ? 2u : 3u;
+      uint32_t componentIndex = 0u;
+
+      for (auto c : mask) {
+        if (util::componentFromBit(c) == Component(fullVec4ComponentIndex))
+          break;
+
+        componentIndex++;
+      }
+
+      auto indexConst = builder.makeConstant(componentIndex);
+      auto zComp = builder.add(ir::Op::CompositeExtract(type.getBaseType(), modifiedDef, indexConst));
+      auto zCompVec = ir::broadcastScalar(builder, zComp, mask);
+      modifiedDef = builder.add(ir::Op::FDiv(type, modifiedDef, zCompVec));
+    } break;
+
+    case OperandModifier::eNeg:
+      modifiedDef = builder.add(ir::Op::FNeg(type, modifiedDef));
+    break;
+
+    case OperandModifier::eNone:
+      break;
+
+    default:
+      Logger::log(LogLevel::eError, "Unknown source register modifier: ", uint32_t(mod));
+      break;
+  }
+
+  if (isUnknown) {
+    type = ir::BasicType(ir::ScalarType::eUnknown, type.getVectorSize());
+    modifiedDef = builder.add(ir::Op::ConsumeAs(type, modifiedDef));
+  }
+
+  return modifiedDef;
+}
+
+
+ir::SsaDef Converter::loadSrcModified(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, ir::ScalarType type) {
+  Swizzle swizzle = operand.getSwizzle(getShaderInfo());
+  Swizzle originalSwizzle = swizzle;
+  WriteMask originalMask = mask;
+  /* If the modifier divides by one of the components, that component needs to be loaded. */
+
+  /* Dz & Dw need to get applied before the swizzle!
+   * So if those are used, we load the whole vector and swizzle afterward. */
+  bool hasPreSwizzleModifier = operand.getModifier() == OperandModifier::eDz || operand.getModifier() == OperandModifier::eDw;
+  if (hasPreSwizzleModifier) {
+    mask = WriteMask(ComponentBit::eAll);
+    swizzle = Swizzle::identity();
+  }
+
+  auto value = loadSrc(builder, op, operand, mask, swizzle, type);
+  auto modified = applySrcModifiers(builder, value, op, operand, mask);
+
+  if (hasPreSwizzleModifier) {
+    modified = swizzleVector(builder, modified, originalSwizzle, originalMask);
+  }
+
+  return modified;
+}
+
+
 void Converter::logOp(LogLevel severity, const Instruction& op) const {
   Disassembler::Options options = { };
   options.indent = false;
