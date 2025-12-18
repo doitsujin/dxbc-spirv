@@ -387,6 +387,76 @@ ir::SsaDef Converter::loadSrcModified(ir::Builder& builder, const Instruction& o
 }
 
 
+bool Converter::storeDst(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef predicateVec, ir::SsaDef value) {
+  WriteMask writeMask = operand.getWriteMask(getShaderInfo());
+
+  switch (operand.getRegisterType()) {
+    case RegisterType::eTemp:
+    case RegisterType::eAddr:
+    case RegisterType::eOutput:
+    case RegisterType::eRasterizerOut:
+    case RegisterType::eAttributeOut:
+    case RegisterType::eColorOut:
+    case RegisterType::eDepthOut:
+      return false;
+      break;
+
+    default: {
+      auto name = makeRegisterDebugName(operand.getRegisterType(), 0u, writeMask);
+      logOpError(op, "Unhandled destination operand: ", name);
+    } return false;
+  }
+}
+
+
+ir::SsaDef Converter::applyDstModifiers(ir::Builder& builder, ir::SsaDef def, const Instruction& instruction, const Operand& operand) {
+  ir::Op op = builder.getOp(def);
+  auto type = op.getType().getBaseType(0u);
+  int8_t shift = operand.getShift();
+
+  /* Handle unknown type */
+  if (type.isUnknownType() && (shift != 0 || operand.isSaturated())) {
+    type = ir::BasicType(ir::ScalarType::eF32, type.getVectorSize());
+    def = builder.add(ir::Op::ConsumeAs(type, def));
+  }
+
+  /* Apply shift */
+  if (shift != 0) {
+    dxbc_spv_assert(type.isFloatType());
+
+    float shiftAmount = shift < 0
+            ? 1.0f / (1 << -shift)
+            : float(1 << shift);
+
+    def = builder.add(ir::Op::FMul(type, def, makeTypedConstant(builder, type, shiftAmount)));
+  }
+
+  /* Saturate dst */
+  if (operand.isSaturated()) {
+    dxbc_spv_assert(type.isFloatType());
+
+    def = builder.add(ir::Op::FClamp(type, def,
+      makeTypedConstant(builder, type, 0.0f),
+      makeTypedConstant(builder, type, 1.0f)));
+  }
+
+  return def;
+}
+
+
+bool Converter::storeDstModifiedPredicated(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value) {
+  value = applyDstModifiers(builder, value, op, operand);
+
+  ir::SsaDef predicate = ir::SsaDef();
+  if (operand.isPredicated()) {
+    /* Predication is unimplemented. */
+    dxbc_spv_unreachable();
+  }
+
+  return storeDst(builder, op, operand, predicate, value);
+}
+
+
 void Converter::logOp(LogLevel severity, const Instruction& op) const {
   Disassembler::Options options = { };
   options.indent = false;
