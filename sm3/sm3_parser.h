@@ -530,21 +530,25 @@ public:
   /** Queries the comparison mode of the instruction.
     * Only relevant for a few control flow instructions. */
   ComparisonMode getComparisonMode() const {
+    dxbc_spv_assert(getOpCode() == OpCode::eIfC || getOpCode() == OpCode::eBreakC || isPredicated());
     return ComparisonMode(util::bextract(m_token, 16u, 8u));
   }
 
   /** Queries the TexLd mode of the instruction. */
   TexLdMode getTexLdMode() const {
+    dxbc_spv_assert(getOpCode() == OpCode::eTexLd);
     return TexLdMode(util::bextract(m_token, 16u, 8u));
   }
 
   /** Get the comment data. Must only be called for comment instructions. */
   const unsigned char* getCommentData() const {
+    dxbc_spv_assert(getOpCode() == OpCode::eComment);
     return m_commentData.data();
   }
 
   /** Get the size of the comment in bytes. */
   uint32_t getCommentDataSize() const {
+    dxbc_spv_assert(getOpCode() == OpCode::eComment);
     return m_commentData.size();
   }
 
