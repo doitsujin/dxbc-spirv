@@ -55,7 +55,7 @@ enum class OpCode : uint32_t {
   eRep          = 38u,
   eEndRep       = 39u,
   eIf           = 40u,
-  eIfc          = 41u,
+  eIfC          = 41u,
   eElse         = 42u,
   eEndIf        = 43u,
   eBreak        = 44u,
@@ -105,28 +105,28 @@ enum class OpCode : uint32_t {
 
 /** Operand type */
 enum class RegisterType : uint32_t {
-  eTemp           =  0u, // Temporary Register File
-  eInput          =  1u, // Input Register File
-  eConst          =  2u, // Constant Register File
-  eAddr           =  3u, // Address Register (VS)
-  eTexture        =  3u, // Texture Register File (PS). Same value as eAddr.
-  eRasterizerOut  =  4u, // Rasterizer Register File
-  eAttributeOut   =  5u, // Attribute Output Register File
-  eTexCoordOut    =  6u, // Texture Coordinate Output Register File
-  eOutput         =  6u, // Output register file for VS3.0+. Same value as eTexCoordOut.
-  eConstInt       =  7u, // Constant Integer Vector Register File
-  eColorOut       =  8u, // Color Output Register File
-  eDepthOut       =  9u, // Depth Output Register File
-  eSampler        = 10u, // Sampler State Register File
-  eConst2         = 11u, // Constant Register File  2048 - 4095
-  eConst3         = 12u, // Constant Register File  4096 - 6143
-  eConst4         = 13u, // Constant Register File  6144 - 8191
-  eConstBool      = 14u, // Constant Boolean register file
-  eLoop           = 15u, // Loop counter register file
-  eTempFloat16    = 16u, // 16-bit float temp register file
-  eMiscType       = 17u, // Miscellaneous (single) registers.
-  eLabel          = 18u, // Label
-  ePredicate      = 19u, // Predicate register
+  eTemp           =  0u, /* Temporary Register File */
+  eInput          =  1u, /* Input Register File */
+  eConst          =  2u, /* Constant Register File */
+  eAddr           =  3u, /* Address Register (VS) */
+  eTexture        =  3u, /* Texture Register File (PS). Same value as eAddr. */
+  eRasterizerOut  =  4u, /* Rasterizer Register File */
+  eAttributeOut   =  5u, /* Attribute Output Register File */
+  eTexCoordOut    =  6u, /* Texture Coordinate Output Register File */
+  eOutput         =  6u, /* Output register file for VS3.0+. Same value as eTexCoordOut. */
+  eConstInt       =  7u, /* Constant Integer Vector Register File */
+  eColorOut       =  8u, /* Color Output Register File */
+  eDepthOut       =  9u, /* Depth Output Register File */
+  eSampler        = 10u, /* Sampler State Register File */
+  eConst2         = 11u, /* Constant Register File 2048 - 4095 */
+  eConst3         = 12u, /* Constant Register File 4096 - 6143 */
+  eConst4         = 13u, /* Constant Register File 6144 - 8191 */
+  eConstBool      = 14u, /* Constant Boolean register file */
+  eLoop           = 15u, /* Loop counter register file */
+  eTempFloat16    = 16u, /* 16-bit float temp register file */
+  eMiscType       = 17u, /* Miscellaneous (single) registers. */
+  eLabel          = 18u, /* Label */
+  ePredicate      = 19u, /* Predicate register */
   ePixelTexCoord  = 20u,
 };
 
@@ -170,18 +170,18 @@ enum class TextureType : uint32_t {
 
 /** Valid indices for RasterizerOut registers */
 enum class RasterizerOutIndex : uint32_t {
-  eRasterOutPosition  = 0,
-  eRasterOutFog       = 1,
-  eRasterOutPointSize = 2
+  eRasterOutPosition  = 0u,
+  eRasterOutFog       = 1u,
+  eRasterOutPointSize = 2u
 };
 
 /** Valid indices for MiscType registers */
 enum class MiscTypeIndex : uint32_t {
-  eMiscTypePosition,
-  eMiscTypeFace,
+  eMiscTypePosition = 0u,
+  eMiscTypeFace     = 1u,
 };
 
-/* Comparison modes for usage with the ifc instruction */
+/* Comparison modes for usage with the IfC instruction */
 enum class ComparisonMode : uint32_t {
   eNever        = 0u,
   eGreaterThan  = 1u,

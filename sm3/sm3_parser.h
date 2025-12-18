@@ -173,20 +173,20 @@ enum class SelectionMode : uint32_t {
  * an operand register.
  */
 enum class OperandModifier : uint32_t {
-  eNone    = 0u,  // r
-  eNeg     = 1u,  // -r
-  eBias    = 2u,  // r - 0.5
-  eBiasNeg = 3u,  // -(r - 0.5)
-  eSign    = 4u,  // fma(r, 2.0f, -1.0f)
-  eSignNeg = 5u,  // -fma(r, 2.0f, -1.0f)
-  eComp    = 6u,  // 1 - r
-  eX2      = 7u,  // r * 2
-  eX2Neg   = 8u,  // -r * 2
-  eDz      = 9u,  // r / r.z
-  eDw      = 10u, // r / r.w
-  eAbs     = 11u, // abs(r)
-  eAbsNeg  = 12u, // -abs(r)
-  eNot     = 13u, // !r
+  eNone    = 0u,  /* r */
+  eNeg     = 1u,  /* -r */
+  eBias    = 2u,  /* r - 0.5 */
+  eBiasNeg = 3u,  /* -(r - 0.5) */
+  eSign    = 4u,  /* fma(r, 2.0, -1.0) */
+  eSignNeg = 5u,  /* -fma(r, 2.0, -1.0) */
+  eComp    = 6u,  /* 1.0 - r */
+  eX2      = 7u,  /* r * 2.0 */
+  eX2Neg   = 8u,  /* -(r * 2.0) */
+  eDz      = 9u,  /* r / r.z */
+  eDw      = 10u, /* r / r.w */
+  eAbs     = 11u, /* abs(r) */
+  eAbsNeg  = 12u, /* -abs(r) */
+  eNot     = 13u, /* !r */
 };
 
 
@@ -446,14 +446,14 @@ public:
 
   /** Retrieves whether the instruction has a destination operand */
   bool hasDst() const {
-    // Dst is always the first operand except for dcl instructions where it's the second.
+    /* Dst is always the first operand except for dcl instructions where it's the second. */
     return (!m_operands.empty() && m_operands[0u].getInfo().kind == OperandKind::eDstReg)
       || (m_operands.size() > 1u && m_operands[1u].getInfo().kind == OperandKind::eDstReg);
   }
 
   /** Retrieves whether the instruction has a declaration operand */
   bool hasDcl() const {
-    // Dcl operands only exist in dcl instructions and they are always the first operand.
+    /* Dcl operands only exist in dcl instructions and they are always the first operand. */
     return !m_operands.empty() && m_operands[0u].getInfo().kind == OperandKind::eDcl;
   }
 
@@ -462,7 +462,7 @@ public:
     if (m_operands.empty())
       return 0u;
 
-    // Src operands can come with a dst operand (but never with anything else)
+    /* Src operands can come with a dst operand (but never with anything else) */
     OperandKind firstArgKind = m_operands[0u].getInfo().kind;
     if (firstArgKind == OperandKind::eDstReg)
       return uint32_t(m_operands.size() - 1u);
@@ -475,7 +475,7 @@ public:
 
   /** Retrieves number of immediate operands */
   bool hasImm() const {
-    // Imm operands only exist in def instructions and are always at index 1
+    /* Imm operands only exist in def instructions and are always at index 1 */
     return m_operands.size() > 1u && m_operands[1u].getInfo().kind == OperandKind::eImm32;
   }
 
