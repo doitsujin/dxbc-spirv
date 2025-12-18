@@ -36,7 +36,8 @@ Converter::Converter(util::ByteReader code,
   const Options& options)
 : m_code(code)
 , m_options(options)
-, m_ioMap(*this) {
+, m_ioMap(*this)
+, m_regFile(*this) {
 
 }
 
@@ -190,6 +191,7 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
     builder.add(ir::Op::DebugName(m_entryPoint.def, m_options.name));
 
   m_ioMap.initialize(builder);
+  m_regFile.initialize(builder);
 
   /* Set cursor to main function so that instructions will be emitted
    * in the correct location */

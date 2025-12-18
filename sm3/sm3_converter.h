@@ -2,6 +2,7 @@
 
 #include "sm3_parser.h"
 #include "sm3_io_map.h"
+#include "sm3_registers.h"
 
 #include "../ir/ir_builder.h"
 
@@ -19,6 +20,7 @@ namespace dxbc_spv::sm3 {
 class Converter {
 
   friend IoMap;
+  friend RegisterFile;
 
 public:
 
@@ -57,6 +59,7 @@ private:
   Parser           m_parser;
 
   IoMap            m_ioMap;
+  RegisterFile     m_regFile;
 
   uint32_t m_instructionCount = 0u;
 
