@@ -111,7 +111,7 @@ enum class RegisterType : uint32_t {
   eAddr           =  3u, /* Address Register (VS) */
   eTexture        =  3u, /* Texture Register File (PS). Same value as eAddr. */
   eRasterizerOut  =  4u, /* Rasterizer Register File */
-  eAttributeOut   =  5u, /* Attribute Output Register File */
+  eAttributeOut   =  5u, /* Attribute Output Register File. Color output from vertex shaders */
   eTexCoordOut    =  6u, /* Texture Coordinate Output Register File */
   eOutput         =  6u, /* Output register file for VS3.0+. Same value as eTexCoordOut. */
   eConstInt       =  7u, /* Constant Integer Vector Register File */
