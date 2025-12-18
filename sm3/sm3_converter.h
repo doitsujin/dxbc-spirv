@@ -3,6 +3,7 @@
 #include "sm3_parser.h"
 #include "sm3_io_map.h"
 #include "sm3_registers.h"
+#include "sm3_spec_constants.h"
 
 #include "../ir/ir_builder.h"
 
@@ -21,6 +22,7 @@ class Converter {
 
   friend IoMap;
   friend RegisterFile;
+  friend SpecializationConstantsMap;
 
 public:
 
@@ -41,7 +43,7 @@ public:
     bool fastFloatEmulation = false;
   };
 
-  Converter(util::ByteReader code, const Options& options);
+  Converter(util::ByteReader code, SpecializationConstantLayout& specConstantsLayout, const Options& options);
 
   ~Converter();
 
@@ -60,6 +62,8 @@ private:
 
   IoMap            m_ioMap;
   RegisterFile     m_regFile;
+
+  SpecializationConstantsMap m_specConstants;
 
   uint32_t m_instructionCount = 0u;
 
