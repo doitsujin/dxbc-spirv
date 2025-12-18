@@ -38,7 +38,18 @@ IoMap::~IoMap() {
 void IoMap::initialize(ir::Builder& builder) {
   const ShaderInfo& info = m_converter.getShaderInfo();
 
-  if (info.getVersion().first < 2u || info.getType() == ShaderType::eVertex) {
+  if (info.getVersion().first >= 3u) {
+    /* Emit functions that pick a register using
+     * a switch statement to allow relative addressing */
+
+    /* Emit placeholders */
+    m_inputSwitchFunction = builder.add(ir::Op::Function(ir::Type(ir::ScalarType::eF32, 4)));
+
+    if (info.getType() == ShaderType::eVertex) {
+      /* Only VS outputs support relative addressing. */
+      m_outputSwitchFunction = builder.add(ir::Op::Function(ir::Type()));
+    }
+  } else if (info.getVersion().first < 2u || info.getType() == ShaderType::eVertex) {
     /* VS 1 & 2 have fixed output registers that do not get explicitly declared.
      * PS 1 has fixed input registers that do not get explicitly declared.
      * PS 2 has input registers that get explicitly declared but unlike PS 3,
@@ -106,6 +117,23 @@ void IoMap::initialize(ir::Builder& builder) {
 
 
 void IoMap::finalize(ir::Builder& builder) {
+  /* Now that all dcl instructions are processed, we can emit the functions containing the switch statements. */
+  if (m_inputSwitchFunction) {
+    ir::SsaDef cursor = builder.setCursor(m_inputSwitchFunction);
+    auto inputSwitchFunction = emitDynamicLoadFunction(builder);
+    builder.rewriteDef(m_inputSwitchFunction, inputSwitchFunction);
+    m_inputSwitchFunction = inputSwitchFunction;
+    builder.setCursor(cursor);
+  }
+
+  if (m_outputSwitchFunction) {
+    ir::SsaDef cursor = builder.setCursor(m_outputSwitchFunction);
+    auto outputSwitchFunction = emitDynamicStoreFunction(builder);
+    builder.rewriteDef(m_outputSwitchFunction, outputSwitchFunction);
+    m_outputSwitchFunction = outputSwitchFunction;
+    builder.setCursor(cursor);
+  }
+
   flushOutputs(builder);
 }
 
@@ -310,10 +338,6 @@ void IoMap::dclIoVar(
     declarationDef = builder.add(std::move(declaration));
   }
 
-  auto [versionMajor, versionMinor] = m_converter.getShaderInfo().getVersion();
-  bool supportsRelativeAddressing = versionMajor == 3u
-    && (shaderType == ShaderType::eVertex || isInput);
-
   auto& mapping = m_variables.emplace_back();
   mapping.semantic = semantic;
   mapping.registerType = registerType;
@@ -328,6 +352,8 @@ void IoMap::dclIoVar(
   /* Point Size always has a full 4 component vector but only one component is used for the builtin. */
   if (builtIn == ir::BuiltIn::ePointSize)
     tempVectorSize = 4u;
+
+  auto [versionMajor, versionMinor] = m_converter.getShaderInfo().getVersion();
 
   if (!isInput || (registerType == RegisterType::eTexture
     && versionMajor == 1u
@@ -513,8 +539,29 @@ ir::SsaDef IoMap::emitLoad(
       components[componentIndex] = convertScalar(builder, type, value);
     }
   } else {
-    /* Relative addressing is unimplemented. */
-    dxbc_spv_assert(false);
+    dxbc_spv_assert(operand.getRegisterType() == RegisterType::eInput);
+    dxbc_spv_assert(m_converter.getShaderInfo().getVersion().first >= 3);
+
+    auto index = m_converter.calculateAddress(builder,
+      operand.getRelativeAddressingRegisterType(),
+      operand.getRelativeAddressingSwizzle(),
+      operand.getIndex(),
+      ir::ScalarType::eU32);
+
+    dxbc_spv_assert(m_inputSwitchFunction);
+
+    auto vec4Value = builder.add(ir::Op::FunctionCall(ir::Type(ir::ScalarType::eF32, 4u), m_inputSwitchFunction)
+        .addOperand(index));
+
+    for (auto c : swizzle.getReadMask(componentMask)) {
+      auto componentIndex = uint8_t(util::componentFromBit(c));
+
+      components[componentIndex] = convertScalar(
+        builder,
+        type,
+        builder.add(ir::Op::CompositeExtract(type, vec4Value, builder.makeConstant(componentIndex)))
+      );
+    }
   }
 
   ir::SsaDef value = composite(builder, ir::BasicType(type, util::popcnt(uint8_t(componentMask))), components.data(), swizzle, componentMask);
@@ -587,11 +634,180 @@ bool IoMap::emitStore(
       componentIndex++;
     }
   } else {
-    /* Relative addressing is unimplemented. */
-    dxbc_spv_assert(false);
+    dxbc_spv_assert(operand.getRegisterType() == RegisterType::eOutput);
+    dxbc_spv_assert(m_converter.getShaderInfo().getVersion().first >= 3);
+
+    auto index = m_converter.calculateAddress(builder,
+      operand.getRelativeAddressingRegisterType(),
+      operand.getRelativeAddressingSwizzle(),
+      operand.getIndex(),
+      ir::ScalarType::eU32);
+
+    dxbc_spv_assert(m_outputSwitchFunction);
+
+    uint32_t componentIndex = 0u;
+
+    for (auto c : writeMask) {
+      ir::SsaDef valueScalar = value;
+
+      if (srcType.isVectorType()) {
+        auto componentIndexConst = builder.makeConstant(componentIndex);
+
+        valueScalar = builder.add(ir::Op::CompositeExtract(srcScalarType, value, componentIndexConst));
+      }
+
+      valueScalar = convertScalar(builder, ir::ScalarType::eF32, valueScalar);
+
+      auto dstComponentIndexConst = builder.makeConstant(uint32_t(util::componentFromBit(c)));
+      auto flattenedIndex = builder.add(ir::Op::IAdd(ir::ScalarType::eU32,
+        builder.add(ir::Op::IMul(ir::ScalarType::eU32, index, builder.makeConstant(4u))),
+        dstComponentIndexConst
+      ));
+
+      builder.add(ir::Op::FunctionCall(ir::Type(), m_outputSwitchFunction)
+        .addOperand(flattenedIndex)
+        .addOperand(valueScalar));
+
+      componentIndex++;
+    }
   }
 
   return true;
+}
+
+
+ir::SsaDef IoMap::emitDynamicLoadFunction(ir::Builder& builder) const {
+  auto indexParameter = builder.add(ir::Op::DclParam(ir::ScalarType::eU32));
+
+  if (m_converter.m_options.includeDebugNames)
+    builder.add(ir::Op::DebugName(indexParameter, "reg"));
+
+  auto function = builder.add(
+    ir::Op::Function(ir::Type(ir::ScalarType::eF32, 4u))
+    .addOperand(indexParameter)
+  );
+
+  if (m_converter.m_options.includeDebugNames)
+    builder.add(ir::Op::DebugName(function, "loadInputDynamic"));
+
+  auto indexArg = builder.add(ir::Op::ParamLoad(ir::ScalarType::eU32, function, indexParameter));
+  auto switchDef = builder.add(ir::Op::ScopedSwitch(ir::SsaDef(), indexArg));
+
+  for (uint32_t i = 0u; i < SM3VSInputArraySize; i++) {
+    const IoVarInfo* ioVar = nullptr;
+
+    for (const auto& variable : m_variables) {
+      if (variable.registerType == RegisterType::eInput && variable.registerIndex == i) {
+        ioVar = &variable;
+        break;
+      }
+    }
+
+    if (ioVar == nullptr)
+      continue;
+
+    dxbc_spv_assert(ioVar != nullptr);
+
+    builder.add(ir::Op::ScopedSwitchCase(switchDef, i));
+
+    auto input = builder.add(ir::Op::InputLoad(ioVar->baseType, ioVar->baseDef, ir::SsaDef()));
+    auto baseType = ioVar->baseType.getBaseType(0u);
+    ir::SsaDef vec4 = input;
+
+    if (baseType.getVectorSize() != 4u) {
+      std::array<ir::SsaDef, 4u> components;
+
+      for (uint32_t j = 0u; j < 4u; j++) {
+        if ((baseType.isScalar() && j == 0) || j < baseType.getVectorSize()) {
+          components[j] = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eF32, input, builder.makeConstant(i)));;
+        } else {
+          components[j] = builder.makeConstant(0.0f);
+        }
+      }
+
+      vec4 = buildVector(builder, ir::ScalarType::eF32, components.size(), components.data());
+    }
+
+    builder.add(ir::Op::Return(ir::Type(ir::ScalarType::eF32, 4u), vec4));
+    builder.add(ir::Op::ScopedSwitchBreak(switchDef));
+  }
+
+  /* Default case */
+  builder.add(ir::Op::ScopedSwitchDefault(switchDef));
+  builder.add(ir::Op::Return(ir::Type(ir::ScalarType::eF32, 4u),
+    builder.makeConstant(0.0f, 0.0f, 0.0f, 0.0f)));
+  builder.add(ir::Op::ScopedSwitchBreak(switchDef));
+
+  auto switchEnd = builder.add(ir::Op::ScopedEndSwitch(switchDef));
+  builder.rewriteOp(switchDef, ir::Op::ScopedSwitch(switchEnd, indexArg));
+
+  builder.add(ir::Op::FunctionEnd());
+
+  return function;
+}
+
+
+ir::SsaDef IoMap::emitDynamicStoreFunction(ir::Builder& builder) const {
+  auto indexParameter = builder.add(ir::Op::DclParam(ir::ScalarType::eU32));
+
+  if (m_converter.m_options.includeDebugNames)
+    builder.add(ir::Op::DebugName(indexParameter, "reg"));
+
+  auto valueParameter = builder.add(ir::Op::DclParam(ir::ScalarType::eF32));
+
+  if (m_converter.m_options.includeDebugNames)
+    builder.add(ir::Op::DebugName(valueParameter, "value"));
+
+  auto function = builder.add(
+    ir::Op::Function(ir::Type())
+    .addOperand(indexParameter)
+    .addOperand(valueParameter)
+  );
+
+  if (m_converter.m_options.includeDebugNames)
+    builder.add(ir::Op::DebugName(function, "storeOutputDynamic"));
+
+  /* The index is: register index * 4 + component index */
+  auto indexArg = builder.add(ir::Op::ParamLoad(ir::ScalarType::eU32, function, indexParameter));
+
+  auto valueArg = builder.add(ir::Op::ParamLoad(ir::ScalarType::eF32, function, valueParameter));
+  auto switchDef = builder.add(ir::Op::ScopedSwitch(ir::SsaDef(), indexArg));
+
+  for (uint32_t i = 0u; i < SM3VSOutputArraySize; i++) {
+    const IoVarInfo* ioVar = nullptr;
+
+    for (const auto& variable : m_variables) {
+      if (variable.registerType == RegisterType::eOutput && variable.registerIndex == i) {
+        ioVar = &variable;
+        break;
+      }
+    }
+
+    if (ioVar == nullptr)
+      continue;
+
+    dxbc_spv_assert(ioVar != nullptr);
+
+    auto baseType = ioVar->baseType.getBaseType(0u);
+    dxbc_spv_assert(baseType.getVectorSize() == 4u);
+
+    for (uint32_t j = 0u; j < baseType.getVectorSize(); j++) {
+      builder.add(ir::Op::ScopedSwitchCase(switchDef, i * 4u + j));
+      builder.add(ir::Op::TmpStore(ioVar->tempDefs[j], valueArg));
+      builder.add(ir::Op::ScopedSwitchBreak(switchDef));
+    }
+  }
+
+  /* Default case */
+  builder.add(ir::Op::ScopedSwitchDefault(switchDef));
+  builder.add(ir::Op::ScopedSwitchBreak(switchDef));
+
+  auto switchEnd = builder.add(ir::Op::ScopedEndSwitch(switchDef));
+  builder.rewriteOp(switchDef, ir::Op::ScopedSwitch(switchEnd, indexArg));
+
+  builder.add(ir::Op::FunctionEnd());
+
+  return function;
 }
 
 

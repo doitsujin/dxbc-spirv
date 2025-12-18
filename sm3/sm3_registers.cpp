@@ -88,6 +88,37 @@ ir::SsaDef RegisterFile::emitTempLoad(
 }
 
 
+ir::SsaDef RegisterFile::emitAddressLoad(
+            ir::Builder&            builder,
+            RegisterType            registerType,
+            Swizzle                 swizzle) {
+  Component component = swizzle.get(0u);
+
+  if (registerType == RegisterType::eAddr) {
+    /* The a0 register only has a single component on SM1.1 */
+    dxbc_spv_assert(m_converter.getShaderInfo().getVersion().first >= 2u
+        || component == Component::eX);
+
+    dxbc_spv_assert(m_a0Reg[uint8_t(component)]);
+
+    return builder.add(ir::Op::TmpLoad(ir::ScalarType::eI32, m_a0Reg[uint8_t(component)]));
+  } else if (registerType == RegisterType::eLoop) {
+    dxbc_spv_assert(component == Component::eX);
+
+    return builder.add(ir::Op::TmpLoad(ir::ScalarType::eI32, m_aLReg));
+  } else {
+    ShaderInfo info = m_converter.getShaderInfo();
+
+    Logger::err("Register type: ",
+      UnambiguousRegisterType { registerType, info.getType(), info.getVersion().first },
+      " not supported as a relative index");
+
+    dxbc_spv_unreachable();
+    return ir::SsaDef();
+  }
+}
+
+
 bool RegisterFile::emitStore(
           ir::Builder&            builder,
     const Operand&                operand,
