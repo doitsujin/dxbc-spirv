@@ -30,6 +30,11 @@ public:
           WriteMask               componentMask,
           ir::ScalarType          type);
 
+  ir::SsaDef emitPredicateLoad(
+          ir::Builder&            builder,
+          Swizzle                 swizzle,
+          WriteMask               componentMask);
+
   ir::SsaDef emitAddressLoad(
           ir::Builder&            builder,
           RegisterType            registerType,

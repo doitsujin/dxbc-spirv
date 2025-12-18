@@ -88,6 +88,22 @@ ir::SsaDef RegisterFile::emitTempLoad(
 }
 
 
+ir::SsaDef RegisterFile::emitPredicateLoad(
+            ir::Builder&            builder,
+            Swizzle                 swizzle,
+            WriteMask               componentMask) {
+  auto returnType = makeVectorType(ir::ScalarType::eBool, componentMask);
+
+  std::array<ir::SsaDef, 4u> components = { };
+  for (auto c : swizzle.getReadMask(componentMask)) {
+    auto component = componentFromBit(c);
+    components[uint8_t(component)] = builder.add(ir::Op::TmpLoad(ir::ScalarType::eBool, m_pReg[uint8_t(component)]));
+  }
+
+  return composite(builder, returnType, components.data(), swizzle, componentMask);
+}
+
+
 ir::SsaDef RegisterFile::emitAddressLoad(
             ir::Builder&            builder,
             RegisterType            registerType,
@@ -172,6 +188,17 @@ bool RegisterFile::emitStore(
       default:
         dxbc_spv_unreachable();
         return false;
+    }
+
+    if (predicateVec) {
+      /* Check if the matching component of the predicate register vector is true first.
+       * Pick the old value if not. */
+      auto condComponent = extractFromVector(builder, predicateVec, componentIndex);
+
+      ir::BasicType regType = builder.getOp(reg).getType().getBaseType(0u);
+
+      auto oldValue = builder.add(ir::Op::TmpLoad(regType, reg));
+      scalar = builder.add(ir::Op::Select(regType, condComponent, scalar, oldValue));
     }
 
     builder.add(ir::Op::TmpStore(reg, scalar));
