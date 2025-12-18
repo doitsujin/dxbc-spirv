@@ -262,8 +262,8 @@ static const std::array<InstructionLayout, 100> g_instructionLayouts = {{
   /* TexLd. Same opcode as the SM<1.4 instruction 'tex'. */
   { {{
     { OperandKind::eDstReg, ir::ScalarType::eF32 },
-    { OperandKind::eSrcReg, ir::ScalarType::eF32 }, // Only on SM2+
-    { OperandKind::eSrcReg, ir::ScalarType::eSampler }, // Only on SM2+
+    { OperandKind::eSrcReg, ir::ScalarType::eF32 }, /* Only on SM2+ */
+    { OperandKind::eSrcReg, ir::ScalarType::eSampler }, /* Only on SM2+ */
   }} },
   /* TexBem */
   { {{
@@ -512,14 +512,14 @@ Operand::Operand(util::ByteReader& reader, const OperandInfo& info, Instruction&
 
     m_addressToken.emplace();
     if (hasExtraRelativeAddressingToken(info.kind, shaderInfo)) {
-      // VS SM3 supports using the following registers as indices:
-      // - a0 the dedicated address register, integer
-      // - aL: the loop counter register, integer
-      // The following registers can be indexed:
-      // - vN: one of the input registers, float
-      // - cN: one of the float constant registers, float
-      // - oN: one of the output registers, float
-      // Everything else only supports a subset of this.
+      /* VS SM3 supports using the following registers as indices:
+       * - a0 the dedicated address register, integer
+       * - aL: the loop counter register, integer
+       * The following registers can be indexed:
+       * - vN: one of the input registers, float
+       * - cN: one of the float constant registers, float
+       * - oN: one of the output registers, float
+       * Everything else only supports a subset of this. */
 
       if (!reader.read(m_addressToken.value())) {
         Logger::err("Failed to read relative addressing token.");
@@ -545,7 +545,7 @@ Operand::Operand(util::ByteReader& reader, const OperandInfo& info, Instruction&
         return;
       }
     } else {
-      // Always use a0
+      /* Always use a0 */
       m_addressToken.value() = util::binsert(m_addressToken.value(), uint32_t(RegisterType::eAddr), 28u, 3u);
     }
   }
@@ -682,19 +682,19 @@ uint32_t Instruction::getOperandTokenCount(const ShaderInfo& info, const Instruc
   if (opcode == OpCode::eEnd)
     return 0;
 
-  // SM2.0 and above has the length of the op in instruction count baked into it.
-  // SM1.4 and below have fixed lengths and run off expectation.
-  // Phase does not respect the following rules.
+  /* SM2.0 and above has the length of the op in instruction count baked into it.
+   * SM1.4 and below have fixed lengths and run off expectation.
+   * Phase does not respect the following rules. */
   if (opcode != OpCode::ePhase) {
     if (info.getVersion().first >= 2) {
       return util::bextract(m_token, 24, 4);
     } else {
-      // SM1.4 barely supports relative addressing and when relative addressing is used,
-      // it always uses the single RelAddr register anyway without further specifying it.
-      // SM1.4 does not support predication so there are never and predicate tokens.
+      /* SM1.4 barely supports relative addressing and when relative addressing is used,
+       * it always uses the single RelAddr register anyway without further specifying it.
+       * SM1.4 does not support predication so there are never and predicate tokens. */
       uint32_t tokenCount = 0u;
       for (const auto& operand : layout.operands) {
-        // We just need to handle 4 dimensional immediate operands.
+        /* We just need to handle 4 dimensional immediate operands. */
         if (operand.kind == OperandKind::eImm32 && operand.type != ir::ScalarType::eBool) {
           tokenCount += 4u;
         } else {
@@ -721,47 +721,47 @@ InstructionLayout Instruction::getLayout(const ShaderInfo& info) const {
   auto [major, minor] = info.getVersion();
 
   if (getOpCode() == OpCode::eSinCos && major <= 2u) {
-    // Shader Model 2 SinCos has two additional src registers
-    // that need to have the value of specific constants
-    // for some reason.
+    /* Shader Model 2 SinCos has two additional src registers
+     * that need to have the value of specific constants
+     * for some reason. */
     result.operands.push_back({ OperandKind::eSrcReg, ir::ScalarType::eF32 });
     result.operands.push_back({ OperandKind::eSrcReg, ir::ScalarType::eF32 });
   }
 
   if (getOpCode() == OpCode::eTexLd && major < 2u) {
-    // TexLd/Tex (same opcode)
+    /* TexLd/Tex (same opcode) */
     result.operands.pop_back();
     result.operands.pop_back();
     result.operands.pop_back();
     if (minor < 4u) {
-      // Tex (SM <1.4) only has the dst register.
-      // This destination register has to be a texture register
-      // and will contain the texture data afterward.
-      // The index of it also determines the texture that will be sampled.
+      /* Tex (SM <1.4) only has the dst register.
+       * This destination register has to be a texture register
+       * and will contain the texture data afterward.
+       * The index of it also determines the texture that will be sampled. */
       result.operands.push_back({ OperandKind::eDstReg, ir::ScalarType::eF32 });
     } else if (minor == 4u) {
-      // TexLd (SM 1.4) has separate dst/src registers.
-      // Dst needs to be a temporary register and the index of it also determines the texture
-      // that will be sampled.
-      // Src provides the texture coordinates. It can be a texcoord register or a temporary register.
+      /* TexLd (SM 1.4) has separate dst/src registers.
+       * Dst needs to be a temporary register and the index of it also determines the texture
+       * that will be sampled.
+       * Src provides the texture coordinates. It can be a texcoord register or a temporary register. */
       result.operands.push_back({ OperandKind::eDstReg, ir::ScalarType::eF32 });
       result.operands.push_back({ OperandKind::eSrcReg, ir::ScalarType::eF32 });
     }
   }
 
   if (getOpCode() == OpCode::eTexCrd && major == 1u && minor < 4u) {
-      // TexCrd/TexCoord (same opcode) are only available in SM1.
-      // SM2+ can just access texcoord registers directly.
-      // TexCoord (SM <1.4) does not take a separate source register.
-      // The destination register has to be a texture register
-      // and will contain the texture coord afterward.
+      /* TexCrd/TexCoord (same opcode) are only available in SM1.
+       * SM2+ can just access texcoord registers directly.
+       * TexCoord (SM <1.4) does not take a separate source register.
+       * The destination register has to be a texture register
+       * and will contain the texture coord afterward. */
       result.operands.pop_back();
   }
 
   if (getOpCode() == OpCode::eMov && major >= 3) {
-    // Shader Model <2 doesn't have the mova instruction to move
-    // a value to the address register. So the destination
-    // *can* have an integer type.
+    /* Shader Model <2 doesn't have the mova instruction to move
+     * a value to the address register. So the destination
+     * *can* have an integer type. */
     dxbc_spv_assert(!result.operands.empty());
     dxbc_spv_assert(result.operands[0].kind == OperandKind::eDstReg);
     result.operands[0].type = ir::ScalarType::eUnknown;
@@ -841,7 +841,7 @@ ConstantTable::ConstantTable(util::ByteReader reader) {
   if (reader.getRemaining() <= commentCtab.creatorOffset)
     return;
 
-  // Offsets are always from the start of the CommentConstantTable struct, so we must not move the reader offset.
+  /* Offsets are always from the start of the CommentConstantTable struct, so we must not move the reader offset. */
   util::ByteReader creatorReader = reader.getRangeRelative(
     commentCtab.creatorOffset,
     reader.getRemaining() - commentCtab.creatorOffset
@@ -852,7 +852,7 @@ ConstantTable::ConstantTable(util::ByteReader reader) {
   std::string creator;
   creatorReader.readString(creator);
   if (creator.substr(0u, strlen("Microsoft")) != "Microsoft") {
-    // Don't trust debug info in shaders that weren't compiled by FXC
+    /* Don't trust debug info in shaders that weren't compiled by FXC */
     return;
   }
 
