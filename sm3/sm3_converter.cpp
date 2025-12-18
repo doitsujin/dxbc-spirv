@@ -380,6 +380,105 @@ ir::SsaDef Converter::loadSrcModified(ir::Builder& builder, const Instruction& o
 }
 
 
+bool Converter::storeDst(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef predicateVec, ir::SsaDef value) {
+  WriteMask writeMask = operand.getWriteMask(getShaderInfo());
+  writeMask = fixupWriteMask(builder, writeMask, value);
+
+  switch (operand.getRegisterType()) {
+    case RegisterType::eTemp:
+    case RegisterType::eAddr:
+    case RegisterType::eOutput:
+    case RegisterType::eRasterizerOut:
+    case RegisterType::eAttributeOut:
+    case RegisterType::eColorOut:
+    case RegisterType::eDepthOut:
+      break;
+
+    default: {
+      auto name = makeRegisterDebugName(operand.getRegisterType(), 0u, writeMask);
+      logOpError(op, "Unhandled destination operand: ", name);
+    } return false;
+  }
+}
+
+
+ir::SsaDef Converter::applyDstModifiers(ir::Builder& builder, ir::SsaDef def, const Instruction& instruction, const Operand& operand) {
+  ir::Op op = builder.getOp(def);
+  auto type = op.getType().getBaseType(0u);
+  int8_t shift = operand.getShift();
+
+  /* Handle unknown type */
+  if (type.isUnknownType() && (shift != 0 || operand.isSaturated())) {
+    type = ir::BasicType(ir::ScalarType::eF32, type.getVectorSize());
+    def = builder.add(ir::Op::ConsumeAs(type, def));
+  }
+
+  /* Apply shift */
+  if (shift != 0) {
+    if (!type.isFloatType()) {
+      logOpMessage(LogLevel::eWarn, instruction, "Shift applied to a non-float result.");
+    }
+
+    float shiftAmount = shift < 0
+            ? 1.0f / (1 << -shift)
+            : float(1 << shift);
+
+    def = builder.add(ir::Op::FMul(type, def, makeTypedConstant(builder, type, shiftAmount)));
+  }
+
+  /* Saturate dst */
+  if (operand.isSaturated()) {
+    if (!type.isFloatType()) {
+      logOpMessage(LogLevel::eWarn, instruction, "Saturation applied to a non-float result.");
+    }
+
+    def = builder.add(ir::Op::FClamp(type, def,
+      makeTypedConstant(builder, type, 0.0f),
+      makeTypedConstant(builder, type, 1.0f)));
+  }
+
+  return def;
+}
+
+
+bool Converter::storeDstModifiedPredicated(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value) {
+  value = applyDstModifiers(builder, value, op, operand);
+
+  ir::SsaDef predicate = ir::SsaDef();
+  if (operand.isPredicated()) {
+    /* Predication is unimplemented. */
+    dxbc_spv_assert(false);
+  }
+
+  return storeDst(builder, op, operand, predicate, value);
+}
+
+
+WriteMask Converter::fixupWriteMask(ir::Builder& builder, WriteMask writeMask, ir::SsaDef value) {
+  /* Fix the write mask if it writes more components than the value has. */
+  auto type = builder.getOp(value).getType().getBaseType(0u);
+
+  if (util::popcnt(uint8_t(writeMask)) == type.getVectorSize()) {
+    return writeMask;
+  }
+
+  /* Scalar values should be turned into vectors with broadcastScalar instead. */
+  dxbc_spv_assert(type.getVectorSize() != 1u);
+
+  WriteMask oldWriteMask = writeMask;
+
+  WriteMask maxWriteMask = WriteMask(uint8_t((1u << type.getVectorSize()) - 1u) << util::tzcnt(uint8_t(writeMask)));
+  writeMask &= maxWriteMask;
+
+  if (writeMask != oldWriteMask) {
+    Logger::warn("Disabling components in write mask because computed value does not have them: Before: ",
+      oldWriteMask, ", after: ", writeMask);
+  }
+
+  return writeMask;
+}
+
+
 void Converter::logOp(LogLevel severity, const Instruction& op) const {
   Disassembler::Options options = { };
   options.indent = false;
