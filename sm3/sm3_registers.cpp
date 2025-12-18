@@ -88,6 +88,22 @@ ir::SsaDef RegisterFile::emitTempLoad(
 }
 
 
+ir::SsaDef RegisterFile::emitPredicateLoad(
+            ir::Builder&            builder,
+            Swizzle                 swizzle,
+            WriteMask               componentMask) {
+  auto returnType = makeVectorType(ir::ScalarType::eBool, componentMask);
+
+  std::array<ir::SsaDef, 4u> components = { };
+  for (auto c : swizzle.getReadMask(componentMask)) {
+    auto component = componentFromBit(c);
+    components[uint8_t(component)] = builder.add(ir::Op::TmpLoad(ir::ScalarType::eBool, m_pReg[uint8_t(component)]));
+  }
+
+  return composite(builder, returnType, components.data(), swizzle, componentMask);
+}
+
+
 ir::SsaDef RegisterFile::emitAddressLoad(
             ir::Builder&            builder,
             RegisterType            registerType,
@@ -174,7 +190,20 @@ bool RegisterFile::emitStore(
       default: dxbc_spv_assert(false); return false;
     }
 
+    ir::SsaDef predicateIf = ir::SsaDef();
+
+    if (predicateVec) {
+      /* Check if the matching component of the predicate register vector is true first. */
+      auto condComponent = extractFromVector(builder, predicateVec, componentIndex);
+      predicateIf = builder.add(ir::Op::ScopedIf(ir::SsaDef(), condComponent));
+    }
+
     builder.add(ir::Op::TmpStore(reg, scalar));
+
+    if (predicateIf) {
+      auto predicateIfEnd = builder.add(ir::Op::ScopedEndIf(predicateIf));
+      builder.rewriteOp(predicateIf, ir::Op(builder.getOp(predicateIf)).setOperand(0u, predicateIfEnd));
+    }
 
     componentIndex++;
   }

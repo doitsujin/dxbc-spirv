@@ -621,7 +621,20 @@ bool IoMap::emitStore(
           builder.makeConstant(0.0f), builder.makeConstant(1.0f)));
       }
 
+      ir::SsaDef predicateIf = ir::SsaDef();
+
+      if (predicateVec) {
+        /* Check if the matching component of the predicate register vector is true first. */
+        auto condComponent = extractFromVector(builder, predicateVec, componentIndex);
+        predicateIf = builder.add(ir::Op::ScopedIf(ir::SsaDef(), condComponent));
+      }
+
       builder.add(ir::Op::TmpStore(ioVar->tempDefs[uint32_t(util::componentFromBit(c))], valueScalar));
+
+      if (predicateIf) {
+        auto predicateIfEnd = builder.add(ir::Op::ScopedEndIf(predicateIf));
+        builder.rewriteOp(predicateIf, ir::Op(builder.getOp(predicateIf)).setOperand(0u, predicateIfEnd));
+      }
 
       componentIndex++;
     }
@@ -651,6 +664,13 @@ bool IoMap::emitStore(
       }
 
       valueScalar = convertScalar(builder, ir::ScalarType::eF32, valueScalar);
+      ir::SsaDef predicateIf = ir::SsaDef();
+
+      if (predicateVec) {
+        /* Check if the matching component of the predicate register vector is true first. */
+        auto condComponent = extractFromVector(builder, predicateVec, componentIndex);
+        predicateIf = builder.add(ir::Op::ScopedIf(ir::SsaDef(), condComponent));
+      }
 
       auto dstComponentIndexConst = builder.makeConstant(uint32_t(util::componentFromBit(c)));
 
@@ -658,6 +678,11 @@ bool IoMap::emitStore(
         .addOperand(index)
         .addOperand(dstComponentIndexConst)
         .addOperand(valueScalar));
+
+      if (predicateIf) {
+        auto predicateIfEnd = builder.add(ir::Op::ScopedEndIf(predicateIf));
+        builder.rewriteOp(predicateIf, ir::Op(builder.getOp(predicateIf)).setOperand(0u, predicateIfEnd));
+      }
 
       componentIndex++;
     }

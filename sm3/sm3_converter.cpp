@@ -260,6 +260,7 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
 
     case RegisterType::ePredicate:
       logOpError(op, "Predicate cannot be loaded as a regular source register.");
+      break;
 
     case RegisterType::eConst:
     case RegisterType::eConst2:
@@ -482,8 +483,25 @@ bool Converter::storeDstModifiedPredicated(ir::Builder& builder, const Instructi
 
   ir::SsaDef predicate = ir::SsaDef();
   if (operand.isPredicated()) {
-    /* Predication is unimplemented. */
-    dxbc_spv_assert(false);
+    /* Make sure we're not trying to load more predicate components than we can write. */
+    WriteMask writeMask = operand.getWriteMask(getShaderInfo());
+    writeMask = fixupWriteMask(builder, writeMask, value);
+
+    /* Load predicate */
+    predicate = m_regFile.emitPredicateLoad(builder, operand.getPredicateSwizzle(), writeMask);
+    /* Apply predicate modifier (per component) if necessary */
+    if (operand.getPredicateModifier() == OperandModifier::eNot) {
+      util::small_vector<ir::SsaDef, 4u> components = { };
+      for (auto c : writeMask) {
+        auto component = componentFromBit(c);
+        auto predicateComponent = ir::extractFromVector(builder, predicate, uint32_t(component));
+        components.push_back(builder.add(ir::Op::BNot(ir::ScalarType::eBool, predicateComponent)));
+      }
+      predicate = buildVector(builder, ir::ScalarType::eBool, components.size(), components.data());
+    } else if (operand.getPredicateModifier() != OperandModifier::eNone) {
+      Logger::log(LogLevel::eError, "Unknown predicate modifier: ", uint32_t(operand.getPredicateModifier()));
+      dxbc_spv_assert(false);
+    }
   }
 
   return storeDst(builder, op, operand, predicate, value);
