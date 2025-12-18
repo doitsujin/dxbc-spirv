@@ -489,6 +489,24 @@ bool Converter::storeDstModifiedPredicated(ir::Builder& builder, const Instructi
 }
 
 
+ir::SsaDef Converter::calculateAddress(
+            ir::Builder&            builder,
+            RegisterType            registerType,
+            Swizzle                 swizzle,
+            uint32_t                baseAddress,
+            ir::ScalarType          type) {
+  auto relativeOffset = m_regFile.emitAddressLoad(builder, registerType, swizzle);
+
+  ir::SsaDef baseAddressDef = builder.makeConstant(int32_t(baseAddress));
+  ir::SsaDef address = builder.add(ir::Op::IAdd(ir::ScalarType::eI32, baseAddressDef, relativeOffset));
+
+  if (type != ir::ScalarType::eI32)
+    address = builder.add(ir::Op::Cast(type, address));
+
+  return address;
+}
+
+
 void Converter::logOp(LogLevel severity, const Instruction& op) const {
   Disassembler::Options options = { };
   options.indent = false;

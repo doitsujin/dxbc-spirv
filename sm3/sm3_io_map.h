@@ -111,6 +111,12 @@ private:
   uint32_t        m_nextInputLocation = 12u;
   uint32_t        m_nextOutputLocation = 12u;
 
+  ir::SsaDef      m_inputSwitchFunction = { };
+  ir::SsaDef      m_outputSwitchFunction = { };
+
+  ir::SsaDef emitDynamicLoadFunction(ir::Builder& builder) const;
+  ir::SsaDef emitDynamicStoreFunction(ir::Builder& builder) const;
+
   void flushOutputs(ir::Builder& builder);
 
   static bool registerTypeIsInput(RegisterType regType, ShaderType shaderType) {
