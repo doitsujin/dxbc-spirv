@@ -33,11 +33,13 @@ namespace dxbc_spv::sm3 {
  */
 
 Converter::Converter(util::ByteReader code,
+        SpecializationConstantLayout& specConstantsLayout,
   const Options& options)
 : m_code(code)
 , m_options(options)
 , m_ioMap(*this)
-, m_regFile(*this) {
+, m_regFile(*this)
+, m_specConstants(*this, specConstantsLayout) {
 
 }
 
@@ -213,6 +215,8 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
   if (m_options.name)
     builder.add(ir::Op::DebugName(m_entryPoint.def, m_options.name));
 
+  m_specConstants.setInsertCursor(afterMainFunc);
+  m_specConstants.initialize(builder);
   m_ioMap.initialize(builder);
   m_regFile.initialize(builder);
 

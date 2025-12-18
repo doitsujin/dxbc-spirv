@@ -12,6 +12,9 @@ using util::ComponentBit;
 using util::WriteMask;
 using util::Swizzle;
 
+constexpr uint32_t SpecialBindingsRegSpace = 3u;
+constexpr uint32_t FastSpecConstCbvRegIdx  = 0u;
+
 /** Opcode */
 enum class OpCode : uint32_t {
   eNop          = 0u,
