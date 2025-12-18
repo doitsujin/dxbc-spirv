@@ -1,6 +1,7 @@
 #pragma once
 
 #include "sm3_parser.h"
+#include "sm3_io_map.h"
 
 #include "../ir/ir_builder.h"
 
@@ -16,6 +17,8 @@ namespace dxbc_spv::sm3 {
  * unknown types, and instructions that cannot be lowered directly. As
  * such, the IR will require further processing. */
 class Converter {
+
+  friend IoMap;
 
 public:
 
@@ -52,6 +55,8 @@ private:
   ConstantTable    m_ctab = { };
 
   Parser           m_parser;
+
+  IoMap            m_ioMap;
 
   uint32_t m_instructionCount = 0u;
 

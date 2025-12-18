@@ -35,7 +35,8 @@ namespace dxbc_spv::sm3 {
 Converter::Converter(util::ByteReader code,
   const Options& options)
 : m_code(code)
-, m_options(options) {
+, m_options(options)
+, m_ioMap(*this) {
 
 }
 
@@ -188,6 +189,8 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
   if (m_options.name)
     builder.add(ir::Op::DebugName(m_entryPoint.def, m_options.name));
 
+  m_ioMap.initialize(builder);
+
   /* Set cursor to main function so that instructions will be emitted
    * in the correct location */
   builder.setCursor(m_entryPoint.mainFunc);
@@ -196,6 +199,8 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
 
 
 bool Converter::finalize(ir::Builder& builder, ShaderType shaderType) {
+  m_ioMap.finalize(builder);
+
   return true;
 }
 
@@ -399,6 +404,8 @@ bool Converter::storeDst(ir::Builder& builder, const Instruction& op, const Oper
       logOpError(op, "Unhandled destination operand: ", name);
     } return false;
   }
+
+  return false;
 }
 
 
