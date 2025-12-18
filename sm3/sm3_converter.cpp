@@ -237,10 +237,29 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
     case RegisterType::eInput:
     case RegisterType::ePixelTexCoord:
     case RegisterType::eMiscType:
+      loadDef = m_ioMap.emitLoad(builder, op, operand, mask, swizzle, type);
+      break;
+
     case RegisterType::eAddr:
+    /* case RegisterType::eTexture: Same Value */
+      if (getShaderInfo().getType() == ShaderType::eVertex)
+        /* RegisterType::eAddr */
+        logOpError(op, "Address register cannot be loaded as a regular source register.");
+      else
+        loadDef = m_ioMap.emitLoad(builder, op, operand, mask, swizzle, type); /* RegisterType::eTexture */
+      break;
+
     case RegisterType::eTemp:
-    case RegisterType::eLoop:
+      loadDef = m_regFile.emitTempLoad(builder,
+        operand.getIndex(),
+        swizzle,
+        mask,
+        type);
+      break;
+
     case RegisterType::ePredicate:
+      logOpError(op, "Predicate cannot be loaded as a regular source register.");
+
     case RegisterType::eConst:
     case RegisterType::eConst2:
     case RegisterType::eConst3:
@@ -399,14 +418,20 @@ bool Converter::storeDst(ir::Builder& builder, const Instruction& op, const Oper
 
   switch (operand.getRegisterType()) {
     case RegisterType::eTemp:
+      return m_regFile.emitStore(builder, operand, writeMask, predicateVec, value);
+
     case RegisterType::eAddr:
+      if (getShaderInfo().getType() == ShaderType::eVertex)
+        return m_regFile.emitStore(builder, operand, writeMask, predicateVec, value);
+      else
+        return m_ioMap.emitStore(builder, op, operand, writeMask, predicateVec, value);
+
     case RegisterType::eOutput:
     case RegisterType::eRasterizerOut:
     case RegisterType::eAttributeOut:
     case RegisterType::eColorOut:
     case RegisterType::eDepthOut:
-      return false;
-      break;
+      return m_ioMap.emitStore(builder, op, operand, writeMask, predicateVec, value);
 
     default: {
       auto name = makeRegisterDebugName(operand.getRegisterType(), 0u, writeMask);
