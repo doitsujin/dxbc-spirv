@@ -53,12 +53,35 @@ bool Converter::convertShader(ir::Builder& builder) {
 
   initialize(builder, shaderType);
 
-  while (m_parser) {
-    Instruction op = m_parser.parseInstruction();
+  Instruction op;
+  if (m_parser)
+    op = m_parser.parseInstruction();
+
+  while (op) {
+    /* Co-issued instructions are executed out of order.
+     * So parse the next instruction, and execute it, if it's co-issued.
+     * After that parse the next instruction and do the next loop iteration. */
+    Instruction nextOp;
+    if (m_parser) {
+      nextOp = m_parser.parseInstruction();
+
+      if (nextOp && nextOp.isCoissued()) {
+        /* Execute the co-issued instruction first. */
+        if (!convertInstruction(builder, nextOp)) {
+          return false;
+        }
+        nextOp = Instruction();
+        if (m_parser) {
+          nextOp = m_parser.parseInstruction();
+        }
+      }
+    }
 
     /* Execute the actual instruction. */
     if (!op || !convertInstruction(builder, op))
       return false;
+
+    op = nextOp;
   }
 
   return finalize(builder, shaderType);
