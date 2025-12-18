@@ -201,12 +201,20 @@ bool RegisterFile::emitStore(
       scalar = builder.add(ir::Op::Select(regType, condComponent, scalar, oldValue));
     }
 
-    builder.add(ir::Op::TmpStore(reg, scalar));
+    m_stores.emplace_back(reg, scalar);
 
     componentIndex++;
   }
 
   return true;
+}
+
+
+void RegisterFile::emitBufferedStores(ir::Builder& builder) {
+  for (const auto& store : m_stores)
+    builder.add(ir::Op::TmpStore(store.reg, store.value));
+
+  m_stores.clear();
 }
 
 
