@@ -13,6 +13,12 @@ namespace dxbc_spv::sm3 {
 
 class Instruction;
 
+/** Translate SM3 program type to internal IR shader stage.
+ *  Our IR has the inverse enum order, but as a bit mask. */
+inline ir::ShaderStage resolveShaderStage(ShaderType type) {
+  return ir::ShaderStage(1u << (1u - uint32_t(type)));
+}
+
 /** Shader code header */
 class ShaderInfo {
 
