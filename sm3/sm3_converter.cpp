@@ -56,10 +56,15 @@ bool Converter::convertShader(ir::Builder& builder) {
   while (m_parser) {
     Instruction op = m_parser.parseInstruction();
 
+    if (!op.isCoissued())
+      m_regFile.emitBufferedStores(builder);
+
     /* Execute the actual instruction. */
     if (!op || !convertInstruction(builder, op))
       return false;
   }
+
+  m_regFile.emitBufferedStores(builder);
 
   return finalize(builder, shaderType);
 }
