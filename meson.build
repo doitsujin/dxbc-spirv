@@ -21,6 +21,7 @@ dxbc_spv_files = files([
   'sm3/sm3_disasm.cpp',
   'sm3/sm3_converter.cpp',
   'sm3/sm3_io_map.cpp',
+  'sm3/sm3_registers.cpp',
 
   'ir/ir.cpp',
   'ir/ir_builder.cpp',
