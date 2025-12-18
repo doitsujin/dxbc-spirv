@@ -30,6 +30,11 @@ public:
           WriteMask               componentMask,
           ir::ScalarType          type);
 
+  ir::SsaDef emitAddressLoad(
+          ir::Builder&            builder,
+          RegisterType            registerType,
+          Swizzle                 swizzle);
+
   /** Stores temporary register or address register. */
   bool emitStore(
           ir::Builder&            builder,

@@ -104,6 +104,8 @@ private:
 
   WriteMask fixupWriteMask(ir::Builder& builder, WriteMask writeMask, ir::SsaDef value);
 
+  ir::SsaDef loadAddress(ir::Builder& builder, RegisterType registerType, Swizzle swizzle);
+
   void logOp(LogLevel severity, const Instruction& op) const;
 
   template<typename... Args>
