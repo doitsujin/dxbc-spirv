@@ -149,6 +149,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return handleMatrixArithmetic(builder, op);
 
     case OpCode::eBem:
+      return handleBem(builder, op);
+
     case OpCode::eTexCrd:
     case OpCode::eTexLd:
     case OpCode::eTexBem:
@@ -340,6 +342,7 @@ ir::SsaDef Converter::applyBumpMapping(ir::Builder& builder, uint32_t stageIdx, 
   }
 
   std::array<ir::SsaDef, 2> components = {};
+
   for (uint32_t i = 0u; i < components.size(); i++) {
     auto src1r = builder.add(ir::Op::CompositeExtract(scalarType, src1, builder.makeConstant(0u)));
     auto bumped0 = builder.add(emitFMul(scalarType, bumpEnvMat0, src1r));
@@ -352,6 +355,7 @@ ir::SsaDef Converter::applyBumpMapping(ir::Builder& builder, uint32_t stageIdx, 
 
     components[i] = builder.add(ir::Op::FAdd(scalarType, src0Component, bumpedSum));
   }
+
   return buildVector(builder, scalarType, components.size(), components.data());
 }
 
@@ -715,6 +719,30 @@ bool Converter::handleMatrixArithmetic(ir::Builder& builder, const Instruction& 
   }
 
   auto result = buildVector(builder, scalarType, rowCount, components.data());
+  return storeDstModifiedPredicated(builder, op, dst, result);
+}
+
+
+bool Converter::handleBem(ir::Builder& builder, const Instruction& op) {
+  /* Apply a fake bump environment-map transform. */
+  dxbc_spv_assert(op.getSrcCount() == 2u);
+  dxbc_spv_assert(op.hasDst());
+  dxbc_spv_assert(!!m_psSharedData);
+
+  auto dst = op.getDst();
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+
+  /* Dst register index determines the bumpmapping stage index. */
+  auto stageIdx = dst.getIndex();
+
+  WriteMask writeMask = dst.getWriteMask(m_parser.getShaderInfo());
+  /* Write mask must be .xy */
+  dxbc_spv_assert(writeMask == WriteMask(ComponentBit::eX | ComponentBit::eY));
+
+  auto src0 = loadSrcModified(builder, op, op.getSrc(0u), writeMask, scalarType);
+  auto src1 = loadSrcModified(builder, op, op.getSrc(1u), writeMask, scalarType);
+
+  auto result = applyBumpMapping(builder, stageIdx, src0, src1);
   return storeDstModifiedPredicated(builder, op, dst, result);
 }
 
