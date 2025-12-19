@@ -165,6 +165,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return handleBem(builder, op);
 
     case OpCode::eTexCrd:
+      return handleTexCoord(builder, op);
+
     case OpCode::eTexLd:
     case OpCode::eTexBem:
     case OpCode::eTexBemL:
@@ -746,6 +748,39 @@ bool Converter::handleBem(ir::Builder& builder, const Instruction& op) {
 
   auto result = applyBumpMapping(builder, stageIdx, src0, src1);
   return storeDstModifiedPredicated(builder, op, dst, result);
+}
+
+
+bool Converter::handleTexCoord(ir::Builder& builder, const Instruction& op) {
+  /* Reads texcoord data */
+  const auto& dst = op.getDst();
+  WriteMask writeMask = dst.getWriteMask(getShaderInfo());
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+
+  if (getShaderInfo().getVersion().first >= 2 || getShaderInfo().getVersion().second >= 4) {
+    /* TexCrd (SM 1.4) */
+    auto src = loadSrcModified(builder, op, op.getSrc(0u), writeMask, scalarType);
+    return storeDstModifiedPredicated(builder, op, dst, src);
+
+  } else {
+    /* TexCoord (SM 1.1 - 1.3) */
+    ir::BasicType vectorType = makeVectorType(scalarType, writeMask);
+    auto src = m_ioMap.emitTexCoordLoad(builder, op, op.getDst().getIndex(), writeMask, Swizzle::identity(), scalarType);
+
+    /* Saturate */
+    src = builder.add(ir::Op::FClamp(
+      vectorType,
+      src,
+      makeTypedConstant(builder, vectorType, 0.0f),
+      makeTypedConstant(builder, vectorType, 1.0f)
+    ));
+
+    /* w = 1.0 */
+    if (writeMask & ComponentBit::eW)
+      src = builder.add(ir::Op::CompositeInsert(vectorType, src, builder.makeConstant(3u), ir::makeTypedConstant(builder, scalarType, 1.0f)));
+
+    return storeDstModifiedPredicated(builder, op, dst, src);
+  }
 }
 
 
