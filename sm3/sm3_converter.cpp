@@ -147,6 +147,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
 
     case OpCode::eSlt:
     case OpCode::eSge:
+      return handleCompare(builder, op);
+
     case OpCode::eLit:
     case OpCode::eM4x4:
     case OpCode::eM4x3:
@@ -479,6 +481,48 @@ bool Converter::handleDot(ir::Builder& builder, const Instruction& op) {
 
   WriteMask writeMask = dst.getWriteMask(getShaderInfo());
   result = broadcastScalar(builder, result, writeMask);
+  return storeDstModifiedPredicated(builder, op, dst, result);
+}
+
+
+bool Converter::handleCompare(ir::Builder& builder, const Instruction& op) {
+  /* All instructions handled here will operate on float vectors of any kind. */
+  auto opCode = op.getOpCode();
+
+  dxbc_spv_assert(op.getSrcCount() == 2u);
+  dxbc_spv_assert(op.hasDst());
+
+  /* Instruction type */
+  const auto& dst = op.getDst();
+
+  WriteMask writeMask = dst.getWriteMask(getShaderInfo());
+
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+
+  /* Load source operands */
+  auto src0 = loadSrcModified(builder, op, op.getSrc(0u), writeMask, scalarType);
+  auto src1 = loadSrcModified(builder, op, op.getSrc(1u), writeMask, scalarType);
+  if (!src0 || !src1)
+    return false;
+
+  util::small_vector<ir::SsaDef, 4u> components;
+  for (auto _ : writeMask) {
+    auto index = components.size();
+    /* It is done per-component. */
+    auto src0c = ir::extractFromVector(builder, src0, index);
+    auto src1c = ir::extractFromVector(builder, src1, index);
+    ir::SsaDef cond;
+    if (opCode == OpCode::eSlt)
+      cond = builder.add(ir::Op::FLt(ir::ScalarType::eBool, src0c, src1c));
+    else
+      cond = builder.add(ir::Op::FGe(ir::ScalarType::eBool, src0c, src1c));
+
+    components.push_back(builder.add(ir::Op::Select(scalarType, cond,
+      makeTypedConstant(builder, scalarType, 1.0f),
+      makeTypedConstant(builder, scalarType, 0.0f))));
+  }
+  auto result = buildVector(builder, scalarType, components.size(), components.data());
+
   return storeDstModifiedPredicated(builder, op, dst, result);
 }
 
