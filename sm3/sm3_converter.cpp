@@ -178,9 +178,11 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eTexDepth:
       return handleTexDepth(builder, op);
 
-    case OpCode::eLrp:
     case OpCode::eCmp:
     case OpCode::eCnd:
+      return handleSelect(builder, op);
+
+    case OpCode::eLrp:
     case OpCode::eNrm:
     case OpCode::eSinCos:
     case OpCode::ePow:
@@ -1287,6 +1289,62 @@ bool Converter::handleExpP(ir::Builder& builder, const Instruction& op) {
     result = builder.add(ir::Op::FMin(vectorType, result,
       ir::makeTypedConstant(builder, vectorType, std::numeric_limits<float>::max())));
   }
+
+  return storeDstModifiedPredicated(builder, op, dst, result);
+}
+
+
+bool Converter::handleSelect(ir::Builder& builder, const Instruction& op) {
+  dxbc_spv_assert(op.getSrcCount() == 3u);
+  dxbc_spv_assert(op.hasDst());
+
+  auto dst = op.getDst();
+  WriteMask writeMask = dst.getWriteMask(m_parser.getShaderInfo());
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+
+  auto src0 = loadSrcModified(builder, op, op.getSrc(0u), writeMask, scalarType);
+  auto src1 = loadSrcModified(builder, op, op.getSrc(1u), writeMask, scalarType);
+  auto src2 = loadSrcModified(builder, op, op.getSrc(2u), writeMask, scalarType);
+
+  if (op.getOpCode() == OpCode::eCnd && getShaderInfo().getVersion().first <= 1u && getShaderInfo().getVersion().second < 4u) {
+    /* Cnd on SM<1.4 compares the a-component and picks one of the two entire source operands based on that
+     * On 1.4+ it compares per component. */
+    auto conditionComponent = ir::extractFromVector(builder, src0, 3u);
+
+    /* Cnd compares to 0.5 */
+    auto conditionBool = builder.add(ir::Op::FGt(ir::ScalarType::eBool, conditionComponent, makeTypedConstant(builder, scalarType, 0.5f)));
+
+    auto result = builder.add(ir::Op::Select(builder.getOp(src1).getType(), conditionBool, src1, src2));
+
+    return storeDstModifiedPredicated(builder, op, dst, result);
+  }
+
+
+  util::small_vector<ir::SsaDef, 4u> components;
+  for (auto _ : writeMask) {
+    uint32_t componentIndex = components.size();
+
+    auto conditionComponent = ir::extractFromVector(builder, src0, componentIndex);
+    auto option1Component = ir::extractFromVector(builder, src1, componentIndex);
+    auto option2Component = ir::extractFromVector(builder, src2, componentIndex);
+
+    ir::SsaDef conditionBool;
+    if (op.getOpCode() == OpCode::eCmp) {
+      /* Cmp compares to 0.0 */
+      conditionBool = builder.add(ir::Op::FGe(ir::ScalarType::eBool, conditionComponent, makeTypedConstant(builder, scalarType, 0.0f)));
+    } else if (op.getOpCode() == OpCode::eCnd) {
+      /* Cnd compares to 0.5 */
+      conditionBool = builder.add(ir::Op::FGt(ir::ScalarType::eBool, conditionComponent, makeTypedConstant(builder, scalarType, 0.5f)));
+    } else {
+      Logger::err("OpCode ", op.getOpCode(), " is not supported by handleSelect.");
+      dxbc_spv_unreachable();
+      return false;
+    }
+
+    components.push_back(builder.add(ir::Op::Select(scalarType, conditionBool, option1Component, option2Component)));
+  }
+
+  auto result = ir::buildVector(builder, scalarType, components.size(), components.data());
 
   return storeDstModifiedPredicated(builder, op, dst, result);
 }
