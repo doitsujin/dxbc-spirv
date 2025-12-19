@@ -213,6 +213,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return handleDerivatives(builder, op);
 
     case OpCode::eCrs:
+      return handleCrs(builder, op);
+
     case OpCode::eSetP:
     case OpCode::eExpP:
     case OpCode::eIf:
@@ -1377,6 +1379,52 @@ bool Converter::handleDerivatives(ir::Builder& builder, const Instruction& op) {
     dxbc_spv_unreachable();
     return false;
   }
+}
+
+
+bool Converter::handleCrs(ir::Builder& builder, const Instruction& op) {
+  /* crs dst, src0, src1
+   * dest.x = src0.y * src1.z - src0.z * src1.y;
+   * dest.y = src0.z * src1.x - src0.x * src1.z;
+   * dest.z = src0.x * src1.y - src0.y * src1.x;
+   *
+   * src0 & src1 must have the default swizzle.
+   * Dst must have one of the following write masks: .x | .y | .z | .xy | .xz | .yz | .xyz.
+   */
+  dxbc_spv_assert(op.hasDst());
+  dxbc_spv_assert(op.getSrcCount() == 2u);
+  auto dst = op.getDst();
+  WriteMask writeMask = dst.getWriteMask(m_parser.getShaderInfo());
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+
+  auto src0 = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX | ComponentBit::eY | ComponentBit::eZ, scalarType);
+  auto src1 = loadSrcModified(builder, op, op.getSrc(1u), ComponentBit::eX | ComponentBit::eY | ComponentBit::eZ, scalarType);
+
+  auto src0x = builder.add(ir::Op::CompositeExtract(scalarType, src0, builder.makeConstant(0u)));
+  auto src0y = builder.add(ir::Op::CompositeExtract(scalarType, src0, builder.makeConstant(1u)));
+  auto src0z = builder.add(ir::Op::CompositeExtract(scalarType, src0, builder.makeConstant(2u)));
+  auto src1x = builder.add(ir::Op::CompositeExtract(scalarType, src1, builder.makeConstant(0u)));
+  auto src1y = builder.add(ir::Op::CompositeExtract(scalarType, src1, builder.makeConstant(1u)));
+  auto src1z = builder.add(ir::Op::CompositeExtract(scalarType, src1, builder.makeConstant(2u)));
+
+  util::small_vector<ir::SsaDef, 4u> components;
+  if (writeMask & ComponentBit::eX) {
+    auto a = builder.add(OpFMul(scalarType, src0y, src1z));
+    auto b = builder.add(OpFMul(scalarType, src0z, src1y));
+    components.push_back(builder.add(ir::Op::FSub(scalarType, a, b)));
+  }
+  if (writeMask & ComponentBit::eY) {
+    auto a = builder.add(OpFMul(scalarType, src0z, src1x));
+    auto b = builder.add(OpFMul(scalarType, src0x, src1z));
+    components.push_back(builder.add(ir::Op::FSub(scalarType, a, b)));
+  }
+  if (writeMask & ComponentBit::eZ) {
+    auto a = builder.add(OpFMul(scalarType, src0x, src1y));
+    auto b = builder.add(OpFMul(scalarType, src0y, src1x));
+    components.push_back(builder.add(ir::Op::FSub(scalarType, a, b)));
+  }
+  auto res = composite(builder, makeVectorType(scalarType, writeMask), components.data(), Swizzle::identity(), writeMask);
+  return storeDstModifiedPredicated(builder, op, dst, res);
 }
 
 

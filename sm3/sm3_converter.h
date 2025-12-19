@@ -166,6 +166,8 @@ private:
 
   bool handleDerivatives(ir::Builder& builder, const Instruction& op);
 
+  bool handleCrs(ir::Builder& builder, const Instruction& op);
+
   ir::SsaDef loadSrc(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, Swizzle swizzle, ir::ScalarType type);
 
   ir::SsaDef applySrcModifiers(ir::Builder& builder, ir::SsaDef def, const Instruction& instruction, const Operand& operand, WriteMask mask);
