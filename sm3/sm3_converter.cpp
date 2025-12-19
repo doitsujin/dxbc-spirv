@@ -384,6 +384,40 @@ ir::SsaDef Converter::normalizeVector(ir::Builder& builder, ir::SsaDef def) {
 }
 
 
+ir::SsaDef Converter::emitComparison(ir::Builder& builder, ir::SsaDef a, ir::SsaDef b, ComparisonMode comparisonMode) {
+  switch (comparisonMode) {
+    case ComparisonMode::eNever:
+      return builder.makeConstant(false);
+      break;
+    case ComparisonMode::eGreaterThan:
+      return builder.add(ir::Op::FGt(ir::ScalarType::eBool, a, b));
+      break;
+    case ComparisonMode::eEqual:
+      return builder.add(ir::Op::FEq(ir::ScalarType::eBool, a, b));
+      break;
+    case ComparisonMode::eGreaterEqual:
+      return builder.add(ir::Op::FGe(ir::ScalarType::eBool, a, b));
+      break;
+    case ComparisonMode::eLessThan:
+      return builder.add(ir::Op::FLt(ir::ScalarType::eBool, a, b));
+      break;
+    case ComparisonMode::eNotEqual:
+      return builder.add(ir::Op::FNe(ir::ScalarType::eBool, a, b));
+      break;
+    case ComparisonMode::eLessEqual:
+      return builder.add(ir::Op::FLe(ir::ScalarType::eBool, a, b));
+      break;
+    case ComparisonMode::eAlways:
+      return builder.makeConstant(true);
+      break;
+
+    default:
+      Logger::warn("Invalid comparison mode: '", uint32_t(comparisonMode), "'");
+      return builder.makeConstant(true);
+  }
+}
+
+
 bool Converter::handleComment(ir::Builder& builder, const Instruction& op) {
   /* The comment is always at the start of the shader from what we've seen,
    * so no need to get extra clever here. */
