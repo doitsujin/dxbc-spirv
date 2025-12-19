@@ -134,6 +134,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return handleDot(builder, op);
 
     case OpCode::eLit:
+      return handleLit(builder, op);
+
     case OpCode::eM4x4:
     case OpCode::eM4x3:
     case OpCode::eM3x4:
@@ -519,6 +521,58 @@ bool Converter::handleDot(ir::Builder& builder, const Instruction& op) {
 
   WriteMask writeMask = dst.getWriteMask(getShaderInfo());
   result = broadcastScalar(builder, result, writeMask);
+  return storeDstModifiedPredicated(builder, op, dst, result);
+}
+
+
+bool Converter::handleLit(ir::Builder& builder, const Instruction& op) {
+  /* Calculates lighting coefficients from two dot products and an exponent. */
+  const auto& dst = op.getDst();
+  WriteMask writeMask = dst.getWriteMask(getShaderInfo());
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+  auto src = loadSrcModified(builder, op, op.getSrc(0u), writeMask, scalarType);
+
+  auto srcX = ir::extractFromVector(builder, src, 0u);
+  auto srcY = ir::extractFromVector(builder, src, 1u);
+  auto srcW = ir::extractFromVector(builder, src, 3u);
+
+  /* power = clamp(src.w, -127.9961, 127.9961) */
+  auto power = builder.add(ir::Op::FClamp(scalarType, srcW,
+    builder.makeConstant(-127.9961f), builder.makeConstant(127.9961f)));
+
+  auto zeroFConst = ir::makeTypedConstant(builder, scalarType, 0.0f);
+  auto oneFConst = ir::makeTypedConstant(builder, scalarType, 1.0f);
+
+  util::small_vector<ir::SsaDef, 4u> components;
+
+  if (writeMask & ComponentBit::eX) {
+    /* dst.x = 1.0 */
+    components.push_back(oneFConst);
+  }
+
+  if (writeMask & ComponentBit::eY) {
+    /* dst.y = max(0.0, src.x) */
+    components.push_back(builder.add(ir::Op::FMax(scalarType, srcX, zeroFConst)));
+  }
+
+  if (writeMask & ComponentBit::eZ) {
+    /* dst.z = src.x > 0.0 && src.y > 0.0 ? pow(src.y, src.w) : 0.0 */
+
+    auto zTestX = builder.add(ir::Op::FGe(ir::ScalarType::eBool, srcX,zeroFConst));
+    auto zTestY = builder.add(ir::Op::FGe(ir::ScalarType::eBool, srcY, zeroFConst));
+    auto zTest = builder.add(ir::Op::BAnd(ir::ScalarType::eBool, zTestX, zTestY));
+
+    auto dstZ = builder.add(ir::Op::FPow(scalarType, srcX, power));
+
+    components.push_back(builder.add(ir::Op::Select(scalarType, zTest, dstZ, zeroFConst)));
+  }
+
+  if (writeMask & ComponentBit::eW) {
+    /* dst.w = 1.0 */
+    components.push_back(oneFConst);
+  }
+
+  auto result = buildVector(builder, scalarType, components.size(), components.data());
   return storeDstModifiedPredicated(builder, op, dst, result);
 }
 
