@@ -186,6 +186,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return handleSelect(builder, op);
 
     case OpCode::eNrm:
+      return handleNrm(builder, op);
+
     case OpCode::eSinCos:
     case OpCode::ePow:
     case OpCode::eDst:
@@ -1370,6 +1372,27 @@ bool Converter::handleSelect(ir::Builder& builder, const Instruction& op) {
   }
 
   auto result = ir::buildVector(builder, scalarType, components.size(), components.data());
+
+  return storeDstModifiedPredicated(builder, op, dst, result);
+}
+
+
+bool Converter::handleNrm(ir::Builder& builder, const Instruction& op) {
+  dxbc_spv_assert(op.getSrcCount() == 1u);
+  dxbc_spv_assert(op.hasDst());
+
+  auto dst = op.getDst();
+  WriteMask writeMask = dst.getWriteMask(m_parser.getShaderInfo());
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+
+  auto src0 = loadSrcModified(builder, op, op.getSrc(0u), writeMask, scalarType);
+  auto result = normalizeVector(builder, src0);
+
+  if (m_options.fastFloatEmulation) {
+    auto vectorType = ir::makeVectorType(scalarType, writeMask);
+    result = builder.add(ir::Op::FMin(vectorType, result,
+      ir::makeTypedConstant(builder, vectorType, std::numeric_limits<float>::max())));
+  }
 
   return storeDstModifiedPredicated(builder, op, dst, result);
 }
