@@ -122,6 +122,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
 
     case OpCode::eMov:
     case OpCode::eMova:
+      return handleMov(builder, op);
+
     case OpCode::eAdd:
     case OpCode::eSub:
     case OpCode::eExp:
@@ -304,6 +306,52 @@ bool Converter::handleDcl(ir::Builder& builder, const Instruction& op) {
       dxbc_spv_unreachable();
       return false;
   }
+}
+
+
+bool Converter::handleMov(ir::Builder& builder, const Instruction& op) {
+  /* Mov always moves data from a float register to another float register.
+   * There's just one exception: mova moves data from a float register to an address register
+   * and rounds the float (RTN) in the process.
+   * On SM1.1 mova doesn't exist and the regular mov has that responsibility. */
+
+  const auto& dst = op.getDst();
+  const auto& src = op.getSrc(0u);
+
+  dxbc_spv_assert(op.getSrcCount() == 1u);
+  dxbc_spv_assert(op.hasDst());
+
+  WriteMask writeMask = dst.getWriteMask(getShaderInfo());
+
+  /* Even when writing the address register, we need to load it as a float to round properly. */
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+
+  auto value = loadSrcModified(builder, op, src, writeMask, scalarType);
+
+  if (!value)
+    return false;
+
+  /* Mova writes to the address register. On <= SM2.1 mov *can* write to the address register (which only exists for VS). */
+  if (dst.getRegisterType() == RegisterType::eAddr && getShaderInfo().getType() == ShaderType::eVertex) {
+    uint32_t componentCount = util::popcnt(uint8_t(writeMask));
+    util::small_vector<ir::SsaDef, 4u> components;
+    for (auto _ : writeMask) {
+      auto componentIndex = components.size();
+      auto scalarValue = ir::extractFromVector(builder, value, componentIndex);
+
+      ir::SsaDef roundedValue;
+      if (getShaderInfo().getVersion().first < 2 && getShaderInfo().getVersion().second < 2)
+        /* Contrary to what the documentation says, we need to floor here. */
+        roundedValue = builder.add(ir::Op::FRound(scalarType, scalarValue, ir::RoundMode::eNegativeInf));
+      else
+        roundedValue = builder.add(ir::Op::FRound(scalarType, scalarValue, ir::RoundMode::eNearestEven));
+
+      components.push_back(builder.add(ir::Op::Cast(ir::ScalarType::eI32, roundedValue)));
+    }
+    value = buildVector(builder, ir::ScalarType::eI32, componentCount, components.data());
+  }
+
+  return storeDstModifiedPredicated(builder, op, dst, value);
 }
 
 
