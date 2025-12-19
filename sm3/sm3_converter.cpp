@@ -143,6 +143,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDp2Add:
     case OpCode::eDp3:
     case OpCode::eDp4:
+      return handleDot(builder, op);
+
     case OpCode::eSlt:
     case OpCode::eSge:
     case OpCode::eLit:
@@ -430,6 +432,54 @@ bool Converter::handleArithmetic(ir::Builder& builder, const Instruction& op) {
   }
 
   return storeDstModifiedPredicated(builder, op, dst, resultDef);
+}
+
+
+bool Converter::handleDot(ir::Builder& builder, const Instruction& op) {
+  /* Dp2/3/4 take two vector operands, produce a scalar, and replicate
+   * that in all components included in the destination write mask.
+   * Dp2Add takes a third vector operand and adds it.
+   * (dst0) Result
+   * (src0) First vector
+   * (src1) Second vector */
+  auto opCode = op.getOpCode();
+
+  dxbc_spv_assert((opCode == OpCode::eDp2Add && op.getSrcCount() == 3u) || op.getSrcCount() == 2u);
+  dxbc_spv_assert(op.hasDst());
+
+  /* The opcode determines which source components to read,
+   * since the write mask can be literally anything. */
+  auto readMask = [opCode] {
+    switch (opCode) {
+      case OpCode::eDp2Add: return util::makeWriteMaskForComponents(2u);
+      case OpCode::eDp3: return util::makeWriteMaskForComponents(3u);
+      case OpCode::eDp4: return util::makeWriteMaskForComponents(4u);
+      default: break;
+    }
+
+    dxbc_spv_unreachable();
+    return WriteMask();
+  } ();
+
+  /* Load source vectors and pass them to the internal dot instruction as they are */
+  const auto& dst = op.getDst();
+
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+
+  auto vectorA = loadSrcModified(builder, op, op.getSrc(0u), readMask, scalarType);
+  auto vectorB = loadSrcModified(builder, op, op.getSrc(1u), readMask, scalarType);
+
+  auto result = builder.add(OpFDot(scalarType, vectorA, vectorB));
+
+  if (opCode == OpCode::eDp2Add) {
+    /* src2 needs to have a replicate swizzle, so just get the first component. */
+    auto summandC = loadSrcModified(builder, op, op.getSrc(2u), WriteMask(ComponentBit::eX), scalarType);
+    result = builder.add(ir::Op::FAdd(scalarType, result, summandC));
+  }
+
+  WriteMask writeMask = dst.getWriteMask(getShaderInfo());
+  result = broadcastScalar(builder, result, writeMask);
+  return storeDstModifiedPredicated(builder, op, dst, result);
 }
 
 
