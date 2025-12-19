@@ -837,7 +837,6 @@ ir::SsaDef IoMap::emitDynamicStoreFunction(ir::Builder& builder) const {
     dxbc_spv_assert(ioVar != nullptr);
 
     auto baseType = ioVar->baseType.getBaseType(0u);
-    dxbc_spv_assert(baseType.getVectorSize() == 4u);
 
     for (uint32_t j = 0u; j < baseType.getVectorSize(); j++) {
       builder.add(ir::Op::ScopedSwitchCase(switchDef, i * 4u + j));

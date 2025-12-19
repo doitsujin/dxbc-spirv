@@ -4,6 +4,7 @@
 #include "sm3_io_map.h"
 #include "sm3_registers.h"
 #include "sm3_spec_constants.h"
+#include "sm3_resources.h"
 
 #include "../ir/ir_builder.h"
 
@@ -22,6 +23,7 @@ class Converter {
 
   friend IoMap;
   friend RegisterFile;
+  friend ResourceMap;
   friend SpecializationConstantsMap;
 
 public:
@@ -62,6 +64,7 @@ private:
 
   IoMap            m_ioMap;
   RegisterFile     m_regFile;
+  ResourceMap      m_resources;
 
   SpecializationConstantsMap m_specConstants;
 
