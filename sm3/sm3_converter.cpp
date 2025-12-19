@@ -170,6 +170,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eTexM3x3:
     case OpCode::eTexLdd:
     case OpCode::eTexLdl:
+      return handleTextureSample(builder, op);
+
     case OpCode::eTexKill:
     case OpCode::eTexDepth:
     case OpCode::eLrp:
@@ -789,6 +791,142 @@ bool Converter::handleTexCoord(ir::Builder& builder, const Instruction& op) {
 
     return storeDstModifiedPredicated(builder, op, dst, src);
   }
+}
+
+
+bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op) {
+  ir::SsaDef result = ir::SsaDef();
+  auto dst = op.getDst();
+  auto opCode = op.getOpCode();
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+
+  switch (opCode) {
+    case OpCode::eTexLd: {
+      /* Regular texture sampling instruction */
+      uint32_t samplerIdx;
+      ir::SsaDef texCoord;
+      ir::SsaDef lodBias = ir::SsaDef();
+      ir::SsaDef lod = ir::SsaDef();
+
+      if (getShaderInfo().getType() == ShaderType::eVertex) {
+        lod = builder.makeConstant(0u);
+      }
+
+      if (getShaderInfo().getVersion().first <= 1u) {
+        dxbc_spv_assert(getShaderInfo().getType() == ShaderType::ePixel);
+        samplerIdx = dst.getIndex();
+        if (getShaderInfo().getVersion().second >= 4u) {
+          /* texld - ps_1_4 */
+          auto src0 = op.getSrc(0u);
+          texCoord = loadSrcModified(builder, op, src0, ComponentBit::eAll, scalarType);
+        } else {
+          /* tex - ps_1_1 - ps_1_3 */
+          /* The destination register index decides the sampler and texture coord index. */
+          texCoord = m_ioMap.emitTexCoordLoad(builder, op, samplerIdx, ComponentBit::eAll, Swizzle::identity(), scalarType);
+        }
+      } else {
+        /* texld - sm_2_0 and up */
+        auto src0 = op.getSrc(0u);
+        auto src1 = op.getSrc(1u);
+        texCoord = loadSrcModified(builder, op, src0, ComponentBit::eAll, scalarType);
+        samplerIdx = src1.getIndex();
+
+        switch (op.getTexLdMode()) {
+          case TexLdMode::eProject:
+            texCoord = m_resources.projectTexCoord(builder, samplerIdx, texCoord, false);
+            break;
+          case TexLdMode::eBias:
+            lodBias = builder.add(ir::Op::CompositeExtract(scalarType, texCoord, builder.makeConstant(3u)));
+            break;
+          default: break;
+        }
+      }
+
+      if (m_parser.getShaderInfo().getVersion().first <= 1u && m_parser.getShaderInfo().getVersion().second < 4u)
+        texCoord = m_resources.projectTexCoord(builder, samplerIdx, texCoord, true);
+
+      result = m_resources.emitSample(builder, samplerIdx, texCoord, lod, lodBias, ir::SsaDef(), ir::SsaDef(), scalarType);
+    } break;
+
+    case OpCode::eTexLdl: {
+      /* Sample with explicit LOD */
+      auto src0 = op.getSrc(0u);
+      auto src1 = op.getSrc(1u);
+      auto texCoord = loadSrcModified(builder, op, src0, ComponentBit::eAll, scalarType);
+      uint32_t samplerIdx = src1.getIndex();
+      auto lod = builder.add(ir::Op::CompositeExtract(scalarType, texCoord, builder.makeConstant(3u)));
+      result = m_resources.emitSample(builder, samplerIdx, texCoord, lod, ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), scalarType);
+    } break;
+
+    case OpCode::eTexLdd: {
+      /* Sample with explicit derivatives */
+      auto src0 = op.getSrc(0u);
+      auto src1 = op.getSrc(1u);
+      auto src2 = op.getSrc(2u);
+      auto src3 = op.getSrc(3u);
+      auto texCoord = loadSrcModified(builder, op, src0, ComponentBit::eAll, scalarType);
+      uint32_t samplerIdx = src1.getIndex();
+      auto dx = loadSrcModified(builder, op, src2, ComponentBit::eAll, scalarType);
+      auto dy = loadSrcModified(builder, op, src3, ComponentBit::eAll, scalarType);
+      result = m_resources.emitSample(builder, samplerIdx, texCoord, ir::SsaDef(), ir::SsaDef(), dx, dy, scalarType);
+    } break;
+
+    case OpCode::eTexReg2Ar:
+    case OpCode::eTexReg2Gb:
+    case OpCode::eTexReg2Rgb: {
+      /* Sample with custom values used as texture coords (SM 1) */
+      Swizzle swizzle = Swizzle::identity();
+      switch (opCode) {
+        case OpCode::eTexReg2Ar:  swizzle = Swizzle(Component::eW, Component::eX, Component::eX, Component::eX); break;
+        case OpCode::eTexReg2Gb:  swizzle = Swizzle(Component::eY, Component::eZ, Component::eZ, Component::eZ); break;
+        case OpCode::eTexReg2Rgb: swizzle = Swizzle(Component::eX, Component::eY, Component::eZ, Component::eZ); break;
+        default: dxbc_spv_unreachable(); break;
+      }
+
+      auto src0 = op.getSrc(0u);
+      auto texCoord = loadSrcModified(builder, op, src0, ComponentBit::eAll, scalarType);
+      texCoord = swizzleVector(builder, texCoord, swizzle, ComponentBit::eAll);
+      uint32_t samplerIdx = dst.getIndex();
+
+      if (m_parser.getShaderInfo().getVersion().first <= 1u && m_parser.getShaderInfo().getVersion().second < 4u)
+        texCoord = m_resources.projectTexCoord(builder, samplerIdx, texCoord, true);
+
+      result = m_resources.emitSample(builder, samplerIdx, texCoord, ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), scalarType);
+    } break;
+
+    case OpCode::eTexM3x2Tex:
+    case OpCode::eTexM3x3Tex:
+    case OpCode::eTexM3x3:
+    case OpCode::eTexM3x2Depth:
+    case OpCode::eTexM3x3Spec:
+    case OpCode::eTexM3x3VSpec: {
+      // NOT YET IMPLEMENTED
+      Logger::err("OpCode ", op.getOpCode(), " is not yet implemented.");
+      return false;
+    } break;
+
+    case OpCode::eTexDp3Tex:
+    case OpCode::eTexDp3: {
+      // NOT YET IMPLEMENTED
+      Logger::err("OpCode ", op.getOpCode(), " is not yet implemented.");
+      return false;
+    } break;
+
+    case OpCode::eTexBem:
+    case OpCode::eTexBemL: {
+      // NOT YET IMPLEMENTED
+      Logger::err("OpCode ", op.getOpCode(), " is not yet implemented.");
+      return false;
+    } break;
+
+    default: {
+      Logger::err("OpCode ", op.getOpCode(), " is not supported by handleTextureSample.");
+      dxbc_spv_unreachable();
+      return false;
+    } break;
+  }
+
+  return storeDstModifiedPredicated(builder, op, dst, result);
 }
 
 
