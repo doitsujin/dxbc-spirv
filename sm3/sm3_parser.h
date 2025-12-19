@@ -409,6 +409,12 @@ public:
     return result;
   }
 
+  /** Returns a new operand with a specific register index */
+  Operand withIndex(uint32_t index) {
+    uint32_t token = util::binsert(m_token, index, 0u, 11u);
+    return Operand(token);
+  }
+
   /** Writes code header to binary blob. */
   bool write(util::ByteWriter& writer, const ShaderInfo& info) const;
 
@@ -418,6 +424,9 @@ public:
   }
 
 private:
+
+  Operand(uint32_t token)
+    : m_token(token) { }
 
   uint32_t                  m_token   = { };
 
