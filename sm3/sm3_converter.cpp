@@ -203,6 +203,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return handleSinCos(builder, op);
 
     case OpCode::ePow:
+      return handlePow(builder, op);
+
     case OpCode::eDst:
     case OpCode::eDsX:
     case OpCode::eDsY:
@@ -1284,6 +1286,30 @@ bool Converter::handleSinCos(ir::Builder& builder, const Instruction& op) {
     components.push_back(builder.add(ir::Op::FSin(scalarType, val)));
 
   auto vec = buildVector(builder, scalarType, components.size(), components.data());
+  return storeDstModifiedPredicated(builder, op, dst, vec);
+}
+
+
+bool Converter::handlePow(ir::Builder& builder, const Instruction& op) {
+  /* abs(src0)^src1 */
+  dxbc_spv_assert(op.getSrcCount() == 2u);
+  dxbc_spv_assert(op.hasDst());
+
+  auto dst = op.getDst();
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+  WriteMask writeMask = dst.getWriteMask(getShaderInfo());
+  Swizzle src0Swizzle = op.getSrc(0u).getSwizzle(getShaderInfo());
+  Swizzle src1Swizzle = op.getSrc(1u).getSwizzle(getShaderInfo());
+
+  /* The swizzles must be replicate swizzles. */
+  dxbc_spv_assert(src0Swizzle.x() == src0Swizzle.y() && src0Swizzle.y() == src0Swizzle.z() && src0Swizzle.z() == src0Swizzle.w());
+  dxbc_spv_assert(src1Swizzle.x() == src1Swizzle.y() && src1Swizzle.y() == src1Swizzle.z() && src1Swizzle.z() == src1Swizzle.w());
+  auto src0 = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX, scalarType);
+  auto src1 = loadSrcModified(builder, op, op.getSrc(1u), ComponentBit::eX, scalarType);
+
+  auto absSrc0 = builder.add(ir::Op::FAbs(scalarType, src0));
+  auto val = builder.add(OpFPow(scalarType, absSrc0, src1));
+  auto vec = broadcastScalar(builder, val, writeMask);
   return storeDstModifiedPredicated(builder, op, dst, vec);
 }
 
