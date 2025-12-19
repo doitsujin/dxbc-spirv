@@ -39,8 +39,8 @@ Converter::Converter(util::ByteReader code,
 , m_options(options)
 , m_ioMap(*this)
 , m_regFile(*this)
+, m_resources(*this)
 , m_specConstants(*this, specConstantsLayout) {
-
 }
 
 Converter::~Converter() {
@@ -52,6 +52,9 @@ bool Converter::convertShader(ir::Builder& builder) {
     return false;
 
   auto shaderType = getShaderInfo().getType();
+
+  /* The SWVP option is only for vertex shaders. */
+  dxbc_spv_assert(shaderType == ShaderType::eVertex || !m_options.isSWVP);
 
   initialize(builder, shaderType);
 
@@ -197,10 +200,12 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
   if (m_options.name)
     builder.add(ir::Op::DebugName(m_entryPoint.def, m_options.name));
 
+  m_resources.setInsertCursor(afterMainFunc);
   m_specConstants.initialize(builder);
   m_ioMap.setInsertCursor(afterMainFunc);
   m_ioMap.initialize(builder);
   m_regFile.initialize(builder);
+  m_resources.initialize(builder);
 
   /* Set cursor to main function so that instructions will be emitted
    * in the correct location */
@@ -277,6 +282,7 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
     case RegisterType::eConst4:
     case RegisterType::eConstInt:
     case RegisterType::eConstBool:
+      loadDef = m_resources.emitConstantLoad(builder, op, operand, mask, type);
       break;
 
     default:

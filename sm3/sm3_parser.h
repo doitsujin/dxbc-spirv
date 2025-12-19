@@ -137,19 +137,42 @@ public:
 
   /** Whether it contains debug information for any constant */
   explicit operator bool () const {
-    for (uint32_t i = 0; i < m_constants.size(); i++) {
-      if (!m_constants[i].empty()) {
-        return true;
-      }
-    }
-    return false;
+    return !m_constants.empty();
+  }
+
+  const std::vector<ConstantInfo>& entries() const {
+    return m_constants;
   }
 
 private:
 
-  std::array<std::vector<ConstantInfo>, uint32_t(ConstantType::eSampler) + 1u> m_constants = { };
+  std::vector<ConstantInfo> m_constants;
 
 };
+
+
+inline ConstantType constantTypeFromRegisterType(RegisterType registerType) {
+  switch (registerType) {
+    case RegisterType::eConst:
+    case RegisterType::eConst2:
+    case RegisterType::eConst3:
+    case RegisterType::eConst4:
+      return ConstantType::eFloat4;
+
+    case RegisterType::eConstInt:
+      return ConstantType::eInt4;
+
+    case RegisterType::eConstBool:
+      return ConstantType::eBool;
+
+    case RegisterType::eSampler:
+      return ConstantType::eSampler;
+
+    default:
+      dxbc_spv_unreachable();
+      return ConstantType::eFloat4;
+  }
+}
 
 
 /** Operand type. Used internally in order to set up the instruction
