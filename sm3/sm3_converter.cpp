@@ -354,6 +354,16 @@ ir::SsaDef Converter::applyBumpMapping(ir::Builder& builder, uint32_t stageIdx, 
 }
 
 
+ir::SsaDef Converter::normalizeVector(ir::Builder& builder, ir::SsaDef def) {
+  auto type = builder.getOp(def).getType().getBaseType(0u);
+  auto scalarType = type.getBaseType();
+  uint32_t vecSize = type.getVectorSize();
+  auto lengthSquared = builder.add(OpFDot(scalarType, def, def));
+  auto lengthInv = builder.add(ir::Op::FRsq(scalarType, lengthSquared));
+  return builder.add(ir::Op::FMul(type, def, broadcastScalar(builder, lengthInv, WriteMask((1u << vecSize) - 1u))));
+}
+
+
 bool Converter::handleComment(ir::Builder& builder, const Instruction& op) {
   /* The comment is always at the start of the shader from what we've seen,
    * so no need to get extra clever here. */
