@@ -145,6 +145,10 @@ public:
     return false;
   }
 
+  const std::array<std::vector<ConstantInfo>, uint32_t(ConstantType::eSampler) + 1u>& entries() const {
+    return m_constants;
+  }
+
 private:
 
   std::array<std::vector<ConstantInfo>, uint32_t(ConstantType::eSampler) + 1u> m_constants = { };

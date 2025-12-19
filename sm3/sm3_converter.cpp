@@ -39,7 +39,8 @@ Converter::Converter(util::ByteReader code,
 , m_options(options)
 , m_ioMap(*this)
 , m_regFile(*this)
-, m_specConstants(*this, specConstantsLayout) {
+, m_resources(*this)
+, m_specConstants(*this, specConstantsLayout){
 
 }
 
@@ -216,9 +217,11 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
     builder.add(ir::Op::DebugName(m_entryPoint.def, m_options.name));
 
   m_specConstants.setInsertCursor(afterMainFunc);
+  m_resources.setInsertCursor(afterMainFunc);
   m_specConstants.initialize(builder);
   m_ioMap.initialize(builder);
   m_regFile.initialize(builder);
+  m_resources.initialize(builder);
 
   /* Set cursor to main function so that instructions will be emitted
    * in the correct location */
@@ -295,6 +298,7 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
     case RegisterType::eConst4:
     case RegisterType::eConstInt:
     case RegisterType::eConstBool:
+      loadDef = m_resources.emitConstantLoad(builder, op, operand, mask, type);
       break;
 
     default:
