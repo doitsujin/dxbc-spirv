@@ -186,6 +186,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return handleTextureSample(builder, op);
 
     case OpCode::eTexKill:
+      return handleTexKill(builder, op);
+
     case OpCode::eTexDepth:
     case OpCode::eLrp:
     case OpCode::eCmp:
@@ -1059,6 +1061,46 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
   }
 
   return storeDstModifiedPredicated(builder, op, dst, result);
+}
+
+
+bool Converter::handleTexKill(ir::Builder& builder, const Instruction& op) {
+  /* Demotes if any of the first 3 components are less than 0.0. */
+  dxbc_spv_assert(op.hasDst());
+  auto writeMask = op.getDst().getWriteMask(getShaderInfo());
+  writeMask &= ComponentBit::eX | ComponentBit::eY | ComponentBit::eZ;
+  ir::SsaDef dst;
+
+  auto [versionMajor, versionMinor] = getShaderInfo().getVersion();
+  if (versionMajor <= 1u && versionMinor <= 3u) {
+    dst = m_ioMap.emitTexCoordLoad(builder,
+      op,
+      op.getDst().getIndex(),
+      writeMask,
+      Swizzle::identity(),
+      ir::ScalarType::eF32);
+  } else {
+    /* Yes, we're loading the dst as a src here. That's not a mistake. */
+    dst = loadSrc(builder, op, op.getDst(), writeMask, Swizzle::identity(), ir::ScalarType::eF32);
+  }
+
+  ir::SsaDef cond = { };
+
+  for (auto c : writeMask) {
+    ir::SsaDef texCoordComponent = ir::extractFromVector(builder, dst, uint32_t(util::componentFromBit(c)));
+
+    auto componentCond = builder.add(ir::Op::FLt(ir::ScalarType::eBool, texCoordComponent, builder.makeConstant(0.0f)));
+    if (!cond)
+      cond = componentCond;
+    else
+      cond = builder.add(ir::Op::BOr(ir::ScalarType::eBool, cond, componentCond));
+  }
+
+  auto ifDef = builder.add(ir::Op::ScopedIf(ir::SsaDef(), cond));
+  builder.add(ir::Op::Demote());
+  auto endIf = builder.add(ir::Op::ScopedEndIf(ifDef));
+  builder.rewriteOp(ifDef, ir::Op(builder.getOp(ifDef)).setOperand(0u, endIf));
+  return true;
 }
 
 
