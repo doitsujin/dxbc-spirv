@@ -124,6 +124,8 @@ private:
 
   ir::SsaDef applyBumpMapping(ir::Builder& builder, uint32_t stageIdx, ir::SsaDef src0, ir::SsaDef src1);
 
+  ir::SsaDef normalizeVector(ir::Builder& builder, ir::SsaDef def);
+
   bool handleComment(ir::Builder& builder, const Instruction& op);
 
   bool handleDef(ir::Builder& builder, const Instruction& op);
