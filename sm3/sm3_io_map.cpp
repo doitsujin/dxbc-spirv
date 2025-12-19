@@ -909,6 +909,19 @@ ir::SsaDef IoMap::emitDynamicStoreFunction(ir::Builder& builder) const {
 
 
 void IoMap::flushOutputs(ir::Builder& builder) {
+  if (m_converter.getShaderInfo().getType() == ShaderType::ePixel && m_converter.getShaderInfo().getVersion().first <= 1u) {
+    /* PS 1 doesn't have output registers. Instead, the first temporary register (r0) additionally serves
+     * as the output register. */
+    const IoVarInfo* ioVar = findIoVar(m_variables, RegisterType::eColorOut, 0u);
+
+    for (uint32_t i = 0u; i < 4u; i++) {
+      auto r0Comp = m_converter.m_regFile.emitTempLoad(builder, 0u, Swizzle::identity(),
+        util::componentBit(Component(i)), ir::ScalarType::eF32);
+
+      builder.add(ir::Op::TmpStore(ioVar->tempDefs[i], r0Comp));
+    }
+  }
+
   for (const auto& variable : m_variables) {
     if (!variable.tempDefs[0u])
       continue;
