@@ -54,7 +54,7 @@ std::ostream& operator << (std::ostream& os, OpCode op) {
     case OpCode::eRep:          return os << "rep";
     case OpCode::eEndRep:       return os << "endrep";
     case OpCode::eIf:           return os << "if";
-    case OpCode::eIfc:          return os << "if";
+    case OpCode::eIfC:          return os << "if";
     case OpCode::eElse:         return os << "else";
     case OpCode::eEndIf:        return os << "endif";
     case OpCode::eBreak:        return os << "break";
@@ -166,12 +166,12 @@ std::ostream& operator << (std::ostream& os, UnambiguousRegisterType registerTyp
     case RegisterType::eConst3:
     case RegisterType::eConst4:        return os << "c";
     case RegisterType::eAddr:
-    // case RegisterType::eTexture: Same value
+    /* case RegisterType::eTexture: Same value */
       return os << (registerType.shaderType == ShaderType::eVertex ? "a" : "t");
     case RegisterType::eRasterizerOut: return os << "o";
     case RegisterType::eAttributeOut:  return os << "oD";
     case RegisterType::eTexCoordOut:
-    // case RegisterType::eOutput: Same value.
+    /* case RegisterType::eOutput: Same value. */
       return os << (registerType.shaderVersionMajor == 3 ? "o" : "oT");
     case RegisterType::eConstBool:     return os << "b";
     case RegisterType::eLoop:          return os << "aL";
