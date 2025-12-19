@@ -176,6 +176,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return handleTexKill(builder, op);
 
     case OpCode::eTexDepth:
+      return handleTexDepth(builder, op);
+
     case OpCode::eLrp:
     case OpCode::eCmp:
     case OpCode::eCnd:
@@ -1138,6 +1140,18 @@ bool Converter::handleTexKill(ir::Builder& builder, const Instruction& op) {
   auto endIf = builder.add(ir::Op::ScopedEndIf(ifDef));
   builder.rewriteOp(ifDef, ir::Op(builder.getOp(ifDef)).setOperand(0u, endIf));
   return true;
+}
+
+
+bool Converter::handleTexDepth(ir::Builder& builder, const Instruction& op) {
+  /* Writes the fragment depth */
+  /* It always uses temporary register r5. */
+  auto val = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX | ComponentBit::eY, ir::ScalarType::eF32);
+  auto r = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eF32, val, builder.makeConstant(0u)));
+  auto g = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eF32, val, builder.makeConstant(1u)));
+  /* depth = r5.r / r5.g */
+  auto depth = builder.add(ir::Op::FDiv(ir::ScalarType::eF32, r, g));
+  return m_ioMap.emitDepthStore(builder, op, depth);
 }
 
 
