@@ -562,6 +562,55 @@ ir::SsaDef IoMap::emitLoad(
 }
 
 
+ir::SsaDef IoMap::emitTexCoordLoad(
+         ir::Builder&            builder,
+   const Instruction&            op,
+         uint32_t                regIdx,
+         WriteMask               componentMask,
+         Swizzle                 swizzle,
+         ir::ScalarType          type) {
+  std::array<ir::SsaDef, 4u> components = { };
+
+  const IoVarInfo* ioVar = findIoVar(m_variables, RegisterType::ePixelTexCoord, regIdx);
+
+  if (ioVar == nullptr) {
+    Semantic semantic;
+    bool foundSemantic = determineSemanticForRegister(RegisterType::ePixelTexCoord, regIdx, &semantic);
+
+    if (!foundSemantic) {
+      m_converter.logOpError(op, "Failed to process I/O load.");
+    } else {
+      dclIoVar(builder, RegisterType::ePixelTexCoord, regIdx, semantic,  WriteMask(ComponentBit::eAll));
+      ioVar = &m_variables.back();
+    }
+  }
+
+  for (auto c : swizzle.getReadMask(componentMask)) {
+    auto componentIndex = uint8_t(util::componentFromBit(c));
+
+    if (!ioVar) {
+      components[componentIndex] = builder.add(ir::Op::Undef(type));
+      continue;
+    }
+
+    auto varScalarType = ioVar->baseType.getBaseType(0u).getBaseType();
+    ir::SsaDef value;
+
+    if (!ioVar->tempDefs[0u]) {
+      ir::SsaDef addressConstant = builder.makeConstant(componentIndex);
+      value = builder.add(ir::Op::InputLoad(varScalarType, ioVar->baseDef, addressConstant));
+    } else {
+      /* The input register is writable. (SM 1 Texture register) */
+      value = builder.add(ir::Op::TmpLoad(varScalarType, ioVar->tempDefs[uint32_t(componentIndex)]));
+    }
+
+    components[componentIndex] = convertScalar(builder, type, value);
+  }
+
+  return composite(builder, ir::BasicType(type, util::popcnt(uint8_t(componentMask))), components.data(), swizzle, componentMask);
+}
+
+
 bool IoMap::emitStore(
         ir::Builder&            builder,
   const Instruction&            op,
