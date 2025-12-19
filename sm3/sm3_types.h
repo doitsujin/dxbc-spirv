@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <iostream>
+#include <optional>
 
 #include "../util/util_swizzle.h"
 
@@ -236,5 +237,27 @@ std::ostream& operator << (std::ostream& os, SemanticUsage usage);
 std::ostream& operator << (std::ostream& os, TextureType textureType);
 std::ostream& operator << (std::ostream& os, RasterizerOutIndex outIndex);
 std::ostream& operator << (std::ostream& os, MiscTypeIndex miscTypeIndex);
+
+inline std::optional<std::pair<uint32_t, uint32_t>> getMatrixSize(OpCode opCode) {
+  switch (opCode) {
+    case OpCode::eM3x2:
+      return std::make_optional(std::make_pair(3u, 2u));
+
+    case OpCode::eM3x3:
+      return std::make_optional(std::make_pair(3u, 3u));
+
+    case OpCode::eM3x4:
+      return std::make_optional(std::make_pair(3u, 4u));
+
+    case OpCode::eM4x3:
+      return std::make_optional(std::make_pair(4u, 3u));
+
+    case OpCode::eM4x4:
+      return std::make_optional(std::make_pair(4u, 4u));
+
+    default:
+      return std::nullopt;
+  }
+}
 
 }
