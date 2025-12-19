@@ -12,6 +12,10 @@ using util::ComponentBit;
 using util::WriteMask;
 using util::Swizzle;
 
+constexpr uint32_t TextureBindingsRegSpace = 0u;
+
+constexpr uint32_t SamplerBindingsRegSpace = 1u;
+
 constexpr uint32_t ConstantBufferRegSpace  = 2u;
 constexpr uint32_t FloatIntHWVPCbvRegIdx   = 0u;
 constexpr uint32_t FloatSWVPCbvRegIdx      = 0u;
