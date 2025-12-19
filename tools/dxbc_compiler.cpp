@@ -27,6 +27,10 @@
 #include "../dxbc/dxbc_signature.h"
 #endif
 
+#ifdef ENABLE_SM3
+#include "../sm3/sm3_converter.h"
+#endif
+
 #ifdef ENABLE_SPIRV
 #include "../spirv/spirv_builder.h"
 #include "../spirv/spirv_mapping.h"
@@ -76,6 +80,30 @@ private:
   bool        m_debugLog = false;
 
 };
+
+
+#ifdef ENABLE_SM3
+class SM3SpecConstantsLayout : public sm3::SpecializationConstantLayout {
+
+public:
+
+  SM3SpecConstantsLayout() { }
+
+  uint32_t getOptimizedDwordOffset() const override {
+    return 1u;
+  }
+
+  sm3::SpecializationConstantBits getSpecConstantLayout(sm3::SpecConstantId /* id */) const override {
+    return { 0u, 0u, 32u };
+  }
+
+  uint32_t getSamplerSpecConstIndex(sm3::ShaderType shaderType, uint32_t perShaderSamplerIndex) override {
+    constexpr uint32_t MaxTexturesPS      = 16u;
+    constexpr uint32_t FirstVSSamplerSlot = MaxTexturesPS + 1u;
+    return shaderType == sm3::ShaderType::eVertex ? FirstVSSamplerSlot + perShaderSamplerIndex : perShaderSamplerIndex;
+  }
+};
+#endif /* ENABLE_SM3 */
 
 
 struct Timers {
@@ -236,33 +264,47 @@ bool compileShader(util::ByteReader reader, const Options& options) {
   if (!options.irInput) {
     bool status = false;
 
-    /* Parse file header */
-#ifdef ENABLE_SM5
-    dxbc::Container container(reader);
+#ifdef ENABLE_SM3
+    if (!dxbc::Container::checkFourCC(reader)) {
+      sm3::Converter::Options sm3Options = { };
+      sm3Options.includeDebugNames = !options.noDebug;
 
-    if (!container) {
-      std::cerr << "Error: " << options.input << " is not a valid dxbc file." << std::endl;
-      return false;
-    }
+      auto specConstLayout = SM3SpecConstantsLayout();
+      sm3::Converter converter(reader, specConstLayout, sm3Options);
 
-    /* Work out shader name based on the file hash */
-    auto name = [&] {
-      std::stringstream stream;
-      stream << container.getHash();
-      return stream.str();
-    } ();
-
-    /* Set up conversion options */
-    dxbc::Converter::Options dxbcOptions = { };
-    dxbcOptions.includeDebugNames = !options.noDebug;
-    dxbcOptions.name = name.c_str();
-
-    dxbc::Converter converter(std::move(container), dxbcOptions);
-
-    if (options.gsPassthrough)
-      status = converter.createPassthroughGs(builder);
-    else
       status = converter.convertShader(builder);
+    }
+#endif
+
+#ifdef ENABLE_SM5
+    if (!status) {
+      /* Parse file header */
+      dxbc::Container container(reader);
+
+      if (!container) {
+        std::cerr << "Error: " << options.input << " is not a valid dxbc file." << std::endl;
+        return false;
+      }
+
+      /* Work out shader name based on the file hash */
+      auto name = [&] {
+        std::stringstream stream;
+        stream << container.getHash();
+        return stream.str();
+      } ();
+
+      /* Set up conversion options */
+      dxbc::Converter::Options dxbcOptions = { };
+      dxbcOptions.includeDebugNames = !options.noDebug;
+      dxbcOptions.name = name.c_str();
+
+      dxbc::Converter converter(std::move(container), dxbcOptions);
+
+      if (options.gsPassthrough)
+        status = converter.createPassthroughGs(builder);
+      else
+        status = converter.convertShader(builder);
+    }
 #endif /* ENABLE_SM5 */
 
     if (!status) {
