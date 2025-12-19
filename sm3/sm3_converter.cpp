@@ -183,6 +183,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eTexM3x3:
     case OpCode::eTexLdd:
     case OpCode::eTexLdl:
+      return handleTextureSample(builder, op);
+
     case OpCode::eTexKill:
     case OpCode::eTexDepth:
     case OpCode::eLrp:
@@ -790,6 +792,273 @@ bool Converter::handleTexCoord(ir::Builder& builder, const Instruction& op) {
 
     return storeDstModifiedPredicated(builder, op, dst, src);
   }
+}
+
+
+bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op) {
+  ir::SsaDef result = ir::SsaDef();
+  auto dst = op.getDst();
+  auto opCode = op.getOpCode();
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+
+  switch (opCode) {
+    case OpCode::eTexLd: {
+      /* Regular texture sampling instruction */
+      uint32_t samplerIdx;
+      ir::SsaDef texCoord;
+      ir::SsaDef lodBias = ir::SsaDef();
+      ir::SsaDef lod = ir::SsaDef();
+
+      if (getShaderInfo().getType() == ShaderType::eVertex) {
+        lod = builder.makeConstant(0u);
+      }
+
+      if (getShaderInfo().getVersion().first <= 1u) {
+        dxbc_spv_assert(getShaderInfo().getType() == ShaderType::ePixel);
+        samplerIdx = dst.getIndex();
+        if (getShaderInfo().getVersion().second >= 4u) {
+          /* texld - ps_1_4 */
+          auto src0 = op.getSrc(0u);
+          texCoord = loadSrcModified(builder, op, src0, ComponentBit::eAll, scalarType);
+        } else {
+          /* tex - ps_1_1 - ps_1_3 */
+          /* The destination register index decides the sampler and texture coord index. */
+          texCoord = m_ioMap.emitTexCoordLoad(builder, op, samplerIdx, ComponentBit::eAll, Swizzle::identity(), scalarType);
+        }
+      } else {
+        /* texld - sm_2_0 and up */
+        auto src0 = op.getSrc(0u);
+        auto src1 = op.getSrc(1u);
+        texCoord = loadSrcModified(builder, op, src0, ComponentBit::eAll, scalarType);
+        samplerIdx = src1.getIndex();
+
+        switch (op.getTexLdMode()) {
+          case TexLdMode::eProject:
+            texCoord = m_resources.projectTexCoord(builder, samplerIdx, texCoord, false);
+            break;
+          case TexLdMode::eBias:
+            lodBias = builder.add(ir::Op::CompositeExtract(scalarType, texCoord, builder.makeConstant(3u)));
+            break;
+          default: break;
+        }
+      }
+
+      if (m_parser.getShaderInfo().getVersion().first <= 1u && m_parser.getShaderInfo().getVersion().second < 4u)
+        texCoord = m_resources.projectTexCoord(builder, samplerIdx, texCoord, true);
+
+      result = m_resources.emitSample(builder, samplerIdx, texCoord, lod, lodBias, ir::SsaDef(), ir::SsaDef(), scalarType);
+    } break;
+
+    case OpCode::eTexLdl: {
+      /* Sample with explicit LOD */
+      auto src0 = op.getSrc(0u);
+      auto src1 = op.getSrc(1u);
+      auto texCoord = loadSrcModified(builder, op, src0, ComponentBit::eAll, scalarType);
+      uint32_t samplerIdx = src1.getIndex();
+      auto lod = builder.add(ir::Op::CompositeExtract(scalarType, texCoord, builder.makeConstant(3u)));
+      result = m_resources.emitSample(builder, samplerIdx, texCoord, lod, ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), scalarType);
+    } break;
+
+    case OpCode::eTexLdd: {
+      /* Sample with explicit derivatives */
+      auto src0 = op.getSrc(0u);
+      auto src1 = op.getSrc(1u);
+      auto src2 = op.getSrc(2u);
+      auto src3 = op.getSrc(3u);
+      auto texCoord = loadSrcModified(builder, op, src0, ComponentBit::eAll, scalarType);
+      uint32_t samplerIdx = src1.getIndex();
+      auto dx = loadSrcModified(builder, op, src2, ComponentBit::eAll, scalarType);
+      auto dy = loadSrcModified(builder, op, src3, ComponentBit::eAll, scalarType);
+      result = m_resources.emitSample(builder, samplerIdx, texCoord, ir::SsaDef(), ir::SsaDef(), dx, dy, scalarType);
+    } break;
+
+    case OpCode::eTexReg2Ar:
+    case OpCode::eTexReg2Gb:
+    case OpCode::eTexReg2Rgb: {
+      /* Sample with custom values used as texture coords (SM 1) */
+      Swizzle swizzle = Swizzle::identity();
+      switch (opCode) {
+        case OpCode::eTexReg2Ar:  swizzle = Swizzle(Component::eW, Component::eX, Component::eX, Component::eX); break;
+        case OpCode::eTexReg2Gb:  swizzle = Swizzle(Component::eY, Component::eZ, Component::eZ, Component::eZ); break;
+        case OpCode::eTexReg2Rgb: swizzle = Swizzle(Component::eX, Component::eY, Component::eZ, Component::eZ); break;
+        default: dxbc_spv_unreachable(); break;
+      }
+
+      auto src0 = op.getSrc(0u);
+      auto texCoord = loadSrcModified(builder, op, src0, ComponentBit::eAll, scalarType);
+      texCoord = swizzleVector(builder, texCoord, swizzle, ComponentBit::eAll);
+      uint32_t samplerIdx = dst.getIndex();
+
+      if (m_parser.getShaderInfo().getVersion().first <= 1u && m_parser.getShaderInfo().getVersion().second < 4u)
+        texCoord = m_resources.projectTexCoord(builder, samplerIdx, texCoord, true);
+
+      result = m_resources.emitSample(builder, samplerIdx, texCoord, ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), scalarType);
+    } break;
+
+    case OpCode::eTexM3x2Tex:
+    case OpCode::eTexM3x3Tex:
+    case OpCode::eTexM3x3:
+    case OpCode::eTexM3x2Depth:
+    case OpCode::eTexM3x3Spec:
+    case OpCode::eTexM3x3VSpec: {
+      /* All of those instructions start with a matrix multiplication. */
+      const uint32_t rows = opCode == OpCode::eTexM3x2Tex ? 2u : 3u;
+
+      auto src0 = op.getSrc(0u);
+      auto n = loadSrcModified(builder, op, src0, util::makeWriteMaskForComponents(3u), scalarType);
+
+      std::array<ir::SsaDef, 4u> components = { };
+      uint32_t lastIndex = dst.getIndex();
+      for (uint32_t i = 0u; i < components.size(); i++) {
+        if (i < rows) {
+          auto mi = m_ioMap.emitTexCoordLoad(builder, op, lastIndex + i - rows - 1u, util::makeWriteMaskForComponents(3u), Swizzle::identity(), scalarType);
+          components[i] = builder.add(OpFDot(scalarType, mi, n));
+        } else {
+          // w is defined to be 1.0 in eTexM3x3.
+          components[i] = makeTypedConstant(builder, scalarType, 1.0f);
+        }
+      }
+
+      if (opCode == OpCode::eTexM3x2Tex || opCode == OpCode::eTexM3x3Tex) {
+
+        /* TexM3x2Tex / TexM3x3Tex do a matrix multiplication and use the result as texture coordinate. */
+        auto texCoord = buildVector(builder, scalarType, rows, components.data());
+        result = m_resources.emitSample(builder, lastIndex, texCoord, ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), scalarType);
+
+      } else if (opCode == OpCode::eTexM3x2Depth) {
+
+        /* TexM3x2Depth doesn't actually sample. */
+        auto z = components.at(0u);
+        auto w = components.at(1u);
+        result = buildVector(builder, scalarType, components.size(), components.data());
+        auto isZero = builder.add(ir::Op::FEq(ir::ScalarType::eBool, w, builder.makeConstantZero(scalarType)));
+        auto depth = builder.add(ir::Op::Select(scalarType, isZero,
+          makeTypedConstant(builder, scalarType, 1.0f),
+          builder.add(ir::Op::FDiv(scalarType, z, w))));
+        m_ioMap.emitDepthStore(builder, op, depth);
+        /* Docs: After running texm3x2depth, register t(m+1) is no longer available for use in the shader. */
+
+      } else if (opCode == OpCode::eTexM3x3) {
+
+        /* TexM3x3 doesn't actually sample. It just does the matrix multiplication and stores the result. */
+        result = buildVector(builder, scalarType, components.size(), components.data());
+
+      } else if (opCode == OpCode::eTexM3x3Spec || opCode == OpCode::eTexM3x3VSpec) {
+
+        /* TexM3x3Spec / TexM3x3VSpec do a matrix multiplication and use the result as the normal vector
+         * in a reflection calculation. */
+        auto normal = buildVector(builder, scalarType, 3u, components.data());
+
+        ir::SsaDef eyeRay;
+        if (opCode == OpCode::eTexM3x3VSpec) {
+          std::array<ir::SsaDef, 3u> eyeRayComponents = { };
+          for (uint32_t i = 0u; i < eyeRayComponents.size(); i++) {
+            eyeRayComponents[i] = m_ioMap.emitTexCoordLoad(builder, op, lastIndex + i - rows - 1u, WriteMask(ComponentBit::eW), Swizzle::identity(), scalarType);
+          }
+          eyeRay = buildVector(builder, scalarType, eyeRayComponents.size(), components.data());
+        } else {
+          eyeRay = loadSrcModified(builder, op, op.getSrc(1u), util::makeWriteMaskForComponents(3u), scalarType);
+        }
+
+        eyeRay = normalizeVector(builder, eyeRay);
+        normal = normalizeVector(builder, normal);
+
+        // 2*[(N*E)/(N*N)]*N - E
+        auto vectorType = ir::BasicType(scalarType, 3u);
+
+        auto nDotE = builder.add(OpFDot(scalarType, normal, eyeRay));
+        auto nDotN = builder.add(OpFDot(scalarType, normal, normal));
+        auto dotDiv = builder.add(ir::Op::FDiv(scalarType, nDotE, nDotN));
+        auto twoDotDiv = builder.add(OpFMul(scalarType, makeTypedConstant(builder, scalarType, 2.0f), dotDiv));
+        auto texCoord = builder.add(OpFMul(vectorType, normal, broadcastScalar(builder, twoDotDiv, util::makeWriteMaskForComponents(3u))));
+        texCoord = builder.add(ir::Op::FSub(vectorType, texCoord, eyeRay));
+
+        /* The sampling function requires a vec4. */
+        std::array<ir::SsaDef, 4u> texCoordComponents = {
+          builder.add(ir::Op::CompositeExtract(scalarType, texCoord, builder.makeConstant(0u))),
+          builder.add(ir::Op::CompositeExtract(scalarType, texCoord, builder.makeConstant(1u))),
+          builder.add(ir::Op::CompositeExtract(scalarType, texCoord, builder.makeConstant(2u))),
+          makeTypedConstant(builder, scalarType, 0.0f),
+        };
+        texCoord = buildVector(builder, scalarType, texCoordComponents.size(), texCoordComponents.data());
+
+        result = m_resources.emitSample(builder, dst.getIndex(), texCoord, ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), scalarType);
+      }
+    } break;
+
+    case OpCode::eTexDp3Tex:
+    case OpCode::eTexDp3: {
+      /* Calculate a dot product of the texcoord data and src0 (and optionally use that for 1D texture lookup) */
+      auto src0 = op.getSrc(0u);
+      auto m = m_ioMap.emitTexCoordLoad(builder, op, dst.getIndex(), util::makeWriteMaskForComponents(3u), Swizzle::identity(), scalarType);
+      auto n = loadSrcModified(builder, op, src0, util::makeWriteMaskForComponents(3u), scalarType);
+      auto dot = builder.add(OpFDot(scalarType, m, n));
+      if (opCode == OpCode::eTexDp3Tex) {
+        /* Sample texture at register index of dst using (dot, 0, 0, 0) as coordinates */
+        std::array<ir::SsaDef, 4u> texCoordComponents = {
+          dot,
+          makeTypedConstant(builder, scalarType, 0.0f),
+          makeTypedConstant(builder, scalarType, 0.0f),
+          makeTypedConstant(builder, scalarType, 0.0f),
+        };
+        auto texCoord = buildVector(builder, scalarType, texCoordComponents.size(), texCoordComponents.data());
+        result = m_resources.emitSample(builder, dst.getIndex(), texCoord, ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), scalarType);
+      } else {
+        /* Replicates the dot product to all four color channels. Doesn't actually sample. */
+        result = broadcastScalar(builder, dot, util::makeWriteMaskForComponents(4u));
+      }
+    } break;
+
+    case OpCode::eTexBem:
+    case OpCode::eTexBemL: {
+      /* Apply a fake bump environment-map transform */
+      uint32_t samplerIdx = dst.getIndex();
+      auto texCoord = m_ioMap.emitTexCoordLoad(builder, op, samplerIdx, ComponentBit::eAll, Swizzle::identity(), scalarType);
+      auto src0 = loadSrcModified(builder, op, op.getSrc(0u), WriteMask(ComponentBit::eX | ComponentBit::eY), scalarType);
+
+      dxbc_spv_assert(getShaderInfo().getVersion().first < 2u);
+      texCoord = m_resources.projectTexCoord(builder, samplerIdx, texCoord, true);
+
+      auto bumpMappedTexCoord = applyBumpMapping(builder, samplerIdx, texCoord, src0);
+
+      /* Insert it back into the original tex coord, so we have a z and w component in case we need them. */
+      auto u = builder.add(ir::Op::CompositeExtract(scalarType, bumpMappedTexCoord, builder.makeConstant(0u)));
+      auto v = builder.add(ir::Op::CompositeExtract(scalarType, bumpMappedTexCoord, builder.makeConstant(1u)));
+      texCoord = builder.add(ir::Op::CompositeInsert(ir::BasicType(scalarType, 4u), texCoord, builder.makeConstant(0u), u));
+      texCoord = builder.add(ir::Op::CompositeInsert(ir::BasicType(scalarType, 4u), texCoord, builder.makeConstant(1u), v));
+
+      result = m_resources.emitSample(builder, samplerIdx, texCoord, ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), scalarType);
+
+      if (opCode == OpCode::eTexBemL) {
+        /* Additionally does luminance correction */
+        auto descriptor = builder.add(ir::Op::DescriptorLoad(ir::ScalarType::eCbv, m_psSharedData, ir::SsaDef()));
+        auto bumpEnvLScale = builder.add(ir::Op::BufferLoad(ir::BasicType(ir::ScalarType::eF32, 2u), descriptor, builder.makeConstant(samplerIdx * 5u + 3u), 16u));
+        auto bumpEnvLOffset = builder.add(ir::Op::BufferLoad(ir::BasicType(ir::ScalarType::eF32, 2u), descriptor, builder.makeConstant(samplerIdx * 5u + 2u), 8u));
+        if (scalarType != ir::ScalarType::eF32) {
+          bumpEnvLScale = builder.add(ir::Op::ConsumeAs(ir::BasicType(scalarType, 2u), bumpEnvLScale));
+          bumpEnvLOffset = builder.add(ir::Op::ConsumeAs(ir::BasicType(scalarType, 2u), bumpEnvLOffset));
+        }
+        auto scale = builder.add(ir::Op::CompositeExtract(scalarType, result, builder.makeConstant(2u)));
+        scale = builder.add(OpFMul(scalarType, scale, bumpEnvLScale));
+        scale = builder.add(ir::Op::FAdd(scalarType, scale, bumpEnvLOffset));
+        std::array<ir::SsaDef, 4u> scaledComponents = {};
+        scale = builder.add(ir::Op::FClamp(scalarType, scale, ir::makeTypedConstant(builder, scalarType, 0.0f), ir::makeTypedConstant(builder, scalarType, 1.0f)));
+        for (uint32_t i = 0u; i < 4u; i++) {
+          auto resultComponent = builder.add(ir::Op::CompositeExtract(scalarType, result, builder.makeConstant(i)));
+          scaledComponents[i] = builder.add(OpFMul(scalarType, resultComponent, scale));
+        }
+        result = buildVector(builder, scalarType, scaledComponents.size(), scaledComponents.data());
+      }
+    } break;
+
+    default: {
+      Logger::err("OpCode ", op.getOpCode(), " is not supported by handleTextureSample.");
+      dxbc_spv_unreachable();
+      return false;
+    } break;
+  }
+
+  return storeDstModifiedPredicated(builder, op, dst, result);
 }
 
 
