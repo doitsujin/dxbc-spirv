@@ -13,6 +13,11 @@ using util::ComponentBit;
 using util::WriteMask;
 using util::Swizzle;
 
+/* Texture sampling binding constants */
+
+constexpr uint32_t TextureBindingsRegSpace = 0u;
+constexpr uint32_t SamplerBindingsRegSpace = 1u;
+
 /* CBV Register indices */
 
 constexpr uint32_t FastSpecConstCbvRegIdx = 0u;
