@@ -115,6 +115,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eDef:
     case OpCode::eDefI:
     case OpCode::eDefB:
+      return handleDef(builder, op);
+
     case OpCode::eDcl:
     case OpCode::eMov:
     case OpCode::eMova:
@@ -262,6 +264,20 @@ bool Converter::handleComment(ir::Builder& builder, const Instruction& op) {
     m_ctab = ConstantTable(ctabReader);
     m_resources.emitNamedConstantRanges(builder, m_ctab);
   }
+  return true;
+}
+
+
+bool Converter::handleDef(ir::Builder& builder, const Instruction& op) {
+  /* def instructions define so-called immediate constants.
+   * Immediate instructions take precedence over constants set using API methods. */
+  dxbc_spv_assert(op.hasDst());
+  dxbc_spv_assert(op.hasImm());
+  auto dst = op.getDst();
+  auto imm = op.getImm();
+
+  m_resources.emitDefineConstant(builder, dst.getRegisterType(), dst.getIndex(), imm);
+
   return true;
 }
 
