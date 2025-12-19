@@ -68,6 +68,8 @@ private:
 
   SpecializationConstantsMap m_specConstants;
 
+  ir::SsaDef       m_psSharedData;
+
   uint32_t m_instructionCount = 0u;
 
   /* Entry point definition and function definitions. */
@@ -117,6 +119,10 @@ private:
       ? ir::Op::FPowLegacy(type, base, exp)
       : ir::Op::FPow(type, base, exp);
   }
+
+  ir::SsaDef emitSharedConstants(ir::Builder& builder);
+
+  ir::SsaDef applyBumpMapping(ir::Builder& builder, uint32_t stageIdx, ir::SsaDef src0, ir::SsaDef src1);
 
   bool handleComment(ir::Builder& builder, const Instruction& op);
 
