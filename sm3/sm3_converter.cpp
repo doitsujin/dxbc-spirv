@@ -384,8 +384,7 @@ bool Converter::handleDcl(ir::Builder& builder, const Instruction& op) {
   auto dst = op.getDst();
   switch (dst.getRegisterType()) {
     case RegisterType::eSampler:
-      Logger::err("Declaring samplers is not implemented yet.");
-      return false;
+      return m_resources.handleDclSampler(builder, op);
 
     case RegisterType::eAttributeOut:
     case RegisterType::eOutput:
