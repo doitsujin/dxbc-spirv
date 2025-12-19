@@ -216,6 +216,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return handleCrs(builder, op);
 
     case OpCode::eSetP:
+      return handleSetP(builder, op);
+
     case OpCode::eExpP:
     case OpCode::eIf:
     case OpCode::eIfC:
@@ -1459,6 +1461,32 @@ bool Converter::handleCrs(ir::Builder& builder, const Instruction& op) {
   }
   auto res = composite(builder, makeVectorType(scalarType, writeMask), components.data(), Swizzle::identity(), writeMask);
   return storeDstModifiedPredicated(builder, op, dst, res);
+}
+
+
+bool Converter::handleSetP(ir::Builder& builder, const Instruction& op) {
+  /* Assigns the result of a comparison to the predicate register */
+  dxbc_spv_assert(op.hasDst());
+  dxbc_spv_assert(op.getSrcCount() == 2u);
+  auto dst = op.getDst();
+  WriteMask writeMask = dst.getWriteMask(m_parser.getShaderInfo());
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+
+  auto src0 = loadSrcModified(builder, op, op.getSrc(0u), writeMask, scalarType);
+  auto src1 = loadSrcModified(builder, op, op.getSrc(1u), writeMask, scalarType);
+
+  util::small_vector<ir::SsaDef, 4u> components;
+  for (auto _ : writeMask) {
+    /* The comparison is done for each component separately. */
+    ir::SsaDef src0c = ir::extractFromVector(builder, src0, uint32_t(components.size()));
+    ir::SsaDef src1c = ir::extractFromVector(builder, src1, uint32_t(components.size()));
+
+    auto comparison = emitComparison(builder, src0c, src1c, op.getComparisonMode());
+    components.push_back(comparison);
+  }
+
+  auto result = composite(builder, makeVectorType(scalarType, writeMask), components.data(), Swizzle::identity(), writeMask);
+  return storeDstModifiedPredicated(builder, op, dst, result);
 }
 
 
