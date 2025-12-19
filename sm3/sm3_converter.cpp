@@ -200,6 +200,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return handleNrm(builder, op);
 
     case OpCode::eSinCos:
+      return handleSinCos(builder, op);
+
     case OpCode::ePow:
     case OpCode::eDst:
     case OpCode::eDsX:
@@ -1255,6 +1257,34 @@ bool Converter::handleNrm(ir::Builder& builder, const Instruction& op) {
   }
 
   return storeDstModifiedPredicated(builder, op, dst, result);
+}
+
+
+bool Converter::handleSinCos(ir::Builder& builder, const Instruction& op) {
+  /* dst.x = cos(src)
+   * dst.y = sin(src)
+   * Before PS 3_0, shaders had to provide specific consts as src1 and src2. */
+  uint32_t majorVersion = getShaderInfo().getVersion().first;
+  dxbc_spv_assert((majorVersion >= 3u && op.getSrcCount() == 1u) || op.getSrcCount() == 3u);
+  dxbc_spv_assert(op.hasDst());
+
+  auto dst = op.getDst();
+  Swizzle swizzle = op.getSrc(0u).getSwizzle(getShaderInfo());
+  dxbc_spv_assert(swizzle.x() == swizzle.y() && swizzle.y() == swizzle.z() && swizzle.z() == swizzle.w());
+  WriteMask writeMask = dst.getWriteMask(getShaderInfo());
+
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+  auto val = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX, scalarType);
+
+  dxbc_spv_assert((writeMask & (ComponentBit::eZ | ComponentBit::eW)) == WriteMask());
+  util::small_vector<ir::SsaDef, 2u> components = { };
+  if (writeMask & ComponentBit::eX)
+    components.push_back(builder.add(ir::Op::FCos(scalarType, val)));
+  if (writeMask & ComponentBit::eY)
+    components.push_back(builder.add(ir::Op::FSin(scalarType, val)));
+
+  auto vec = buildVector(builder, scalarType, components.size(), components.data());
+  return storeDstModifiedPredicated(builder, op, dst, vec);
 }
 
 
