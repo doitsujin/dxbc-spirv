@@ -144,6 +144,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eM3x4:
     case OpCode::eM3x3:
     case OpCode::eM3x2:
+      return handleMatrixArithmetic(builder, op);
+
     case OpCode::eBem:
     case OpCode::eTexCrd:
     case OpCode::eTexLd:
@@ -575,6 +577,43 @@ bool Converter::handleLit(ir::Builder& builder, const Instruction& op) {
   }
 
   auto result = buildVector(builder, scalarType, components.size(), components.data());
+  return storeDstModifiedPredicated(builder, op, dst, result);
+}
+
+
+bool Converter::handleMatrixArithmetic(ir::Builder& builder, const Instruction& op) {
+  /* All instructions handled here will operate on float vectors of any kind. */
+  dxbc_spv_assert(op.getSrcCount() == 2);
+  dxbc_spv_assert(op.hasDst());
+
+  auto matrixSize = getMatrixSize(op.getOpCode());
+  dxbc_spv_assert(matrixSize.has_value());
+  uint32_t columnCount = matrixSize.value().first;
+  uint32_t rowCount = matrixSize.value().second;
+
+  /* Instruction type */
+  const auto& dst = op.getDst();
+
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+
+  /* Build a write mask that determines how many components we'll load. */
+  WriteMask srcMask = WriteMask((1u << columnCount) - 1u);
+
+  /* Load source operands */
+  auto src0 = loadSrcModified(builder, op, op.getSrc(0u), srcMask, scalarType);
+  Operand src1Operand = op.getSrc(1u);
+
+  std::array<ir::SsaDef, 4u> components = { };
+  for (uint32_t i = 0u; i < rowCount; i++) {
+    /* Load matrix column */
+    auto src1iOperand = src1Operand.withIndex(src1Operand.getIndex() + i);
+    auto src1 = loadSrcModified(builder, op, src1iOperand, srcMask, scalarType);
+
+    /* Calculate vector component */
+    components[i] = builder.add(emitFDot(scalarType, src0, src1));
+  }
+
+  auto result = buildVector(builder, scalarType, rowCount, components.data());
   return storeDstModifiedPredicated(builder, op, dst, result);
 }
 
