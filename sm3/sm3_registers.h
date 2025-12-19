@@ -60,6 +60,13 @@ public:
           WriteMask               componentMask,
           ir::ScalarType          type);
 
+  ir::SsaDef emitLoopCounterLoad(
+          ir::Builder&            builder);
+
+  void emitLoopCounterStore(
+          ir::Builder&            builder,
+          ir::SsaDef              value);
+
 private:
 
   ir::SsaDef getOrDeclareTemp(ir::Builder& builder, uint32_t index, Component component);

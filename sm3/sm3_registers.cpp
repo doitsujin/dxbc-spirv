@@ -275,4 +275,23 @@ void RegisterFile::emitBufferedStores(ir::Builder& builder) {
 }
 
 
+ir::SsaDef RegisterFile::emitLoopCounterLoad(
+            ir::Builder&            builder) {
+  return builder.add(ir::Op::TmpLoad(ir::ScalarType::eI32, m_aLReg));
+}
+
+
+void RegisterFile::emitLoopCounterStore(
+            ir::Builder&            builder,
+            ir::SsaDef              value) {
+  auto op = builder.getOp(value);
+  auto type = op.getType();
+
+  if (type != ir::ScalarType::eI32)
+    value = builder.add(ir::Op::ConsumeAs(ir::ScalarType::eI32, value));
+
+  builder.add(ir::Op::TmpStore(m_aLReg, value));
+}
+
+
 }
