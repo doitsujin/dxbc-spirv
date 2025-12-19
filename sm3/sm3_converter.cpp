@@ -210,6 +210,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
 
     case OpCode::eDsX:
     case OpCode::eDsY:
+      return handleDerivatives(builder, op);
+
     case OpCode::eCrs:
     case OpCode::eSetP:
     case OpCode::eExpP:
@@ -1351,6 +1353,30 @@ bool Converter::handleDst(ir::Builder& builder, const Instruction& op) {
 
   auto result = buildVector(builder, scalarType, components.size(), components.data());
   return storeDstModifiedPredicated(builder, op, dst, result);
+}
+
+
+bool Converter::handleDerivatives(ir::Builder& builder, const Instruction& op) {
+  dxbc_spv_assert(op.hasDst());
+  dxbc_spv_assert(op.getSrcCount() == 1u);
+  auto dst = op.getDst();
+  WriteMask writeMask = dst.getWriteMask(m_parser.getShaderInfo());
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+
+  auto src0 = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eAll, scalarType);
+
+  auto type = makeVectorType(scalarType, writeMask);
+  if (op.getOpCode() == OpCode::eDsX) {
+    builder.add(ir::Op::DerivX(type, src0, ir::DerivativeMode::eDefault));
+    return true;
+  } else if (op.getOpCode() == OpCode::eDsY) {
+    builder.add(ir::Op::DerivY(type, src0, ir::DerivativeMode::eDefault));
+    return true;
+  } else {
+    Logger::err("OpCode ", op.getOpCode(), " is not supported by handleDerivatives.");
+    dxbc_spv_unreachable();
+    return false;
+  }
 }
 
 
