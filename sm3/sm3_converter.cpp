@@ -234,11 +234,19 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eBreak:
     case OpCode::eBreakC:
     case OpCode::eBreakP:
+      return handleBreak(builder, op);
+
     case OpCode::eLoop:
+      return handleLoop(builder, op);
+
     case OpCode::eEndLoop:
+      return handleEndLoop(builder, op);
+
     case OpCode::eRep:
+      return handleRep(builder, op);
+
     case OpCode::eEndRep:
-      return logOpError(op, "OpCode ", opCode, " is not implemented.");
+      return handleEndRep(builder, op);
 
     case OpCode::eLabel:
     case OpCode::eCall:
@@ -1593,6 +1601,165 @@ bool Converter::handleEndIf(ir::Builder& builder, const Instruction& op) {
   builder.rewriteOp(construct->def, ir::Op(builder.getOp(construct->def)).setOperand(0u, constructEnd));
 
   m_controlFlow.pop();
+  return true;
+}
+
+
+bool Converter::handleBreak(ir::Builder& builder, const Instruction& op) {
+  auto construct = m_controlFlow.getBreakConstruct(builder);
+
+  if (construct == nullptr)
+    return logOpError(op, "'Break' occurred outside of 'Loop' or 'Rep'.");
+
+  if (op.getOpCode() == OpCode::eBreak) {
+    /* Break unconditionally */
+
+    builder.add(ir::Op::ScopedLoopBreak(construct->def));
+    return true;
+
+  } else if (op.getOpCode() == OpCode::eBreakP) {
+    /* Break if the predicate is true */
+
+    /* It **must** have a replicate swizzle, so just load X. */
+    auto cond = m_regFile.emitPredicateLoad(builder, op.getDst().getPredicateSwizzle(), ComponentBit::eX);
+    auto breakIf = builder.add(ir::Op::ScopedIf(ir::SsaDef(), cond));
+    builder.add(ir::Op::ScopedLoopBreak(construct->def));
+    auto breakEndIf = builder.add(ir::Op::ScopedEndIf(breakIf));
+    builder.rewriteOp(breakIf, ir::Op(builder.getOp(breakIf)).setOperand(0u, breakEndIf));
+    return true;
+
+  } else if (op.getOpCode() == OpCode::eBreakC) {
+    /* Break based on the comparison */
+
+    auto src0 = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX, ir::ScalarType::eF32);
+    auto src1 = loadSrcModified(builder, op, op.getSrc(1u), ComponentBit::eX, ir::ScalarType::eF32);
+    auto cond = emitComparison(builder, src0, src1, op.getComparisonMode());
+    auto breakIf = builder.add(ir::Op::ScopedIf(ir::SsaDef(), cond));
+    builder.add(ir::Op::ScopedLoopBreak(construct->def));
+    auto breakEndIf = builder.add(ir::Op::ScopedEndIf(breakIf));
+    builder.rewriteOp(breakIf, ir::Op(builder.getOp(breakIf)).setOperand(0u, breakEndIf));
+    return true;
+
+  } else {
+
+    dxbc_spv_unreachable();
+    Logger::err("handleBreak can't handle opcode '", op.getOpCode(), "'");
+    return false;
+  }
+
+  return false;
+}
+
+
+bool Converter::handleLoop(ir::Builder& builder, const Instruction& op) {
+  /* For-Loop with a loop counter that can be used for relative addressing */
+  dxbc_spv_assert(op.getSrcCount() >= 1u);
+
+  /* Assume that modifiers aren't supported here. We only implement them for floats right now. */
+  dxbc_spv_assert(op.getSrc(0u).getModifier() == OperandModifier::eNone);
+  auto src0 = loadSrc(
+    builder, op, op.getSrc(0u),
+    ComponentBit::eX | ComponentBit::eY | ComponentBit::eZ,
+    op.getSrc(0u).getSwizzle(getShaderInfo()),
+    ir::ScalarType::eI32);
+
+  auto iterationCount = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eI32, src0, builder.makeConstant(0u)));
+  auto initialValue = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eI32, src0, builder.makeConstant(1u)));
+  auto stepSize = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eI32, src0, builder.makeConstant(2u)));
+
+  auto loopCounter =  builder.add(ir::Op::DclTmp(ir::ScalarType::eI32, m_entryPoint.def));
+  builder.add(ir::Op::TmpStore(loopCounter, initialValue));
+
+  auto loopCounterBackup = m_regFile.emitLoopCounterLoad(builder);
+
+  auto loopDef = builder.add(ir::Op::ScopedLoop(ir::SsaDef()));
+  auto& loop = m_controlFlow.push(loopDef);
+
+  auto loopCounterVal = builder.add(ir::Op::TmpLoad(ir::ScalarType::eI32, loopCounter));
+  auto totalSteps = builder.add(ir::Op::IMul(ir::ScalarType::eI32, stepSize, iterationCount));
+  auto finalCounterValue = builder.add(ir::Op::IAdd(ir::ScalarType::eI32, initialValue, totalSteps));
+  auto breakCondition = builder.add(ir::Op::IEq(ir::ScalarType::eBool, loopCounterVal, finalCounterValue));
+  auto breakIf = builder.add(ir::Op::ScopedIf(ir::SsaDef(), breakCondition));
+  builder.add(ir::Op::ScopedLoopBreak(loopDef));
+  m_regFile.emitLoopCounterStore(builder, loopCounterBackup);
+  auto breakEndIf = builder.add(ir::Op::ScopedEndIf(breakIf));
+  builder.rewriteOp(breakIf, ir::Op(builder.getOp(breakIf)).setOperand(0u, breakEndIf));
+
+  m_regFile.emitLoopCounterStore(builder, loopCounterVal);
+
+  loop.loopStep = stepSize;
+  loop.loopCounter = loopCounter;
+  return true;
+}
+
+
+bool Converter::handleEndLoop(ir::Builder &builder, const Instruction &op) {
+  auto [construct, type] = m_controlFlow.getConstruct(builder);
+
+  if (type != ir::OpCode::eScopedLoop)
+    return logOpError(op, "'EndLoop' occurred outside of 'Loop' or 'Loop' is straddling 'If'.");
+
+  auto loopCounterVal = builder.add(ir::Op::TmpLoad(ir::ScalarType::eI32, construct->loopCounter));
+  loopCounterVal = builder.add(ir::Op::IAdd(ir::ScalarType::eI32, loopCounterVal, construct->loopStep));
+  builder.add(ir::Op::TmpStore(construct->loopCounter, loopCounterVal));
+
+  auto constructEnd = builder.add(ir::Op::ScopedEndLoop(construct->def));
+  builder.rewriteOp(construct->def, ir::Op(builder.getOp(construct->def)).setOperand(0u, constructEnd));
+
+  m_controlFlow.pop();
+
+  return true;
+}
+
+
+bool Converter::handleRep(ir::Builder& builder, const Instruction& op) {
+  /* Loop that does n repetitions (src0) and doesn't expose the current counter to the application. */
+  dxbc_spv_assert(op.getSrcCount() >= 1u);
+
+  /* Assume that modifiers aren't supported here. We only implement them for floats right now. */
+  dxbc_spv_assert(op.getSrc(0u).getModifier() == OperandModifier::eNone);
+  auto iterationCount = loadSrc(
+    builder, op, op.getSrc(0u),
+    ComponentBit::eX,
+    op.getSrc(0u).getSwizzle(getShaderInfo()),
+    ir::ScalarType::eU32);
+
+  auto loopCounter =  builder.add(ir::Op::DclTmp(ir::ScalarType::eU32, m_entryPoint.def));
+  builder.add(ir::Op::TmpStore(loopCounter, iterationCount));
+
+  auto loopDef = builder.add(ir::Op::ScopedLoop(ir::SsaDef()));
+  auto& loop = m_controlFlow.push(loopDef);
+
+  auto loopCounterVal = builder.add(ir::Op::TmpLoad(ir::ScalarType::eU32, loopCounter));
+  auto breakCondition = builder.add(ir::Op::IEq(ir::ScalarType::eBool, loopCounterVal, builder.makeConstant(0u)));
+  auto breakIf = builder.add(ir::Op::ScopedIf(ir::SsaDef(), breakCondition));
+  builder.add(ir::Op::ScopedLoopBreak(loopDef));
+  auto breakEndIf = builder.add(ir::Op::ScopedEndIf(breakIf));
+  builder.rewriteOp(breakIf, ir::Op(builder.getOp(breakIf)).setOperand(0u, breakEndIf));
+
+  m_regFile.emitLoopCounterStore(builder, loopCounterVal);
+
+  loop.loopStep = ir::SsaDef();
+  loop.loopCounter = loopCounter;
+  return true;
+}
+
+
+bool Converter::handleEndRep(ir::Builder &builder, const Instruction &op) {
+  auto [construct, type] = m_controlFlow.getConstruct(builder);
+
+  if (type != ir::OpCode::eScopedLoop)
+    return logOpError(op, "'EndRep' occurred outside of 'Rep' or 'Rep' is straddling 'If'.");
+
+  auto loopCounterVal = builder.add(ir::Op::TmpLoad(ir::ScalarType::eU32, construct->loopCounter));
+  loopCounterVal = builder.add(ir::Op::ISub(ir::ScalarType::eU32, loopCounterVal, builder.makeConstant(1u)));
+  builder.add(ir::Op::TmpStore(construct->loopCounter, loopCounterVal));
+
+  auto constructEnd = builder.add(ir::Op::ScopedEndLoop(construct->def));
+  builder.rewriteOp(construct->def, ir::Op(builder.getOp(construct->def)).setOperand(0u, constructEnd));
+
+  m_controlFlow.pop();
+
   return true;
 }
 
