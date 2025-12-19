@@ -118,6 +118,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return handleDef(builder, op);
 
     case OpCode::eDcl:
+      return handleDcl(builder, op);
+
     case OpCode::eMov:
     case OpCode::eMova:
     case OpCode::eAdd:
@@ -279,6 +281,29 @@ bool Converter::handleDef(ir::Builder& builder, const Instruction& op) {
   m_resources.emitDefineConstant(builder, dst.getRegisterType(), dst.getIndex(), imm);
 
   return true;
+}
+
+
+bool Converter::handleDcl(ir::Builder& builder, const Instruction& op) {
+  auto dst = op.getDst();
+  switch (dst.getRegisterType()) {
+    case RegisterType::eSampler:
+      Logger::err("Declaring samplers is not implemented yet.");
+      return false;
+
+    case RegisterType::eAttributeOut:
+    case RegisterType::eOutput:
+    case RegisterType::eInput:
+    case RegisterType::eTexture:
+    case RegisterType::ePixelTexCoord:
+    case RegisterType::eMiscType:
+    case RegisterType::eColorOut:
+      return m_ioMap.handleDclIoVar(builder, op);
+
+    default:
+      dxbc_spv_unreachable();
+      return false;
+  }
 }
 
 
