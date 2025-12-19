@@ -152,6 +152,8 @@ private:
 
   bool handleTexKill(ir::Builder& builder, const Instruction& op);
 
+  bool handleTexDepth(ir::Builder& builder, const Instruction& op);
+
   ir::SsaDef loadSrc(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, Swizzle swizzle, ir::ScalarType type);
 
   ir::SsaDef applySrcModifiers(ir::Builder& builder, ir::SsaDef def, const Instruction& instruction, const Operand& operand, WriteMask mask);
