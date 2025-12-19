@@ -20,6 +20,7 @@ constexpr uint32_t BoolSWVPCbvRegIdx       = 2u;
 
 constexpr uint32_t SpecialBindingsRegSpace = 3u;
 constexpr uint32_t FastSpecConstCbvRegIdx  = 0u;
+constexpr uint32_t PSSharedDataCbvRegIdx   = 1u;
 
 /** Opcode */
 enum class OpCode : uint32_t {

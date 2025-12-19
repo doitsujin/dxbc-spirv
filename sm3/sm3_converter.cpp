@@ -6,6 +6,8 @@
 
 namespace dxbc_spv::sm3 {
 
+constexpr uint32_t TextureStageCount = 8u;
+
 /* Types in SM3
  * Integer:
  *   - Instructions:
@@ -241,6 +243,10 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
   m_regFile.initialize(builder);
   m_resources.initialize(builder);
 
+  if (getShaderInfo().getType() == ShaderType::ePixel) {
+    m_psSharedData = emitSharedConstants(builder);
+  }
+
   /* Set cursor to main function so that instructions will be emitted
    * in the correct location */
   builder.setCursor(m_entryPoint.mainFunc);
@@ -267,6 +273,80 @@ bool Converter::initParser(Parser& parser, util::ByteReader reader) {
   }
 
   return true;
+}
+
+
+ir::SsaDef Converter::emitSharedConstants(ir::Builder& builder) {
+  ir::Type bufferStruct = ir::Type();
+
+  for (uint32_t i = 0u; i  < TextureStageCount; i++) {
+    bufferStruct.addStructMember(ir::BasicType(ir::ScalarType::eF32, 4u));
+    bufferStruct.addStructMember(ir::BasicType(ir::ScalarType::eF32, 2u));
+    bufferStruct.addStructMember(ir::BasicType(ir::ScalarType::eF32, 2u));
+    bufferStruct.addStructMember(ir::ScalarType::eF32);
+    bufferStruct.addStructMember(ir::ScalarType::eF32);
+  }
+
+  auto buffer = builder.add(ir::Op::DclCbv(bufferStruct, getEntryPoint(), SpecialBindingsRegSpace, PSSharedDataCbvRegIdx, 1u));
+
+  if (getOptions().includeDebugNames) {
+    builder.add(ir::Op::DebugName(buffer, "PSSharedData"));
+    for (uint32_t i = 0u; i < TextureStageCount; i++) {
+      std::stringstream namestream;
+      namestream << "Constant" << i;
+      builder.add(ir::Op::DebugMemberName(buffer, i, namestream.str().c_str()));
+      namestream.clear();
+      namestream << "BumpEnvMat0_" << i;
+      builder.add(ir::Op::DebugMemberName(buffer, i + 1u, namestream.str().c_str()));
+      namestream.clear();
+      namestream << "BumpEnvMat1_" << i;
+      builder.add(ir::Op::DebugMemberName(buffer, i + 2u, namestream.str().c_str()));
+      namestream.clear();
+      namestream << "BumpEnvLScale" << i;
+      builder.add(ir::Op::DebugMemberName(buffer, i + 3u, namestream.str().c_str()));
+      namestream.clear();
+      namestream << "BumpEnvLOffset" << i;
+      builder.add(ir::Op::DebugMemberName(buffer, i + 4u, namestream.str().c_str()));
+      namestream.clear();
+    }
+  }
+
+  return buffer;
+}
+
+
+ir::SsaDef Converter::applyBumpMapping(ir::Builder& builder, uint32_t stageIdx, ir::SsaDef src0, ir::SsaDef src1) {
+  /*
+   * dst.x = src0.x + D3DTSS_BUMPENVMAT00(stage n) * src1.x
+  *                 + D3DTSS_BUMPENVMAT10(stage n) * src1.y
+  *
+   * dst.y = src0.y + D3DTSS_BUMPENVMAT01(stage n) * src1.x
+   *                + D3DTSS_BUMPENVMAT11(stage n) * src1.y
+   */
+
+  auto type = builder.getOp(src0).getType().getBaseType(0u);
+  auto scalarType = type.getBaseType();
+  dxbc_spv_assert(scalarType == builder.getOp(src1).getType().getBaseType(0u).getBaseType());
+
+  auto descriptor = builder.add(ir::Op::DescriptorLoad(ir::ScalarType::eCbv, m_psSharedData, ir::SsaDef()));
+  std::array<ir::SsaDef, 2> components = {};
+  for (uint32_t i = 0u; i < components.size(); i++) {
+    /* Load bump matrix */
+    auto bumpEnvMat0 = builder.add(ir::Op::BufferLoad(ir::BasicType(ir::ScalarType::eF32, 2u), descriptor, builder.makeConstant(stageIdx * 5u + 1u), 16u));
+    auto bumpEnvMat1 = builder.add(ir::Op::BufferLoad(ir::BasicType(ir::ScalarType::eF32, 2u), descriptor, builder.makeConstant(stageIdx * 5u + 2u), 8u));
+    if (scalarType != ir::ScalarType::eF32) {
+      bumpEnvMat0 = builder.add(ir::Op::ConsumeAs(ir::BasicType(scalarType, 2u), bumpEnvMat0));
+      bumpEnvMat1 = builder.add(ir::Op::ConsumeAs(ir::BasicType(scalarType, 2u), bumpEnvMat1));
+    }
+    auto src1r = builder.add(ir::Op::CompositeExtract(scalarType, src1, builder.makeConstant(0u)));
+    auto bumped0 = builder.add(OpFMul(scalarType, bumpEnvMat0, src1r));
+    auto src1g = builder.add(ir::Op::CompositeExtract(scalarType, src1, builder.makeConstant(1u)));
+    auto bumped1 = builder.add(OpFMul(scalarType, bumpEnvMat1, src1g));
+    auto bumpedSum = builder.add(ir::Op::FAdd(scalarType, bumped0, bumped1));
+    auto src0Component = builder.add(ir::Op::CompositeExtract(scalarType, src0, builder.makeConstant(i)));
+    components[i] = builder.add(ir::Op::FAdd(scalarType, src0Component, bumpedSum));
+  }
+  return buildVector(builder, scalarType, components.size(), components.data());
 }
 
 
