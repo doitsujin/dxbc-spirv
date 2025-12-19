@@ -206,6 +206,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return handlePow(builder, op);
 
     case OpCode::eDst:
+      return handleDst(builder, op);
+
     case OpCode::eDsX:
     case OpCode::eDsY:
     case OpCode::eCrs:
@@ -1311,6 +1313,44 @@ bool Converter::handlePow(ir::Builder& builder, const Instruction& op) {
   auto val = builder.add(OpFPow(scalarType, absSrc0, src1));
   auto vec = broadcastScalar(builder, val, writeMask);
   return storeDstModifiedPredicated(builder, op, dst, vec);
+}
+
+
+bool Converter::handleDst(ir::Builder& builder, const Instruction& op) {
+  /* Calculates a distance vector */
+  dxbc_spv_assert(op.hasDst());
+  dxbc_spv_assert(op.getSrcCount() == 2u);
+  auto dst = op.getDst();
+  WriteMask writeMask = dst.getWriteMask(m_parser.getShaderInfo());
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+
+  auto src0 = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eAll, scalarType);
+  auto src1 = loadSrcModified(builder, op, op.getSrc(1u), ComponentBit::eAll, scalarType);
+  util::small_vector<ir::SsaDef, 4u> components = { };
+
+  if (writeMask & ComponentBit::eX) {
+    /* dst.x = 1.0 */
+    components.push_back(makeTypedConstant(builder, scalarType, 1.0f));
+  }
+  if (writeMask & ComponentBit::eY) {
+    /* dst.y = src0.y * src1.y */
+    auto src0y = builder.add(ir::Op::CompositeExtract(scalarType, src0, builder.makeConstant(1u)));
+    auto src1y = builder.add(ir::Op::CompositeExtract(scalarType, src1, builder.makeConstant(1u)));
+    components.push_back(builder.add(OpFMul(scalarType, src0y, src1y)));
+  }
+  if (writeMask & ComponentBit::eZ) {
+    /* dst.z = src0.z */
+    auto src0z = builder.add(ir::Op::CompositeExtract(scalarType, src0, builder.makeConstant(2u)));
+    components.push_back(src0z);
+  }
+  if (writeMask & ComponentBit::eW) {
+    /* dst.w = src1.w */
+    auto src1w = builder.add(ir::Op::CompositeExtract(scalarType, src1, builder.makeConstant(3u)));
+    components.push_back(src1w);
+  }
+
+  auto result = buildVector(builder, scalarType, components.size(), components.data());
+  return storeDstModifiedPredicated(builder, op, dst, result);
 }
 
 
