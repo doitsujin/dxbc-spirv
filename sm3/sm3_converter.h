@@ -5,6 +5,7 @@
 #include "sm3_registers.h"
 #include "sm3_spec_constants.h"
 #include "sm3_resources.h"
+#include "sm3_control_flow.h"
 
 #include "../ir/ir_builder.h"
 
@@ -65,6 +66,7 @@ private:
   IoMap            m_ioMap;
   RegisterFile     m_regFile;
   ResourceMap      m_resources;
+  ControlFlow      m_controlFlow;
 
   SpecializationConstantsMap m_specConstants;
 
