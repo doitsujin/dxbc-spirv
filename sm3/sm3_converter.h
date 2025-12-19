@@ -97,6 +97,27 @@ private:
     return m_options;
   }
 
+  ir::Op emitFMul(ir::Type type, ir::SsaDef a, ir::SsaDef b) const {
+    return !m_options.fastFloatEmulation
+      ? ir::Op::FMulLegacy(type, a, b)
+      : ir::Op::FMul(type, a, b);
+  }
+  ir::Op emitFMad(ir::Type type, ir::SsaDef a, ir::SsaDef b, ir::SsaDef c) const {
+    return !m_options.fastFloatEmulation
+      ? ir::Op::FMadLegacy(type, a, b, c)
+      : ir::Op::FMad(type, a, b, c);
+  }
+  ir::Op emitFDot(ir::Type type, ir::SsaDef a, ir::SsaDef b) const {
+    return !m_options.fastFloatEmulation
+      ? ir::Op::FDotLegacy(type, a, b)
+      : ir::Op::FDot(type, a, b);
+  }
+  ir::Op emitFPow(ir::Type type, ir::SsaDef base, ir::SsaDef exp) const {
+    return !m_options.fastFloatEmulation
+      ? ir::Op::FPowLegacy(type, base, exp)
+      : ir::Op::FPow(type, base, exp);
+  }
+
   bool handleComment(ir::Builder& builder, const Instruction& op);
 
   bool handleDef(ir::Builder& builder, const Instruction& op);
