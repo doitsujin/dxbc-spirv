@@ -389,6 +389,12 @@ public:
     return result;
   }
 
+  /** Sets register index */
+  Operand& setIndex(uint32_t index) {
+    m_token = util::binsert(m_token, index, 0u, 11u);
+    return *this;
+  }
+
   /** Writes code header to binary blob. */
   bool write(util::ByteWriter& writer, const ShaderInfo& info) const;
 
