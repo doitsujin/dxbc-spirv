@@ -130,6 +130,14 @@ public:
           ir::SsaDef              predicateVec,
           ir::SsaDef              value);
 
+  /** Stores a scalar vector to the depth output register.
+   *
+   *  Returns \c false on error. */
+  bool emitDepthStore(
+          ir::Builder&            builder,
+    const Instruction&            op,
+          ir::SsaDef              value);
+
 private:
 
   Converter&      m_converter;

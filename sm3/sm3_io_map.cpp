@@ -741,6 +741,29 @@ bool IoMap::emitStore(
 }
 
 
+bool IoMap::emitDepthStore(ir::Builder &builder, const Instruction &op, ir::SsaDef value) {
+  const IoVarInfo* ioVar = findIoVar(m_variables, RegisterType::eDepthOut, 0u);
+
+  if (ioVar == nullptr) {
+    Semantic semantic;
+    bool foundSemantic = determineSemanticForRegister(RegisterType::eDepthOut, 0u, &semantic);
+
+    if (!foundSemantic) {
+      m_converter.logOpError(op, "Failed to process I/O depth store.");
+      return false;
+    }
+
+    dclIoVar(builder, RegisterType::eDepthOut, 0u, semantic,  WriteMask(ComponentBit::eAll));
+    ioVar = &m_variables.back();
+  }
+
+  ir::Type scalarType = ioVar->baseType.isVectorType() ? ioVar->baseType.getBaseType(0u) : ioVar->baseType;
+  builder.add(ir::Op::TmpStore(ioVar->tempDefs[0u], value));
+
+  return true;
+}
+
+
 ir::SsaDef IoMap::emitDynamicLoadFunction(ir::Builder& builder) const {
   auto indexParameter = builder.add(ir::Op::DclParam(ir::ScalarType::eU32));
 
