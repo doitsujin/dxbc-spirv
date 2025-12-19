@@ -138,6 +138,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eSgn:
     case OpCode::eAbs:
     case OpCode::eMad:
+      return handleArithmetic(builder, op);
+
     case OpCode::eDp2Add:
     case OpCode::eDp3:
     case OpCode::eDp4:
@@ -352,6 +354,82 @@ bool Converter::handleMov(ir::Builder& builder, const Instruction& op) {
   }
 
   return storeDstModifiedPredicated(builder, op, dst, value);
+}
+
+
+bool Converter::handleArithmetic(ir::Builder& builder, const Instruction& op) {
+  /* All instructions handled here will operate on float vectors of any kind. */
+  auto opCode = op.getOpCode();
+
+  dxbc_spv_assert(op.getSrcCount());
+  dxbc_spv_assert(op.hasDst());
+
+  /* Instruction type */
+  const auto& dst = op.getDst();
+
+  WriteMask writeMask = dst.getWriteMask(getShaderInfo());
+
+  bool isPartialPrecision = dst.isPartialPrecision();
+  switch (opCode) {
+    /* Exp & Log are explicitly full-precision instructions. */
+    case OpCode::eExp:
+    case OpCode::eLog:  isPartialPrecision = false; break;
+    /* LogP is an explicitly partial-precision instruction. */
+    case OpCode::eLogP: isPartialPrecision = true;  break;
+    default: break;
+  }
+
+  auto scalarType = isPartialPrecision ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+  auto vectorType = makeVectorType(scalarType, writeMask);
+
+  /* Load source operands */
+  util::small_vector<ir::SsaDef, 3u> src;
+
+  for (uint32_t i = 0u; i < op.getSrcCount(); i++) {
+    auto value = loadSrcModified(builder, op, op.getSrc(i), writeMask, scalarType);
+
+    if (!value)
+      return false;
+
+    src.push_back(value);
+  }
+
+  ir::Op result = [this, opCode, vectorType, &src] {
+    switch (opCode) {
+      case OpCode::eAdd:        return ir::Op::FAdd(vectorType, src.at(0u), src.at(1u));
+      case OpCode::eSub:        return ir::Op::FSub(vectorType, src.at(0u), src.at(1u));
+      case OpCode::eExp:        return ir::Op::FExp2(vectorType, src.at(0u));
+      case OpCode::eFrc:        return ir::Op::FFract(vectorType, src.at(0u));
+      case OpCode::eLog:        return ir::Op::FLog2(vectorType, src.at(0u));
+      case OpCode::eLogP:       return ir::Op::FLog2(vectorType, src.at(0u));
+      case OpCode::eMax:        return ir::Op::FMax(vectorType, src.at(0u), src.at(1u));
+      case OpCode::eMin:        return ir::Op::FMin(vectorType, src.at(0u), src.at(1u));
+      case OpCode::eMul:        return OpFMul(vectorType, src.at(0u), src.at(1u));
+      case OpCode::eRcp:        return ir::Op::FRcp(vectorType, src.at(0u));
+      case OpCode::eRsq:        return ir::Op::FRsq(vectorType, src.at(0u));
+      case OpCode::eAbs:        return ir::Op::FAbs(vectorType, src.at(0u));
+      case OpCode::eSgn:        return ir::Op::FAbs(vectorType, src.at(0u));
+      case OpCode::eMad:        return OpFMad(vectorType, src.at(0u), src.at(1u), src.at(2u));
+      default: break;
+    }
+
+    dxbc_spv_unreachable();
+    return ir::Op();
+  } ();
+
+  auto resultDef = builder.add(std::move(result));
+
+  if (m_options.fastFloatEmulation) {
+    if (opCode == OpCode::eRcp || opCode == OpCode::eRsq || opCode == OpCode::eExp) {
+      resultDef = builder.add(ir::Op::FMin(vectorType, resultDef,
+        ir::makeTypedConstant(builder, vectorType, std::numeric_limits<float>::max())));
+    } else if (opCode == OpCode::eLog || opCode == OpCode::eLogP) {
+      resultDef = builder.add(ir::Op::FMax(vectorType, resultDef,
+        ir::makeTypedConstant(builder, vectorType, -std::numeric_limits<float>::max())));
+    }
+  }
+
+  return storeDstModifiedPredicated(builder, op, dst, resultDef);
 }
 
 
