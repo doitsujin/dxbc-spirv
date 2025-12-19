@@ -273,8 +273,22 @@ void Disassembler::disassembleRegisterAddressing(std::ostream& stream, const Ope
   } else if (arg.getRegisterType() == RegisterType::eRasterizerOut) {
     stream << RasterizerOutIndex(arg.getIndex());
   } else if (arg.getRegisterType() != RegisterType::eLoop) {
+    const ConstantInfo* constantInfo = nullptr;
+
+    RegisterType type = arg.getRegisterType();
+    if (type == RegisterType::eConst
+      || type == RegisterType::eConst2
+      || type == RegisterType::eConst3
+      || type == RegisterType::eConst4
+      || type == RegisterType::eConstInt
+      || type == RegisterType::eConstBool
+      || type == RegisterType::eSampler
+      || (type == RegisterType::eTexture
+        && m_info.getVersion().first == 1u
+        && m_info.getVersion().second < 4u))
+      constantInfo = ctab.findConstantInfo(type, arg.getIndex());
+
     if (arg.hasRelativeAddressing()) {
-      const ConstantInfo* constantInfo = ctab.findConstantInfo(arg.getRegisterType(), arg.getIndex());
       if (constantInfo != nullptr) {
         dxbc_spv_assert(constantInfo->count > 1u);
         stream << arg.getIndex() << "_" << constantInfo->name;
@@ -296,7 +310,7 @@ void Disassembler::disassembleRegisterAddressing(std::ostream& stream, const Ope
       stream << "]";
     } else {
       stream << arg.getIndex();
-      const ConstantInfo* constantInfo = ctab.findConstantInfo(arg.getRegisterType(), arg.getIndex());
+
       if (constantInfo != nullptr) {
         stream << "_" << constantInfo->name;
         if (constantInfo->count > 1u) {

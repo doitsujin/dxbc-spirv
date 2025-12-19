@@ -39,8 +39,8 @@ Converter::Converter(util::ByteReader code,
 , m_options(options)
 , m_ioMap(*this)
 , m_regFile(*this)
+, m_resources(*this)
 , m_specConstants(*this, specConstantsLayout) {
-
 }
 
 Converter::~Converter() {
@@ -52,6 +52,9 @@ bool Converter::convertShader(ir::Builder& builder) {
     return false;
 
   auto shaderType = getShaderInfo().getType();
+
+  /* The SWVP option is only for vertex shaders. */
+  dxbc_spv_assert(shaderType == ShaderType::eVertex || !m_options.isSWVP);
 
   initialize(builder, shaderType);
 
@@ -200,6 +203,7 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
   m_specConstants.initialize(builder);
   m_ioMap.initialize(builder);
   m_regFile.initialize(builder);
+  m_resources.initialize(builder);
 
   /* Set cursor to main function so that instructions will be emitted
    * in the correct location */
@@ -276,6 +280,7 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
     case RegisterType::eConst4:
     case RegisterType::eConstInt:
     case RegisterType::eConstBool:
+      loadDef = m_resources.emitConstantLoad(builder, op, operand, mask, type);
       break;
 
     default:
@@ -547,7 +552,18 @@ std::string Converter::makeRegisterDebugName(RegisterType type, uint32_t index, 
   std::stringstream name;
   name << UnambiguousRegisterType { type, shaderInfo.getType(), shaderInfo.getVersion().first };
 
-  const ConstantInfo* constantInfo = m_ctab.findConstantInfo(type, index);
+  const ConstantInfo* constantInfo = nullptr;
+  if (type == RegisterType::eConst
+    || type == RegisterType::eConst2
+    || type == RegisterType::eConst3
+    || type == RegisterType::eConst4
+    || type == RegisterType::eConstInt
+    || type == RegisterType::eConstBool
+    || type == RegisterType::eSampler
+    || (type == RegisterType::eTexture
+      && shaderInfo.getVersion().first == 1u
+      && shaderInfo.getVersion().second < 4u))
+    constantInfo = m_ctab.findConstantInfo(type, index);
 
   if (constantInfo != nullptr && m_options.includeDebugNames) {
     name << "_" << constantInfo->name;
