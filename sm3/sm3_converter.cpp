@@ -219,6 +219,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return handleSetP(builder, op);
 
     case OpCode::eExpP:
+      return handleExpP(builder, op);
+
     case OpCode::eIf:
     case OpCode::eIfC:
     case OpCode::eElse:
@@ -1486,6 +1488,54 @@ bool Converter::handleSetP(ir::Builder& builder, const Instruction& op) {
   }
 
   auto result = composite(builder, makeVectorType(scalarType, writeMask), components.data(), Swizzle::identity(), writeMask);
+  return storeDstModifiedPredicated(builder, op, dst, result);
+}
+
+
+bool Converter::handleExpP(ir::Builder& builder, const Instruction& op) {
+  dxbc_spv_assert(op.hasDst());
+  dxbc_spv_assert(op.getSrcCount() == 1u);
+  auto dst = op.getDst();
+  auto info = m_parser.getShaderInfo();
+  WriteMask writeMask = dst.getWriteMask(info);
+  /* ExpP is the partial precision variant. Always use MinF16 here. */
+  auto scalarType = ir::ScalarType::eMinF16;
+
+  /* src0 has to have a replicate swizzle, so just load x */
+  auto src0 = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX, scalarType);
+
+  util::small_vector<ir::SsaDef, 4u> components;
+  if (info.getVersion().first >= 2u) {
+    for (auto _ : writeMask) {
+      components.push_back(builder.add(ir::Op::FExp2(scalarType, src0)));
+    }
+  } else {
+    if (writeMask & ComponentBit::eX) {
+      /* dst.x = pow(2.0, floor(src0)) */
+      components.push_back(builder.add(ir::Op::FExp2(scalarType, src0)));
+    }
+    if (writeMask & ComponentBit::eY) {
+      /* dst.y = src0 - floor(src0) */
+      components.push_back(builder.add(ir::Op::FSub(scalarType, src0, builder.add(ir::Op::FRound(scalarType, src0, ir::RoundMode::eNegativeInf)))));
+    }
+    if (writeMask & ComponentBit::eZ) {
+      /* dst.z = pow(2.0, floor(src0)) */
+      components.push_back(builder.add(ir::Op::FExp2(scalarType, src0)));
+    }
+    if (writeMask & ComponentBit::eW) {
+      /* dst.w 1.0 */
+      components.push_back(makeTypedConstant(builder, scalarType, 1.0f));
+    }
+  }
+
+  auto result = ir::buildVector(builder, scalarType, components.size(), components.data());
+
+  if (m_options.fastFloatEmulation) {
+    auto vectorType = ir::makeVectorType(scalarType, writeMask);
+    result = builder.add(ir::Op::FMin(vectorType, result,
+      ir::makeTypedConstant(builder, vectorType, std::numeric_limits<float>::max())));
+  }
+
   return storeDstModifiedPredicated(builder, op, dst, result);
 }
 
