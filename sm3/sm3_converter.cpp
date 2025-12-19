@@ -223,8 +223,14 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
 
     case OpCode::eIf:
     case OpCode::eIfC:
+      return handleIf(builder, op);
+
     case OpCode::eElse:
+      return handleElse(builder, op);
+
     case OpCode::eEndIf:
+      return handleEndIf(builder, op);
+
     case OpCode::eBreak:
     case OpCode::eBreakC:
     case OpCode::eBreakP:
@@ -1537,6 +1543,57 @@ bool Converter::handleExpP(ir::Builder& builder, const Instruction& op) {
   }
 
   return storeDstModifiedPredicated(builder, op, dst, result);
+}
+
+
+bool Converter::handleIf(ir::Builder& builder, const Instruction& op) {
+  ir::SsaDef cond;
+
+  if (op.getOpCode() == OpCode::eIf) {
+    cond = loadSrc(builder, op, op.getSrc(0u), ComponentBit::eX, op.getSrc(0u).getSwizzle(getShaderInfo()), ir::ScalarType::eBool);
+    if (op.getSrc(0u).getModifier() == OperandModifier::eNot) {
+      cond = builder.add(ir::Op::BNot(ir::ScalarType::eBool, cond));
+    } else if (op.getSrc(0u).getModifier() != OperandModifier::eNone) {
+      Logger::log(LogLevel::eError, "Unknown if condition modifier: ", uint32_t(op.getSrc(0u).getModifier()));
+      dxbc_spv_assert(false);
+    }
+  } else if (op.getOpCode() == OpCode::eIfC) {
+    ir::SsaDef src0 = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX, ir::ScalarType::eF32);
+    ir::SsaDef src1 = loadSrcModified(builder, op, op.getSrc(1u), ComponentBit::eX, ir::ScalarType::eF32);
+    cond = emitComparison(builder, src0, src1, op.getComparisonMode());
+  } else {
+    Logger::err("OpCode ", op.getOpCode(), " is not supported by handleControlFlowIf");
+    dxbc_spv_unreachable();
+    return false;
+  }
+  auto ifDef = builder.add(ir::Op::ScopedIf(ir::SsaDef(), cond));
+  m_controlFlow.push(ifDef);
+  return true;
+}
+
+
+bool Converter::handleElse(ir::Builder& builder, const Instruction& op) {
+  auto [construct, type] = m_controlFlow.getConstruct(builder);
+
+  if (type != ir::OpCode::eScopedIf)
+    return logOpError(op, "'Else' occurred outside of 'If'.");
+
+  builder.add(ir::Op::ScopedElse(construct->def));
+  return true;
+}
+
+
+bool Converter::handleEndIf(ir::Builder& builder, const Instruction& op) {
+  auto [construct, type] = m_controlFlow.getConstruct(builder);
+
+  if (type != ir::OpCode::eScopedIf)
+    return logOpError(op, "'EndIf' occurred outside of 'If'.");
+
+  auto constructEnd = builder.add(ir::Op::ScopedEndIf(construct->def));
+  builder.rewriteOp(construct->def, ir::Op(builder.getOp(construct->def)).setOperand(0u, constructEnd));
+
+  m_controlFlow.pop();
+  return true;
 }
 
 
