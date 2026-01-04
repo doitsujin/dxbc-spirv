@@ -648,7 +648,7 @@ bool IoMap::declareIoSignatureVars(
   });
 
   for (auto e = entries; e != signature->end(); e++) {
-    auto sv = *resolveSignatureSysval(e->getSystemValue(), e->getSemanticIndex());
+    auto sv = resolveSignatureSysval(e->getSystemValue(), e->getSemanticIndex()).value_or(Sysval::eNone);
 
     if (sv == Sysval::eNone || sysvalNeedsMirror(regType, sv)) {
       auto usedMask = uint8_t(e->getComponentMask());
