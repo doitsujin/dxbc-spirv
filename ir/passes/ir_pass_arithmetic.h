@@ -115,9 +115,12 @@ private:
   void lowerInstructionsPreTransform();
   void lowerInstructionsPostTransform();
 
+  void splitMultiplyAdd();
   void fuseMultiplyAdd();
 
   void propagateInvariance(const Op& base);
+
+  Builder::iterator splitMad(Builder::iterator op);
 
   Builder::iterator fuseMad(Builder::iterator op);
 

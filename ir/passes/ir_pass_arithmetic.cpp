@@ -146,6 +146,7 @@ void ArithmeticPass::runPropagateInvariancePass(Builder& builder) {
 
 
 void ArithmeticPass::lowerInstructionsPreTransform() {
+  splitMultiplyAdd();
   fuseMultiplyAdd();
 
   auto iter = m_builder.begin();
@@ -252,6 +253,23 @@ void ArithmeticPass::lowerInstructionsPostTransform() {
 }
 
 
+void ArithmeticPass::splitMultiplyAdd() {
+  auto iter = m_builder.getCode().first;
+
+  while (iter != m_builder.end()) {
+    switch (iter->getOpCode()) {
+      case OpCode::eFMad:
+      case OpCode::eFMadLegacy: {
+        iter = splitMad(iter);
+      } continue;
+
+      default:
+        ++iter;
+    }
+  }
+}
+
+
 void ArithmeticPass::fuseMultiplyAdd() {
   auto iter = m_builder.getCode().first;
 
@@ -318,6 +336,37 @@ void ArithmeticPass::propagateInvariance(const Op& base) {
         break;
     }
   }
+}
+
+
+Builder::iterator ArithmeticPass::splitMad(Builder::iterator op) {
+  // Multiply-add behaviour is annoying and it is not entirely clear how
+  // to make different cases work:
+  // 1) Shader Model 4 is precise, but must generate the same code as both precise
+  //    and non-precise Shader Model 5 code.
+  // 2) We cannot rely on multiply-add instructions on invariant outputs in general
+  //    since FXC is not consistent in whether it emits mad or mul + add for any
+  //    given piece of code.
+  // 3) We also cannot always emit separate mul + add since that causes precision
+  //    issues in a compute shader in Elite Dangerous for some reason.
+  // 4) We ideally also want precise code to produce the same results regardless
+  //    of the shader stage.
+  //
+  // We try to make 1-3 work and ignore 4. Split all non-precise and all invariant mad
+  // instructions, but crucially, keep precise non-invariant mad fused to fix case 3.
+  if ((getFpFlags(*op) & OpFlag::ePrecise) && !(getFpFlags(*op) & OpFlag::eInvariant))
+    return ++op;
+
+  auto mulOpCode = op->getOpCode() == OpCode::eFMadLegacy
+    ? OpCode::eFMulLegacy
+    : OpCode::eFMul;
+
+  auto mul = m_builder.addBefore(op->getDef(), Op(mulOpCode, op->getType())
+    .addOperands(op->getOperand(0u), op->getOperand(1u))
+    .setFlags(op->getFlags()));
+
+  m_builder.rewriteOp(op->getDef(), Op::FAdd(op->getType(), mul, SsaDef(op->getOperand(2u))).setFlags(op->getFlags()));
+  return op;
 }
 
 
