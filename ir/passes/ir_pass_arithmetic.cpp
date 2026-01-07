@@ -146,6 +146,7 @@ void ArithmeticPass::runPropagateInvariancePass(Builder& builder) {
 
 
 void ArithmeticPass::lowerInstructionsPreTransform() {
+  splitMultiplyAdd();
   fuseMultiplyAdd();
 
   auto iter = m_builder.begin();
@@ -252,6 +253,23 @@ void ArithmeticPass::lowerInstructionsPostTransform() {
 }
 
 
+void ArithmeticPass::splitMultiplyAdd() {
+  auto iter = m_builder.getCode().first;
+
+  while (iter != m_builder.end()) {
+    switch (iter->getOpCode()) {
+      case OpCode::eFMad:
+      case OpCode::eFMadLegacy: {
+        iter = splitMad(iter);
+      } continue;
+
+      default:
+        ++iter;
+    }
+  }
+}
+
+
 void ArithmeticPass::fuseMultiplyAdd() {
   auto iter = m_builder.getCode().first;
 
@@ -318,6 +336,28 @@ void ArithmeticPass::propagateInvariance(const Op& base) {
         break;
     }
   }
+}
+
+
+Builder::iterator ArithmeticPass::splitMad(Builder::iterator op) {
+  // Keep precise multiply-add fused at all times to benefit from improved
+  // accuracy whenever possible. Elite Dangerous relies on this.
+  if (getFpFlags(*op) & OpFlag::ePrecise)
+    return ++op;
+
+  // Otherwise, split, and re-fuse later. When computing invariant outputs,
+  // we want code to be consistent between different shaders even if the
+  // incoming sequence of code might not be, which is a common issue.
+  auto mulOpCode = op->getOpCode() == OpCode::eFMadLegacy
+    ? OpCode::eFMulLegacy
+    : OpCode::eFMul;
+
+  auto mul = m_builder.addBefore(op->getDef(), Op(mulOpCode, op->getType())
+    .addOperands(op->getOperand(0u), op->getOperand(1u))
+    .setFlags(op->getFlags()));
+
+  m_builder.rewriteOp(op->getDef(), Op::FAdd(op->getType(), mul, SsaDef(op->getOperand(2u))).setFlags(op->getFlags()));
+  return op;
 }
 
 
