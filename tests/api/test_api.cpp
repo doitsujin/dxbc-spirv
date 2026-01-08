@@ -110,14 +110,17 @@ void enumerateLoweringTests(std::vector<NamedTest>& result, const char* category
   ADD_TEST(test_resources_srv_indexed_buffer_structured_query);
 
   ADD_TEST(test_resources_uav_buffer_typed_load);
+  ADD_TEST(test_resources_uav_buffer_typed_load_precise);
   ADD_TEST(test_resources_uav_buffer_typed_store);
   ADD_TEST(test_resources_uav_buffer_typed_atomic);
   ADD_TEST(test_resources_uav_buffer_typed_query);
   ADD_TEST(test_resources_uav_buffer_raw_load);
+  ADD_TEST(test_resources_uav_buffer_raw_load_precise);
   ADD_TEST(test_resources_uav_buffer_raw_store);
   ADD_TEST(test_resources_uav_buffer_raw_atomic);
   ADD_TEST(test_resources_uav_buffer_raw_query);
   ADD_TEST(test_resources_uav_buffer_structured_load);
+  ADD_TEST(test_resources_uav_buffer_structured_load_precise);
   ADD_TEST(test_resources_uav_buffer_structured_store);
   ADD_TEST(test_resources_uav_buffer_structured_atomic);
   ADD_TEST(test_resources_uav_buffer_structured_query);
@@ -219,6 +222,7 @@ void enumerateLoweringTests(std::vector<NamedTest>& result, const char* category
   ADD_TEST(test_resource_uav_image_1d_array_store);
   ADD_TEST(test_resource_uav_image_1d_array_atomic);
   ADD_TEST(test_resource_uav_image_2d_load);
+  ADD_TEST(test_resource_uav_image_2d_load_precise);
   ADD_TEST(test_resource_uav_image_2d_query);
   ADD_TEST(test_resource_uav_image_2d_store);
   ADD_TEST(test_resource_uav_image_2d_atomic);

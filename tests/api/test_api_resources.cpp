@@ -196,7 +196,7 @@ SsaDef emit_buffer_load_store_address(Builder& builder, SsaDef entryPoint, Resou
   return index;
 }
 
-Builder make_test_buffer_load(ResourceKind kind, bool uav, bool indexed) {
+Builder make_test_buffer_load(ResourceKind kind, bool uav, bool indexed, OpFlags flags = OpFlags()) {
   Builder builder;
   auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
 
@@ -210,9 +210,9 @@ Builder make_test_buffer_load(ResourceKind kind, bool uav, bool indexed) {
     : BasicType(ScalarType::eU32, 2u);
 
   auto data0 = builder.add(Op::BufferLoad(type, descriptor, index0,
-    kind == ResourceKind::eBufferTyped ? 0u : 4u));
+    kind == ResourceKind::eBufferTyped ? 0u : 4u).setFlags(flags));
   auto data1 = builder.add(Op::BufferLoad(type, descriptor, index1,
-    kind == ResourceKind::eBufferTyped ? 0u : 4u));
+    kind == ResourceKind::eBufferTyped ? 0u : 4u).setFlags(flags));
 
   auto output0Def = builder.add(Op::DclOutput(type, entryPoint, 0u, 0u));
   builder.add(Op::Semantic(output0Def, 0u, "SV_TARGET"));
@@ -226,7 +226,7 @@ Builder make_test_buffer_load(ResourceKind kind, bool uav, bool indexed) {
     auto type = BasicType(ScalarType::eU32, 4u);
 
     auto index2 = builder.makeConstant(16u, 11u);
-    auto data2 = builder.add(Op::BufferLoad(type, descriptor, index2, 4u));
+    auto data2 = builder.add(Op::BufferLoad(type, descriptor, index2, 4u).setFlags(flags));
 
     auto output2Def = builder.add(Op::DclOutput(type, entryPoint, 2u, 0u));
     builder.add(Op::Semantic(output2Def, 2u, "SV_TARGET"));
@@ -235,7 +235,7 @@ Builder make_test_buffer_load(ResourceKind kind, bool uav, bool indexed) {
 
   if (kind != ResourceKind::eBufferTyped) {
     auto type = BasicType(ScalarType::eU32, 1u);
-    auto data3 = builder.add(Op::BufferLoad(type, descriptor, index0, 4u));
+    auto data3 = builder.add(Op::BufferLoad(type, descriptor, index0, 4u).setFlags(flags));
 
     auto output3Def = builder.add(Op::DclOutput(type, entryPoint, 3u, 0u));
     builder.add(Op::Semantic(output3Def, 3u, "SV_TARGET"));
@@ -384,6 +384,10 @@ Builder test_resources_uav_buffer_typed_load() {
   return make_test_buffer_load(ResourceKind::eBufferTyped, true, false);
 }
 
+Builder test_resources_uav_buffer_typed_load_precise() {
+  return make_test_buffer_load(ResourceKind::eBufferTyped, true, false, OpFlag::ePrecise);
+}
+
 Builder test_resources_uav_buffer_typed_query() {
   return make_test_buffer_query(ResourceKind::eBufferTyped, true, false);
 }
@@ -400,6 +404,10 @@ Builder test_resources_uav_buffer_raw_load() {
   return make_test_buffer_load(ResourceKind::eBufferRaw, true, false);
 }
 
+Builder test_resources_uav_buffer_raw_load_precise() {
+  return make_test_buffer_load(ResourceKind::eBufferRaw, true, false, OpFlag::ePrecise);
+}
+
 Builder test_resources_uav_buffer_raw_query() {
   return make_test_buffer_query(ResourceKind::eBufferRaw, true, false);
 }
@@ -414,6 +422,10 @@ Builder test_resources_uav_buffer_raw_atomic() {
 
 Builder test_resources_uav_buffer_structured_load() {
   return make_test_buffer_load(ResourceKind::eBufferStructured, true, false);
+}
+
+Builder test_resources_uav_buffer_structured_load_precise() {
+  return make_test_buffer_load(ResourceKind::eBufferStructured, true, false, OpFlag::ePrecise);
 }
 
 Builder test_resources_uav_buffer_structured_query() {
@@ -630,7 +642,7 @@ SsaDef emit_programmable_offset(Builder& builder, SsaDef entryPoint, ResourceKin
   return builder.add(Op::InputLoad(type, input, SsaDef()));
 }
 
-Builder make_test_image_load(ResourceKind kind, bool uav, bool indexed) {
+Builder make_test_image_load(ResourceKind kind, bool uav, bool indexed, OpFlags flags = OpFlag::ePrecise) {
   Builder builder;
   auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
 
@@ -660,7 +672,7 @@ Builder make_test_image_load(ResourceKind kind, bool uav, bool indexed) {
 
   uint32_t outputId = 0u;
   emit_store_outptut(builder, entryPoint, vec4Type, outputId++, builder.add(
-    Op::ImageLoad(vec4Type, descriptor, mip, layer, coord, sample, offset)));
+    Op::ImageLoad(vec4Type, descriptor, mip, layer, coord, sample, offset).setFlags(flags)));
 
   bool isCube = kind == ResourceKind::eImageCube ||
                 kind == ResourceKind::eImageCubeArray;
@@ -669,7 +681,7 @@ Builder make_test_image_load(ResourceKind kind, bool uav, bool indexed) {
     offset = emit_constant_offset(builder, kind);
 
     emit_store_outptut(builder, entryPoint, vec4Type, outputId++, builder.add(
-      Op::ImageLoad(vec4Type, descriptor, mip, layer, coord, sample, offset)));
+      Op::ImageLoad(vec4Type, descriptor, mip, layer, coord, sample, offset).setFlags(flags)));
   }
 
   builder.add(Op::Return());
@@ -1299,6 +1311,10 @@ Builder test_resource_uav_image_1d_array_atomic() {
 
 Builder test_resource_uav_image_2d_load() {
   return make_test_image_load(ResourceKind::eImage2D, true, false);
+}
+
+Builder test_resource_uav_image_2d_load_precise() {
+  return make_test_image_load(ResourceKind::eImage2D, true, false, OpFlag::ePrecise);
 }
 
 Builder test_resource_uav_image_2d_query() {
