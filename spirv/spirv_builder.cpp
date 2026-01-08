@@ -1444,6 +1444,9 @@ void SpirvBuilder::emitBufferLoad(const ir::Op& op) {
 
       if (getUavCoherentScope(uavFlags) != spv::ScopeInvocation)
         memoryOperands.flags |= spv::MemoryAccessNonPrivatePointerMask;
+
+      if (!(uavFlags & ir::UavFlag::eReadOnly) && (op.getFlags() & ir::OpFlag::ePrecise))
+        memoryOperands.flags |= spv::MemoryAccessVolatileMask;
     }
 
     /* Emit access chains for loading the requested data. */
@@ -1506,7 +1509,7 @@ void SpirvBuilder::emitBufferLoad(const ir::Op& op) {
     SpirvImageOperands imageOperands = { };
 
     if (isUav)
-      setUavImageReadOperands(imageOperands, dclOp);
+      setUavImageReadOperands(imageOperands, dclOp, op);
 
     /* Select correct opcode to emit */
     auto opCode = isUav
@@ -1861,7 +1864,7 @@ void SpirvBuilder::emitImageLoad(const ir::Op& op) {
   SpirvImageOperands imageOperands = { };
 
   if (isUav)
-    setUavImageReadOperands(imageOperands, dclOp);
+    setUavImageReadOperands(imageOperands, dclOp, op);
 
   auto mipDef = ir::SsaDef(op.getOperand(1u));
 
@@ -4920,13 +4923,18 @@ uint32_t SpirvBuilder::getDescriptorArraySize(const ir::Op& op) {
 }
 
 
-void SpirvBuilder::setUavImageReadOperands(SpirvImageOperands& operands, const ir::Op& uavOp) {
+void SpirvBuilder::setUavImageReadOperands(SpirvImageOperands& operands, const ir::Op& uavOp, const ir::Op& loadOp) {
   dxbc_spv_assert(uavOp.getOpCode() == ir::OpCode::eDclUav);
 
   auto uavFlags = getUavFlags(uavOp);
 
   if (getUavCoherentScope(uavFlags) != spv::ScopeInvocation)
     operands.flags |= spv::ImageOperandsNonPrivateTexelMask;
+
+  // If the UAV is not read-only and the load is marked as precise,
+  // we need to mark the load as volatile.
+  if (!(uavFlags & ir::UavFlag::eReadOnly) && (loadOp.getFlags() & ir::OpFlag::ePrecise))
+    operands.flags |= spv::ImageOperandsVolatileTexelMask;
 }
 
 

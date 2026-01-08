@@ -455,7 +455,7 @@ private:
 
   uint32_t getDescriptorArraySize(const ir::Op& op);
 
-  void setUavImageReadOperands(SpirvImageOperands& operands, const ir::Op& uavOp);
+  void setUavImageReadOperands(SpirvImageOperands& operands, const ir::Op& uavOp, const ir::Op& loadOp);
 
   void setUavImageWriteOperands(SpirvImageOperands& operands, const ir::Op& uavOp);
 
