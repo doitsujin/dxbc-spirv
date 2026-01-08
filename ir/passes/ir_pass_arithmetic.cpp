@@ -362,7 +362,7 @@ Builder::iterator ArithmeticPass::splitMad(Builder::iterator op) {
 
 
 Builder::iterator ArithmeticPass::fuseMad(Builder::iterator op) {
-  if (getFpFlags(*op) & (OpFlag::ePrecise | OpFlag::eInvariant))
+  if (getFpFlags(*op) & OpFlag::ePrecise)
     return ++op;
 
   std::optional<uint32_t> fmulOperand = { };
@@ -372,11 +372,15 @@ Builder::iterator ArithmeticPass::fuseMad(Builder::iterator op) {
 
     if (operand.getOpCode() == OpCode::eFMul ||
         operand.getOpCode() == OpCode::eFMulLegacy) {
-      if (getFpFlags(operand) & (OpFlag::ePrecise | OpFlag::eInvariant))
+      if (getFpFlags(operand) & OpFlag::ePrecise)
         return ++op;
 
-      if (!fmulOperand && isOnlyUse(m_builder, operand.getDef(), op->getDef()))
+      // If the fused instruction is invariant, we cannot look at any other
+      // uses of the fmul instruction since they may differ between shaders.
+      if ((getFpFlags(*op) & OpFlag::eInvariant) || isOnlyUse(m_builder, operand.getDef(), op->getDef())) {
         fmulOperand = i;
+        break;
+      }
     }
   }
 
