@@ -362,7 +362,9 @@ std::ostream& operator << (std::ostream& os, const ScalarType& ty) {
 
 
 std::ostream& operator << (std::ostream& os, const BasicType& ty) {
-  return os << ty.getBaseType() << "x" << ty.getVectorSize();
+  return ty.isVector()
+    ? os << ty.getBaseType() << "x" << ty.getVectorSize()
+    : os << ty.getBaseType();
 }
 
 
