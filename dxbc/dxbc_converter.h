@@ -372,6 +372,10 @@ private:
 
   bool isSm51() const;
 
+  bool isPrecise(const Instruction& op) const {
+    return op.getOpToken().getPreciseMask() || (m_fpMode.defaultFlags & ir::OpFlag::ePrecise);
+  }
+
   bool initParser(Parser& parser, util::ByteReader reader);
 
   ir::SsaDef getEntryPoint() const {

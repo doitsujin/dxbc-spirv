@@ -2048,6 +2048,9 @@ bool Converter::handleLdTyped(ir::Builder& builder, const Instruction& op) {
   if (hasSparseFeedback)
     loadOp.setFlags(ir::OpFlag::eSparseFeedback);
 
+  if (isPrecise(op))
+    loadOp.setFlags(ir::OpFlag::ePrecise);
+
   /* Take result apart and write it back to the destination registers */
   auto [feedback, value] = decomposeResourceReturn(builder, builder.add(std::move(loadOp)));
 

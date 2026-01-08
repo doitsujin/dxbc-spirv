@@ -381,6 +381,10 @@ std::pair<ir::SsaDef, ir::SsaDef> ResourceMap::emitRawStructuredLoad(
   if (!resource)
     return std::make_pair(ir::SsaDef(), ir::SsaDef());
 
+  auto loadFlags = (operand.getRegisterType() == RegisterType::eUav) && m_converter.isPrecise(op)
+    ? ir::OpFlags(ir::OpFlag::ePrecise)
+    : ir::OpFlags();
+
   auto opCode = op.getOpToken().getOpCode();
   auto bufferType = resource->type.getBaseType(0u).getBaseType();
 
@@ -421,7 +425,7 @@ std::pair<ir::SsaDef, ir::SsaDef> ResourceMap::emitRawStructuredLoad(
 
     /* Load buffer data and convert to desired result type */
     ir::SsaDef sparseFeedback = { };
-    ir::SsaDef result = builder.add(ir::Op::BufferLoad(resultType, descriptor, address, blockAlignment));
+    ir::SsaDef result = builder.add(ir::Op::BufferLoad(resultType, descriptor, address, blockAlignment).setFlags(loadFlags));
 
     if (isSparse) {
       builder.setOpFlags(result, ir::OpFlag::eSparseFeedback);
