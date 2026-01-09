@@ -46,6 +46,10 @@ public:
     bool supportsZeroInfNanPreserveF16 = false;
     bool supportsZeroInfNanPreserveF32 = false;
     bool supportsZeroInfNanPreserveF64 = false;
+    /** Supported bit width for FMA instruction */
+    bool supportsFmaF16 = false;
+    bool supportsFmaF32 = false;
+    bool supportsFmaF64 = false;
     /** Maximum size for constant buffers. Larger buffers will be emitted
      *  as storage buffers instead. If 0, constant buffers can have any size. */
     uint32_t maxCbvSize = 0u;
@@ -346,6 +350,8 @@ private:
   void emitCompositeConstruct(const ir::Op& op);
 
   void emitSimpleArithmetic(const ir::Op& op);
+
+  void emitFMad(const ir::Op& op);
 
   void emitExtendedGlslArithmetic(const ir::Op& op);
 

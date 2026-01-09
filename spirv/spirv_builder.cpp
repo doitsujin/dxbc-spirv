@@ -496,9 +496,11 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eUMod:
       return emitSimpleArithmetic(op);
 
+    case ir::OpCode::eFMad:
+      return emitFMad(op);
+
     case ir::OpCode::eIAbs:
     case ir::OpCode::eFAbs:
-    case ir::OpCode::eFMad:
     case ir::OpCode::eFFract:
     case ir::OpCode::eFSin:
     case ir::OpCode::eFCos:
@@ -3607,12 +3609,53 @@ void SpirvBuilder::emitSimpleArithmetic(const ir::Op& op) {
 }
 
 
+void SpirvBuilder::emitFMad(const ir::Op& op) {
+  auto scalarType = op.getType().getBaseType(0u).getBaseType();
+
+  auto [flags, hasFma] = [this, scalarType] {
+    switch (scalarType) {
+      case ir::ScalarType::eF16: return std::make_pair(m_fpMode.f16, m_options.supportsFmaF16);
+      case ir::ScalarType::eF32: return std::make_pair(m_fpMode.f32, m_options.supportsFmaF32);
+      case ir::ScalarType::eF64: return std::make_pair(m_fpMode.f64, m_options.supportsFmaF64);
+
+      default:
+        dxbc_spv_unreachable();
+        return std::make_pair(ir::OpFlags(), false);
+    }
+  } ();
+
+  flags |= op.getFlags();
+
+  // Only use strict fma if we need accuracy guarantees or consistency
+  auto id = getIdForDef(op.getDef());
+
+  if (hasFma && (flags & (ir::OpFlag::ePrecise | ir::OpFlag::eInvariant))) {
+    enableCapability(spv::CapabilityFMAKHR);
+
+    m_code.push_back(makeOpcodeToken(spv::OpFmaKHR, 3u + op.getOperandCount()));
+    m_code.push_back(getIdForType(op.getType()));
+    m_code.push_back(id);
+  } else {
+    m_code.push_back(makeOpcodeToken(spv::OpExtInst, 5u + op.getOperandCount()));
+    m_code.push_back(getIdForType(op.getType()));
+    m_code.push_back(id);
+    m_code.push_back(importGlslExt());
+    m_code.push_back(uint32_t(GLSLstd450Fma));
+  }
+
+  for (uint32_t i = 0u; i < op.getOperandCount(); i++)
+    m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(i))));
+
+  emitFpMode(op, id);
+  emitDebugName(op.getDef(), id);
+}
+
+
 void SpirvBuilder::emitExtendedGlslArithmetic(const ir::Op& op) {
   auto extOp = [&] {
     switch (op.getOpCode()) {
       case ir::OpCode::eIAbs: return GLSLstd450SAbs;
       case ir::OpCode::eFAbs: return GLSLstd450FAbs;
-      case ir::OpCode::eFMad: return GLSLstd450Fma;
       case ir::OpCode::eFFract: return GLSLstd450Fract;
       case ir::OpCode::eFSin: return GLSLstd450Sin;
       case ir::OpCode::eFCos: return GLSLstd450Cos;
@@ -4846,6 +4889,10 @@ bool SpirvBuilder::enableCapability(spv::Capability cap) {
   switch (cap) {
     case spv::CapabilityFloatControls2:
       enableExtension("SPV_KHR_float_controls2");
+      break;
+
+    case spv::CapabilityFMAKHR:
+      enableExtension("SPV_KHR_fma");
       break;
 
     case spv::CapabilityFragmentShaderSampleInterlockEXT:
