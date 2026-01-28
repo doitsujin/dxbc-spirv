@@ -47,6 +47,11 @@ public:
     return m_size - m_offset;
   }
 
+  /** Queries the current offset. */
+  size_t getOffset() const {
+    return m_offset;
+  }
+
   /* Sets read location to given fixed offset.
    * Returns true if the offset is in bounds. */
   ByteReader getRange(size_t offset, size_t size) const {
