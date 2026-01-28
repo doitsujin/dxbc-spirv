@@ -633,6 +633,12 @@ public:
 
   Instruction parseInstruction();
 
+  /** Queries the current offset.
+   * If we are past the end, this is the bytecode length of the shader. */
+  size_t getByteOffset() const {
+    return m_reader.getOffset();
+  }
+
   /** Checks whether any more instructions are
    *  available to be parsed. */
   explicit operator bool () const {
