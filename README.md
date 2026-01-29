@@ -15,8 +15,8 @@ Min-precision integer types are lowered to 16 or 32-bit integers accordingly.
 
 - Shader Model 5.1 resource declarations and dynamic descriptor indexing are supported.
 
-- Shader Model 5.0 interfaces and class linkage are **not** supported. Other that one
-  tech demo, there are no known real-world uses of this feature.
+- Shader Model 5.0 interfaces and class linkage are supported, but require a very specific
+data layout to pass in instance data and function table indices.
 
 ### SPIR-V
 - The built-in SPIR-V lowering targets SPIR-V 1.6 with the Vulkan memory model, and
