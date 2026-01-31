@@ -17,6 +17,9 @@ class SyncPass {
 public:
 
   struct Options {
+    /** Whether to allow workgroup-coherent semantics. If false,
+     *  memory barriers involving UAVs will always be global. */
+    bool allowWorkgroupCoherence = false;
     /** Whether to insert scoped locks for ROVs. Has no effect
      *  if no rasterizer-ordered resources are present. */
     bool insertRovLocks = true;

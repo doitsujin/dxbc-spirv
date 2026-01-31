@@ -528,7 +528,7 @@ bool SyncPass::hasRovResources() const {
 
 
 Scope SyncPass::getUavMemoryScope() const {
-  if (m_stage != ShaderStage::eCompute)
+  if (m_stage != ShaderStage::eCompute || !m_options.allowWorkgroupCoherence)
     return Scope::eGlobal;
 
   auto [a, b] = m_builder.getDeclarations();
