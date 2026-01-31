@@ -157,6 +157,11 @@ private:
     util::small_vector<PushDataInfo, 64u> members;
   } m_pushData;
 
+  struct {
+    spv::Scope scope = spv::ScopeInvocation;
+    spv::MemorySemanticsMask memory = spv::MemorySemanticsUniformMemoryMask;
+  } m_atomics;
+
   uint32_t m_entryPointId = 0u;
 
   void processDebugNames();
@@ -423,6 +428,8 @@ private:
 
   uint32_t translateMemoryTypes(ir::MemoryTypeFlags memoryFlags, spv::MemorySemanticsMask base);
 
+  void adjustAtomicScope(ir::UavFlags flags, spv::MemorySemanticsMask memory);
+
   uint32_t makeScalarConst(ir::ScalarType type, const ir::Op& op, uint32_t& operandIndex);
 
   uint32_t makeBasicConst(ir::BasicType type, const ir::Op& op, uint32_t& operandIndex);
@@ -480,6 +487,8 @@ private:
   static uint32_t makeOpcodeToken(spv::Op op, uint32_t len);
 
   static uint32_t getStringDwordCount(const char* str);
+
+  static spv::Scope pickStrongestScope(spv::Scope a, spv::Scope b);
 
   template<typename T, typename... Args>
   static void pushOp(T& container, spv::Op op, Args... args);
