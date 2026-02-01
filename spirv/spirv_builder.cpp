@@ -2418,16 +2418,22 @@ void SpirvBuilder::emitAtomic(const ir::Op& op, const ir::Type& type, uint32_t i
     : ir::BasicType()));
 
   /* Set up memory semantics */
-  auto semantics = spv::MemorySemanticsAcquireReleaseMask |
-                   spv::MemorySemanticsMakeVisibleMask |
-                   spv::MemorySemanticsMakeAvailableMask;
+  auto semantics = spv::MemorySemanticsMaskNone;
 
-  if (atomicOp == ir::AtomicOp::eLoad) {
-    semantics = spv::MemorySemanticsAcquireMask |
-                spv::MemorySemanticsMakeVisibleMask;
-  } else if (atomicOp == ir::AtomicOp::eStore) {
-    semantics = spv::MemorySemanticsReleaseMask |
+  if (scope != spv::ScopeInvocation) {
+    semantics = spv::MemorySemanticsAcquireReleaseMask |
+                spv::MemorySemanticsMakeVisibleMask |
                 spv::MemorySemanticsMakeAvailableMask;
+
+    if (atomicOp == ir::AtomicOp::eLoad) {
+      semantics = spv::MemorySemanticsAcquireMask |
+                  spv::MemorySemanticsMakeVisibleMask;
+    } else if (atomicOp == ir::AtomicOp::eStore) {
+      semantics = spv::MemorySemanticsReleaseMask |
+                  spv::MemorySemanticsMakeAvailableMask;
+    }
+
+    semantics = spv::MemorySemanticsMask(memoryTypes | semantics);
   }
 
   /* Decompose composite arg */
@@ -2454,12 +2460,18 @@ void SpirvBuilder::emitAtomic(const ir::Op& op, const ir::Type& type, uint32_t i
 
   m_code.push_back(ptrId);
   m_code.push_back(makeConstU32(scope));
-  m_code.push_back(makeConstU32(memoryTypes | semantics));
+  m_code.push_back(makeConstU32(semantics));
 
   if (atomicOp == ir::AtomicOp::eCompareExchange) {
-    m_code.push_back(makeConstU32(memoryTypes |
-      spv::MemorySemanticsAcquireMask |
-      spv::MemorySemanticsMakeVisibleMask));
+    auto semantics = spv::MemorySemanticsMaskNone;
+
+    if (scope != spv::ScopeInvocation) {
+      semantics = memoryTypes |
+        spv::MemorySemanticsAcquireMask |
+        spv::MemorySemanticsMakeVisibleMask;
+    }
+
+    m_code.push_back(makeConstU32(semantics));
 
     /* Operands are in reverse order here */
     m_code.push_back(argIds.at(1u));
