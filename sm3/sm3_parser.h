@@ -500,15 +500,23 @@ public:
     if (m_operands.empty())
       return 0u;
 
+    /* Instructions, that have immediate operands, don't have src operands.
+     * Comments are a special case. */
+    if (hasImm() || getOpCode() == OpCode::eComment)
+      return 0u;
+
     /* Src operands can come with a dst operand (but never with anything else) */
     OperandKind firstArgKind = m_operands[0u].getInfo().kind;
+
+    if (firstArgKind != OperandKind::eSrcReg && firstArgKind != OperandKind::eDstReg)
+      return 0u;
+
+    uint32_t srcCount = uint32_t(m_operands.size());
+
     if (firstArgKind == OperandKind::eDstReg)
-      return uint32_t(m_operands.size() - 1u);
+      srcCount--;
 
-    if (firstArgKind == OperandKind::eSrcReg)
-      return uint32_t(m_operands.size());
-
-    return 0u;
+    return srcCount;
   }
 
   /** Retrieves number of immediate operands */
