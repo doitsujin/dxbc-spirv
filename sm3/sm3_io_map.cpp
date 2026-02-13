@@ -9,6 +9,23 @@
 
 namespace dxbc_spv::sm3 {
 
+static std::array<Semantic, 12u> s_ffLocations = {{
+  {SemanticUsage::eNormal,   0u},
+  {SemanticUsage::eTexCoord, 0u},
+  {SemanticUsage::eTexCoord, 1u},
+  {SemanticUsage::eTexCoord, 2u},
+  {SemanticUsage::eTexCoord, 3u},
+  {SemanticUsage::eTexCoord, 4u},
+  {SemanticUsage::eTexCoord, 5u},
+  {SemanticUsage::eTexCoord, 6u},
+  {SemanticUsage::eTexCoord, 7u},
+
+  {SemanticUsage::eColor,    0u},
+  {SemanticUsage::eColor,    1u},
+
+  {SemanticUsage::eFog,      0u},
+}};
+
 IoMap::IoMap(Converter& converter)
 : m_converter(converter) {}
 
@@ -241,10 +258,26 @@ void IoMap::dclIoVar(
   uint32_t location = 0u;
 
   if (!builtIn) {
-    if (shaderType == ShaderType::eVertex || isInput)
-      location = isInput ? m_nextInputLocation++ : m_nextOutputLocation++;
-    else
+    if (shaderType == ShaderType::eVertex || isInput) {
+      bool foundFFLocation = false;
+      if ((shaderType == ShaderType::ePixel) == isInput) {
+        /* Pick FF-compatible locations for VS outputs and PS inputs. */
+        for (uint32_t i = 0u; i < s_ffLocations.size() && !foundFFLocation; i++) {
+          if (s_ffLocations[i] == semantic) {
+            location = i;
+            foundFFLocation = true;
+          }
+        }
+      }
+
+      if (!foundFFLocation) {
+        location = isInput ? m_nextInputLocation++ : m_nextOutputLocation++;
+      }
+    } else {
+      /* PS outputs need to write to the location that the shader specifies so values end up in the correct
+       * render target */
       location = registerIndex;
+    }
 
     ir::OpCode opCode = isInput
       ? ir::OpCode::eDclInput
