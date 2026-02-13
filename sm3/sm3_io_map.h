@@ -108,8 +108,8 @@ private:
   Converter&      m_converter;
 
   IoVarList       m_variables;
-  uint32_t        m_nextInputLocation = 0u;
-  uint32_t        m_nextOutputLocation = 0u;
+  uint32_t        m_nextInputLocation = 12u;
+  uint32_t        m_nextOutputLocation = 12u;
 
   void flushOutputs(ir::Builder& builder);
 
