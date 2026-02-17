@@ -674,7 +674,10 @@ void LowerIoPass::enableSampleInterpolation() {
         auto operandIndex = op.getFirstLiteralOperandIndex() + (isBuiltIn ? 1u : 2u);
         auto interpolation = InterpolationModes(op.getOperand(operandIndex));
 
-        if (!(interpolation & (InterpolationMode::eFlat | InterpolationMode::eCentroid))) {
+        if (!(interpolation & InterpolationMode::eFlat)) {
+          /* Centroid exists to prevent extrapolation, so that is
+           * safe to override when using sample interpolation. */
+          interpolation -= InterpolationMode::eCentroid;
           op.setOperand(operandIndex, interpolation | InterpolationMode::eSample);
           m_builder.rewriteOp(iter->getDef(), std::move(op));
         }
