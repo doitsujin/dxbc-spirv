@@ -103,6 +103,12 @@ public:
           ir::SsaDef              predicateVec,
           ir::SsaDef              value);
 
+  void setInsertCursor(ir::SsaDef cursor) {
+    m_dclInsertPoint = cursor;
+  }
+
+  void emitIoVarDefaults(ir::Builder& builder);
+
 private:
 
   Converter&      m_converter;
@@ -114,8 +120,14 @@ private:
   ir::SsaDef      m_inputSwitchFunction = { };
   ir::SsaDef      m_outputSwitchFunction = { };
 
+  ir::SsaDef      m_dclInsertPoint;
+
   ir::SsaDef emitDynamicLoadFunction(ir::Builder& builder) const;
   ir::SsaDef emitDynamicStoreFunction(ir::Builder& builder) const;
+
+  void emitIoVarDefault(
+          ir::Builder& builder,
+    const IoVarInfo&   ioVar);
 
   void flushOutputs(ir::Builder& builder);
 

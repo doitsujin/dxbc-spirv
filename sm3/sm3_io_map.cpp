@@ -163,6 +163,7 @@ bool IoMap::handleDclIoVar(ir::Builder& builder, const Instruction& op) {
   }
 
   dclIoVar(builder, dst.getRegisterType(), dst.getIndex(), semantic);
+  emitIoVarDefault(builder, m_variables.back());
   return true;
 }
 
@@ -242,6 +243,8 @@ void IoMap::dclIoVar(
    RegisterType registerType,
    uint32_t     registerIndex,
    Semantic     semantic) {
+
+  auto cursor = builder.setCursor(m_dclInsertPoint);
 
   auto shaderType = m_converter.getShaderInfo().getType();
   bool isInput = registerTypeIsInput(registerType, shaderType);
@@ -366,41 +369,6 @@ void IoMap::dclIoVar(
     }
   }
 
-  if (!isInput) {
-
-    if (semantic == Semantic { SemanticUsage::eColor, 0u }) {
-      /* The default for color 0 is 1.0, 1.0, 1.0, 1.0 */
-      for (uint32_t i = 0u; i < typeVectorSize; i++) {
-        builder.add(ir::Op::TmpStore(mapping.tempDefs[i], builder.makeConstant(1.0f)));
-      }
-    } else if (semantic.usage == SemanticUsage::eColor) {
-      /* The default for other color registers is 0.0, 0.0, 0.0, 1.0.
-       * TODO: If it's used with a SM3 PS, we need to export 0,0,0,0 as the default for color1.
-       *       Implement that using a spec constant. */
-      for (uint32_t i = 0u; i < typeVectorSize; i++) {
-        builder.add(ir::Op::TmpStore(mapping.tempDefs[i], builder.makeConstant(i == 3u ? 1.0f : 0.0f)));
-      }
-    } else if (semantic.usage == SemanticUsage::eFog || isScalar) {
-      /* The default for the fog register is 0.0 */
-      builder.add(ir::Op::TmpStore(mapping.tempDefs[0u],
-        builder.makeConstant(0.0f)));
-    } else {
-      /* The default for other registers is 0.0, 0.0, 0.0, 0.0 */
-      for (uint32_t i = 0u; i < typeVectorSize; i++) {
-        builder.add(ir::Op::TmpStore(mapping.tempDefs[i], builder.makeConstant(0.0f)));
-      }
-    }
-
-  } else if (mapping.tempDefs[0u]) {
-    /* Load the initial input tex coords. */
-    for (uint32_t i = 0u; i < typeVectorSize; i++) {
-      builder.add(ir::Op::TmpStore(
-        mapping.tempDefs[i],
-        builder.add(ir::Op::InputLoad(ir::ScalarType::eF32, mapping.baseDef, builder.makeConstant(i)))
-      ));
-    }
-  }
-
   emitDebugName(
     builder,
     mapping.baseDef,
@@ -421,6 +389,63 @@ void IoMap::dclIoVar(
       mapping.semantic,
       true
     );
+  }
+
+  builder.setCursor(cursor);
+}
+
+
+void IoMap::emitIoVarDefaults(ir::Builder& builder) {
+  for (const IoVarInfo& ioVar : m_variables) {
+    emitIoVarDefault(builder, ioVar);
+  }
+}
+
+
+void IoMap::emitIoVarDefault(
+        ir::Builder& builder,
+  const IoVarInfo&   ioVar) {
+
+  const ShaderInfo& shaderInfo = m_converter.getShaderInfo();
+
+  bool isInput = registerTypeIsInput(ioVar.registerType, shaderInfo.getType());
+  ir::BasicType ioVarType = builder.getOp(ioVar.baseDef).getType().getBaseType(0u);
+
+  if (!isInput) {
+
+    if (ioVar.semantic == Semantic { SemanticUsage::eColor, 0u }) {
+      /* The default for color 0 is 1.0, 1.0, 1.0, 1.0 */
+      for (uint32_t i = 0u; i < ioVarType.getVectorSize(); i++) {
+        builder.add(ir::Op::TmpStore(ioVar.tempDefs[i], builder.makeConstant(1.0f)));
+      }
+    } else if (ioVar.semantic.usage == SemanticUsage::eColor) {
+      /* The default for other color registers is 0.0, 0.0, 0.0, 1.0.
+       * TODO: If it's used with a SM3 PS, we need to export 0,0,0,0 as the default for color1.
+       *       Implement that using a spec constant. */
+      for (uint32_t i = 0u; i < ioVarType.getVectorSize(); i++) {
+        builder.add(ir::Op::TmpStore(ioVar.tempDefs[i], builder.makeConstant(i == 3u ? 1.0f : 0.0f)));
+      }
+    } else {
+      /* The default for other registers is 0.0, 0.0, 0.0, 0.0 */
+      for (uint32_t i = 0u; i < ioVarType.getVectorSize(); i++) {
+        builder.add(ir::Op::TmpStore(ioVar.tempDefs[i], builder.makeConstant(0.0f)));
+      }
+    }
+
+  } else if (ioVar.tempDefs[0u]
+    && ioVar.registerType == RegisterType::eTexture
+    && shaderInfo.getType() == ShaderType::ePixel
+    && shaderInfo.getVersion().first < 2u
+    && shaderInfo.getVersion().second < 4u) {
+
+    /* Load the initial input tex coords. */
+    for (uint32_t i = 0u; i < ioVarType.getVectorSize(); i++) {
+      builder.add(ir::Op::TmpStore(
+        ioVar.tempDefs[i],
+        builder.add(ir::Op::InputLoad(ir::ScalarType::eF32, ioVar.baseDef, builder.makeConstant(i)))
+      ));
+    }
+
   }
 }
 
@@ -498,6 +523,7 @@ ir::SsaDef IoMap::emitLoad(
       } else {
         dclIoVar(builder, operand.getRegisterType(), operand.getIndex(), semantic.value());
         ioVar = &m_variables.back();
+        emitIoVarDefault(builder, *ioVar);
       }
     }
 
@@ -595,6 +621,7 @@ bool IoMap::emitStore(
 
       dclIoVar(builder, operand.getRegisterType(), operand.getIndex(), semantic.value());
       ioVar = &m_variables.back();
+      emitIoVarDefault(builder, *ioVar);
     }
 
     if (operand.getRegisterType() == RegisterType::eTexture) {
