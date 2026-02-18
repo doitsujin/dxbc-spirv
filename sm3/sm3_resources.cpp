@@ -396,8 +396,20 @@ ir::SsaDef ResourceMap::emitSample(
   /* Cast texCoord to F32 if necessary, sampling functions always expect Vec4<F32>. */
   auto texCoordType = builder.getOp(texCoord).getType().getBaseType(0u);
 
-  if (texCoordType.getBaseType() != ir::ScalarType::eF32)
-    texCoord = builder.add(ir::Op::ConsumeAs(ir::BasicType(ir::ScalarType::eF32, texCoordType.getVectorSize()), texCoord));
+  if (texCoordType != ir::BasicType(ir::ScalarType::eF32, 4u)) {
+    std::array<ir::SsaDef, 4u> texCoordComponents;
+    for (uint32_t i = 0; i < 4u; i++) {
+      if (i < texCoordType.getVectorSize()) {
+        texCoordComponents[i] = extractFromVector(builder, texCoord, i);
+        if (texCoordType.getBaseType() != ir::ScalarType::eF32) {
+          texCoordComponents[i] = builder.add(ir::Op::ConsumeAs(ir::ScalarType::eF32, texCoordComponents[i]));
+        }
+      } else {
+        texCoordComponents[i] = builder.add(ir::Op::Constant(0.0f));
+      }
+    }
+    texCoord = ir::buildVector(builder, ir::ScalarType::eF32, texCoordComponents.size(), texCoordComponents.data());
+  }
 
   /* Prepare function call with required arguments based on how we're sampling the texture. */
   auto funcCall = ir::Op::FunctionCall(ir::BasicType(ir::ScalarType::eF32, 4u), samplingFunction)
