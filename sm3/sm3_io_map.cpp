@@ -659,18 +659,10 @@ void IoMap::emitDebugName(
   if (!m_converter.getOptions().includeDebugNames)
     return;
 
-  bool isInput = registerTypeIsInput(registerType, m_converter.getShaderInfo().getType());
-
   std::stringstream nameStream;
 
-  if ((registerType == RegisterType::eInput || semantic.usage != SemanticUsage::eNormal)
-    || (isInput && registerType == RegisterType::eRasterizerOut)
-    || (!isInput && registerType == RegisterType::eMiscType)) {
-    /* There is no VS output register type for normals, it's only emitted for FF emulation.
-     * The other exceptions either only have input only or output only registers. */
-    nameStream << m_converter.makeRegisterDebugName(registerType, registerIndex, writeMask);
-    nameStream << "_";
-  }
+  nameStream << m_converter.makeRegisterDebugName(registerType, registerIndex, writeMask);
+  nameStream << "_";
 
   if (semantic.usage == SemanticUsage::eColor) {
     if (semantic.index == 0) {
