@@ -243,7 +243,7 @@ public:
        || (getRegisterType() == RegisterType::eRasterizerOut && getIndex() == uint32_t(RasterizerOutIndex::eRasterOutFog))
        || (getRegisterType() == RegisterType::eRasterizerOut && getIndex() == uint32_t(RasterizerOutIndex::eRasterOutPointSize))
        || (getRegisterType() == RegisterType::eMiscType && getIndex() == uint32_t(MiscTypeIndex::eMiscTypeFace))
-       || (getRegisterType() == RegisterType::eAddr && shaderInfo.getVersion().first == 1)
+       || (getRegisterType() == RegisterType::eAddr && shaderInfo.getType() == ShaderType::eVertex && shaderInfo.getVersion().first == 1)
        || getRegisterType() == RegisterType::eDepthOut;
   }
 
