@@ -167,7 +167,7 @@ void Disassembler::disassembleOperand(std::ostream& stream, const Instruction& o
 
       case OperandModifier::eBias:
         stream << "(";
-        suffix = " - 0.5";
+        suffix = " - 0.5)";
         break;
 
       case OperandModifier::eBiasNeg:
