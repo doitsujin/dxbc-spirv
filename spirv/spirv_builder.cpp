@@ -4105,7 +4105,7 @@ void SpirvBuilder::emitSetTessDomain(const ir::Op& op) {
 void SpirvBuilder::emitSetTessControlPoints(const ir::Op& op) {
   dxbc_spv_assert(m_stage == ir::ShaderStage::eHull);
 
-  auto vertexCount = uint32_t(op.getOperand(1u));
+  auto vertexCount = uint32_t(op.getOperand(2u));
 
   pushOp(m_executionModes, spv::OpExecutionMode, m_entryPointId,
     spv::ExecutionModeOutputVertices, vertexCount);
