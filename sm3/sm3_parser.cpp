@@ -881,7 +881,7 @@ ConstantTable::ConstantTable(util::ByteReader reader) {
     std::string constantName;
     constantNameReader.readString(constantName);
 
-    ConstantInfo& constantInfo = m_constants[uint32_t(commentConstantInfo.registerSet)].emplace_back();
+    ConstantInfo& constantInfo = m_constants.emplace_back();
     constantInfo.name = constantName;
     constantInfo.index = commentConstantInfo.registerIndex;
     constantInfo.registerSet = commentConstantInfo.registerSet;
@@ -889,7 +889,7 @@ ConstantTable::ConstantTable(util::ByteReader reader) {
   }
 
   for (uint32_t i = 0u; i < m_constants.size(); i++) {
-    std::sort(m_constants[i].begin(), m_constants[i].end(), [] (const ConstantInfo& a, const ConstantInfo& b) {
+    std::sort(m_constants.begin(), m_constants.end(), [] (const ConstantInfo& a, const ConstantInfo& b) {
       return a.index < b.index || (a.index == b.index && a.count < b.count);
     });
   }
@@ -897,45 +897,21 @@ ConstantTable::ConstantTable(util::ByteReader reader) {
 
 
 const ConstantInfo* ConstantTable::findConstantInfo(RegisterType registerType, uint32_t index) const {
-  ConstantType constantType;
-  switch (registerType) {
-    case RegisterType::eConst:
-    case RegisterType::eConst2:
-    case RegisterType::eConst3:
-    case RegisterType::eConst4:
-      constantType = ConstantType::eFloat4;
-      break;
+  ConstantType constantType = constantTypeFromRegisterType(registerType);
 
-    case RegisterType::eConstInt:
-      constantType = ConstantType::eInt4;
-      break;
-
-    case RegisterType::eConstBool:
-      constantType = ConstantType::eBool;
-      break;
-
-    case RegisterType::eSampler:
-      constantType = ConstantType::eSampler;
-      break;
-
-    default:
-      return nullptr;
-  }
-
-  const auto& ctab = m_constants[uint32_t(constantType)];
-  if (ctab.empty()) {
+  if (m_constants.empty()) {
     return nullptr;
   }
 
   uint32_t ctabIndex = 0u;
-  for (uint32_t i = 0u; i < ctab.size(); i++) {
-    if (ctab[i].index > index) {
+  for (uint32_t i = 0u; i < m_constants.size(); i++) {
+    if (m_constants[i].registerSet == constantType && m_constants[i].index > index) {
       break;
     }
     ctabIndex = i;
   }
 
-  const ConstantInfo& ctabEntry = ctab[ctabIndex];
+  const ConstantInfo& ctabEntry = m_constants[ctabIndex];
 
   if (ctabEntry.index > index || ctabEntry.index + ctabEntry.count <= index) {
     return nullptr;

@@ -33,12 +33,14 @@ namespace dxbc_spv::sm3 {
  */
 
 Converter::Converter(util::ByteReader code,
+        SpecializationConstantLayout& specConstantsLayout,
   const Options& options)
 : m_code(code)
 , m_options(options)
 , m_ioMap(*this)
-, m_regFile(*this) {
-
+, m_regFile(*this)
+, m_resources(*this)
+, m_specConstants(*this, specConstantsLayout) {
 }
 
 Converter::~Converter() {
@@ -50,6 +52,9 @@ bool Converter::convertShader(ir::Builder& builder) {
     return false;
 
   auto shaderType = getShaderInfo().getType();
+
+  /* The SWVP option is only for vertex shaders. */
+  dxbc_spv_assert(shaderType == ShaderType::eVertex || !m_options.isSWVP);
 
   initialize(builder, shaderType);
 
@@ -89,6 +94,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return true;
 
     case OpCode::eComment:
+      return handleComment(builder, op);
+
     case OpCode::eDef:
     case OpCode::eDefI:
     case OpCode::eDefB:
@@ -195,9 +202,12 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
   if (m_options.name)
     builder.add(ir::Op::DebugName(m_entryPoint.def, m_options.name));
 
+  m_resources.setInsertCursor(afterMainFunc);
+  m_specConstants.initialize(builder);
   m_ioMap.setInsertCursor(afterMainFunc);
   m_ioMap.initialize(builder);
   m_regFile.initialize(builder);
+  m_resources.initialize(builder);
 
   /* Set cursor to main function so that instructions will be emitted
    * in the correct location */
@@ -225,6 +235,18 @@ bool Converter::initParser(Parser& parser, util::ByteReader reader) {
     return false;
   }
 
+  return true;
+}
+
+
+bool Converter::handleComment(ir::Builder& builder, const Instruction& op) {
+  /* The comment is always at the start of the shader from what we've seen,
+   * so no need to get extra clever here. */
+  if (m_options.includeDebugNames && op.getOpCode() == OpCode::eComment && !m_ctab) {
+    auto ctabReader = util::ByteReader(op.getCommentData(), op.getCommentDataSize());
+    m_ctab = ConstantTable(ctabReader);
+    m_resources.emitNamedConstantRanges(builder, m_ctab);
+  }
   return true;
 }
 
@@ -274,6 +296,7 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
     case RegisterType::eConst4:
     case RegisterType::eConstInt:
     case RegisterType::eConstBool:
+      loadDef = m_resources.emitConstantLoad(builder, op, operand, mask, type);
       break;
 
     default:
