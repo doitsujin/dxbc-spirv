@@ -375,7 +375,7 @@ bool DerivativePass::canHoistDerivativeOp(const Op& derivOp, SsaDef dstBlock) co
       case OpCode::eInterpolateAtCentroid:
       case OpCode::eInterpolateAtSample:
       case OpCode::eInterpolateAtOffset: {
-        if (!!allowComplexInput)
+        if (!allowComplexInput)
           return false;
       } [[fallthrough]];
 
