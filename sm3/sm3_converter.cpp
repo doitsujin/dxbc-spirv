@@ -181,7 +181,7 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
 bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
   /* A valid debug namee is required for the main function */
   m_entryPoint.mainFunc = builder.add(ir::Op::Function(ir::ScalarType::eVoid));
-  ir::SsaDef afterMainFunc = builder.add(ir::Op::FunctionEnd());
+  builder.add(ir::Op::FunctionEnd());
   builder.add(ir::Op::DebugName(m_entryPoint.mainFunc, "main"));
 
   /* Emit entry point instruction as the first instruction of the
@@ -198,7 +198,6 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
     builder.add(ir::Op::DebugName(m_entryPoint.def, m_options.name));
 
   m_specConstants.initialize(builder);
-  m_ioMap.setInsertCursor(afterMainFunc);
   m_ioMap.initialize(builder);
   m_regFile.initialize(builder);
 
