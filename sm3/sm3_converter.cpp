@@ -33,11 +33,13 @@ namespace dxbc_spv::sm3 {
  */
 
 Converter::Converter(util::ByteReader code,
+        SpecializationConstantLayout& specConstantsLayout,
   const Options& options)
 : m_code(code)
 , m_options(options)
 , m_ioMap(*this)
-, m_regFile(*this) {
+, m_regFile(*this)
+, m_specConstants(*this, specConstantsLayout) {
 
 }
 
@@ -179,7 +181,7 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
 bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
   /* A valid debug namee is required for the main function */
   m_entryPoint.mainFunc = builder.add(ir::Op::Function(ir::ScalarType::eVoid));
-  ir::SsaDef afterMainFunc = builder.add(ir::Op::FunctionEnd());
+  builder.add(ir::Op::FunctionEnd());
   builder.add(ir::Op::DebugName(m_entryPoint.mainFunc, "main"));
 
   /* Emit entry point instruction as the first instruction of the
@@ -195,7 +197,7 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
   if (m_options.name)
     builder.add(ir::Op::DebugName(m_entryPoint.def, m_options.name));
 
-  m_ioMap.setInsertCursor(afterMainFunc);
+  m_specConstants.initialize(builder);
   m_ioMap.initialize(builder);
   m_regFile.initialize(builder);
 
