@@ -244,8 +244,6 @@ void IoMap::dclIoVar(
    uint32_t     registerIndex,
    Semantic     semantic) {
 
-  auto cursor = builder.setCursor(m_dclInsertPoint);
-
   auto shaderType = m_converter.getShaderInfo().getType();
   bool isInput = registerTypeIsInput(registerType, shaderType);
 
@@ -285,6 +283,7 @@ void IoMap::dclIoVar(
     typeVectorSize
   );
 
+  ir::SsaDef cursor;
   ir::SsaDef declarationDef;
   uint32_t location = 0u;
 
@@ -323,7 +322,8 @@ void IoMap::dclIoVar(
       declaration.addOperand(ir::InterpolationModes(ir::InterpolationMode::eCentroid));
     }
 
-    declarationDef = builder.add(std::move(declaration));
+    declarationDef = builder.addBefore(builder.getCode().first->getDef(), std::move(declaration));
+    cursor = builder.setCursor(declarationDef);
 
     std::stringstream semanticNameStream;
     semanticNameStream << semantic.usage;
@@ -338,7 +338,8 @@ void IoMap::dclIoVar(
       .addOperand(m_converter.getEntryPoint())
       .addOperand(*builtIn);
 
-    declarationDef = builder.add(std::move(declaration));
+    declarationDef = builder.addBefore(builder.getCode().first->getDef(), std::move(declaration));
+    cursor = builder.setCursor(declarationDef);
   }
 
   auto& mapping = m_variables.emplace_back();
@@ -836,7 +837,6 @@ ir::SsaDef IoMap::emitDynamicStoreFunction(ir::Builder& builder) const {
     dxbc_spv_assert(ioVar != nullptr);
 
     auto baseType = ioVar->baseType.getBaseType(0u);
-    dxbc_spv_assert(baseType.getVectorSize() == 4u);
 
     for (uint32_t j = 0u; j < baseType.getVectorSize(); j++) {
       builder.add(ir::Op::ScopedSwitchCase(switchDef, i * 4u + j));
