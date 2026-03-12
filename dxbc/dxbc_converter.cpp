@@ -1025,13 +1025,8 @@ bool Converter::handleFloatArithmetic(ir::Builder& builder, const Instruction& o
   auto defaultType = dst.getInfo().type;
   bool is64Bit = is64BitType(defaultType);
 
-  /* Some ops need to operate on 32-bit floats, so ignore min-precision
-   * hints for those. This includes all 64-bit operations. */
-  bool supportsMinPrecision = !is64Bit &&
-                              opCode != OpCode::eExp &&
-                              opCode != OpCode::eLog &&
-                              opCode != OpCode::eRsq &&
-                              opCode != OpCode::eSqrt;
+  /* Ignore min-precision hints for 64-bit operations. */
+  bool supportsMinPrecision = !is64Bit;
 
   auto scalarType = determineOperandType(dst, defaultType, supportsMinPrecision);
   auto vectorType = makeVectorType(scalarType, dst.getWriteMask());
