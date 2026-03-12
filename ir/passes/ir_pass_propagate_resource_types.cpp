@@ -1348,7 +1348,7 @@ void PropagateResourceTypesPass::rewriteDeclaration(SsaDef def, const PropagateR
 
   if (op.isConstant()) {
     /* For constants, each incoming dword corresponds to one constant
-     * operand. Simply copy used operands over and replace the op. */
+     * operand. Simply copy or convert operands and replace the op. */
     Op constant(OpCode::eConstant, info.newType);
 
     uint32_t scalarCount = info.elements.size();
@@ -1359,8 +1359,19 @@ void PropagateResourceTypesPass::rewriteDeclaration(SsaDef def, const PropagateR
 
     for (uint32_t i = 0u; i < flattenedArraySize; i++) {
       for (uint32_t j = 0u; j < scalarCount; j++) {
-        if (info.elements[j].isUsed())
-          constant.addOperand(op.getOperand(scalarCount * i + j));
+        if (info.elements[j].isUsed()) {
+          uint32_t scalarIndex = scalarCount * i + j;
+
+          Operand operand = op.getOperand(scalarIndex);
+
+          ScalarType srcType = op.getType().resolveFlattenedType(scalarIndex);
+          ScalarType dstType = info.elements[j].resolvedType;
+
+          if (srcType != dstType)
+            operand = consumeConstant(Op(OpCode::eConstant, srcType).addOperand(operand), dstType).getOperand(0u);
+
+          constant.addOperand(operand);
+        }
       }
     }
 
