@@ -55,6 +55,8 @@ public:
     int32_t maxCbvCount = -1;
     /** Maximum tessellation factor supported by the device. */
     float maxTessFactor = 64.0f;
+    /** Relax atomics semantics on Intel HW. */
+    bool intelRelaxAtomicMemoryOrderingSemantics = false;
   };
 
   explicit SpirvBuilder(const ir::Builder& builder, ResourceMapping& mapping, const Options& options);
