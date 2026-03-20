@@ -1,5 +1,5 @@
 #include <algorithm>
-#include <unordered_map>
+#include <map>
 
 #include "ir_pass_propagate_resource_types.h"
 #include "ir_pass_lower_consume.h"
@@ -713,7 +713,7 @@ PropagateResourceTypesPass::~PropagateResourceTypesPass() {
 
 
 void PropagateResourceTypesPass::run() {
-  std::unordered_map<SsaDef, PropagateResourceTypeRewriteInfo> types;
+  std::map<SsaDef, PropagateResourceTypeRewriteInfo> types;
 
   /* Infer types for any unknown resource or scratch/lds declaration */
   auto [a, b] = m_builder.getDeclarations();
