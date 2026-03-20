@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -64,8 +65,8 @@ private:
 
   Builder& m_builder;
 
-  std::unordered_map<SsaDef, SsaDef> m_sharedTemps;
-  std::unordered_map<SsaDef, uint32_t> m_callDepth;
+  std::map<SsaDef, SsaDef> m_sharedTemps;
+  std::map<SsaDef, uint32_t> m_callDepth;
 
   std::multimap<SsaDef, SsaDef> m_functionTemps;
   std::multimap<SsaDef, SsaDef> m_functionCalls;

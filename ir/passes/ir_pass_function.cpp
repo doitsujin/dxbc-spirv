@@ -48,7 +48,7 @@ void FunctionCleanupPass::runResolveSharedTempPass(Builder& builder) {
 
 void FunctionCleanupPass::removeUnusedParameters() {
   std::unordered_set<ParamEntry, ParamEntryHash> usedParams;
-  std::unordered_set<SsaDef> functions;
+  std::set<SsaDef> functions;
 
   auto [a, b] = m_builder.getDeclarations();
 

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <optional>
-#include <unordered_map>
+#include <map>
 
 #include "../ir.h"
 #include "../ir_builder.h"
@@ -68,7 +68,7 @@ private:
   std::optional<DominanceGraph>       m_dominance;
   std::optional<DivergenceAnalysis>   m_divergence;
 
-  std::unordered_map<SsaDef, SsaDef>  m_opBlocks;
+  std::map<SsaDef, SsaDef>  m_opBlocks;
 
   void hoistInstruction(const Op& op, SsaDef block);
 
