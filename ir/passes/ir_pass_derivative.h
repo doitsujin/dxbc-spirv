@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <map>
+#include <unordered_map>
 
 #include "../ir.h"
 #include "../ir_builder.h"
