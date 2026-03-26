@@ -1348,6 +1348,7 @@ void SpirvBuilder::emitConstantLoad(const ir::Op& op) {
 
     pushOp(m_declarations, spv::OpVariable, ptrTypeId, varId,
       spv::StorageClassPrivate, getIdForDef(constantOp.getDef()));
+    pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationNonWritable);
 
     addEntryPointId(varId);
     emitDebugName(constantOp.getDef(), varId);
