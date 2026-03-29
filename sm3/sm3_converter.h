@@ -124,6 +124,8 @@ private:
 
   ir::SsaDef applyBumpMapping(ir::Builder& builder, uint32_t stageIdx, ir::SsaDef src0, ir::SsaDef src1);
 
+  ir::SsaDef normalizeVector(ir::Builder& builder, ir::SsaDef def);
+
   bool handleComment(ir::Builder& builder, const Instruction& op);
 
   bool handleDef(ir::Builder& builder, const Instruction& op);
@@ -147,6 +149,8 @@ private:
   bool handleBem(ir::Builder& builder, const Instruction& op);
 
   bool handleTexCoord(ir::Builder& builder, const Instruction& op);
+
+  bool handleTextureSample(ir::Builder& builder, const Instruction& op);
 
   ir::SsaDef loadSrc(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, Swizzle swizzle, ir::ScalarType type);
 
