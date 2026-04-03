@@ -170,8 +170,8 @@ private:
   /** Converts input to the given scalar type. */
   ir::SsaDef convertScalar(ir::Builder& builder, ir::ScalarType dstType, ir::SsaDef value);
 
- /** Determines the appropriate semantic for a given register in shader model 1/2 */
- std::optional<Semantic> determineSemanticForRegister(RegisterType regType, uint32_t regIndex);
+  /** Determines the appropriate semantic for a given register in shader model 1/2 */
+  std::optional<Semantic> determineSemanticForRegister(RegisterType regType, uint32_t regIndex);
 
   void emitDebugName(
     ir::Builder& builder,
