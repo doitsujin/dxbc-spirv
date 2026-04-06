@@ -412,7 +412,7 @@ public:
   /** Returns a new operand with a specific register index */
   Operand withIndex(uint32_t index) {
     uint32_t token = util::binsert(m_token, index, 0u, 11u);
-    return Operand(token);
+    return Operand(token, m_info);
   }
 
   /** Writes code header to binary blob. */
@@ -425,8 +425,9 @@ public:
 
 private:
 
-  Operand(uint32_t token)
-    : m_token(token) { }
+  Operand(uint32_t token, OperandInfo info)
+    : m_token(token)
+    , m_info(info) { }
 
   uint32_t                  m_token   = { };
 
