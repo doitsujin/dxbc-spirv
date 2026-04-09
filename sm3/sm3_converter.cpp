@@ -553,7 +553,7 @@ bool Converter::handleArithmetic(ir::Builder& builder, const Instruction& op) {
       case OpCode::eRsq:        return ir::Op::FRsq(vectorType,
                                   builder.add(ir::Op::FAbs(vectorType, src.at(0u))));
       case OpCode::eAbs:        return ir::Op::FAbs(vectorType, src.at(0u));
-      case OpCode::eSgn:        return ir::Op::FAbs(vectorType, src.at(0u));
+      case OpCode::eSgn:        return ir::Op::FSgn(vectorType, src.at(0u));
       case OpCode::eMad:        return emitFMad(vectorType, src.at(0u), src.at(1u), src.at(2u));
       default: break;
     }
