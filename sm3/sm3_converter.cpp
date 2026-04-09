@@ -538,7 +538,7 @@ bool Converter::handleArithmetic(ir::Builder& builder, const Instruction& op) {
     src.push_back(value);
   }
 
-  ir::Op result = [this, opCode, vectorType, &src] {
+  ir::Op result = [this, &builder, opCode, vectorType, &src] {
     switch (opCode) {
       case OpCode::eAdd:        return ir::Op::FAdd(vectorType, src.at(0u), src.at(1u));
       case OpCode::eSub:        return ir::Op::FSub(vectorType, src.at(0u), src.at(1u));
@@ -550,7 +550,8 @@ bool Converter::handleArithmetic(ir::Builder& builder, const Instruction& op) {
       case OpCode::eMin:        return ir::Op::FMin(vectorType, src.at(0u), src.at(1u));
       case OpCode::eMul:        return emitFMul(vectorType, src.at(0u), src.at(1u));
       case OpCode::eRcp:        return ir::Op::FRcp(vectorType, src.at(0u));
-      case OpCode::eRsq:        return ir::Op::FRsq(vectorType, src.at(0u));
+      case OpCode::eRsq:        return ir::Op::FRsq(vectorType,
+                                  builder.add(ir::Op::FAbs(vectorType, src.at(0u))));
       case OpCode::eAbs:        return ir::Op::FAbs(vectorType, src.at(0u));
       case OpCode::eSgn:        return ir::Op::FAbs(vectorType, src.at(0u));
       case OpCode::eMad:        return emitFMad(vectorType, src.at(0u), src.at(1u), src.at(2u));
