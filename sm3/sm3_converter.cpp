@@ -1001,11 +1001,36 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
       result = m_resources.emitSample(builder, dst.getIndex(), texCoord, ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), scalarType);
     } break;
 
-    case OpCode::eTexDp3Tex:
+
+    case OpCode::eTexDp3Tex: {
+      /* Calculate a dot product of the texcoord data and src0 (and optionally use that for 1D texture lookup) */
+      auto src0 = op.getSrc(0u);
+      auto m = m_ioMap.emitTexCoordLoad(builder, op, dst.getIndex(), util::makeWriteMaskForComponents(3u), Swizzle::identity(), scalarType);
+      auto n = loadSrcModified(builder, op, src0, util::makeWriteMaskForComponents(3u), scalarType);
+      auto dot = builder.add(emitFDot(scalarType, m, n));
+
+      /* Sample texture at register index of dst using (dot, 0, 0, 0) as coordinates */
+      std::array<ir::SsaDef, 4u> texCoordComponents = {
+        dot,
+        makeTypedConstant(builder, scalarType, 0.0f),
+        makeTypedConstant(builder, scalarType, 0.0f),
+        makeTypedConstant(builder, scalarType, 0.0f),
+      };
+      auto texCoord = buildVector(builder, scalarType, texCoordComponents.size(), texCoordComponents.data());
+      texCoord = m_resources.projectTexCoord(builder, dst.getIndex(), texCoord, true);
+      result = m_resources.emitSample(builder, dst.getIndex(), texCoord, ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), scalarType);
+    } break;
+
+
     case OpCode::eTexDp3: {
-      // NOT YET IMPLEMENTED
-      Logger::err("OpCode ", op.getOpCode(), " is not yet implemented.");
-      return false;
+      /* Calculate a dot product of the texcoord data and src0 (and optionally use that for 1D texture lookup) */
+      auto src0 = op.getSrc(0u);
+      auto m = m_ioMap.emitTexCoordLoad(builder, op, dst.getIndex(), util::makeWriteMaskForComponents(3u), Swizzle::identity(), scalarType);
+      auto n = loadSrcModified(builder, op, src0, util::makeWriteMaskForComponents(3u), scalarType);
+      auto dot = builder.add(emitFDot(scalarType, m, n));
+
+      /* Replicates the dot product to all four color channels. Doesn't actually sample. */
+      result = broadcastScalar(builder, dot, util::makeWriteMaskForComponents(4u));
     } break;
 
     case OpCode::eTexBem:
