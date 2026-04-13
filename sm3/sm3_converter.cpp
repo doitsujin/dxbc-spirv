@@ -1035,9 +1035,57 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
 
     case OpCode::eTexBem:
     case OpCode::eTexBemL: {
-      // NOT YET IMPLEMENTED
-      Logger::err("OpCode ", op.getOpCode(), " is not yet implemented.");
-      return false;
+      /* Apply a fake bump environment-map transform */
+      uint32_t samplerIdx = dst.getIndex();
+      auto texCoord = m_ioMap.emitTexCoordLoad(builder, op, samplerIdx, ComponentBit::eAll, Swizzle::identity(), scalarType);
+      auto src0 = loadSrcModified(builder, op, op.getSrc(0u), WriteMask(ComponentBit::eX | ComponentBit::eY), scalarType);
+
+      dxbc_spv_assert(getShaderInfo().getVersion().first < 2u);
+      /* The projection (/.w) happens before this... */
+      texCoord = m_resources.projectTexCoord(builder, samplerIdx, texCoord, true);
+
+      auto bumpMappedTexCoord = applyBumpMapping(builder, samplerIdx, texCoord, src0);
+
+      /* Insert it back into the original tex coord, so we have a z and w component in case we need them. */
+      std::array<ir::SsaDef, 4u> texCoordComponents = {};
+      texCoordComponents[0] = ir::extractFromVector(builder, bumpMappedTexCoord, 0u);
+      texCoordComponents[1] = ir::extractFromVector(builder, bumpMappedTexCoord, 1u);
+      texCoordComponents[2] = ir::extractFromVector(builder, texCoord, 2u);
+      texCoordComponents[3] = ir::extractFromVector(builder, texCoord, 3u);
+      texCoord = buildVector(builder, scalarType, texCoordComponents.size(), texCoordComponents.data());
+
+      result = m_resources.emitSample(builder, samplerIdx, texCoord, ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), scalarType);
+
+      if (opCode == OpCode::eTexBemL) {
+        /* Additionally does luminance correction
+         * m = dst index
+         * n = src0 index
+         * = sampled(t(m)) + (t(n).b * D3DTSS_BUMPENVLSCALE(stage m) + D3DTSS_BUMPENVLOFFSET(stage m)) */
+
+        auto descriptor = builder.add(ir::Op::DescriptorLoad(ir::ScalarType::eCbv, m_psSharedData, ir::SsaDef()));
+        auto bumpEnvLScale = builder.add(ir::Op::BufferLoad(ir::BasicType(ir::ScalarType::eF32, 2u),
+          descriptor, builder.makeConstant(samplerIdx * 5u + 3u), 16u));
+        auto bumpEnvLOffset = builder.add(ir::Op::BufferLoad(ir::BasicType(ir::ScalarType::eF32, 2u),
+          descriptor, builder.makeConstant(samplerIdx * 5u + 2u), 8u));
+
+        if (scalarType != ir::ScalarType::eF32) {
+          bumpEnvLScale = builder.add(ir::Op::ConsumeAs(ir::BasicType(scalarType, 2u), bumpEnvLScale));
+          bumpEnvLOffset = builder.add(ir::Op::ConsumeAs(ir::BasicType(scalarType, 2u), bumpEnvLOffset));
+        }
+
+        auto scale = builder.add(ir::Op::CompositeExtract(scalarType, result, builder.makeConstant(2u)));
+        scale = builder.add(emitFMul(scalarType, scale, bumpEnvLScale));
+        scale = builder.add(ir::Op::FAdd(scalarType, scale, bumpEnvLOffset));
+        scale = builder.add(ir::Op::FClamp(scalarType, scale, ir::makeTypedConstant(builder, scalarType, 0.0f), ir::makeTypedConstant(builder, scalarType, 1.0f)));
+
+        std::array<ir::SsaDef, 4u> scaledComponents = {};
+        for (uint32_t i = 0u; i < 4u; i++) {
+          auto resultComponent = builder.add(ir::Op::CompositeExtract(scalarType, result, builder.makeConstant(i)));
+          scaledComponents[i] = builder.add(emitFMul(scalarType, resultComponent, scale));
+        }
+
+        result = buildVector(builder, scalarType, scaledComponents.size(), scaledComponents.data());
+      }
     } break;
 
     default: {
