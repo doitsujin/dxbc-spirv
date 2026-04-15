@@ -2477,8 +2477,10 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityCompareOp(Buil
 
   /* (a + c0) == c1 -> a == c1 - c0
    * (a - c0) == c1 -> a == c1 + c0
-   * (c0 - a) == c1 -> a == c0 - c1 */
-  if (b.isConstant() && (a.getOpCode() == OpCode::eIAdd || a.getOpCode() == OpCode::eISub) && (isOnlyUse(m_builder, a.getDef(), op->getDef()))) {
+   * (c0 - a) == c1 -> a == c0 - c1
+   * Need to keep integer overflow behaviour intact for inequalities. */
+  if ((op->getOpCode() == OpCode::eIEq || op->getOpCode() == OpCode::eINe) &&
+      b.isConstant() && (a.getOpCode() == OpCode::eIAdd || a.getOpCode() == OpCode::eISub) && (isOnlyUse(m_builder, a.getDef(), op->getDef()))) {
     const auto& a0 = m_builder.getOpForOperand(a, 0u);
     const auto& a1 = m_builder.getOpForOperand(a, 1u);
 
