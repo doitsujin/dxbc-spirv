@@ -120,6 +120,8 @@ private:
       : ir::Op::FPow(type, base, exp);
   }
 
+  ir::SsaDef emitTexMatMul(ir::Builder& builder, const Instruction& op);
+
   ir::SsaDef emitSharedConstants(ir::Builder& builder);
 
   ir::SsaDef applyBumpMapping(ir::Builder& builder, uint32_t stageIdx, ir::SsaDef src0, ir::SsaDef src1);
