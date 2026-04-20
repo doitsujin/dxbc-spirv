@@ -5,6 +5,8 @@
 #include <sstream>
 #include <vector>
 
+#include "../config.h"
+
 #include "../ir/ir.h"
 #include "../ir/ir_builder.h"
 #include "../ir/ir_disasm.h"
@@ -13,15 +15,22 @@
 
 #include "../ir/passes/ir_pass_lower_io.h"
 
+#include "../util/util_byte_stream.h"
+#include "../util/util_log.h"
+
+#ifdef ENABLE_SM5
 #include "../dxbc/dxbc_api.h"
 #include "../dxbc/dxbc_container.h"
 #include "../dxbc/dxbc_converter.h"
 #include "../dxbc/dxbc_disasm.h"
 #include "../dxbc/dxbc_parser.h"
 #include "../dxbc/dxbc_signature.h"
+#endif
 
+#ifdef ENABLE_SPIRV
 #include "../spirv/spirv_builder.h"
 #include "../spirv/spirv_mapping.h"
+#endif
 
 using namespace dxbc_spv;
 
@@ -166,8 +175,8 @@ bool writeIrBinary(const ir::Builder& builder, const Options& options, Timers& t
   return bool(file);
 }
 
-
 bool writeSpirvBinary(ir::Builder builder, const Options& options, Timers& timers) {
+#ifdef ENABLE_SPIRV
   timers.tLowerSpirvBegin = std::chrono::high_resolution_clock::now();
 
   { ir::LowerIoPass pass(builder);
@@ -211,6 +220,10 @@ bool writeSpirvBinary(ir::Builder builder, const Options& options, Timers& timer
 
   file.write(reinterpret_cast<const char*>(data.data()), data.size());
   return bool(file);
+#else
+  std::cerr << "Error: dxbc-spirv built without SPIR-V support." << std::endl;
+  return false;
+#endif /* ENABLE_SPIRV */
 }
 
 
@@ -221,7 +234,10 @@ bool compileShader(util::ByteReader reader, const Options& options) {
   ir::Builder builder;
 
   if (!options.irInput) {
+    bool status = false;
+
     /* Parse file header */
+#ifdef ENABLE_SM5
     dxbc::Container container(reader);
 
     if (!container) {
@@ -243,12 +259,11 @@ bool compileShader(util::ByteReader reader, const Options& options) {
 
     dxbc::Converter converter(std::move(container), dxbcOptions);
 
-    bool status = false;
-
     if (options.gsPassthrough)
       status = converter.createPassthroughGs(builder);
     else
       status = converter.convertShader(builder);
+#endif /* ENABLE_SM5 */
 
     if (!status) {
       std::cerr << "Error: Failed to convert shader." << std::endl;

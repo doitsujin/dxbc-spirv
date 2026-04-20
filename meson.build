@@ -3,7 +3,18 @@ project('dxbc-spirv', ['cpp'],
   meson_version   : '>= 1.0',
   default_options : [ 'cpp_std=c++17', 'warning_level=2', 'cpp_eh=none' ])
 
-dxbc_spv_files = files([
+sm3_files = files([
+  'sm3/sm3_types.cpp',
+  'sm3/sm3_parser.cpp',
+  'sm3/sm3_disasm.cpp',
+  'sm3/sm3_converter.cpp',
+  'sm3/sm3_io_map.cpp',
+  'sm3/sm3_registers.cpp',
+  'sm3/sm3_spec_constants.cpp',
+  'sm3/sm3_resources.cpp',
+])
+
+sm5_files = files([
   'dxbc/dxbc_api.cpp',
   'dxbc/dxbc_container.cpp',
   'dxbc/dxbc_converter.cpp',
@@ -15,16 +26,14 @@ dxbc_spv_files = files([
   'dxbc/dxbc_resources.cpp',
   'dxbc/dxbc_signature.cpp',
   'dxbc/dxbc_types.cpp',
+])
 
-  'sm3/sm3_types.cpp',
-  'sm3/sm3_parser.cpp',
-  'sm3/sm3_disasm.cpp',
-  'sm3/sm3_converter.cpp',
-  'sm3/sm3_io_map.cpp',
-  'sm3/sm3_registers.cpp',
-  'sm3/sm3_spec_constants.cpp',
-  'sm3/sm3_resources.cpp',
+spv_files = files([
+  'spirv/spirv_builder.cpp',
+  'spirv/spirv_mapping.cpp',
+])
 
+dxbc_spv_files = files([
   'ir/ir.cpp',
   'ir/ir_builder.cpp',
   'ir/ir_disasm.cpp',
@@ -57,10 +66,29 @@ dxbc_spv_files = files([
   'util/util_log.cpp',
   'util/util_md5.cpp',
   'util/util_swizzle.cpp',
-
-  'spirv/spirv_builder.cpp',
-  'spirv/spirv_mapping.cpp',
 ])
+
+if get_option('enable_sm3')
+  dxbc_spv_files += sm3_files
+endif
+
+if get_option('enable_sm5')
+  dxbc_spv_files += sm5_files
+endif
+
+if get_option('enable_spirv')
+  dxbc_spv_files += spv_files
+endif
+
+conf_data = configuration_data()
+conf_data.set('ENABLE_SM3', get_option('enable_sm3'))
+conf_data.set('ENABLE_SM5', get_option('enable_sm5'))
+conf_data.set('ENABLE_SPIRV', get_option('enable_spirv'))
+
+configure_file(
+  input : 'config.h.in',
+  output : 'config.h',
+  configuration : conf_data)
 
 lib_dxbc_spv = static_library('dxbc_spv', dxbc_spv_files)
 

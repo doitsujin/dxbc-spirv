@@ -1,2 +1,5 @@
 option('enable_tests', type : 'boolean', value : false, description: 'Build tests')
 option('enable_tools', type : 'boolean', value : false, description: 'Build utility programs')
+option('enable_sm3', type : 'boolean', value : true, description: 'Build with Shader Model 3 support')
+option('enable_sm5', type : 'boolean', value : true, description: 'Build with Shader Model 5 support')
+option('enable_spirv', type : 'boolean', value : true, description: 'Build with SPIR-V backend')
