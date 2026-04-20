@@ -1,20 +1,30 @@
+#include <cstring>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <vector>
 
+#include "../config.h"
+
+#ifdef ENABLE_SM5
 #include "../dxbc/dxbc_container.h"
 #include "../dxbc/dxbc_disasm.h"
 #include "../dxbc/dxbc_interface.h"
 #include "../dxbc/dxbc_parser.h"
 #include "../dxbc/dxbc_signature.h"
+#endif
 
+#ifdef ENABLE_SM3
 #include "../sm3/sm3_disasm.h"
 #include "../sm3/sm3_parser.h"
+#endif
+
+#include "../util/util_byte_stream.h"
 
 using namespace dxbc_spv;
 
+#ifdef ENABLE_SM5
 bool printSignature(util::ByteReader reader) {
   if (!reader)
     return true;
@@ -77,8 +87,9 @@ bool printCode(util::ByteReader reader) {
 
   return true;
 }
+#endif /* ENABLE_SM5 */
 
-
+#ifdef ENABLE_SM3
 bool printCodeSM3(util::ByteReader reader, bool useDebugNames) {
   if (!reader) {
     std::cout << "(no code)" << std::endl;
@@ -115,20 +126,27 @@ bool printCodeSM3(util::ByteReader reader, bool useDebugNames) {
 
   return true;
 }
+#endif /* ENABLE_SM3 */
 
 
 bool disassembleShader(util::ByteReader reader, bool useDebugNames) {
-  if (!dxbc::Container::checkFourCC(reader)) {
-    return printCodeSM3(reader, useDebugNames);
+#ifdef ENABLE_SM5
+  if (dxbc::Container::checkFourCC(reader)) {
+    dxbc::Container container(reader);
+
+    return printSignature(container.getInputSignatureChunk()) &&
+          printSignature(container.getOutputSignatureChunk()) &&
+          printSignature(container.getPatchConstantSignatureChunk()) &&
+          printInterface(container.getInterfaceChunk()) &&
+          printCode(container.getCodeChunk());
   }
+#endif /* ENABLE_SM5 */
 
-  dxbc::Container container(reader);
-
-  return printSignature(container.getInputSignatureChunk()) &&
-         printSignature(container.getOutputSignatureChunk()) &&
-         printSignature(container.getPatchConstantSignatureChunk()) &&
-         printInterface(container.getInterfaceChunk()) &&
-         printCode(container.getCodeChunk());
+#ifdef ENABLE_SM3
+  return printCodeSM3(reader, useDebugNames);
+#else
+  return false;
+#endif /* ENABLE_SM3 */
 }
 
 

@@ -1,6 +1,10 @@
 #include <iostream>
 
+#include "../config.h"
+
+#ifdef ENABLE_SM5
 #include "./dxbc/test_dxbc.h"
+#endif
 
 #include "./ir/test_ir.h"
 
@@ -13,7 +17,10 @@ TestState g_testState;
 void runTests() {
   util::runTests();
   ir::runTests();
+
+#ifdef ENABLE_SM5
   dxbc::runTests();
+#endif
 
   std::cerr << "Tests run: " << g_testState.testsRun
     << ", failed: " << g_testState.testsFailed << std::endl;
