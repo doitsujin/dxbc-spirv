@@ -242,4 +242,52 @@ Builder test_spirv_point_size() {
   return builder;
 }
 
+Builder test_spirv_input_target_generic(bool isMultisampled) {
+  Builder builder;
+
+  auto entryPoint = setupTestFunction(builder, ShaderStage::ePixel);
+  builder.add(Op::Label());
+
+  auto kind = isMultisampled
+    ? ResourceKind::eImage2DMS
+    : ResourceKind::eImage2D;
+
+  auto depthInput = builder.add(Op::DclInputTarget(ScalarType::eF32, entryPoint, 0u, 0u, 1u, kind, -1));
+  auto colorInput0 = builder.add(Op::DclInputTarget(ScalarType::eF32, entryPoint, 0u, 1u, 1u, kind, 0));
+  auto colorInput1 = builder.add(Op::DclInputTarget(ScalarType::eU32, entryPoint, 0u, 2u, 1u, kind, 1));
+
+  depthInput = builder.add(Op::DescriptorLoad(ScalarType::eInputTarget, depthInput, builder.makeConstant(0u)));
+  colorInput0 = builder.add(Op::DescriptorLoad(ScalarType::eInputTarget, colorInput0, builder.makeConstant(0u)));
+  colorInput1 = builder.add(Op::DescriptorLoad(ScalarType::eInputTarget, colorInput1, builder.makeConstant(0u)));
+
+  auto sampleId = SsaDef();
+
+  if (isMultisampled) {
+    auto sampleInput = builder.add(Op::DclInputBuiltIn(ScalarType::eU32, entryPoint, BuiltIn::eSampleId));
+    sampleId = builder.add(Op::InputLoad(ScalarType::eU32, sampleInput, SsaDef()));
+  }
+
+  auto depthOutput = builder.add(Op::DclOutput(BasicType(ScalarType::eF32, 4u), entryPoint, 0u, 0u));
+  auto colorOutput0 = builder.add(Op::DclOutput(BasicType(ScalarType::eF32, 4u), entryPoint, 1u, 0u));
+  auto colorOutput1 = builder.add(Op::DclOutput(BasicType(ScalarType::eU32, 4u), entryPoint, 2u, 0u));
+
+  builder.add(Op::OutputStore(depthOutput, SsaDef(),
+    builder.add(Op::InputTargetLoad(BasicType(ScalarType::eF32, 4u), depthInput, sampleId))));
+  builder.add(Op::OutputStore(colorOutput0, SsaDef(),
+    builder.add(Op::InputTargetLoad(BasicType(ScalarType::eF32, 4u), colorInput0, sampleId))));
+  builder.add(Op::OutputStore(colorOutput1, SsaDef(),
+    builder.add(Op::InputTargetLoad(BasicType(ScalarType::eU32, 4u), colorInput1, sampleId))));
+
+  builder.add(Op::Return());
+  return builder;
+}
+
+Builder test_spirv_input_target() {
+  return test_spirv_input_target_generic(false);
+}
+
+Builder test_spirv_input_target_ms() {
+  return test_spirv_input_target_generic(true);
+}
+
 }
