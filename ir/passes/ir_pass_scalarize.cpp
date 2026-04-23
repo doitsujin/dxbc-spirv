@@ -210,6 +210,7 @@ void ScalarizePass::scalarizeVectorOps() {
       case OpCode::eDclTmp:
       case OpCode::eDclParam:
       case OpCode::eDclXfb:
+      case OpCode::eDclInputTarget:
       case OpCode::eFunction:
       case OpCode::eFunctionEnd:
       case OpCode::eFunctionCall:

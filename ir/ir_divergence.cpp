@@ -381,6 +381,7 @@ Scope DivergenceAnalysis::determineScope(const Op& op) {
     case OpCode::eDclTmp:
     case OpCode::eDclParam:
     case OpCode::eDclXfb:
+    case OpCode::eDclInputTarget:
       return Scope::eGlobal;
 
     case OpCode::eDclOutput:

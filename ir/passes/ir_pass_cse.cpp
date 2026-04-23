@@ -375,6 +375,7 @@ CseOpFlags CsePass::classifyOp(const Op& op) const {
     case OpCode::eDclTmp:
     case OpCode::eDclParam:
     case OpCode::eDclXfb:
+    case OpCode::eDclInputTarget:
       break;
 
     /* Instructions that must be lowered by now */

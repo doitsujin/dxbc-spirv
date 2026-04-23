@@ -537,6 +537,7 @@ bool DerivativePass::canHoistDerivativeOp(const Op& derivOp, SsaDef dstBlock) co
       case OpCode::eDclTmp:
       case OpCode::eDclParam:
       case OpCode::eDclXfb:
+      case OpCode::eDclInputTarget:
       case OpCode::eLastDeclarative:
       case OpCode::eFunction:
       case OpCode::eFunctionEnd:
