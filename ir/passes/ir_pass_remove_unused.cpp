@@ -243,6 +243,7 @@ bool RemoveUnusedPass::hasSideEffect(OpCode opCode) {
     case OpCode::eDclSrv:
     case OpCode::eDclUav:
     case OpCode::eDclUavCounter:
+    case OpCode::eDclInputTarget:
     case OpCode::eDclLds:
     case OpCode::eDclScratch:
     case OpCode::eDclTmp:

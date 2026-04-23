@@ -64,6 +64,7 @@ enum class ScalarType : uint8_t {
   eSrv          = 24,
   eUav          = 25,
   eUavCounter   = 26,
+  eInputTarget  = 27,
 
   eCount
 };
@@ -226,7 +227,8 @@ public:
         || type == ScalarType::eCbv
         || type == ScalarType::eSrv
         || type == ScalarType::eUav
-        || type == ScalarType::eUavCounter;
+        || type == ScalarType::eUavCounter
+        || type == ScalarType::eInputTarget;
   }
 
   /** Computes byte size of vector type */
@@ -921,6 +923,7 @@ enum class OpCode : uint16_t {
   eDclTmp                       = 45u,
   eDclParam                     = 46u,
   eDclXfb                       = 47u,
+  eDclInputTarget               = 48u,
 
   /** Last valid opcode for declarative instructions */
   eLastDeclarative              = 63u,
@@ -1649,6 +1652,16 @@ public:
       .addOperand(buffer)
       .addOperand(stride)
       .addOperand(offset);
+  }
+
+  static Op DclInputTarget(Type type, SsaDef entryPoint, uint32_t regSpace, uint32_t regIdx, uint32_t count, ResourceKind kind, int32_t rtIndex) {
+    return Op(OpCode::eDclInputTarget, type)
+      .addOperand(entryPoint)
+      .addOperand(regSpace)
+      .addOperand(regIdx)
+      .addOperand(count)
+      .addOperand(kind)
+      .addOperand(rtIndex);
   }
 
   /** Helpers to construct mode setting ops */
