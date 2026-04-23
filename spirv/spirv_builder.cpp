@@ -436,6 +436,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eImageQuerySamples:
       return emitImageQuerySamples(op);
 
+    case ir::OpCode::eInputTargetLoad:
+      return emitInputTargetLoad(op);
+
     case ir::OpCode::eCheckSparseAccess:
       return emitCheckSparseAccess(op);
 
@@ -2290,6 +2293,41 @@ void SpirvBuilder::emitImageQuerySamples(const ir::Op& op) {
   pushOp(m_code, spv::OpImageQuerySamples,
     getIdForType(op.getType()), id,
     getIdForDef(descriptorOp.getDef()));
+
+  emitDebugName(op.getDef(), id);
+}
+
+
+void SpirvBuilder::emitInputTargetLoad(const ir::Op& op) {
+  const auto& descriptorOp = m_builder.getOpForOperand(op, 0u);
+
+  auto id = getIdForDef(op.getDef());
+
+  /* Set up sample operand as necessary */
+  SpirvImageOperands imageOperands = { };
+
+  auto sampleDef = ir::SsaDef(op.getOperand(1u));
+
+  if (sampleDef) {
+    imageOperands.flags |= spv::ImageOperandsSampleMask;
+    imageOperands.sampleId = getIdForDef(sampleDef);
+  }
+
+  /* The coordinate merely acts as an offset and must be 0. */
+  SpirvConstant coordConstant = { };
+  coordConstant.op = spv::OpConstantComposite;
+  coordConstant.typeId = getIdForType(ir::BasicType(ir::ScalarType::eI32, 2u));
+
+  for (uint32_t i = 0u; i < 2u; i++)
+    coordConstant.constituents[i] = makeConstI32(0);
+
+  /* Emit actual image read */
+  m_code.push_back(makeOpcodeToken(spv::OpImageRead, 5u + imageOperands.computeDwordCount()));
+  m_code.push_back(getIdForType(op.getType()));
+  m_code.push_back(id);
+  m_code.push_back(getIdForDef(descriptorOp.getDef()));
+  m_code.push_back(getIdForConstant(coordConstant, 2u));
+  imageOperands.pushTo(m_code);
 
   emitDebugName(op.getDef(), id);
 }
