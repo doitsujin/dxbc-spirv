@@ -210,6 +210,8 @@ private:
 
   void emitDclUavCounter(const ir::Op& op);
 
+  void emitDclInputTarget(const ir::Op& op);
+
   uint32_t getDescriptorArrayIndex(const ir::Op& op);
 
   uint32_t getImageDescriptorPointer(const ir::Op& op);
