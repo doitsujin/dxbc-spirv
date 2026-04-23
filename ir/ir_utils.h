@@ -145,6 +145,8 @@ SsaDef buildVector(Builder& builder, ScalarType scalarType, size_t count, const 
 
 SsaDef extractFromVector(Builder& builder, SsaDef def, uint32_t component);
 
+SsaDef insertIntoVector(Builder& builder, SsaDef def, uint32_t component, SsaDef value);
+
 bool is64BitType(BasicType type);
 
 inline BasicType makeVectorType(ScalarType type, util::WriteMask mask) {
