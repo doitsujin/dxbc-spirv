@@ -394,6 +394,27 @@ SsaDef extractFromVector(Builder& builder, SsaDef def, uint32_t component) {
 }
 
 
+SsaDef insertIntoVector(Builder& builder, SsaDef def, uint32_t component, SsaDef value) {
+  const auto& op = builder.getOp(def);
+
+  dxbc_spv_assert(op.getType().isBasicType());
+
+  if (op.getType().isScalarType())
+    return value;
+
+  auto vectorType = op.getType().getBaseType(0u);
+  dxbc_spv_assert(component < vectorType.getVectorSize());
+  dxbc_spv_assert(builder.getOp(value).getType() == vectorType.getBaseType());
+
+  Op compositeOp(OpCode::eCompositeConstruct, op.getType());
+
+  for (uint32_t i = 0u; i < vectorType.getVectorSize(); i++)
+    compositeOp.addOperand(i == component ? value : extractFromVector(builder, def, i));
+
+  return builder.add(std::move(compositeOp));
+}
+
+
 bool is64BitType(BasicType type) {
   auto scalarType = type.getBaseType();
 
