@@ -978,7 +978,7 @@ enum class OpCode : uint16_t {
   eLdsLoad                      = 293u,
   eLdsStore                     = 294u,
   ePushDataLoad                 = 295u,
-  /* unused opcode 296 */
+  eInputTargetLoad              = 296u,
   eInputLoad                    = 297u,
   eOutputLoad                   = 298u,
   eOutputStore                  = 299u,
@@ -1995,6 +1995,12 @@ public:
     return Op(OpCode::ePushDataLoad, type)
       .addOperand(decl)
       .addOperand(address);
+  }
+
+  static Op InputTargetLoad(Type type, SsaDef descriptor, SsaDef sample) {
+    return Op(OpCode::eInputTargetLoad, type)
+      .addOperand(descriptor)
+      .addOperand(sample);
   }
 
   static Op InputLoad(Type type, SsaDef decl, SsaDef address) {

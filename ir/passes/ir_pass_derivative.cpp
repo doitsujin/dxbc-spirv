@@ -371,6 +371,9 @@ bool DerivativePass::canHoistDerivativeOp(const Op& derivOp, SsaDef dstBlock) co
           queue.push_back(SsaDef(arg.getOperand(i)));
       } break;
 
+      case OpCode::eInputTargetLoad:
+        return true;
+
       /* Skip declaration for other types of loads */
       case OpCode::eInterpolateAtCentroid:
       case OpCode::eInterpolateAtSample:

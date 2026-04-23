@@ -402,6 +402,14 @@ For `ImageSample`, the `%dx` and `%dy` parameters, if not `null`, contain deriva
 
 For `ImageSample`, if the `%depth_compare` parameter is not `null`, the instruction must return a scalar float.
 
+# Input target instructions
+| `ir::OpCode`         | Return type      | Arguments...  |                   |
+|----------------------|------------------|---------------|-------------------|
+| `InputTargetLoad`    | any              | `%descriptor` | `%sample`         |
+
+The `InputTargetLoad` instruction loads pixel data for the rendered pixel. The `sample` parameter must not be `null` if the input
+target is multisampled, and must be less than the sample count.
+
 ### Pointer instructions
 Raw pointers can be used to access memory via the `MemoryLoad`, `MemoryStore` and `MemoryAtomic` instructions.
 

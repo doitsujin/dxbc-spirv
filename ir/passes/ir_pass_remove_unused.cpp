@@ -255,6 +255,7 @@ bool RemoveUnusedPass::hasSideEffect(OpCode opCode) {
     case OpCode::eScratchLoad:
     case OpCode::eLdsLoad:
     case OpCode::ePushDataLoad:
+    case OpCode::eInputTargetLoad:
     case OpCode::eInputLoad:
     case OpCode::eOutputLoad:
     case OpCode::eDescriptorLoad:
