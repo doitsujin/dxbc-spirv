@@ -330,6 +330,8 @@ void enumerateSpirvTests(std::vector<NamedTest>& result, const char* category, c
   ADD_TEST(test_spirv_raw_pointer);
   ADD_TEST(test_spirv_cbv_srv_uav_structs);
   ADD_TEST(test_spirv_point_size);
+  ADD_TEST(test_spirv_input_target);
+  ADD_TEST(test_spirv_input_target_ms);
 }
 
 
