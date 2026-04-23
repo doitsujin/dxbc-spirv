@@ -961,7 +961,7 @@ enum class OpCode : uint16_t {
   eCast                         = 198u,
   eConsumeAs                    = 199u,
 
-  eCompositeInsert              = 224u,
+  /* unused opcode 224 */
   eCompositeExtract             = 225u,
   eCompositeConstruct           = 226u,
 
@@ -1915,13 +1915,6 @@ public:
 
   static Op ConsumeAs(Type type, SsaDef value) {
     return Op(OpCode::eConsumeAs, type)
-      .addOperand(value);
-  }
-
-  static Op CompositeInsert(Type type, SsaDef composite, SsaDef address, SsaDef value) {
-    return Op(OpCode::eCompositeInsert, type)
-      .addOperand(composite)
-      .addOperand(address)
       .addOperand(value);
   }
 

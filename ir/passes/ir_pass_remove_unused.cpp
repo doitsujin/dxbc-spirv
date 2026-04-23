@@ -283,7 +283,6 @@ bool RemoveUnusedPass::hasSideEffect(OpCode opCode) {
     case OpCode::eCast:
     case OpCode::eConsumeAs:
 
-    case OpCode::eCompositeInsert:
     case OpCode::eCompositeExtract:
     case OpCode::eCompositeConstruct:
 

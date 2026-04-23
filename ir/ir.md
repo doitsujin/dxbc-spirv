@@ -267,7 +267,6 @@ Shader I/O and certain resource access operations may use arrays, structs or vec
 
 | `ir::OpCode`         | Return type      | Arguments...           |                           |          |
 |----------------------|------------------|------------------------|---------------------------|----------|
-| `CompositeInsert `   | any              | `%composite`           | `%address` into composite | `%value` |
 | `CompositeExtract`   | any              | `%composite`           | `%address` into composite |          |
 | `CompositeConstruct` | any composite    | List of `%members`     |                           |          |
 
