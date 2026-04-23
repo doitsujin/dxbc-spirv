@@ -181,6 +181,7 @@ CseOpFlags CsePass::classifyOp(const Op& op) const {
     case OpCode::eCheckSparseAccess:
     case OpCode::eParamLoad:
     case OpCode::ePushDataLoad:
+    case OpCode::eInputTargetLoad:
     case OpCode::eInputLoad:
     case OpCode::eDescriptorLoad:
     case OpCode::eBufferQuerySize:

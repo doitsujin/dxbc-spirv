@@ -247,6 +247,7 @@ void ScalarizePass::scalarizeVectorOps() {
       case OpCode::eLdsLoad:
       case OpCode::eLdsStore:
       case OpCode::ePushDataLoad:
+      case OpCode::eInputTargetLoad:
       case OpCode::eInputLoad:
       case OpCode::eOutputLoad:
       case OpCode::eOutputStore:
