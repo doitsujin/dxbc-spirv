@@ -262,6 +262,8 @@ private:
 
   void emitImageQuerySamples(const ir::Op& op);
 
+  void emitInputTargetLoad(const ir::Op& op);
+
   void emitConvert(const ir::Op& op);
 
   void emitDerivative(const ir::Op& op);
