@@ -207,7 +207,6 @@ Scope DivergenceAnalysis::determineScope(const Op& op) {
     case OpCode::eConvertPackedF16toF32:
     case OpCode::eCast:
     case OpCode::eConsumeAs:
-    case OpCode::eCompositeInsert:
     case OpCode::eCompositeExtract:
     case OpCode::eCompositeConstruct:
     case OpCode::eCheckSparseAccess:

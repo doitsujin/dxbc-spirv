@@ -234,7 +234,6 @@ void ScalarizePass::scalarizeVectorOps() {
       case OpCode::eBarrier:
       case OpCode::eConvertF32toPackedF16:
       case OpCode::eConvertPackedF16toF32:
-      case OpCode::eCompositeInsert:
       case OpCode::eCompositeExtract:
       case OpCode::eCompositeConstruct:
       case OpCode::eCheckSparseAccess:

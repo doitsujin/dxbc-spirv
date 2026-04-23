@@ -175,7 +175,6 @@ CseOpFlags CsePass::classifyOp(const Op& op) const {
     case OpCode::eConvertPackedF16toF32:
     case OpCode::eCast:
     case OpCode::eConsumeAs:
-    case OpCode::eCompositeInsert:
     case OpCode::eCompositeExtract:
     case OpCode::eCompositeConstruct:
     case OpCode::eCheckSparseAccess:
@@ -413,7 +412,6 @@ bool CsePass::isTrivialOp(const Op& op) const {
   return op.getOpCode() == OpCode::eCast ||
          op.getOpCode() == OpCode::eCompositeConstruct ||
          op.getOpCode() == OpCode::eCompositeExtract ||
-         op.getOpCode() == OpCode::eCompositeInsert ||
          op.getOpCode() == OpCode::eInputLoad ||
          op.getOpCode() == OpCode::ePushDataLoad;
 }

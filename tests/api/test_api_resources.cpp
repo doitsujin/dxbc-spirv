@@ -1561,10 +1561,14 @@ Builder test_resource_rov() {
 
   auto red = builder.add(Op::CompositeExtract(ScalarType::eF32, color, builder.makeConstant(0u)));
   red = builder.add(Op::FMul(ScalarType::eF32, red, builder.makeConstant(2.0f)));
-  color = builder.add(Op::CompositeInsert(Type(ScalarType::eF32, 4u), color, builder.makeConstant(0u), red));
 
-  builder.add(Op::ImageStore(uavDescriptor, SsaDef(), coord, color));
+  auto colorOp = Op(ir::OpCode::eCompositeConstruct, Type(ScalarType::eF32, 4u));
+  colorOp.addOperand(red);
 
+  for (uint32_t i = 1u; i < 4u; i++)
+    colorOp.addOperand(builder.add(Op::CompositeExtract(ScalarType::eF32, color, builder.makeConstant(i))));
+
+  builder.add(Op::ImageStore(uavDescriptor, SsaDef(), coord, builder.add(std::move(colorOp))));
   builder.add(Op::RovScopedLockEnd(MemoryType::eUav));
 
   builder.add(Op::Return());

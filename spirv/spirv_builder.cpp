@@ -400,7 +400,6 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eOutputStore:
       return emitStoreVariable(op);
 
-    case ir::OpCode::eCompositeInsert:
     case ir::OpCode::eCompositeExtract:
       return emitCompositeOp(op);
 
@@ -3498,8 +3497,6 @@ void SpirvBuilder::emitStoreVariable(const ir::Op& op) {
 
 
 void SpirvBuilder::emitCompositeOp(const ir::Op& op) {
-  bool isInsert = op.getOpCode() == ir::OpCode::eCompositeInsert;
-
   const auto& addressOp = m_builder.getOpForOperand(op, 1u);
   dxbc_spv_assert(addressOp.isConstant() && addressOp.getType().isBasicType());
 
@@ -3507,15 +3504,9 @@ void SpirvBuilder::emitCompositeOp(const ir::Op& op) {
   auto spvId = getIdForDef(op.getDef());
 
   /* Emit actual composite instruction */
-  m_code.push_back(makeOpcodeToken(
-    (isInsert ? spv::OpCompositeInsert : spv::OpCompositeExtract),
-    (isInsert ? 5u : 4u) + addressOp.getOperandCount()));
+  m_code.push_back(makeOpcodeToken(spv::OpCompositeExtract, 4u + addressOp.getOperandCount()));
   m_code.push_back(typeId);
   m_code.push_back(spvId);
-
-  /* Value ID to insert */
-  if (isInsert)
-    m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(2u))));
 
   /* Composite ID */
   m_code.push_back(getIdForDef(ir::SsaDef(op.getOperand(0u))));
