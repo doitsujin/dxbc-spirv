@@ -778,16 +778,13 @@ bool Converter::handleTexCoord(ir::Builder& builder, const Instruction& op) {
     auto src = m_ioMap.emitTexCoordLoad(builder, op, op.getDst().getIndex(), writeMask, Swizzle::identity(), scalarType);
 
     /* Saturate */
-    src = builder.add(ir::Op::FClamp(
-      vectorType,
-      src,
+    src = builder.add(ir::Op::FClamp(vectorType, src,
       makeTypedConstant(builder, vectorType, 0.0f),
-      makeTypedConstant(builder, vectorType, 1.0f)
-    ));
+      makeTypedConstant(builder, vectorType, 1.0f)));
 
     /* w = 1.0 */
     if (writeMask & ComponentBit::eW)
-      src = builder.add(ir::Op::CompositeInsert(vectorType, src, builder.makeConstant(3u), ir::makeTypedConstant(builder, scalarType, 1.0f)));
+      src = insertIntoVector(builder, src, 3u, ir::makeTypedConstant(builder, scalarType, 1.0f));
 
     return storeDstModifiedPredicated(builder, op, dst, src);
   }
