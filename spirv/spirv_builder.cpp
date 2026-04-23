@@ -317,6 +317,9 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eDclUavCounter:
       return emitDclUavCounter(op);
 
+    case ir::OpCode::eDclInputTarget:
+      return emitDclInputTarget(op);
+
     case ir::OpCode::eDclXfb:
       return emitDclXfb(op);
 
@@ -1249,6 +1252,28 @@ void SpirvBuilder::emitDclUavCounter(const ir::Op& op) {
 
   defDescriptor(op, structTypeId, spv::StorageClassStorageBuffer);
   m_descriptorTypes.insert({ op.getDef(), structTypeId });
+}
+
+
+void SpirvBuilder::emitDclInputTarget(const ir::Op& op) {
+    dxbc_spv_assert(op.getType().isScalarType());
+
+    auto kind = getResourceKind(op);
+
+    enableCapability(spv::CapabilityInputAttachment);
+
+    /* The image type is different from regular resources */
+    SpirvImageTypeKey key = { };
+    key.sampledTypeId = getIdForType(op.getType());
+    key.dim = spv::DimSubpassData;
+    key.ms = ir::resourceIsMultisampled(kind) ? 1u : 0u;
+    key.sampled = 2u;
+
+    /* Declare actual image type and descriptor */
+    auto imageTypeId = getIdForImageType(key);
+
+    defDescriptor(op, imageTypeId, spv::StorageClassUniformConstant);
+    m_descriptorTypes.insert({ op.getDef(), imageTypeId });
 }
 
 
@@ -4397,6 +4422,13 @@ uint32_t SpirvBuilder::defDescriptor(const ir::Op& op, uint32_t typeId, spv::Sto
   if (op.getOpCode() == ir::OpCode::eDclCbv && cbvAsSsbo(op))
     pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationNonWritable);
 
+  if (op.getOpCode() == ir::OpCode::eDclInputTarget) {
+    int32_t rtIndex = int32_t(op.getOperand(op.getFirstLiteralOperandIndex() + 4u));
+
+    if (rtIndex >= 0)
+      pushOp(m_decorations, spv::OpDecorate, varId, spv::DecorationInputAttachmentIndex, rtIndex);
+  }
+
   emitDebugName(op.getDef(), varId);
 
   addEntryPointId(varId);
@@ -4946,7 +4978,8 @@ uint32_t SpirvBuilder::getDescriptorArraySize(const ir::Op& op) {
   dxbc_spv_assert(op.getOpCode() == ir::OpCode::eDclCbv ||
                   op.getOpCode() == ir::OpCode::eDclSrv ||
                   op.getOpCode() == ir::OpCode::eDclUav ||
-                  op.getOpCode() == ir::OpCode::eDclSampler);
+                  op.getOpCode() == ir::OpCode::eDclSampler ||
+                  op.getOpCode() == ir::OpCode::eDclInputTarget);
 
   return uint32_t(op.getOperand(3u));
 }
@@ -5065,6 +5098,7 @@ DescriptorBinding SpirvBuilder::mapDescriptor(const ir::Op& op, const ir::Op& bi
       case ir::OpCode::eDclSrv:         return ir::ScalarType::eSrv;
       case ir::OpCode::eDclUav:         return ir::ScalarType::eUav;
       case ir::OpCode::eDclUavCounter:  return ir::ScalarType::eUavCounter;
+      case ir::OpCode::eDclInputTarget: return ir::ScalarType::eInputTarget;
       default: break;
     }
 
@@ -5118,7 +5152,10 @@ ir::UavFlags SpirvBuilder::getUavFlags(const ir::Op& op) {
 
 
 ir::ResourceKind SpirvBuilder::getResourceKind(const ir::Op& op) {
-  dxbc_spv_assert(op.getOpCode() == ir::OpCode::eDclSrv || op.getOpCode() == ir::OpCode::eDclUav);
+  dxbc_spv_assert(op.getOpCode() == ir::OpCode::eDclSrv
+    || op.getOpCode() == ir::OpCode::eDclUav
+    || op.getOpCode() == ir::OpCode::eDclInputTarget);
+
   return ir::ResourceKind(op.getOperand(4u));
 }
 
