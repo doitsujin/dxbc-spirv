@@ -2420,7 +2420,15 @@ void SpirvBuilder::emitAtomic(const ir::Op& op, const ir::Type& type, uint32_t i
   /* Set up memory semantics */
   auto semantics = spv::MemorySemanticsMaskNone;
 
-  if (scope != spv::ScopeInvocation) {
+  /* Intel-specific path
+
+     DX specification does not mention any additional synchronization requirements for atomics.
+     Therefore we could relax memory semantics on atomics in DX shaders on Intel HW. */
+  if (m_options.intelRelaxAtomicMemoryOrderingSemantics) {
+    if (scope != spv::ScopeInvocation) {
+      semantics = spv::MemorySemanticsMask(memoryTypes | semantics);
+    }
+  } else if (scope != spv::ScopeInvocation) {
     semantics = spv::MemorySemanticsAcquireReleaseMask |
                 spv::MemorySemanticsMakeVisibleMask |
                 spv::MemorySemanticsMakeAvailableMask;
