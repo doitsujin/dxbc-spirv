@@ -173,7 +173,11 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return handleTextureSample(builder, op);
 
     case OpCode::eTexKill:
+      return handleTexKill(builder, op);
+
     case OpCode::eTexDepth:
+      return handleTexDepth(builder, op);
+
     case OpCode::eLrp:
     case OpCode::eCmp:
     case OpCode::eCnd:
@@ -791,6 +795,29 @@ bool Converter::handleTexCoord(ir::Builder& builder, const Instruction& op) {
 }
 
 
+ir::SsaDef Converter::emitTexMatMul(ir::Builder& builder, const Instruction& op) {
+  const uint32_t rows = op.getOpCode() == OpCode::eTexM3x2Tex ? 2u : 3u;
+  auto dst = op.getDst();
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+  auto src0 = op.getSrc(0u);
+  auto n = loadSrcModified(builder, op, src0, util::makeWriteMaskForComponents(3u), scalarType);
+
+  std::array<ir::SsaDef, 4u> components = { };
+  uint32_t lastIndex = dst.getIndex();
+  for (uint32_t i = 0u; i < components.size(); i++) {
+    if (i < rows) {
+      auto mi = m_ioMap.emitTexCoordLoad(builder, op, lastIndex + i - rows - 1u, util::makeWriteMaskForComponents(3u), Swizzle::identity(), scalarType);
+      components[i] = builder.add(emitFDot(scalarType, mi, n));
+    } else {
+      /* w is defined to be 1.0 in eTexM3x3. */
+      components[i] = ir::makeTypedConstant(builder, scalarType, 1.0f);
+    }
+  }
+
+  return buildVector(builder, scalarType, components.size(), components.data());
+}
+
+
 bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op) {
   ir::SsaDef result = ir::SsaDef();
   auto dst = op.getDst();
@@ -891,29 +918,175 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
       result = m_resources.emitSample(builder, samplerIdx, texCoord, ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), scalarType);
     } break;
 
-    case OpCode::eTexM3x2Tex:
-    case OpCode::eTexM3x3Tex:
-    case OpCode::eTexM3x3:
-    case OpCode::eTexM3x2Depth:
-    case OpCode::eTexM3x3Spec:
-    case OpCode::eTexM3x3VSpec: {
-      // NOT YET IMPLEMENTED
-      Logger::err("OpCode ", op.getOpCode(), " is not yet implemented.");
-      return false;
+
+    case OpCode::eTexM3x2Tex: {
+      auto texCoord = emitTexMatMul(builder, op);
+      texCoord = m_resources.projectTexCoord(builder, dst.getIndex(), texCoord, true);
+      /* TexM3x2Tex does a matrix multiplication and use the result as texture coordinate. */
+      result = m_resources.emitSample(builder, dst.getIndex(), texCoord, ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), scalarType);
     } break;
 
-    case OpCode::eTexDp3Tex:
+
+    case OpCode::eTexM3x3Tex: {
+      auto texCoord = emitTexMatMul(builder, op);
+      texCoord = m_resources.projectTexCoord(builder, dst.getIndex(), texCoord, true);
+      /* TexM3x3Tex does a matrix multiplication and use the result as texture coordinate. */
+      result = m_resources.emitSample(builder, dst.getIndex(), texCoord, ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), scalarType);
+    } break;
+
+
+    case OpCode::eTexM3x2Depth: {
+      auto texCoord = emitTexMatMul(builder, op);
+      /* TexM3x2Depth doesn't actually sample. */
+      auto z = ir::extractFromVector(builder, texCoord, 0u);
+      auto w = ir::extractFromVector(builder, texCoord, 1u);
+      auto isZero = builder.add(ir::Op::FEq(ir::ScalarType::eBool, w, builder.makeConstantZero(scalarType)));
+      auto depth = builder.add(ir::Op::Select(scalarType, isZero,
+        makeTypedConstant(builder, scalarType, 1.0f),
+        builder.add(ir::Op::FDiv(scalarType, z, w))));
+      m_ioMap.emitDepthStore(builder, op, depth);
+      /* Docs: After running texm3x2depth, register t(m+1) is no longer available for use in the shader. */
+    } break;
+
+
+    case OpCode::eTexM3x3: {
+      /* TexM3x3 doesn't actually sample. It just does the matrix multiplication and stores the result. */
+      result = emitTexMatMul(builder, op);
+    } break;
+
+
+    case OpCode::eTexM3x3Spec:
+    case OpCode::eTexM3x3VSpec: {
+      /* TexM3x3Spec / TexM3x3VSpec do a matrix multiplication and use the result as the normal vector
+       * in a reflection calculation. */
+      auto normal = emitTexMatMul(builder, op);
+
+      ir::SsaDef eyeRay;
+      if (opCode == OpCode::eTexM3x3VSpec) {
+        uint32_t lastIndex = dst.getIndex();
+        /* VSpec -> Create eye ray from .w of last 3 tex coords (m, m-1, m-2) */
+        std::array<ir::SsaDef, 3u> eyeRayComponents = { };
+        for (uint32_t i = 0u; i < eyeRayComponents.size(); i++)
+          eyeRayComponents[i] = m_ioMap.emitTexCoordLoad(builder, op, lastIndex + i - 2u, WriteMask(ComponentBit::eW), Swizzle::identity(), scalarType);
+
+        eyeRay = buildVector(builder, scalarType, eyeRayComponents.size(), eyeRayComponents.data());
+      } else {
+        /* Spec -> Get eye ray from src[1] */
+        eyeRay = loadSrcModified(builder, op, op.getSrc(1u), util::makeWriteMaskForComponents(3u), scalarType);
+      }
+
+      eyeRay = normalizeVector(builder, eyeRay);
+      normal = normalizeVector(builder, normal);
+
+      /* 2*[(N*E)/(N*N)]*N - E */
+      auto vectorType = ir::BasicType(scalarType, 3u);
+
+      auto nDotE = builder.add(emitFDot(scalarType, normal, eyeRay));
+      auto nDotN = builder.add(emitFDot(scalarType, normal, normal));
+      auto dotDiv = builder.add(ir::Op::FDiv(scalarType, nDotE, nDotN));
+      auto twoDotDiv = builder.add(emitFMul(scalarType, makeTypedConstant(builder, scalarType, 2.0f), dotDiv));
+      auto texCoord = builder.add(emitFMul(vectorType, normal, broadcastScalar(builder, twoDotDiv, util::makeWriteMaskForComponents(3u))));
+      texCoord = builder.add(ir::Op::FSub(vectorType, texCoord, eyeRay));
+
+      /* The sampling function requires a vec4. */
+      std::array<ir::SsaDef, 4u> texCoordComponents = {
+        builder.add(ir::Op::CompositeExtract(scalarType, texCoord, builder.makeConstant(0u))),
+        builder.add(ir::Op::CompositeExtract(scalarType, texCoord, builder.makeConstant(1u))),
+        builder.add(ir::Op::CompositeExtract(scalarType, texCoord, builder.makeConstant(2u))),
+        makeTypedConstant(builder, scalarType, 0.0f),
+      };
+      texCoord = buildVector(builder, scalarType, texCoordComponents.size(), texCoordComponents.data());
+
+      texCoord = m_resources.projectTexCoord(builder, dst.getIndex(), texCoord, true);
+
+      result = m_resources.emitSample(builder, dst.getIndex(), texCoord, ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), scalarType);
+    } break;
+
+
+    case OpCode::eTexDp3Tex: {
+      /* Calculate a dot product of the texcoord data and src0 (and optionally use that for 1D texture lookup) */
+      auto src0 = op.getSrc(0u);
+      auto m = m_ioMap.emitTexCoordLoad(builder, op, dst.getIndex(), util::makeWriteMaskForComponents(3u), Swizzle::identity(), scalarType);
+      auto n = loadSrcModified(builder, op, src0, util::makeWriteMaskForComponents(3u), scalarType);
+      auto dot = builder.add(emitFDot(scalarType, m, n));
+
+      /* Sample texture at register index of dst using (dot, 0, 0, 0) as coordinates */
+      std::array<ir::SsaDef, 4u> texCoordComponents = {
+        dot,
+        makeTypedConstant(builder, scalarType, 0.0f),
+        makeTypedConstant(builder, scalarType, 0.0f),
+        makeTypedConstant(builder, scalarType, 0.0f),
+      };
+      auto texCoord = buildVector(builder, scalarType, texCoordComponents.size(), texCoordComponents.data());
+      texCoord = m_resources.projectTexCoord(builder, dst.getIndex(), texCoord, true);
+      result = m_resources.emitSample(builder, dst.getIndex(), texCoord, ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), scalarType);
+    } break;
+
+
     case OpCode::eTexDp3: {
-      // NOT YET IMPLEMENTED
-      Logger::err("OpCode ", op.getOpCode(), " is not yet implemented.");
-      return false;
+      /* Calculate a dot product of the texcoord data and src0 (and optionally use that for 1D texture lookup) */
+      auto src0 = op.getSrc(0u);
+      auto m = m_ioMap.emitTexCoordLoad(builder, op, dst.getIndex(), util::makeWriteMaskForComponents(3u), Swizzle::identity(), scalarType);
+      auto n = loadSrcModified(builder, op, src0, util::makeWriteMaskForComponents(3u), scalarType);
+      auto dot = builder.add(emitFDot(scalarType, m, n));
+
+      /* Replicates the dot product to all four color channels. Doesn't actually sample. */
+      result = broadcastScalar(builder, dot, util::makeWriteMaskForComponents(4u));
     } break;
 
     case OpCode::eTexBem:
     case OpCode::eTexBemL: {
-      // NOT YET IMPLEMENTED
-      Logger::err("OpCode ", op.getOpCode(), " is not yet implemented.");
-      return false;
+      /* Apply a fake bump environment-map transform */
+      uint32_t samplerIdx = dst.getIndex();
+      auto texCoord = m_ioMap.emitTexCoordLoad(builder, op, samplerIdx, ComponentBit::eAll, Swizzle::identity(), scalarType);
+      auto src0 = loadSrcModified(builder, op, op.getSrc(0u), WriteMask(ComponentBit::eX | ComponentBit::eY), scalarType);
+
+      dxbc_spv_assert(getShaderInfo().getVersion().first < 2u);
+      /* The projection (/.w) happens before this... */
+      texCoord = m_resources.projectTexCoord(builder, samplerIdx, texCoord, true);
+
+      auto bumpMappedTexCoord = applyBumpMapping(builder, samplerIdx, texCoord, src0);
+
+      /* Insert it back into the original tex coord, so we have a z and w component in case we need them. */
+      std::array<ir::SsaDef, 4u> texCoordComponents = {};
+      texCoordComponents[0] = ir::extractFromVector(builder, bumpMappedTexCoord, 0u);
+      texCoordComponents[1] = ir::extractFromVector(builder, bumpMappedTexCoord, 1u);
+      texCoordComponents[2] = ir::extractFromVector(builder, texCoord, 2u);
+      texCoordComponents[3] = ir::extractFromVector(builder, texCoord, 3u);
+      texCoord = buildVector(builder, scalarType, texCoordComponents.size(), texCoordComponents.data());
+
+      result = m_resources.emitSample(builder, samplerIdx, texCoord, ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), scalarType);
+
+      if (opCode == OpCode::eTexBemL) {
+        /* Additionally does luminance correction
+         * m = dst index
+         * n = src0 index
+         * = sampled(t(m)) + (t(n).b * D3DTSS_BUMPENVLSCALE(stage m) + D3DTSS_BUMPENVLOFFSET(stage m)) */
+
+        auto descriptor = builder.add(ir::Op::DescriptorLoad(ir::ScalarType::eCbv, m_psSharedData, ir::SsaDef()));
+        auto bumpEnvLScale = builder.add(ir::Op::BufferLoad(ir::BasicType(ir::ScalarType::eF32, 2u),
+          descriptor, builder.makeConstant(samplerIdx * 5u + 3u), 16u));
+        auto bumpEnvLOffset = builder.add(ir::Op::BufferLoad(ir::BasicType(ir::ScalarType::eF32, 2u),
+          descriptor, builder.makeConstant(samplerIdx * 5u + 2u), 8u));
+
+        if (scalarType != ir::ScalarType::eF32) {
+          bumpEnvLScale = builder.add(ir::Op::ConsumeAs(ir::BasicType(scalarType, 2u), bumpEnvLScale));
+          bumpEnvLOffset = builder.add(ir::Op::ConsumeAs(ir::BasicType(scalarType, 2u), bumpEnvLOffset));
+        }
+
+        auto scale = builder.add(ir::Op::CompositeExtract(scalarType, result, builder.makeConstant(2u)));
+        scale = builder.add(emitFMul(scalarType, scale, bumpEnvLScale));
+        scale = builder.add(ir::Op::FAdd(scalarType, scale, bumpEnvLOffset));
+        scale = builder.add(ir::Op::FClamp(scalarType, scale, ir::makeTypedConstant(builder, scalarType, 0.0f), ir::makeTypedConstant(builder, scalarType, 1.0f)));
+
+        std::array<ir::SsaDef, 4u> scaledComponents = {};
+        for (uint32_t i = 0u; i < 4u; i++) {
+          auto resultComponent = builder.add(ir::Op::CompositeExtract(scalarType, result, builder.makeConstant(i)));
+          scaledComponents[i] = builder.add(emitFMul(scalarType, resultComponent, scale));
+        }
+
+        result = buildVector(builder, scalarType, scaledComponents.size(), scaledComponents.data());
+      }
     } break;
 
     default: {
@@ -924,6 +1097,61 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
   }
 
   return storeDstModifiedPredicated(builder, op, dst, result);
+}
+
+
+bool Converter::handleTexKill(ir::Builder& builder, const Instruction& op) {
+  /* Demotes if any of the first 3 components are less than 0.0. */
+  dxbc_spv_assert(op.hasDst());
+  auto writeMask = op.getDst().getWriteMask(getShaderInfo());
+  writeMask &= ComponentBit::eX | ComponentBit::eY | ComponentBit::eZ;
+  ir::SsaDef dst;
+
+  auto [versionMajor, versionMinor] = getShaderInfo().getVersion();
+  if (versionMajor <= 1u && versionMinor <= 3u) {
+    dst = m_ioMap.emitTexCoordLoad(builder,
+      op,
+      op.getDst().getIndex(),
+      writeMask,
+      Swizzle::identity(),
+      ir::ScalarType::eF32);
+  } else {
+    /* Yes, we're loading the dst as a src here. That's not a mistake. */
+    dst = loadSrc(builder, op, op.getDst(), writeMask, Swizzle::identity(), ir::ScalarType::eF32);
+  }
+
+  ir::SsaDef minVal = { };
+
+  for (auto c : writeMask) {
+    ir::SsaDef texCoordComponent = ir::extractFromVector(builder, dst, uint32_t(util::componentFromBit(c)));
+
+    if (!minVal)
+      minVal = texCoordComponent;
+    else
+      minVal = builder.add(ir::Op::FMin(builder.getOp(texCoordComponent).getType(), texCoordComponent, minVal));
+  }
+
+  auto cond = builder.add(ir::Op::FLt(ir::ScalarType::eBool, minVal, builder.makeConstant(0.0f)));
+  auto ifDef = builder.add(ir::Op::ScopedIf(ir::SsaDef(), cond));
+  builder.add(ir::Op::Demote());
+  auto endIf = builder.add(ir::Op::ScopedEndIf(ifDef));
+  builder.rewriteOp(ifDef, ir::Op(builder.getOp(ifDef)).setOperand(0u, endIf));
+  return true;
+}
+
+
+bool Converter::handleTexDepth(ir::Builder& builder, const Instruction& op) {
+  /* Writes the fragment depth */
+  /* It always uses temporary register r5. */
+  auto val = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX | ComponentBit::eY, ir::ScalarType::eF32);
+  auto r = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eF32, val, builder.makeConstant(0u)));
+  auto g = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eF32, val, builder.makeConstant(1u)));
+  /* depth = r5.r / r5.g */
+  auto depth = builder.add(ir::Op::FDiv(ir::ScalarType::eF32, r, g));
+  /* If r5.g = 0, the result of r5.r / r5.g = 1.0. */
+  auto zeroCond = builder.add(ir::Op::FEq(ir::ScalarType::eBool, g, builder.makeConstant(0.0f)));
+  depth = builder.add(ir::Op::Select(ir::ScalarType::eF32, zeroCond, builder.makeConstant(1.0f), depth));
+  return m_ioMap.emitDepthStore(builder, op, depth);
 }
 
 

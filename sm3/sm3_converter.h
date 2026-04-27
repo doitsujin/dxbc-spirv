@@ -120,6 +120,8 @@ private:
       : ir::Op::FPow(type, base, exp);
   }
 
+  ir::SsaDef emitTexMatMul(ir::Builder& builder, const Instruction& op);
+
   ir::SsaDef emitSharedConstants(ir::Builder& builder);
 
   ir::SsaDef applyBumpMapping(ir::Builder& builder, uint32_t stageIdx, ir::SsaDef src0, ir::SsaDef src1);
@@ -151,6 +153,10 @@ private:
   bool handleTexCoord(ir::Builder& builder, const Instruction& op);
 
   bool handleTextureSample(ir::Builder& builder, const Instruction& op);
+
+  bool handleTexKill(ir::Builder& builder, const Instruction& op);
+
+  bool handleTexDepth(ir::Builder& builder, const Instruction& op);
 
   ir::SsaDef loadSrc(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, Swizzle swizzle, ir::ScalarType type);
 
