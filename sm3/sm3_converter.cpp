@@ -820,6 +820,9 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
           /* tex - ps_1_1 - ps_1_3 */
           /* The destination register index decides the sampler and texture coord index. */
           texCoord = m_ioMap.emitTexCoordLoad(builder, op, samplerIdx, ComponentBit::eAll, Swizzle::identity(), scalarType);
+
+          /* D3DTTFF_PROJECTED only impacts the ps_1_1 - ps_1_3 tex instruction. */
+          texCoord = m_resources.projectTexCoord(builder, samplerIdx, texCoord, true);
         }
       } else {
         /* texld - sm_2_0 and up */
@@ -838,9 +841,6 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
           default: break;
         }
       }
-
-      if (m_parser.getShaderInfo().getVersion().first <= 1u && m_parser.getShaderInfo().getVersion().second < 4u)
-        texCoord = m_resources.projectTexCoord(builder, samplerIdx, texCoord, true);
 
       result = m_resources.emitSample(builder, samplerIdx, texCoord, lod, lodBias, ir::SsaDef(), ir::SsaDef(), scalarType);
     } break;
@@ -884,9 +884,6 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
       auto texCoord = loadSrcModified(builder, op, src0, ComponentBit::eAll, scalarType);
       texCoord = swizzleVector(builder, texCoord, swizzle, ComponentBit::eAll);
       uint32_t samplerIdx = dst.getIndex();
-
-      if (m_parser.getShaderInfo().getVersion().first <= 1u && m_parser.getShaderInfo().getVersion().second < 4u)
-        texCoord = m_resources.projectTexCoord(builder, samplerIdx, texCoord, true);
 
       result = m_resources.emitSample(builder, samplerIdx, texCoord, ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), scalarType);
     } break;
