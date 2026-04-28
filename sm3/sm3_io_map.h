@@ -126,6 +126,9 @@ public:
     const Instruction&            op,
           ir::SsaDef              value);
 
+  /** Stores a vector value to color output register 0. */
+  bool emitColorStore(ir::Builder& builder, ir::SsaDef value);
+
 private:
 
   Converter&      m_converter;
