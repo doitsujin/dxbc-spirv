@@ -52,9 +52,19 @@ public:
   void emitBufferedStores(
           ir::Builder&            builder);
 
+  /** Loads value from texture register. */
+  ir::SsaDef emitTextureRegLoad(
+          ir::Builder&            builder,
+          uint32_t                regIndex,
+          Swizzle                 swizzle,
+          WriteMask               componentMask,
+          ir::ScalarType          type);
+
 private:
 
   ir::SsaDef getOrDeclareTemp(ir::Builder& builder, uint32_t index, Component component);
+
+  ir::SsaDef getOrDeclareTextureReg(ir::Builder& builder, uint32_t index, Component component);
 
   Converter& m_converter;
 
@@ -80,6 +90,9 @@ private:
 
   /* Buffered stores to deal with coissue */
   util::small_vector<Store, 8u> m_stores = { };
+
+  /* In shader model 1.1 - 1.3, you put either texture data (from sampling) or texcoords into a texture register. */
+  std::array<ir::SsaDef, 8u * 4u> m_textureRegs = { };
 
 };
 

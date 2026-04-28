@@ -10,9 +10,11 @@ RegisterFile::RegisterFile(Converter &converter)
 : m_converter(converter) {
 }
 
+
 RegisterFile::~RegisterFile() {
 
 }
+
 
 void RegisterFile::initialize(ir::Builder& builder) {
   uint32_t addressRegisterComponents = m_converter.getShaderInfo().getVersion().first >= 2u ? 4u : 1u;
@@ -43,6 +45,7 @@ void RegisterFile::initialize(ir::Builder& builder) {
   }
 }
 
+
 ir::SsaDef RegisterFile::getOrDeclareTemp(ir::Builder& builder, uint32_t index, Component component) {
   uint32_t tempIndex = 4u * index + uint8_t(component);
 
@@ -61,6 +64,23 @@ ir::SsaDef RegisterFile::getOrDeclareTemp(ir::Builder& builder, uint32_t index, 
   return m_rRegs[tempIndex];
 }
 
+
+ir::SsaDef RegisterFile::getOrDeclareTextureReg(ir::Builder& builder, uint32_t index, Component component) {
+  uint32_t textureIndex = 4u * index + uint8_t(component);
+
+  if (!m_textureRegs[textureIndex]) {
+    m_textureRegs[textureIndex] = builder.add(ir::Op::DclTmp(ir::ScalarType::eUnknown, m_converter.getEntryPoint()));
+
+    if (m_converter.getOptions().includeDebugNames) {
+      std::string name = m_converter.makeRegisterDebugName(RegisterType::eTexture, index, util::componentBit(component));
+      builder.add(ir::Op::DebugName(m_textureRegs[textureIndex], name.c_str()));
+    }
+  }
+
+  return m_textureRegs[textureIndex];
+}
+
+
 ir::SsaDef RegisterFile::emitTempLoad(
   ir::Builder& builder,
   uint32_t regIndex,
@@ -77,6 +97,33 @@ ir::SsaDef RegisterFile::emitTempLoad(
 
     auto tmpReg = getOrDeclareTemp(builder, regIndex, component);
     auto scalar = builder.add(ir::Op::TmpLoad(ir::ScalarType::eUnknown, tmpReg));
+
+    /* Convert to requested type */
+    scalar = builder.add(ir::Op::ConsumeAs(type, scalar));
+
+    components[uint8_t(component)] = scalar;
+  }
+
+  return composite(builder, returnType, components.data(), swizzle, componentMask);
+}
+
+
+ir::SsaDef RegisterFile::emitTextureRegLoad(
+    ir::Builder& builder,
+    uint32_t regIndex,
+    Swizzle swizzle,
+    WriteMask componentMask,
+    ir::ScalarType type
+  ) {
+  auto returnType = makeVectorType(type, componentMask);
+
+  std::array<ir::SsaDef, 4u> components = { };
+
+  for (auto c : swizzle.getReadMask(componentMask)) {
+    auto component = componentFromBit(c);
+
+    auto texReg = getOrDeclareTextureReg(builder, regIndex, component);
+    auto scalar = builder.add(ir::Op::TmpLoad(ir::ScalarType::eUnknown, texReg));
 
     /* Convert to requested type */
     scalar = builder.add(ir::Op::ConsumeAs(type, scalar));
@@ -164,20 +211,30 @@ bool RegisterFile::emitStore(
           scalar = builder.add(ir::Op::ConsumeAs(ir::ScalarType::eUnknown, scalar));
       } break;
 
-      case RegisterType::eAddr: {
-        dxbc_spv_assert(m_converter.getShaderInfo().getVersion().first >= 2u || c == ComponentBit::eX);
-        dxbc_spv_assert(m_converter.getShaderInfo().getType() == ShaderType::eVertex);
+      case RegisterType::eAddr:
+      /* case RegisterType::eTexture: Same Value */ {
 
-        if (!valueType.isIntType()) {
-          /* a0 can be written to using the mova instruction on SM2+
-           * or the mov instruction on SM1.1. */
+        /* Vertex shaders use this register type value for address */
+        if (m_converter.getShaderInfo().getType() == ShaderType::eVertex) {
+          dxbc_spv_assert(m_converter.getShaderInfo().getVersion().first >= 2u || c == ComponentBit::eX);
 
-          scalar = builder.add(ir::Op::ConsumeAs(ir::ScalarType::eF32, scalar));
-          scalar = builder.add(ir::Op::FRound(ir::ScalarType::eF32, scalar, ir::RoundMode::eNearestEven));
-          scalar = builder.add(ir::Op::ConvertFtoI(ir::ScalarType::eI32, scalar));
+          if (!valueType.isIntType()) {
+            /* a0 can be written to using the mova instruction on SM2+
+             * or the mov instruction on SM1.1. */
+
+            scalar = builder.add(ir::Op::ConsumeAs(ir::ScalarType::eF32, scalar));
+            scalar = builder.add(ir::Op::FRound(ir::ScalarType::eF32, scalar, ir::RoundMode::eNearestEven));
+            scalar = builder.add(ir::Op::ConvertFtoI(ir::ScalarType::eI32, scalar));
+          }
+
+          reg = m_a0Reg[uint8_t(component)];
+        } else {
+          /* Texture registers act as special purpose temp registers in PS 1.1 - PS 1.3. */
+          reg = getOrDeclareTextureReg(builder, regIndex, component);
+
+          if (!valueType.isUnknownType())
+            scalar = builder.add(ir::Op::ConsumeAs(ir::ScalarType::eUnknown, scalar));
         }
-
-        reg = m_a0Reg[uint8_t(component)];
       } break;
 
       case RegisterType::ePredicate: {
