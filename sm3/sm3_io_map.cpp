@@ -774,6 +774,30 @@ bool IoMap::emitDepthStore(ir::Builder &builder, const Instruction &op, ir::SsaD
 }
 
 
+bool IoMap::emitColorStore(ir::Builder& builder, ir::SsaDef value) {
+  const IoVarInfo* ioVar = findIoVar(m_variables, RegisterType::eColorOut, 0u);
+
+  if (ioVar == nullptr) {
+    std::optional<Semantic> semantic = determineSemanticForRegister(RegisterType::eColorOut, 0u);
+
+    if (!semantic.has_value()) {
+      Logger::err("Failed to process I/O color store.");
+      return false;
+    }
+
+    dclIoVar(builder, RegisterType::eColorOut, 0u, semantic.value());
+    ioVar = &m_variables.back();
+  }
+
+  for (uint32_t i = 0u; i < 4u; i++) {
+    auto valueScalar = ir::extractFromVector(builder, value, i);
+    dxbc_spv_assert(builder.getOp(ioVar->tempDefs[i]).getType() == builder.getOp(valueScalar).getType());
+    builder.add(ir::Op::TmpStore(ioVar->tempDefs[i], valueScalar));
+  }
+  return true;
+}
+
+
 ir::SsaDef IoMap::emitDynamicLoadFunction(ir::Builder& builder) const {
   auto indexParameter = builder.add(ir::Op::DclParam(ir::ScalarType::eU32));
 

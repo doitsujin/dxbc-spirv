@@ -246,6 +246,16 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
 
 
 bool Converter::finalize(ir::Builder& builder, ShaderType shaderType) {
+  if (getShaderInfo().getVersion().first == 1u) {
+    /* Shader model 1 doesn't have special color output registers.
+     * Instead, it simply outputs what was in Temp register 0 (r0) at the end. */
+    auto value = m_regFile.emitTempLoad(builder, 0u,
+      Swizzle::identity(), WriteMask(ComponentBit::eAll), ir::ScalarType::eF32);
+
+    if (!m_ioMap.emitColorStore(builder, value))
+      return false;
+  }
+
   m_ioMap.finalize(builder);
 
   return true;
