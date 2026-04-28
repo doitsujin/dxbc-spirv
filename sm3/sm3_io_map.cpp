@@ -357,12 +357,7 @@ void IoMap::dclIoVar(
   if (builtIn == ir::BuiltIn::ePointSize)
     tempVectorSize = 4u;
 
-  auto [versionMajor, versionMinor] = m_converter.getShaderInfo().getVersion();
-
-  if (!isInput || (registerType == RegisterType::eTexture
-    && versionMajor == 1u
-    && versionMinor < 4u
-    && shaderType == ShaderType::ePixel)) {
+  if (!isInput) {
     /* SM 1 texture ops write the texture data into the texture register which used to hold the texcoord.
      * So we need writable temps for this input register. */
     for (uint32_t i = 0u; i < tempVectorSize; i++) {
@@ -628,15 +623,9 @@ ir::SsaDef IoMap::emitTexCoordLoad(
     }
 
     auto varScalarType = ioVar->baseType.getBaseType(0u).getBaseType();
-    ir::SsaDef value;
 
-    if (!ioVar->tempDefs[0u]) {
-      ir::SsaDef addressConstant = builder.makeConstant(componentIndex);
-      value = builder.add(ir::Op::InputLoad(varScalarType, ioVar->baseDef, addressConstant));
-    } else {
-      /* The input register is writable. (SM 1 Texture register) */
-      value = builder.add(ir::Op::TmpLoad(varScalarType, ioVar->tempDefs[uint32_t(componentIndex)]));
-    }
+    ir::SsaDef addressConstant = builder.makeConstant(componentIndex);
+    auto value = builder.add(ir::Op::InputLoad(varScalarType, ioVar->baseDef, addressConstant));
 
     components[componentIndex] = convertScalar(builder, type, value);
   }
@@ -673,16 +662,7 @@ bool IoMap::emitStore(
       emitIoVarDefault(builder, *ioVar);
     }
 
-    if (operand.getRegisterType() == RegisterType::eTexture) {
-      /* PS 1 texture registers hold the texcoords at first which then gets replaced by the texture data when
-       * a texture sampling instruction is executed. */
-      dxbc_spv_assert(m_converter.getShaderInfo().getType() == ShaderType::ePixel);
-      auto [versionMajor, versionMinor] = m_converter.getShaderInfo().getVersion();
-      dxbc_spv_assert(versionMajor <= 1u && versionMinor <= 3u);
-    } else {
-      bool isOutput = !registerTypeIsInput(ioVar->registerType, m_converter.getShaderInfo().getType());
-      dxbc_spv_assert(isOutput);
-    }
+    dxbc_spv_assert(!registerTypeIsInput(ioVar->registerType, m_converter.getShaderInfo().getType()));
 
     auto ioVarBaseType = ioVar->baseType.getBaseType(0u);
     ir::ScalarType ioVarScalarType = ioVarBaseType.getBaseType();
