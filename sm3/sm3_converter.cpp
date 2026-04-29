@@ -833,6 +833,7 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
   auto dst = op.getDst();
   auto opCode = op.getOpCode();
   auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+  Swizzle swizzle = Swizzle::identity();
 
   switch (opCode) {
     case OpCode::eTexLd: {
@@ -886,6 +887,10 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
       /* Sample with explicit LOD */
       auto src0 = op.getSrc(0u);
       auto src1 = op.getSrc(1u);
+
+      if (getShaderInfo().getVersion().first >= 3u)
+        swizzle = src1.getSwizzle(getShaderInfo());
+
       auto texCoord = loadSrcModified(builder, op, src0, ComponentBit::eAll, scalarType);
       uint32_t samplerIdx = src1.getIndex();
       auto lod = builder.add(ir::Op::CompositeExtract(scalarType, texCoord, builder.makeConstant(3u)));
@@ -896,6 +901,10 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
       /* Sample with explicit derivatives */
       auto src0 = op.getSrc(0u);
       auto src1 = op.getSrc(1u);
+
+      if (getShaderInfo().getVersion().first >= 3u)
+        swizzle = src1.getSwizzle(getShaderInfo());
+
       auto src2 = op.getSrc(2u);
       auto src3 = op.getSrc(3u);
       auto texCoord = loadSrcModified(builder, op, src0, ComponentBit::eAll, scalarType);
@@ -909,17 +918,17 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
     case OpCode::eTexReg2Gb:
     case OpCode::eTexReg2Rgb: {
       /* Sample with custom values used as texture coords (SM 1) */
-      Swizzle swizzle = Swizzle::identity();
+      Swizzle texCoordSwizzle = Swizzle::identity();
       switch (opCode) {
-        case OpCode::eTexReg2Ar:  swizzle = Swizzle(Component::eW, Component::eX, Component::eX, Component::eX); break;
-        case OpCode::eTexReg2Gb:  swizzle = Swizzle(Component::eY, Component::eZ, Component::eZ, Component::eZ); break;
-        case OpCode::eTexReg2Rgb: swizzle = Swizzle(Component::eX, Component::eY, Component::eZ, Component::eZ); break;
+        case OpCode::eTexReg2Ar:  texCoordSwizzle = Swizzle(Component::eW, Component::eX, Component::eX, Component::eX); break;
+        case OpCode::eTexReg2Gb:  texCoordSwizzle = Swizzle(Component::eY, Component::eZ, Component::eZ, Component::eZ); break;
+        case OpCode::eTexReg2Rgb: texCoordSwizzle = Swizzle(Component::eX, Component::eY, Component::eZ, Component::eZ); break;
         default: dxbc_spv_unreachable(); break;
       }
 
       auto src0 = op.getSrc(0u);
       auto texCoord = loadSrcModified(builder, op, src0, ComponentBit::eAll, scalarType);
-      texCoord = swizzleVector(builder, texCoord, swizzle, ComponentBit::eAll);
+      texCoord = swizzleVector(builder, texCoord, texCoordSwizzle, ComponentBit::eAll);
       uint32_t samplerIdx = dst.getIndex();
 
       result = m_resources.emitSample(builder, samplerIdx, texCoord, ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), ir::SsaDef(), scalarType);
@@ -1098,6 +1107,10 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
       return false;
     } break;
   }
+
+  /* The sampling functions return an unswizzled vec4 that hasn't applied the write mask yet.
+   * So do that now. */
+  result = ir::swizzleVector(builder, result, swizzle, dst.getWriteMask(getShaderInfo()));
 
   return storeDstModifiedPredicated(builder, op, dst, result);
 }
