@@ -246,7 +246,7 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
 
 
 bool Converter::finalize(ir::Builder& builder, ShaderType shaderType) {
-  if (getShaderInfo().getVersion().first == 1u) {
+  if (shaderType == ShaderType::ePixel && getShaderInfo().getVersion().first == 1u) {
     /* Shader model 1 doesn't have special color output registers.
      * Instead, it simply outputs what was in Temp register 0 (r0) at the end. */
     auto value = m_regFile.emitTempLoad(builder, 0u,
