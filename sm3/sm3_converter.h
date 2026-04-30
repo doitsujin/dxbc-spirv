@@ -158,6 +158,8 @@ private:
 
   bool handleTexDepth(ir::Builder& builder, const Instruction& op);
 
+  bool handleLrp(ir::Builder& builder, const Instruction& op);
+
   bool handleSelect(ir::Builder& builder, const Instruction& op);
 
   ir::SsaDef loadSrc(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, Swizzle swizzle, ir::ScalarType type);
