@@ -178,11 +178,13 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
     case OpCode::eTexDepth:
       return handleTexDepth(builder, op);
 
+    case OpCode::eLrp:
+      return handleLrp(builder, op);
+
     case OpCode::eCmp:
     case OpCode::eCnd:
       return handleSelect(builder, op);
 
-    case OpCode::eLrp:
     case OpCode::eNrm:
     case OpCode::eSinCos:
     case OpCode::ePow:
@@ -1289,6 +1291,29 @@ bool Converter::handleExpP(ir::Builder& builder, const Instruction& op) {
     result = builder.add(ir::Op::FMin(vectorType, result,
       ir::makeTypedConstant(builder, vectorType, std::numeric_limits<float>::max())));
   }
+
+  return storeDstModifiedPredicated(builder, op, dst, result);
+}
+
+
+bool Converter::handleLrp(ir::Builder& builder, const Instruction& op) {
+  dxbc_spv_assert(op.getSrcCount() == 3u);
+  dxbc_spv_assert(op.hasDst());
+
+  auto dst = op.getDst();
+  WriteMask writeMask = dst.getWriteMask(m_parser.getShaderInfo());
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+
+  auto src0 = loadSrcModified(builder, op, op.getSrc(0u), writeMask, scalarType);
+  auto src1 = loadSrcModified(builder, op, op.getSrc(1u), writeMask, scalarType);
+  auto src2 = loadSrcModified(builder, op, op.getSrc(2u), writeMask, scalarType);
+
+  auto type = makeVectorType(scalarType, writeMask);
+
+  /* dest = src0 * (src1 - src2) + src2 */
+  auto result = builder.add(ir::Op::FSub(type, src1, src2));
+  result = builder.add(emitFMul(type, src0, result));
+  result = builder.add(ir::Op::FAdd(type, result, src2));
 
   return storeDstModifiedPredicated(builder, op, dst, result);
 }
