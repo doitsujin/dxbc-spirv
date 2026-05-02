@@ -925,25 +925,23 @@ bool Converter::handleTexCoord(ir::Builder& builder, const Instruction& op) {
 
 
 ir::SsaDef Converter::emitTexMatMul(ir::Builder& builder, const Instruction& op) {
-  const uint32_t rows = op.getOpCode() == OpCode::eTexM3x2Tex ? 2u : 3u;
+  const uint32_t rows = op.getOpCode() == OpCode::eTexM3x2Tex
+    || op.getOpCode() == OpCode::eTexM3x2Depth
+    ? 2u : 3u;
+
   auto dst = op.getDst();
   auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
   auto src0 = op.getSrc(0u);
-  auto n = loadSrcModified(builder, op, src0, util::makeWriteMaskForComponents(3u), scalarType);
+  auto tn = loadSrcModified(builder, op, src0, util::makeWriteMaskForComponents(3u), scalarType);
 
-  std::array<ir::SsaDef, 4u> components = { };
+  std::array<ir::SsaDef, 3u> components = { };
   uint32_t lastIndex = dst.getIndex();
-  for (uint32_t i = 0u; i < components.size(); i++) {
-    if (i < rows) {
-      auto mi = m_ioMap.emitTexCoordLoad(builder, op, lastIndex + i - rows - 1u, util::makeWriteMaskForComponents(3u), Swizzle::identity(), scalarType);
-      components[i] = builder.add(emitFDot(scalarType, mi, n));
-    } else {
-      /* w is defined to be 1.0 in eTexM3x3. */
-      components[i] = ir::makeTypedConstant(builder, scalarType, 1.0f);
-    }
+  for (uint32_t i = 0u; i < rows; i++) {
+    auto tmi = m_ioMap.emitTexCoordLoad(builder, op, lastIndex + i - rows + 1u, util::makeWriteMaskForComponents(3u), Swizzle::identity(), scalarType);
+    components[i] = builder.add(emitFDot(scalarType, tmi, tn));
   }
 
-  return buildVector(builder, scalarType, components.size(), components.data());
+  return buildVector(builder, scalarType, rows, components.data());
 }
 
 
@@ -1085,6 +1083,15 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
     case OpCode::eTexM3x3: {
       /* TexM3x3 doesn't actually sample. It just does the matrix multiplication and stores the result. */
       result = emitTexMatMul(builder, op);
+      /* TexM3x3 is defined to return a 4d vector with w being 1.0. emitTexMatMul only returns a 3d vector. */
+      std::array<ir::SsaDef, 4u> components = {
+        ir::extractFromVector(builder, result, 0u),
+        ir::extractFromVector(builder, result, 1u),
+        ir::extractFromVector(builder, result, 2u),
+        makeTypedConstant(builder, scalarType, 1.0f)
+      };
+      dxbc_spv_assert(builder.getOp(components[0u]).getType().getBaseType(0u).getBaseType() == scalarType);
+      result = ir::buildVector(builder, scalarType, components.size(), components.data());
     } break;
 
 
