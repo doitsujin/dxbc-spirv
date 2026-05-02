@@ -122,7 +122,6 @@ public:
    *  instruction. If possible this will emit a vectorized load. */
   ir::SsaDef emitConstantLoad(
           ir::Builder&            builder,
-    const Instruction&            op,
     const Operand&                operand,
           WriteMask               componentMask,
           ir::ScalarType          scalarType);
