@@ -1287,7 +1287,7 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
     case RegisterType::eConst4:
     case RegisterType::eConstInt:
     case RegisterType::eConstBool:
-      loadDef = m_resources.emitConstantLoad(builder, op, operand, mask, type);
+      loadDef = m_resources.emitConstantLoad(builder, operand, mask, type);
       break;
 
     default:
@@ -2004,7 +2004,7 @@ bool Converter::storeDst(ir::Builder& builder, const Instruction& op, const Oper
 }
 
 
-ir::SsaDef Converter::applyDstModifiers(ir::Builder& builder, ir::SsaDef def, const Instruction& instruction, const Operand& operand) {
+ir::SsaDef Converter::applyDstModifiers(ir::Builder& builder, ir::SsaDef def, const Operand& operand) {
   ir::Op op = builder.getOp(def);
   auto type = op.getType().getBaseType(0u);
   int8_t shift = operand.getShift();
@@ -2040,7 +2040,7 @@ ir::SsaDef Converter::applyDstModifiers(ir::Builder& builder, ir::SsaDef def, co
 
 
 bool Converter::storeDstModifiedPredicated(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value) {
-  value = applyDstModifiers(builder, value, op, operand);
+  value = applyDstModifiers(builder, value, operand);
 
   ir::SsaDef predicate = ir::SsaDef();
   if (operand.isPredicated()) {

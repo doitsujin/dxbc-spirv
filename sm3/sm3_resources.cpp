@@ -131,7 +131,6 @@ void ResourceMap::emitNamedConstantRanges(ir::Builder& builder, const ConstantTa
 
 ir::SsaDef ResourceMap::emitConstantLoad(
           ir::Builder&            builder,
-    const Instruction&            op,
     const Operand&                operand,
           WriteMask               componentMask,
           ir::ScalarType          scalarType) {

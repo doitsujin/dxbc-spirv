@@ -204,7 +204,7 @@ private:
 
   bool storeDst(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef predicateVec, ir::SsaDef value);
 
-  ir::SsaDef applyDstModifiers(ir::Builder& builder, ir::SsaDef def, const Instruction& instruction, const Operand& operand);
+  ir::SsaDef applyDstModifiers(ir::Builder& builder, ir::SsaDef def, const Operand& operand);
 
   bool storeDstModifiedPredicated(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value);
 
