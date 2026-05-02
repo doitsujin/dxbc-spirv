@@ -1339,23 +1339,26 @@ bool Converter::handleSelect(ir::Builder& builder, const Instruction& op) {
   WriteMask writeMask = dst.getWriteMask(m_parser.getShaderInfo());
   auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
 
+  if (op.getOpCode() == OpCode::eCnd && getShaderInfo().getVersion().first <= 1u && getShaderInfo().getVersion().second < 4u) {
+    /* Cnd on SM<1.4 compares everything to r0.a. Attempting to use a different register for source 0 or a different
+     * swizzle makes D3D9 reject the shader on SM<1.4. It similarly rejects the shader when you try to use a different
+     * write mask than .rgba, .rgb or .a.
+     * On 1.4+ it compares per component and it's a lot more flexible. */
+    auto src0Register = op.getSrc(0u);
+    if (src0Register.getIndex() != 0u
+      || src0Register.getRegisterType() != RegisterType::eTemp
+      || src0Register.getSwizzle(getShaderInfo()) != Swizzle(Component::eW))
+      return false;
+
+    if (writeMask != WriteMask(ComponentBit::eAll)
+      && writeMask != WriteMask(ComponentBit::eW)
+      && writeMask != WriteMask(ComponentBit::eX | ComponentBit::eY | ComponentBit::eZ))
+      return false;
+  }
+
   auto src0 = loadSrcModified(builder, op, op.getSrc(0u), writeMask, scalarType);
   auto src1 = loadSrcModified(builder, op, op.getSrc(1u), writeMask, scalarType);
   auto src2 = loadSrcModified(builder, op, op.getSrc(2u), writeMask, scalarType);
-
-  if (op.getOpCode() == OpCode::eCnd && getShaderInfo().getVersion().first <= 1u && getShaderInfo().getVersion().second < 4u) {
-    /* Cnd on SM<1.4 compares the a-component and picks one of the two entire source operands based on that
-     * On 1.4+ it compares per component. */
-    auto conditionComponent = ir::extractFromVector(builder, src0, 3u);
-
-    /* Cnd compares to 0.5 */
-    auto conditionBool = builder.add(ir::Op::FGt(ir::ScalarType::eBool, conditionComponent, makeTypedConstant(builder, scalarType, 0.5f)));
-
-    auto result = builder.add(ir::Op::Select(builder.getOp(src1).getType(), conditionBool, src1, src2));
-
-    return storeDstModifiedPredicated(builder, op, dst, result);
-  }
-
 
   util::small_vector<ir::SsaDef, 4u> components;
   for (auto _ : writeMask) {
