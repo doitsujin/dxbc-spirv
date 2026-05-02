@@ -378,14 +378,16 @@ ir::SsaDef Converter::applyBumpMapping(ir::Builder& builder, uint32_t stageIdx, 
   std::array<ir::SsaDef, 2> components = {};
 
   for (uint32_t i = 0u; i < components.size(); i++) {
-    auto src1r = builder.add(ir::Op::CompositeExtract(scalarType, src1, builder.makeConstant(0u)));
-    auto bumped0 = builder.add(emitFMul(scalarType, bumpEnvMat0, src1r));
+    auto src1r = ir::extractFromVector(builder, src1, 0u);
+    auto bumpEnv0 = ir::extractFromVector(builder, bumpEnvMat0, i);
+    auto bumped0 = builder.add(emitFMul(scalarType, bumpEnv0, src1r));
 
-    auto src1g = builder.add(ir::Op::CompositeExtract(scalarType, src1, builder.makeConstant(1u)));
-    auto bumped1 = builder.add(emitFMul(scalarType, bumpEnvMat1, src1g));
+    auto src1g = ir::extractFromVector(builder, src1, 1u);
+    auto bumpEnv1 = ir::extractFromVector(builder, bumpEnvMat1, i);
+    auto bumped1 = builder.add(emitFMul(scalarType, bumpEnv1, src1g));
 
     auto bumpedSum = builder.add(ir::Op::FAdd(scalarType, bumped0, bumped1));
-    auto src0Component = builder.add(ir::Op::CompositeExtract(scalarType, src0, builder.makeConstant(i)));
+    auto src0Component = ir::extractFromVector(builder, src0, i);
 
     components[i] = builder.add(ir::Op::FAdd(scalarType, src0Component, bumpedSum));
   }
