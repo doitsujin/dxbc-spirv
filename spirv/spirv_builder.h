@@ -157,11 +157,6 @@ private:
     util::small_vector<PushDataInfo, 64u> members;
   } m_pushData;
 
-  struct {
-    spv::Scope scope = spv::ScopeInvocation;
-    spv::MemorySemanticsMask memory = spv::MemorySemanticsUniformMemoryMask;
-  } m_atomics;
-
   uint32_t m_entryPointId = 0u;
 
   void processDebugNames();
@@ -431,8 +426,6 @@ private:
   spv::Scope translateScope(ir::Scope scope);
 
   uint32_t translateMemoryTypes(ir::MemoryTypeFlags memoryFlags, spv::MemorySemanticsMask base);
-
-  void adjustAtomicScope(ir::UavFlags flags, spv::MemorySemanticsMask memory);
 
   uint32_t makeScalarConst(ir::ScalarType type, const ir::Op& op, uint32_t& operandIndex);
 
