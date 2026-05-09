@@ -855,14 +855,12 @@ public:
     util::uint_type_t<T> data = { };
 
     if (getRegisterType() == RegisterType::eImm64) {
-      dxbc_spv_assert(idx < 2u);
-      data = util::uint_type_t<T>(m_imm[2u * idx + 0u]);
+      data = util::uint_type_t<T>(m_imm.at(2u * idx + 0u));
 
       if constexpr (sizeof(data) == 8u)
-        data |= util::uint_type_t<T>(m_imm[2u * idx + 1u]) << 32u;
+        data |= util::uint_type_t<T>(m_imm.at(2u * idx + 1u)) << 32u;
     } else {
-      dxbc_spv_assert(idx < 4u);
-      data = util::uint_type_t<T>(m_imm[idx]);
+      data = util::uint_type_t<T>(m_imm.at(idx));
     }
 
     T result;
@@ -889,16 +887,16 @@ public:
     std::memcpy(&data, &value, sizeof(data));
 
     if (type == RegisterType::eImm64) {
-      dxbc_spv_assert(idx < 2u);
-      m_imm[2u * idx + 0u] = uint32_t(data);
+      uint32_t lo = uint32_t(data);
+      uint32_t hi = 0u;
 
-      if constexpr (sizeof(data) == 8u)
-        m_imm[2u * idx + 1u] = uint32_t(data >> 32u);
-      else
-        m_imm[2u * idx + 1u] = 0u;
+      if constexpr (sizeof(data) > sizeof(uint32_t))
+        hi = uint32_t(data >> 32u);
+
+      m_imm.at(2u * idx + 0u) = lo;
+      m_imm.at(2u * idx + 1u) = hi;
     } else {
-      dxbc_spv_assert(idx < 4u);
-      m_imm[idx] = uint32_t(data);
+      m_imm.at(idx) = uint32_t(data);
     }
 
     return *this;
