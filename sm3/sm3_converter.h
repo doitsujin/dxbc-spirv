@@ -71,6 +71,7 @@ private:
   SpecializationConstantsMap m_specConstants;
 
   ir::SsaDef       m_psSharedData;
+  ir::SsaDef       m_renderState;
 
   uint32_t m_instructionCount = 0u;
 
@@ -125,6 +126,8 @@ private:
   ir::SsaDef emitTexMatMul(ir::Builder& builder, const Instruction& op);
 
   ir::SsaDef emitSharedConstants(ir::Builder& builder);
+
+  ir::SsaDef emitRenderStatePushData(ir::Builder& builder);
 
   ir::SsaDef applyBumpMapping(ir::Builder& builder, uint32_t stageIdx, ir::SsaDef src0, ir::SsaDef src1);
 
