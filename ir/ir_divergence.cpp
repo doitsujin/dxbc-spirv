@@ -518,6 +518,7 @@ Scope DivergenceAnalysis::determineScopeForBuiltIn(const Op& op) {
     case BuiltIn::eTessCoord:
     case BuiltIn::eSampleMask:
     case BuiltIn::eIsFullyCovered:
+    case BuiltIn::ePointCoord:
       return Scope::eThread;
 
     /* Per-primitive inputs, including in geometry stages. Use quad scope

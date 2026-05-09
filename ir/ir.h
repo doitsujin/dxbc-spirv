@@ -717,6 +717,8 @@ enum class BuiltIn : uint32_t {
   ePointSize          = 27u,
   /** Maximum tessellation factor */
   eTessFactorLimit    = 28u,
+  /** Coordinate of a fragment within a point */
+  ePointCoord         = 29u,
 };
 
 
