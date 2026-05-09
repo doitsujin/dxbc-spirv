@@ -499,6 +499,7 @@ std::ostream& operator << (std::ostream& os, const BuiltIn& builtIn) {
     case BuiltIn::eLocalThreadIndex:    return os << "LocalThreadIndex";
     case BuiltIn::ePointSize:           return os << "PointSize";
     case BuiltIn::eTessFactorLimit:     return os << "TessFactorLimit";
+    case BuiltIn::ePointCoord:          return os << "PointCoord";
   }
 
   return os << "BuiltIn(" << uint32_t(builtIn) << ")";
