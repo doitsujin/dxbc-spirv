@@ -1048,6 +1048,9 @@ void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
       case ir::BuiltIn::eTessFactorLimit:
         /* Handled elsewhere */
         break;
+
+      case ir::BuiltIn::ePointCoord:
+        return spv::BuiltInPointCoord;
     }
 
     dxbc_spv_unreachable();
