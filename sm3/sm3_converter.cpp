@@ -273,6 +273,8 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
     m_psSharedData = emitSharedConstants(builder);
   }
 
+  m_renderState = emitRenderStatePushData(builder);
+
   /* Set cursor to main function so that instructions will be emitted
    * in the correct location */
   builder.setCursor(m_entryPoint.mainFunc);
@@ -364,6 +366,57 @@ ir::SsaDef Converter::emitSharedConstants(ir::Builder& builder) {
   }
 
   return buffer;
+}
+
+
+ir::SsaDef Converter::emitRenderStatePushData(ir::Builder& builder) {
+  /*
+   * struct RenderState {
+   *     vec3 fogColor;
+   *     float fogScale;
+   *     float fogEnd;
+   *     float fogDensity;
+   *     uint alphaRef;
+   *     float pointSize;
+   *     float pointSizeMin;
+   *     float pointSizeMax;
+   *     float pointScaleA;
+   *     float pointScaleB;
+   *     float pointScaleC;
+   * }
+   */
+  ir::Type bufferStruct = ir::Type();
+  bufferStruct.addStructMember(ir::BasicType(ir::ScalarType::eF32, 3u));
+  bufferStruct.addStructMember(ir::ScalarType::eF32);
+  bufferStruct.addStructMember(ir::ScalarType::eF32);
+  bufferStruct.addStructMember(ir::ScalarType::eF32);
+  bufferStruct.addStructMember(ir::ScalarType::eU32);
+  bufferStruct.addStructMember(ir::ScalarType::eF32);
+  bufferStruct.addStructMember(ir::ScalarType::eF32);
+  bufferStruct.addStructMember(ir::ScalarType::eF32);
+  bufferStruct.addStructMember(ir::ScalarType::eF32);
+  bufferStruct.addStructMember(ir::ScalarType::eF32);
+  bufferStruct.addStructMember(ir::ScalarType::eF32);
+
+  auto pushData = builder.add(ir::Op::DclPushData(bufferStruct, getEntryPoint(), 0u,
+    ir::ShaderStage::eVertex | ir::ShaderStage::ePixel));
+
+  if (getOptions().includeDebugNames) {
+    builder.add(ir::Op::DebugName(pushData, "RenderState"));
+    builder.add(ir::Op::DebugMemberName(pushData, 0u, "fogColor"));
+    builder.add(ir::Op::DebugMemberName(pushData, 1u, "fogScale"));
+    builder.add(ir::Op::DebugMemberName(pushData, 2u, "fogEnd"));
+    builder.add(ir::Op::DebugMemberName(pushData, 3u, "fogDensity"));
+    builder.add(ir::Op::DebugMemberName(pushData, 4u, "alphaRef"));
+    builder.add(ir::Op::DebugMemberName(pushData, 5u, "pointSize"));
+    builder.add(ir::Op::DebugMemberName(pushData, 6u, "pointSizeMin"));
+    builder.add(ir::Op::DebugMemberName(pushData, 7u, "pointSizeMax"));
+    builder.add(ir::Op::DebugMemberName(pushData, 8u, "pointScaleA"));
+    builder.add(ir::Op::DebugMemberName(pushData, 9u, "pointScaleB"));
+    builder.add(ir::Op::DebugMemberName(pushData, 10u, "pointScaleC"));
+  }
+
+  return pushData;
 }
 
 
