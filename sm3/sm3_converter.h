@@ -73,6 +73,8 @@ private:
   ir::SsaDef       m_psSharedData;
   ir::SsaDef       m_renderState;
 
+  ir::SsaDef       m_alphaTestFunction;
+
   uint32_t m_instructionCount = 0u;
 
   /* Entry point definition and function definitions. */
@@ -210,6 +212,8 @@ private:
   ir::SsaDef applyDstModifiers(ir::Builder& builder, ir::SsaDef def, const Operand& operand);
 
   bool storeDstModifiedPredicated(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value);
+
+  void emitAlphaTest(ir::Builder& builder);
 
   ir::SsaDef calculateAddress(
             ir::Builder&            builder,

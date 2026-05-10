@@ -268,4 +268,15 @@ inline std::optional<std::pair<uint32_t, uint32_t>> getMatrixSize(OpCode opCode)
   }
 }
 
+enum class AlphaTestComparisonMode : uint32_t {
+  eNever = 0u,
+  eLess = 1u,
+  eEqual = 2u,
+  eLessOrEqual = 3u,
+  eGreater = 4u,
+  eNotEqual = 5u,
+  eGreaterOrEqual = 6u,
+  eAlways = 7u,
+};
+
 }
