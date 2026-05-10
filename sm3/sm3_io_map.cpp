@@ -111,6 +111,9 @@ void IoMap::initialize(ir::Builder& builder) {
         0u,
         { SemanticUsage::eColor, 0u }
       );
+
+      /* Declare the point coord built-in because we might need that for the texcoord register. */
+      dclPointCoord(builder);
     }
   }
 }
@@ -391,6 +394,21 @@ void IoMap::dclIoVar(
 }
 
 
+void IoMap::dclPointCoord(ir::Builder& builder) {
+  auto type = ir::BasicType(ir::ScalarType::eF32, 2u);
+  m_pointCoord = builder.add(ir::Op::DclInputBuiltIn(type, m_converter.getEntryPoint(), ir::BuiltIn::ePointCoord));
+}
+
+
+ir::SsaDef IoMap::emitPointCoordLoad(ir::Builder& builder) {
+  auto pointCoordType = ir::BasicType(ir::ScalarType::eF32, 2u);
+  auto pointCoord = builder.add(ir::Op::InputLoad(pointCoordType, m_pointCoord, ir::SsaDef()));
+  /* Turn it into a vec4 so it can easily be used as the texcoord register value. */
+  std::array<ir::SsaDef, 4u> components = { pointCoord, pointCoord, builder.makeConstant(0.0f), builder.makeConstant(0.0f) };
+  return ir::buildVector(builder, ir::ScalarType::eF32, 4u, components.data());
+}
+
+
 void IoMap::emitIoVarDefaults(ir::Builder& builder) {
   for (const IoVarInfo& ioVar : m_variables) {
     emitIoVarDefault(builder, ioVar);
@@ -555,6 +573,26 @@ ir::SsaDef IoMap::emitLoad(
             addressConstant = builder.makeConstant(uint32_t(componentIndex));
 
           value = builder.add(ir::Op::InputLoad(varScalarType, ioVar->baseDef, addressConstant));
+
+          if (m_converter.getShaderInfo().getType() == ShaderType::ePixel
+            && ioVar->registerType == RegisterType::eInput
+            && ioVar->semantic.usage == SemanticUsage::eTexCoord) {
+            /* We need to replace TEXCOORD inputs with gl_PointCoord
+             * if D3DRS_POINTSPRITEENABLE is set. */
+            auto pointCoord = emitPointCoordLoad(builder);
+
+            auto specConstBit = m_converter.m_specConstants.get(builder, SpecConstantId::eSpecPointMode,
+              builder.makeConstant(1u), builder.makeConstant(1u));
+            auto pointSpriteEnabled = builder.add(ir::Op::IEq(ir::ScalarType::eU32, specConstBit, builder.makeConstant(1u)));
+
+            value = builder.add(ir::Op::Select(
+              ir::BasicType(ir::ScalarType::eF32, 4u),
+              pointSpriteEnabled,
+              pointCoord,
+              value
+            ));
+          }
+
         } else {
           /* The input register is writable. (SM 1 Texture register) */
           value = builder.add(ir::Op::TmpLoad(varScalarType, ioVar->tempDefs[uint32_t(componentIndex)]));
