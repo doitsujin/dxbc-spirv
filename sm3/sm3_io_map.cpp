@@ -421,6 +421,16 @@ void IoMap::emitIoVarDefault(
       for (uint32_t i = 0u; i < ioVarType.getVectorSize(); i++) {
         builder.add(ir::Op::TmpStore(ioVar.tempDefs[i], builder.makeConstant(i == 3u ? 1.0f : 0.0f)));
       }
+    } else if (ioVar.semantic.usage == SemanticUsage::ePointSize) {
+      auto pointSize = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32, m_converter.m_renderState,
+        builder.makeConstant(5u)));
+      auto pointSizeMin = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32, m_converter.m_renderState,
+        builder.makeConstant(6u)));
+      auto pointSizeMax = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32, m_converter.m_renderState,
+        builder.makeConstant(7u)));
+
+      auto finalSize = builder.add(ir::Op::FClamp(ir::ScalarType::eF32, pointSize, pointSizeMin, pointSizeMax));
+      builder.add(ir::Op::TmpStore(ioVar.tempDefs[0], finalSize));
     } else {
       /* The default for other registers is 0.0, 0.0, 0.0, 0.0 */
       for (uint32_t i = 0u; i < ioVarType.getVectorSize(); i++) {
@@ -683,6 +693,13 @@ bool IoMap::emitStore(
         /* The color register cannot be dynamically indexed, so there's no need to do this in the dynamic store function. */
         valueScalar = builder.add(ir::Op::FClamp(ioVarScalarType, valueScalar,
           builder.makeConstant(0.0f), builder.makeConstant(1.0f)));
+      } else if (ioVar->semantic.usage == SemanticUsage::ePointSize) {
+        /* Clamp value between D3DRS_POINTSIZE_MIN and D3DRS_POINTSIZE_MAX. */
+        auto pointSizeMin = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32, m_converter.m_renderState,
+          builder.makeConstant(6u)));
+        auto pointSizeMax = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32, m_converter.m_renderState,
+          builder.makeConstant(7u)));
+        valueScalar = builder.add(ir::Op::FClamp(ioVarScalarType, valueScalar, pointSizeMin, pointSizeMax));
       }
 
       if (predicateVec) {
