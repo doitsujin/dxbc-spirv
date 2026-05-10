@@ -37,6 +37,9 @@ constexpr uint32_t MaxOtherConstants         = 16;
 constexpr uint32_t MaxFloatConstantsSoftware = 8192;
 constexpr uint32_t MaxOtherConstantsSoftware = 2048;
 
+/* Other */
+constexpr uint32_t MaxClipPlanes = 6u;
+
 /** Opcode */
 enum class OpCode : uint32_t {
   eNop          = 0u,
