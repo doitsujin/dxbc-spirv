@@ -140,6 +140,8 @@ private:
   ir::SsaDef      m_inputSwitchFunction = { };
   ir::SsaDef      m_outputSwitchFunction = { };
 
+  ir::SsaDef      m_pointCoord;
+
   ir::SsaDef emitDynamicLoadFunction(ir::Builder& builder) const;
   ir::SsaDef emitDynamicStoreFunction(ir::Builder& builder) const;
 
@@ -163,6 +165,10 @@ private:
     RegisterType registerType,
     uint32_t     registerIndex,
     Semantic     semantic);
+
+  void dclPointCoord(ir::Builder& builder);
+
+  ir::SsaDef emitPointCoordLoad(ir::Builder& builder);
 
   /** Turns a front face boolean into a float. 1.0 for the front face, -1.0 for the back face. */
   ir::SsaDef emitFrontFaceFloat(ir::Builder& builder, ir::SsaDef isFrontFaceDef) const;
