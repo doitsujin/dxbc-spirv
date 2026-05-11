@@ -129,6 +129,8 @@ public:
   /** Stores a vector value to color output register 0. */
   bool emitColorStore(ir::Builder& builder, ir::SsaDef value);
 
+  ir::SsaDef getColorValue(ir::Builder& builder);
+
 private:
 
   Converter&      m_converter;
