@@ -415,17 +415,17 @@ ir::SsaDef Converter::emitRenderStatePushData(ir::Builder& builder) {
 
   if (getOptions().includeDebugNames) {
     builder.add(ir::Op::DebugName(pushData, "RenderState"));
-    builder.add(ir::Op::DebugMemberName(pushData, 0u, "fogColor"));
-    builder.add(ir::Op::DebugMemberName(pushData, 1u, "fogScale"));
-    builder.add(ir::Op::DebugMemberName(pushData, 2u, "fogEnd"));
-    builder.add(ir::Op::DebugMemberName(pushData, 3u, "fogDensity"));
-    builder.add(ir::Op::DebugMemberName(pushData, 4u, "alphaRef"));
-    builder.add(ir::Op::DebugMemberName(pushData, 5u, "pointSize"));
-    builder.add(ir::Op::DebugMemberName(pushData, 6u, "pointSizeMin"));
-    builder.add(ir::Op::DebugMemberName(pushData, 7u, "pointSizeMax"));
-    builder.add(ir::Op::DebugMemberName(pushData, 8u, "pointScaleA"));
-    builder.add(ir::Op::DebugMemberName(pushData, 9u, "pointScaleB"));
-    builder.add(ir::Op::DebugMemberName(pushData, 10u, "pointScaleC"));
+    builder.add(ir::Op::DebugMemberName(pushData, uint32_t(RenderStateItem::eFogColor), "fogColor"));
+    builder.add(ir::Op::DebugMemberName(pushData, uint32_t(RenderStateItem::eFogScale), "fogScale"));
+    builder.add(ir::Op::DebugMemberName(pushData, uint32_t(RenderStateItem::eFogEnd), "fogEnd"));
+    builder.add(ir::Op::DebugMemberName(pushData, uint32_t(RenderStateItem::eFogDensity), "fogDensity"));
+    builder.add(ir::Op::DebugMemberName(pushData, uint32_t(RenderStateItem::eAlphaRef), "alphaRef"));
+    builder.add(ir::Op::DebugMemberName(pushData, uint32_t(RenderStateItem::ePointSize), "pointSize"));
+    builder.add(ir::Op::DebugMemberName(pushData, uint32_t(RenderStateItem::ePointSizeMin), "pointSizeMin"));
+    builder.add(ir::Op::DebugMemberName(pushData, uint32_t(RenderStateItem::ePointSizeMax), "pointSizeMax"));
+    builder.add(ir::Op::DebugMemberName(pushData, uint32_t(RenderStateItem::ePointScaleA), "pointScaleA"));
+    builder.add(ir::Op::DebugMemberName(pushData, uint32_t(RenderStateItem::ePointScaleB), "pointScaleB"));
+    builder.add(ir::Op::DebugMemberName(pushData, uint32_t(RenderStateItem::ePointScaleC), "pointScaleC"));
   }
 
   return pushData;
@@ -2153,7 +2153,7 @@ void Converter::emitAlphaTest(ir::Builder& builder) {
    * So if we want 12 bits of accuracy (i.e. 0-4095), that value will be 4. */
   auto alpha = builder.add(ir::Op::ParamLoad(ir::ScalarType::eF32, m_alphaTestFunction, alphaParam));
   auto alphaRef = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eU32, m_renderState,
-  builder.makeConstant(4u)));
+  builder.makeConstant(uint32_t(RenderStateItem::eAlphaRef))));
   auto alphaComparisonMode = m_specConstants.get(builder, SpecConstantId::eSpecAlphaCompareOp);
   auto alphaPrecision = m_specConstants.get(builder, SpecConstantId::eSpecAlphaPrecisionBits);
 
