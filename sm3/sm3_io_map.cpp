@@ -859,6 +859,20 @@ bool IoMap::emitColorStore(ir::Builder& builder, ir::SsaDef value) {
 }
 
 
+ir::SsaDef IoMap::getColorValue(ir::Builder& builder) {
+  const IoVarInfo* ioVar = findIoVar(m_variables, RegisterType::eColorOut, 0u);
+  dxbc_spv_assert(ioVar != nullptr);
+
+  auto componentType = ioVar->baseType.getBaseType(0u).getBaseType();
+
+  std::array<ir::SsaDef, 4u> components;
+  for (uint32_t i = 0u; i < components.size(); i++) {
+    components[i] = builder.add(ir::Op::TmpLoad(componentType, ioVar->tempDefs[i]));
+  }
+  return ir::buildVector(builder, componentType, components.size(), components.data());
+}
+
+
 ir::SsaDef IoMap::emitDynamicLoadFunction(ir::Builder& builder) const {
   auto indexParameter = builder.add(ir::Op::DclParam(ir::ScalarType::eU32));
 
