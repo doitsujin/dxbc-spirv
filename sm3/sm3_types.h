@@ -268,6 +268,20 @@ inline std::optional<std::pair<uint32_t, uint32_t>> getMatrixSize(OpCode opCode)
   }
 }
 
+enum class RenderStateItem : uint32_t {
+  eFogColor = 0u,
+  eFogScale = 1u,
+  eFogEnd = 2u,
+  eFogDensity = 3u,
+  eAlphaRef = 4u,
+  ePointSize = 5u,
+  ePointSizeMin = 6u,
+  ePointSizeMax = 7u,
+  ePointScaleA = 8u,
+  ePointScaleB = 9u,
+  ePointScaleC = 10u,
+};
+
 enum class AlphaTestComparisonMode : uint32_t {
   eNever = 0u,
   eLess = 1u,

@@ -447,11 +447,11 @@ void IoMap::emitIoVarDefault(
       }
     } else if (ioVar.semantic.usage == SemanticUsage::ePointSize) {
       auto pointSize = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32, m_converter.m_renderState,
-        builder.makeConstant(5u)));
+        builder.makeConstant(uint32_t(RenderStateItem::ePointSize))));
       auto pointSizeMin = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32, m_converter.m_renderState,
-        builder.makeConstant(6u)));
+        builder.makeConstant(uint32_t(RenderStateItem::ePointSizeMin))));
       auto pointSizeMax = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32, m_converter.m_renderState,
-        builder.makeConstant(7u)));
+        builder.makeConstant(uint32_t(RenderStateItem::ePointSizeMax))));
 
       auto finalSize = builder.add(ir::Op::FClamp(ir::ScalarType::eF32, pointSize, pointSizeMin, pointSizeMax));
       builder.add(ir::Op::TmpStore(ioVar.tempDefs[0], finalSize));
@@ -740,9 +740,9 @@ bool IoMap::emitStore(
       } else if (ioVar->semantic.usage == SemanticUsage::ePointSize) {
         /* Clamp value between D3DRS_POINTSIZE_MIN and D3DRS_POINTSIZE_MAX. */
         auto pointSizeMin = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32, m_converter.m_renderState,
-          builder.makeConstant(6u)));
+          builder.makeConstant(uint32_t(RenderStateItem::ePointSizeMin))));
         auto pointSizeMax = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32, m_converter.m_renderState,
-          builder.makeConstant(7u)));
+          builder.makeConstant(uint32_t(RenderStateItem::ePointSizeMax))));
         valueScalar = builder.add(ir::Op::FClamp(ioVarScalarType, valueScalar, pointSizeMin, pointSizeMax));
       }
 
