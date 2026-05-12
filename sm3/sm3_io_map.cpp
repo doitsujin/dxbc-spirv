@@ -1047,7 +1047,9 @@ void IoMap::emitVSClipping(ir::Builder& builder) {
     builder.add(ir::Op::DebugName(clipPlaneBlock, "ClipPlanes"));
 
   /* Declare output array for clip distances */
-  auto clipDistancesArrayOp = ir::Op::DclOutputBuiltIn(clipPlaneArrayType,
+  auto clipDistanceArrayType = ir::Type(ir::ScalarType::eF32);
+  clipDistanceArrayType.addArrayDimension(MaxClipPlanes);
+  auto clipDistancesArrayOp = ir::Op::DclOutputBuiltIn(clipDistanceArrayType,
     m_converter.getEntryPoint(), ir::BuiltIn::eClipDistance);
   clipDistancesArrayOp.setFlags(ir::OpFlag::eInvariant);
   auto clipDistanceArray = builder.add(clipDistancesArrayOp);
@@ -1076,7 +1078,7 @@ void IoMap::emitVSClipping(ir::Builder& builder) {
   auto position = ir::buildVector(builder, ir::ScalarType::eF32, components.size(), components.data());
 
   for (uint32_t i = 0u; i < MaxClipPlanes; i++) {
-    auto descriptor = builder.add(ir::Op::DescriptorLoad(vec4Type, clipPlaneBlock, ir::SsaDef()));
+    auto descriptor = builder.add(ir::Op::DescriptorLoad(ir::ScalarType::eCbv, clipPlaneBlock, builder.makeConstant(0u)));
     auto clipPlane = builder.add(ir::Op::BufferLoad(vec4Type, descriptor, builder.makeConstant(i), 16u));
     auto dist = builder.add(m_converter.emitFDot(ir::ScalarType::eF32, position, clipPlane));
 
