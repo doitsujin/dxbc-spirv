@@ -2158,7 +2158,7 @@ void Converter::emitAlphaTest(ir::Builder& builder) {
   auto alphaComparisonMode = m_specConstants.get(builder, SpecConstantId::eSpecAlphaCompareOp);
   auto alphaPrecision = m_specConstants.get(builder, SpecConstantId::eSpecAlphaPrecisionBits);
 
-  auto isAlways = builder.add(ir::Op::IEq(ir::ScalarType::eU32, alphaComparisonMode,
+  auto isAlways = builder.add(ir::Op::IEq(ir::ScalarType::eBool, alphaComparisonMode,
     builder.makeConstant(uint32_t(AlphaTestComparisonMode::eAlways))));
 
   /* if (alphaComparisonMode == ALWAYS) return; */
