@@ -215,6 +215,8 @@ private:
 
   void emitAlphaTest(ir::Builder& builder);
 
+  void emitFloatModes(ir::Builder& builder);
+
   ir::SsaDef calculateAddress(
             ir::Builder&            builder,
             RegisterType            registerType,

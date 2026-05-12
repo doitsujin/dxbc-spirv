@@ -264,6 +264,7 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
   if (m_options.name)
     builder.add(ir::Op::DebugName(m_entryPoint.def, m_options.name));
 
+  emitFloatModes(builder);
   m_specConstants.initialize(builder);
   m_ioMap.initialize(builder);
   m_regFile.initialize(builder);
@@ -2243,6 +2244,15 @@ void Converter::emitAlphaTest(ir::Builder& builder) {
   builder.rewriteOp(discardIf, ir::Op(builder.getOp(discardIf)).setOperand(0u, discardEndIf));
 
   builder.add(ir::Op::FunctionEnd());
+}
+
+
+void Converter::emitFloatModes(ir::Builder& builder) {
+  builder.add(ir::Op::SetFpMode(getEntryPoint(), ir::ScalarType::eF32,
+    ir::OpFlag::eNoSz, ir::RoundMode::eNearestEven, ir::DenormMode::eFlush));
+
+  builder.add(ir::Op::SetFpMode(getEntryPoint(), ir::ScalarType::eF16,
+    ir::OpFlag::eNoSz, ir::RoundMode::eNearestEven, ir::DenormMode::ePreserve));
 }
 
 
