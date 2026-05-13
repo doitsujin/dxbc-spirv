@@ -111,10 +111,12 @@ void IoMap::initialize(ir::Builder& builder) {
         0u,
         { SemanticUsage::eColor, 0u }
       );
-
-      /* Declare the point coord built-in because we might need that for the texcoord register. */
-      dclPointCoord(builder);
     }
+  }
+
+  if (m_converter.getShaderInfo().getType() == ShaderType::ePixel) {
+    /* Declare the point coord built-in because we might need that for the texcoord register. */
+    dclPointCoord(builder);
   }
 }
 
