@@ -179,8 +179,10 @@ private:
 
   void emitVSClipping(ir::Builder& builder);
 
- /** Looks up matching I/O variable in the given list. */
- IoVarInfo* findIoVar(IoVarList& list, RegisterType regType, uint32_t regIndex);
+  /** Looks up matching I/O variable in the given list. */
+  const IoVarInfo* findIoVar(RegisterType regType, uint32_t regIndex) const;
+  /** Looks up matching I/O variable in the given list based on semantic. */
+  const IoVarInfo* findIoVar(Semantic semantic, bool isInput) const;
 
   /** Converts input to the given scalar type. */
   ir::SsaDef convertScalar(ir::Builder& builder, ir::ScalarType dstType, ir::SsaDef value);

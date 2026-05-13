@@ -565,7 +565,7 @@ ir::SsaDef IoMap::emitLoad(
   std::array<ir::SsaDef, 4u> components = { };
 
   if (!operand.hasRelativeAddressing()) {
-    const IoVarInfo* ioVar = findIoVar(m_variables, operand.getRegisterType(), operand.getIndex());
+    const IoVarInfo* ioVar = findIoVar(operand.getRegisterType(), operand.getIndex());
 
     if (ioVar == nullptr) {
       std::optional<Semantic> semantic = determineSemanticForRegister(operand.getRegisterType(), operand.getIndex());
@@ -677,7 +677,7 @@ ir::SsaDef IoMap::emitTexCoordLoad(
          ir::ScalarType          type) {
   std::array<ir::SsaDef, 4u> components = { };
 
-  const IoVarInfo* ioVar = findIoVar(m_variables, RegisterType::ePixelTexCoord, regIdx);
+  const IoVarInfo* ioVar = findIoVar(RegisterType::ePixelTexCoord, regIdx);
 
   if (ioVar == nullptr) {
     std::optional<Semantic> semantic = determineSemanticForRegister(RegisterType::ePixelTexCoord, regIdx);
@@ -722,7 +722,7 @@ bool IoMap::emitStore(
   auto srcScalarType = srcBaseType.getBaseType();
 
   if (!operand.hasRelativeAddressing()) {
-    const IoVarInfo* ioVar = findIoVar(m_variables, operand.getRegisterType(), operand.getIndex());
+    const IoVarInfo* ioVar = findIoVar(operand.getRegisterType(), operand.getIndex());
 
     if (ioVar == nullptr) {
       std::optional<Semantic> semantic;
@@ -836,7 +836,7 @@ bool IoMap::emitStore(
 
 
 bool IoMap::emitDepthStore(ir::Builder &builder, const Instruction &op, ir::SsaDef value) {
-  const IoVarInfo* ioVar = findIoVar(m_variables, RegisterType::eDepthOut, 0u);
+  const IoVarInfo* ioVar = findIoVar(RegisterType::eDepthOut, 0u);
 
   if (ioVar == nullptr) {
     std::optional<Semantic> semantic = determineSemanticForRegister(RegisterType::eDepthOut, 0u);
@@ -858,7 +858,7 @@ bool IoMap::emitDepthStore(ir::Builder &builder, const Instruction &op, ir::SsaD
 
 
 bool IoMap::emitColorStore(ir::Builder& builder, ir::SsaDef value) {
-  const IoVarInfo* ioVar = findIoVar(m_variables, RegisterType::eColorOut, 0u);
+  const IoVarInfo* ioVar = findIoVar(RegisterType::eColorOut, 0u);
 
   if (ioVar == nullptr) {
     std::optional<Semantic> semantic = determineSemanticForRegister(RegisterType::eColorOut, 0u);
@@ -882,7 +882,7 @@ bool IoMap::emitColorStore(ir::Builder& builder, ir::SsaDef value) {
 
 
 ir::SsaDef IoMap::getColorValue(ir::Builder& builder) {
-  const IoVarInfo* ioVar = findIoVar(m_variables, RegisterType::eColorOut, 0u);
+  const IoVarInfo* ioVar = findIoVar(RegisterType::eColorOut, 0u);
   dxbc_spv_assert(ioVar != nullptr);
 
   auto componentType = ioVar->baseType.getBaseType(0u).getBaseType();
@@ -916,14 +916,7 @@ ir::SsaDef IoMap::emitDynamicLoadFunction(ir::Builder& builder) const {
   uint32_t arraySize = isPS ? SM3PSInputArraySize : SM3VSInputArraySize;
 
   for (uint32_t i = 0u; i < arraySize; i++) {
-    const IoVarInfo* ioVar = nullptr;
-
-    for (const auto& variable : m_variables) {
-      if (variable.registerType == RegisterType::eInput && variable.registerIndex == i) {
-        ioVar = &variable;
-        break;
-      }
-    }
+    const IoVarInfo* ioVar = findIoVar(RegisterType::eInput, i);
 
     if (ioVar == nullptr)
       continue;
@@ -996,14 +989,7 @@ ir::SsaDef IoMap::emitDynamicStoreFunction(ir::Builder& builder) const {
   auto switchDef = builder.add(ir::Op::ScopedSwitch(ir::SsaDef(), indexArg));
 
   for (uint32_t i = 0u; i < SM3VSOutputArraySize; i++) {
-    const IoVarInfo* ioVar = nullptr;
-
-    for (const auto& variable : m_variables) {
-      if (variable.registerType == RegisterType::eOutput && variable.registerIndex == i) {
-        ioVar = &variable;
-        break;
-      }
-    }
+    const IoVarInfo* ioVar = findIoVar(RegisterType::eOutput, i);
 
     if (ioVar == nullptr)
       continue;
@@ -1079,14 +1065,7 @@ void IoMap::emitVSClipping(ir::Builder& builder) {
   clipDistancesArrayOp.setFlags(ir::OpFlag::eInvariant);
   auto clipDistanceArray = builder.add(clipDistancesArrayOp);
 
-  const IoVarInfo* positionVar = nullptr;
-  for (const auto& variable : m_variables) {
-    if (variable.semantic.usage == SemanticUsage::ePosition && variable.semantic.index == 0u
-      && !registerTypeIsInput(variable.registerType, ShaderType::eVertex)) {
-      positionVar = &variable;
-      break;
-    }
-  }
+  const IoVarInfo* positionVar = findIoVar({ SemanticUsage::ePosition, 0u }, false);
 
   dxbc_spv_assert(positionVar != nullptr);
   dxbc_spv_assert(positionVar->baseType == ir::BasicType(ir::ScalarType::eF32, 4u));
@@ -1114,14 +1093,23 @@ void IoMap::emitVSClipping(ir::Builder& builder) {
 }
 
 
-IoVarInfo* IoMap::findIoVar(IoVarList& list, RegisterType regType, uint32_t regIndex) {
-  for (auto& e : list) {
+const IoVarInfo* IoMap::findIoVar(RegisterType regType, uint32_t regIndex) const {
+  for (auto& e : m_variables) {
     if (e.registerType == regType && e.registerIndex == regIndex) {
       return &e;
-      break;
     }
   }
+  return nullptr;
+}
 
+
+const IoVarInfo* IoMap::findIoVar(Semantic semantic, bool isInput) const {
+  for (auto& e : m_variables) {
+    if (e.semantic == semantic
+      && isInput == registerTypeIsInput(e.registerType, m_converter.getShaderInfo().getType())) {
+      return &e;
+    }
+  }
   return nullptr;
 }
 
