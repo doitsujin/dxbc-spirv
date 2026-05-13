@@ -308,14 +308,26 @@ bool Converter::finalize(ir::Builder& builder, ShaderType shaderType) {
       return false;
   }
 
-  m_ioMap.finalize(builder);
-
   if (shaderType == ShaderType::ePixel) {
     auto color = m_ioMap.getColorValue(builder);
     auto alpha = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eF32, color,
       builder.makeConstant(3u)));
     builder.add(ir::Op::FunctionCall(ir::ScalarType::eVoid, m_alphaTestFunction).addParam(alpha));
+
+    if (m_fogFunction) {
+      auto position = m_ioMap.getPositionValue(builder);
+      auto colorWithFog = builder.add(
+        ir::Op::FunctionCall(ir::BasicType(ir::ScalarType::eF32, 4u), m_fogFunction)
+        .addParam(position)
+        .addParam(color)
+      );
+
+      if (!m_ioMap.emitColorStore(builder, colorWithFog))
+        return false;
+    }
   }
+
+  m_ioMap.finalize(builder);
 
   return true;
 }
