@@ -55,6 +55,8 @@ class IoMap {
   constexpr static uint32_t SM3PSInputArraySize = 10u;
   constexpr static uint32_t MaxIoArraySize = SM3VSInputArraySize;
 
+  constexpr static uint32_t FogRegisterIndex = SM3PSInputArraySize;
+
   constexpr static uint32_t SM2TexCoordCount = 8u;
   constexpr static uint32_t SM2ColorCount = 2u;
 
