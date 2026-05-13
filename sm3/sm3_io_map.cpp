@@ -912,7 +912,10 @@ ir::SsaDef IoMap::emitDynamicLoadFunction(ir::Builder& builder) const {
   auto indexArg = builder.add(ir::Op::ParamLoad(ir::ScalarType::eU32, function, indexParameter));
   auto switchDef = builder.add(ir::Op::ScopedSwitch(ir::SsaDef(), indexArg));
 
-  for (uint32_t i = 0u; i < SM3VSInputArraySize; i++) {
+  bool isPS = m_converter.getShaderInfo().getType() == ShaderType::ePixel;
+  uint32_t arraySize = isPS ? SM3PSInputArraySize : SM3VSInputArraySize;
+
+  for (uint32_t i = 0u; i < arraySize; i++) {
     const IoVarInfo* ioVar = nullptr;
 
     for (const auto& variable : m_variables) {
