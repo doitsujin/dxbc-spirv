@@ -38,6 +38,14 @@ IoMap::~IoMap() {
 void IoMap::initialize(ir::Builder& builder) {
   const ShaderInfo& info = m_converter.getShaderInfo();
 
+  /* Reserve the IO locations used by fixed function,
+   * so programmable shaders can be used with fixed function without having to modify the shader. */
+  if (info.getType() == ShaderType::eVertex) {
+    m_nextOutputLocation = s_ffLocations.size();
+  } else {
+    m_nextInputLocation = s_ffLocations.size();
+  }
+
   if (info.getVersion().first >= 3u) {
     /* Emit functions that pick a register using
      * a switch statement to allow relative addressing */
