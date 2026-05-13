@@ -858,20 +858,20 @@ bool IoMap::emitDepthStore(ir::Builder &builder, const Instruction &op, ir::SsaD
 
 
 bool IoMap::emitColorStore(ir::Builder& builder, ir::SsaDef value) {
+  /* The color register 0 is only guaranteed to exist for pixel shaders. */
+  dxbc_spv_assert(m_converter.getShaderInfo().getType() == ShaderType::ePixel);
+
   const IoVarInfo* ioVar = findIoVar(RegisterType::eColorOut, 0u);
 
   if (ioVar == nullptr) {
     std::optional<Semantic> semantic = determineSemanticForRegister(RegisterType::eColorOut, 0u);
-
     if (!semantic.has_value()) {
       Logger::err("Failed to process I/O color store.");
       return false;
     }
-
     dclIoVar(builder, RegisterType::eColorOut, 0u, semantic.value());
     ioVar = &m_variables.back();
   }
-
   for (uint32_t i = 0u; i < 4u; i++) {
     auto valueScalar = ir::extractFromVector(builder, value, i);
     dxbc_spv_assert(builder.getOp(ioVar->tempDefs[i]).getType() == builder.getOp(valueScalar).getType());
@@ -882,11 +882,73 @@ bool IoMap::emitColorStore(ir::Builder& builder, ir::SsaDef value) {
 
 
 ir::SsaDef IoMap::getColorValue(ir::Builder& builder) {
+  /* The color register 0 is only guaranteed to exist for pixel shaders. (Assuming this only gets called after r0 gets
+   * flushed to oC0 on shader model 1) */
+  dxbc_spv_assert(m_converter.getShaderInfo().getType() == ShaderType::ePixel);
+
   const IoVarInfo* ioVar = findIoVar(RegisterType::eColorOut, 0u);
   dxbc_spv_assert(ioVar != nullptr);
 
   auto componentType = ioVar->baseType.getBaseType(0u).getBaseType();
 
+  std::array<ir::SsaDef, 4u> components;
+  for (uint32_t i = 0u; i < components.size(); i++) {
+    components[i] = builder.add(ir::Op::TmpLoad(componentType, ioVar->tempDefs[i]));
+  }
+  return ir::buildVector(builder, componentType, components.size(), components.data());
+}
+
+
+void IoMap::emitFogStore(ir::Builder& builder, ir::SsaDef value) {
+  /* The fog register is only an output for vertex shaders. */
+  dxbc_spv_assert(m_converter.getShaderInfo().getType() == ShaderType::eVertex);
+
+  const IoVarInfo* ioVar = findIoVar({ SemanticUsage::eFog, 0u }, false);
+
+  if (ioVar == nullptr) {
+    dclIoVar(builder, RegisterType::eRasterizerOut, uint32_t(RasterizerOutIndex::eRasterOutFog),
+      { SemanticUsage::eFog, 0u });
+    ioVar = &m_variables.back();
+  }
+  dxbc_spv_assert(ioVar != nullptr);
+
+  dxbc_spv_assert(ioVar->baseType == builder.getOp(value).getType());
+  builder.add(ir::Op::TmpStore(ioVar->tempDefs[0u], value));
+}
+
+
+ir::SsaDef IoMap::getFogValue(ir::Builder& builder) {
+  /* The fog register is only an input for pixel shaders and there's no reason to read the temporary output in a
+   * vertex shader. */
+  dxbc_spv_assert(m_converter.getShaderInfo().getType() == ShaderType::ePixel);
+
+  const IoVarInfo* ioVar = findIoVar(Semantic { SemanticUsage::eFog, 0u }, true);
+  if (ioVar == nullptr) {
+    dclIoVar(builder, RegisterType::eInput, FogRegisterIndex, { SemanticUsage::eFog, 0u });
+    ioVar = &m_variables.back();
+  }
+  dxbc_spv_assert(ioVar != nullptr);
+
+  return builder.add(ir::Op::InputLoad(ioVar->baseType, ioVar->baseDef, ir::SsaDef()));
+}
+
+
+ir::SsaDef IoMap::getPositionValue(ir::Builder& builder) {
+  /* We'll use the built-in vPos (gl_Position) in pixel shaders and the required position output in vertex shaders. */
+  bool isPS = m_converter.getShaderInfo().getType() == ShaderType::ePixel;
+  const IoVarInfo* ioVar = findIoVar({ SemanticUsage::ePosition, 0u }, isPS);
+
+  if (ioVar == nullptr && isPS) {
+    /* Only lazily declare it for pixel shaders. In vertex shaders the user HAS TO declare one output register
+     * as position 0, and we can't do it lazily because we don't know which output register index is available. */
+    dclIoVar(builder, RegisterType::eMiscType, uint32_t(MiscTypeIndex::eMiscTypePosition),
+      { SemanticUsage::ePosition, 0u });
+    ioVar = &m_variables.back();
+    emitIoVarDefault(builder, *ioVar);
+  }
+  dxbc_spv_assert(ioVar != nullptr);
+
+  auto componentType = ioVar->baseType.getBaseType(0u).getBaseType();
   std::array<ir::SsaDef, 4u> components;
   for (uint32_t i = 0u; i < components.size(); i++) {
     components[i] = builder.add(ir::Op::TmpLoad(componentType, ioVar->tempDefs[i]));

@@ -133,6 +133,12 @@ public:
 
   ir::SsaDef getColorValue(ir::Builder& builder);
 
+  void emitFogStore(ir::Builder& builder, ir::SsaDef value);
+
+  ir::SsaDef getFogValue(ir::Builder& builder);
+
+  ir::SsaDef getPositionValue(ir::Builder& builder);
+
 private:
 
   Converter&      m_converter;
