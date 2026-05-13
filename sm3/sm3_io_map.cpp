@@ -47,6 +47,10 @@ void IoMap::initialize(ir::Builder& builder) {
   }
 
   if (info.getVersion().first >= 3u) {
+    /* Assume that shader model 3 vertex shaders hardly ever get mixed with fixed function pixel processing
+     * If they do, the backend handles it. Color 0 is the exception because that needs a different value.
+     * Shader model 3 pixel shaders don't support any kind of fog. */
+
     /* Emit functions that pick a register using
      * a switch statement to allow relative addressing */
 
@@ -61,7 +65,8 @@ void IoMap::initialize(ir::Builder& builder) {
     /* VS 1 & 2 have fixed output registers that do not get explicitly declared.
      * PS 1 has fixed input registers that do not get explicitly declared.
      * PS 2 has input registers that get explicitly declared but unlike PS 3,
-     * it uses distinct register types instead of generic input registers + semantics. */
+     * it uses distinct register types instead of generic input registers + semantics.
+     * Declare the registers that the fixed function pipeline uses so their IO locations get reserved. */
 
     bool isPS = info.getType() == ShaderType::ePixel;
 
@@ -102,12 +107,12 @@ void IoMap::initialize(ir::Builder& builder) {
 
     /* Fog
      * There is no fog input register in the pixel shader that is accessible
-     * to the shader. We do however need to pass the vertex shader calculated
-     * fog value across to the fragment shader. Use an imaginary 11th input register. */
+     * to the shader. We do however need to pass the fog value calculated by the vertex shader
+     * the fragment shader. Use an imaginary 11th input register. */
     dclIoVar(
       builder,
       isPS ? RegisterType::eInput : RegisterType::eRasterizerOut,
-      isPS ? SM3PSInputArraySize : uint32_t(RasterizerOutIndex::eRasterOutFog),
+      isPS ? FogRegisterIndex : uint32_t(RasterizerOutIndex::eRasterOutFog),
       { SemanticUsage::eFog, 0u }
     );
 
@@ -289,6 +294,7 @@ void IoMap::dclIoVar(
   bool isScalar = registerType == RegisterType::eRasterizerOut
     && (registerIndex == uint32_t(RasterizerOutIndex::eRasterOutFog)
     || registerIndex == uint32_t(RasterizerOutIndex::eRasterOutPointSize));
+  isScalar |= registerType == RegisterType::eInput && registerIndex == FogRegisterIndex;
   isScalar |= builtIn == ir::BuiltIn::eIsFrontFace;
   isScalar |= builtIn == ir::BuiltIn::eDepth;
   isScalar |= builtIn == ir::BuiltIn::ePointSize;
@@ -465,6 +471,9 @@ void IoMap::emitIoVarDefault(
 
       auto finalSize = builder.add(ir::Op::FClamp(ir::ScalarType::eF32, pointSize, pointSizeMin, pointSizeMax));
       builder.add(ir::Op::TmpStore(ioVar.tempDefs[0], finalSize));
+    } else if (ioVar.semantic == Semantic { SemanticUsage::eFog, 0u }) {
+      /* The default for fog is 1.0 */
+      builder.add(ir::Op::TmpStore(ioVar.tempDefs[0u], builder.makeConstant(1.0f)));
     } else {
       /* The default for other registers is 0.0, 0.0, 0.0, 0.0 */
       for (uint32_t i = 0u; i < ioVarType.getVectorSize(); i++) {
@@ -496,7 +505,10 @@ std::optional<Semantic> IoMap::determineSemanticForRegister(RegisterType regType
       return std::make_optional(Semantic { SemanticUsage::eColor, regIndex });
 
     case RegisterType::eInput:
-      return std::make_optional(Semantic { SemanticUsage::eColor, regIndex });
+      if (regIndex == FogRegisterIndex)
+        return std::make_optional(Semantic { SemanticUsage::eFog, 0u });
+      else
+        return std::make_optional(Semantic { SemanticUsage::eColor, regIndex });
 
     case RegisterType::eTexCoordOut:
       return std::make_optional(Semantic { SemanticUsage::eTexCoord, regIndex });
