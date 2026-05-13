@@ -278,6 +278,14 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
 
   if (shaderType == ShaderType::ePixel) {
     emitAlphaTest(builder);
+
+    if (getShaderInfo().getVersion().first < 3u) {
+      /* With shader model 3, the user has to implement fog themselves. There is no fixed function fog blending at
+       * after the pixel shader.
+       * Vertex fog is implemented by the fixed function pipeline (the Direct3D Lighting & Transform engine).
+       * So there's no code needed in vertex shaders. */
+      emitFog(builder);
+    }
   }
 
   /* Set cursor to main function so that instructions will be emitted
@@ -2243,6 +2251,148 @@ void Converter::emitAlphaTest(ir::Builder& builder) {
   auto discardEndIf = builder.add(ir::Op::ScopedEndIf(discardIf));
   builder.rewriteOp(discardIf, ir::Op(builder.getOp(discardIf)).setOperand(0u, discardEndIf));
 
+  builder.add(ir::Op::FunctionEnd());
+}
+
+
+void Converter::emitFog(ir::Builder& builder) {
+  dxbc_spv_assert(getShaderInfo().getType() == ShaderType::ePixel);
+
+  auto posParam = builder.add(ir::Op::DclParam(ir::BasicType(ir::ScalarType::eF32, 4u)));
+  auto colorParam = builder.add(ir::Op::DclParam(ir::BasicType(ir::ScalarType::eF32, 4u)));
+  auto returnType = ir::BasicType(ir::ScalarType::eF32, 4u);
+
+  auto functionOp = ir::Op::Function(returnType)
+      .addOperand(posParam)
+      .addOperand(colorParam);
+
+  m_fogFunction = builder.add(functionOp);
+
+  if (m_options.includeDebugNames) {
+    builder.add(ir::Op::DebugName(m_fogFunction, "calculateFog"));
+    builder.add(ir::Op::DebugName(posParam, "vPos"));
+    builder.add(ir::Op::DebugName(colorParam, "oColor"));
+  }
+
+  /* Read the required values. */
+  auto position = builder.add(ir::Op::ParamLoad(ir::BasicType(ir::ScalarType::eF32, 4u), m_fogFunction, posParam));
+  auto color = builder.add(ir::Op::ParamLoad(ir::BasicType(ir::ScalarType::eF32, 4u), m_fogFunction, colorParam));
+
+  auto fogColor = builder.add(ir::Op::PushDataLoad(ir::BasicType(ir::ScalarType::eF32, 3u),
+    m_renderState, builder.makeConstant(uint32_t(RenderStateItem::eFogColor))));
+
+  auto fogScale = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32,
+    m_renderState, builder.makeConstant(uint32_t(RenderStateItem::eFogScale))));
+
+  auto fogEnd = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32,
+    m_renderState, builder.makeConstant(uint32_t(RenderStateItem::eFogEnd))));
+
+  auto fogDensity = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32,
+    m_renderState, builder.makeConstant(uint32_t(RenderStateItem::eFogDensity))));
+
+  auto fogMode = m_specConstants.get(builder,
+     SpecConstantId::eSpecPixelFogMode);
+
+  auto fogEnabledInt = m_specConstants.get(builder, SpecConstantId::eSpecFogEnabled);
+  auto fogDisabled = builder.add(ir::Op::IEq(ir::ScalarType::eBool, fogEnabledInt, builder.makeConstant(0u)));
+
+  /* Check if fog is disabled and return early. */
+  auto fogDisabledIf = builder.add(ir::Op::ScopedIf(ir::SsaDef(), fogDisabled));
+
+  builder.add(ir::Op::Return(returnType, color));
+
+  auto fogDisabledIfEnd = builder.add(ir::Op::ScopedEndIf(fogDisabledIf));
+  builder.rewriteOp(fogDisabledIf, ir::Op(builder.getOp(fogDisabledIf)).setOperand(0u, fogDisabledIfEnd));
+
+  /* Actually calculate the fog factor now we have all the vars in-place. */
+  auto z = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eF32, position, builder.makeConstant(2u)));
+  auto w = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eF32, position, builder.makeConstant(3u)));
+
+  auto depth = builder.add(ir::Op::FDiv(ir::ScalarType::eF32, z, w));
+
+  /* There are a few different fog formulas for the user to choose. */
+  auto fogFactorTmp = builder.add(ir::Op::DclTmp(ir::ScalarType::eF32, getEntryPoint()));
+
+  auto fogModeSwitch = builder.add(ir::Op::ScopedSwitch(ir::SsaDef(), fogMode));
+  for (uint32_t i = 0u; i <= uint32_t(FogMode::eLinear); i++) {
+    builder.add(ir::Op::ScopedSwitchCase(fogModeSwitch, i));
+
+    ir::SsaDef fogFactor;
+    auto mode = FogMode(i);
+    switch (mode) {
+      default:
+      /* vFog */
+      case FogMode::eNone: {
+        fogFactor = m_ioMap.getFogValue(builder);
+      } break;
+
+      /* (end - d) / (end - start) */
+      case FogMode::eLinear: {
+        fogFactor = builder.add(ir::Op::FSub(ir::ScalarType::eF32, fogEnd, depth));
+        fogFactor = builder.add(ir::Op::FMulLegacy(ir::ScalarType::eF32, fogFactor, fogScale));
+      } break;
+
+      /* 1 / (e^(d * density)) */
+      case FogMode::eExp:
+      /* 1 / (e^((d * density)^2)) */
+      case FogMode::eExp2: {
+        fogFactor = builder.add(ir::Op::FMulLegacy(ir::ScalarType::eF32, depth, fogDensity));
+
+        if (mode == FogMode::eExp2)
+          fogFactor = builder.add(ir::Op::FMulLegacy(ir::ScalarType::eF32, fogFactor, fogFactor));
+
+        /* Provides the rcp. */
+        /* 1 / (e^x) = 1 / (2^((1 / ln(2)) * x)) = 2^(-1.442695041 * x)*/
+        constexpr float Ln2Rcp = -1.442695041f;
+        fogFactor = builder.add(ir::Op::FMul(ir::ScalarType::eF32, fogFactor, builder.makeConstant(Ln2Rcp)));
+        fogFactor = builder.add(ir::Op::FExp2(ir::ScalarType::eF32, fogFactor));
+      } break;
+    }
+    builder.add(ir::Op::TmpStore(fogFactorTmp, fogFactor));
+
+    builder.add(ir::Op::ScopedSwitchBreak(fogModeSwitch));
+  }
+  auto fogModeSwitchEnd = builder.add(ir::Op::ScopedEndSwitch(fogModeSwitch));
+  builder.rewriteOp(fogModeSwitch, ir::Op(builder.getOp(fogModeSwitch)).setOperand(0u, fogModeSwitchEnd));
+
+  /* Fog factor controls 'the visibility' of the original color of the pixel.
+   * So a fog factor of 0 means 100% fog and a fog factor of 1 means no fog at all and the original color is
+   * completely visible. It's called that way because the D3D9 docs call it that. */
+  auto fogFactor = builder.add(ir::Op::TmpLoad(ir::ScalarType::eF32, fogFactorTmp));
+  fogFactor = builder.add(ir::Op::FClamp(ir::ScalarType::eF32, fogFactor, builder.makeConstant(0.0f),
+    builder.makeConstant(1.0f)));
+
+  /* Calculate the color of the pixel with fog in pixel shaders and return that. */
+  dxbc_spv_assert(color);
+
+  std::array<ir::SsaDef, 3u> colorComponents = {
+    ir::extractFromVector(builder, color, 0u),
+    ir::extractFromVector(builder, color, 1u),
+    ir::extractFromVector(builder, color, 2u)
+  };
+  auto color3 = ir::buildVector(builder, ir::ScalarType::eF32, colorComponents.size(),
+    colorComponents.data());
+
+  std::array<ir::SsaDef, 3u> fogFactComponents = { fogFactor, fogFactor, fogFactor };
+  auto fogFact3 = ir::buildVector(builder, ir::ScalarType::eF32, fogFactComponents.size(),
+    fogFactComponents.data());
+
+  auto vec3Type = ir::BasicType(ir::ScalarType::eF32, 3u);
+
+  auto diff = builder.add(ir::Op::FSub(vec3Type, color3, fogColor));
+  auto scaledDiff = builder.add(ir::Op::FMul(vec3Type, diff, fogFact3));
+  auto finalColor = builder.add(ir::Op::FAdd(vec3Type, fogColor, scaledDiff));
+
+  std::array<ir::SsaDef, 4u> finalColorComponents = {
+    ir::extractFromVector(builder, finalColor, 0u),
+    ir::extractFromVector(builder, finalColor, 1u),
+    ir::extractFromVector(builder, finalColor, 2u),
+    ir::extractFromVector(builder, color, 3u)
+  };
+  auto finalColor4 = ir::buildVector(builder, ir::ScalarType::eF32, finalColorComponents.size(),
+    finalColorComponents.data());
+
+  builder.add(ir::Op::Return(ir::BasicType(ir::ScalarType::eF32, 4u), finalColor4));
   builder.add(ir::Op::FunctionEnd());
 }
 

@@ -293,4 +293,11 @@ enum class AlphaTestComparisonMode : uint32_t {
   eAlways = 7u,
 };
 
+enum class FogMode : uint32_t {
+  eNone = 0u,
+  eExp = 1u,
+  eExp2 = 2u,
+  eLinear = 3u
+};
+
 }

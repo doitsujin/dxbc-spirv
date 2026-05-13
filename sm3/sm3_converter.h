@@ -74,6 +74,7 @@ private:
   ir::SsaDef       m_renderState;
 
   ir::SsaDef       m_alphaTestFunction;
+  ir::SsaDef       m_fogFunction = { };
 
   uint32_t m_instructionCount = 0u;
 
@@ -214,6 +215,8 @@ private:
   bool storeDstModifiedPredicated(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value);
 
   void emitAlphaTest(ir::Builder& builder);
+
+  void emitFog(ir::Builder& builder);
 
   void emitFloatModes(ir::Builder& builder);
 
