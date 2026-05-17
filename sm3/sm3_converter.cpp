@@ -286,6 +286,9 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
        * So there's no code needed in vertex shaders. */
       emitFog(builder);
     }
+  } else {
+    m_clipPlanes = emitClipPlanes(builder);
+    emitClipping(builder);
   }
 
   /* Set cursor to main function so that instructions will be emitted
@@ -325,6 +328,12 @@ bool Converter::finalize(ir::Builder& builder, ShaderType shaderType) {
       if (!m_ioMap.emitColorStore(builder, colorWithFog))
         return false;
     }
+  } else {
+    auto position = m_ioMap.getPositionValue(builder);
+    builder.add(
+      ir::Op::FunctionCall(ir::ScalarType::eVoid, m_clippingFunction)
+      .addParam(position)
+    );
   }
 
   m_ioMap.finalize(builder);
@@ -450,6 +459,22 @@ ir::SsaDef Converter::emitRenderStatePushData(ir::Builder& builder) {
   }
 
   return pushData;
+}
+
+
+ir::SsaDef Converter::emitClipPlanes(ir::Builder& builder) {
+  dxbc_spv_assert(getShaderInfo().getType() == ShaderType::eVertex);
+
+  /* Declare Cbv containing clip planes */
+  auto clipPlaneArrayType = ir::Type(ir::BasicType(ir::ScalarType::eF32, 4u));
+  clipPlaneArrayType.addArrayDimension(MaxClipPlanes);
+  auto clipPlaneBlock = builder.add(ir::Op::DclCbv(clipPlaneArrayType, getEntryPoint(),
+    0u, VSClipPlanesCbvRegIdx, 1u));
+
+  if (getOptions().includeDebugNames)
+    builder.add(ir::Op::DebugName(clipPlaneBlock, "ClipPlanes"));
+
+  return clipPlaneBlock;
 }
 
 
@@ -2405,6 +2430,41 @@ void Converter::emitFog(ir::Builder& builder) {
     finalColorComponents.data());
 
   builder.add(ir::Op::Return(ir::BasicType(ir::ScalarType::eF32, 4u), finalColor4));
+  builder.add(ir::Op::FunctionEnd());
+}
+
+
+void Converter::emitClipping(ir::Builder& builder) {
+  auto vec4Type = ir::BasicType(ir::ScalarType::eF32, 4u);
+
+  auto positionParam = builder.add(ir::Op::DclParam(vec4Type));
+  auto returnType = ir::BasicType(ir::ScalarType::eF32, 4u);
+
+  auto functionOp = ir::Op::Function(returnType)
+      .addOperand(positionParam);
+
+  m_clippingFunction = builder.add(functionOp);
+
+  if (getOptions().includeDebugNames) {
+    builder.add(ir::Op::DebugName(m_clippingFunction, "clipping"));
+    builder.add(ir::Op::DebugName(positionParam, "position"));
+  }
+
+  // Always consider clip planes enabled when doing GPL by forcing 6 for the quick value.
+  auto clipPlaneCount = m_specConstants.get(builder, SpecConstantId::eSpecClipPlaneCount);
+
+  auto position = builder.add(ir::Op::ParamLoad(vec4Type, m_clippingFunction, positionParam));
+
+  for (uint32_t i = 0u; i < MaxClipPlanes; i++) {
+    auto descriptor = builder.add(ir::Op::DescriptorLoad(ir::ScalarType::eCbv, m_clipPlanes, builder.makeConstant(0u)));
+    auto clipPlane = builder.add(ir::Op::BufferLoad(vec4Type, descriptor, builder.makeConstant(i), 16u));
+    auto dist = builder.add(emitFDot(ir::ScalarType::eF32, position, clipPlane));
+
+    auto clipPlaneEnabled = builder.add(ir::Op::ULt(ir::ScalarType::eBool, builder.makeConstant(i), clipPlaneCount));
+    auto value = builder.add(ir::Op::Select(ir::ScalarType::eF32, clipPlaneEnabled, dist, builder.makeConstant(0.0f)));
+    m_ioMap.emitClipPlaneStore(builder, i, value);
+  }
+
   builder.add(ir::Op::FunctionEnd());
 }
 

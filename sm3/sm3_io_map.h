@@ -139,6 +139,8 @@ public:
 
   ir::SsaDef getPositionValue(ir::Builder& builder);
 
+  void emitClipPlaneStore(ir::Builder& builder, uint32_t index, ir::SsaDef value);
+
 private:
 
   Converter&      m_converter;
@@ -151,6 +153,8 @@ private:
   ir::SsaDef      m_outputSwitchFunction = { };
 
   ir::SsaDef      m_pointCoord = { };
+
+  ir::SsaDef      m_clipDistances = { };
 
   ir::SsaDef emitDynamicLoadFunction(ir::Builder& builder) const;
   ir::SsaDef emitDynamicStoreFunction(ir::Builder& builder) const;
@@ -183,7 +187,7 @@ private:
   /** Turns a front face boolean into a float. 1.0 for the front face, -1.0 for the back face. */
   ir::SsaDef emitFrontFaceFloat(ir::Builder& builder, ir::SsaDef isFrontFaceDef) const;
 
-  void emitVSClipping(ir::Builder& builder);
+  void dclClipPlanes(ir::Builder& builder);
 
   /** Looks up matching I/O variable in the given list. */
   const IoVarInfo* findIoVar(RegisterType regType, uint32_t regIndex) const;

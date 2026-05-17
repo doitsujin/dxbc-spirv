@@ -72,9 +72,11 @@ private:
 
   ir::SsaDef       m_psSharedData;
   ir::SsaDef       m_renderState;
+  ir::SsaDef       m_clipPlanes = { };
 
   ir::SsaDef       m_alphaTestFunction;
   ir::SsaDef       m_fogFunction = { };
+  ir::SsaDef       m_clippingFunction = { };
 
   uint32_t m_instructionCount = 0u;
 
@@ -131,6 +133,8 @@ private:
   ir::SsaDef emitSharedConstants(ir::Builder& builder);
 
   ir::SsaDef emitRenderStatePushData(ir::Builder& builder);
+
+  ir::SsaDef emitClipPlanes(ir::Builder& builder);
 
   ir::SsaDef applyBumpMapping(ir::Builder& builder, uint32_t stageIdx, ir::SsaDef src0, ir::SsaDef src1);
 
@@ -217,6 +221,8 @@ private:
   void emitAlphaTest(ir::Builder& builder);
 
   void emitFog(ir::Builder& builder);
+
+  void emitClipping(ir::Builder& builder);
 
   void emitFloatModes(ir::Builder& builder);
 
