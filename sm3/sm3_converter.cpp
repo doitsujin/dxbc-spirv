@@ -2247,7 +2247,7 @@ void Converter::emitAlphaTest(ir::Builder& builder) {
   auto alphaTestBoolTmp = builder.add(ir::Op::DclTmp(ir::ScalarType::eBool, m_entryPoint.def));
 
   auto switchDef = builder.add(ir::Op::ScopedSwitch(ir::SsaDef(), alphaComparisonMode));
-  for (uint32_t i = 0u; i <= uint(AlphaTestComparisonMode::eAlways); i++) {
+  for (uint32_t i = 0u; i <= uint32_t(AlphaTestComparisonMode::eAlways); i++) {
     builder.add(ir::Op::ScopedSwitchCase(switchDef, i));
 
     ir::Op comparisonOp;
