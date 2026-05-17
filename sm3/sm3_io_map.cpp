@@ -130,6 +130,8 @@ void IoMap::initialize(ir::Builder& builder) {
   if (m_converter.getShaderInfo().getType() == ShaderType::ePixel) {
     /* Declare the point coord built-in because we might need that for the texcoord register. */
     dclPointCoord(builder);
+  } else {
+    dclClipPlanes(builder);
   }
 }
 
@@ -151,9 +153,6 @@ void IoMap::finalize(ir::Builder& builder) {
     m_outputSwitchFunction = outputSwitchFunction;
     builder.setCursor(cursor);
   }
-
-  if (m_converter.getShaderInfo().getType() == ShaderType::eVertex)
-    emitVSClipping(builder);
 
   flushOutputs(builder);
 }
@@ -957,6 +956,15 @@ ir::SsaDef IoMap::getPositionValue(ir::Builder& builder) {
 }
 
 
+void IoMap::emitClipPlaneStore(ir::Builder& builder, uint32_t index, ir::SsaDef value) {
+  dxbc_spv_assert(m_converter.getShaderInfo().getType() == ShaderType::eVertex);
+  dxbc_spv_assert(m_clipDistances);
+  dxbc_spv_assert(index < MaxClipPlanes);
+
+  builder.add(ir::Op::OutputStore(m_clipDistances, builder.makeConstant(index), value));
+}
+
+
 ir::SsaDef IoMap::emitDynamicLoadFunction(ir::Builder& builder) const {
   auto indexParameter = builder.add(ir::Op::DclParam(ir::ScalarType::eU32));
 
@@ -1107,17 +1115,8 @@ ir::SsaDef IoMap::emitFrontFaceFloat(ir::Builder &builder, ir::SsaDef isFrontFac
 }
 
 
-void IoMap::emitVSClipping(ir::Builder& builder) {
-  auto vec4Type = ir::BasicType(ir::ScalarType::eF32, 4u);
-
-  /* Declare Cbv containing clip planes */
-  auto clipPlaneArrayType = ir::Type(vec4Type);
-  clipPlaneArrayType.addArrayDimension(MaxClipPlanes);
-  auto clipPlaneBlock = builder.add(ir::Op::DclCbv(clipPlaneArrayType, m_converter.getEntryPoint(),
-    0u, VSClipPlanesCbvRegIdx, 1u));
-
-  if (m_converter.getOptions().includeDebugNames)
-    builder.add(ir::Op::DebugName(clipPlaneBlock, "ClipPlanes"));
+void IoMap::dclClipPlanes(ir::Builder& builder) {
+  dxbc_spv_assert(m_converter.getShaderInfo().getType() == ShaderType::eVertex);
 
   /* Declare output array for clip distances */
   auto clipDistanceArrayType = ir::Type(ir::ScalarType::eF32);
@@ -1125,33 +1124,7 @@ void IoMap::emitVSClipping(ir::Builder& builder) {
   auto clipDistancesArrayOp = ir::Op::DclOutputBuiltIn(clipDistanceArrayType,
     m_converter.getEntryPoint(), ir::BuiltIn::eClipDistance);
   clipDistancesArrayOp.setFlags(ir::OpFlag::eInvariant);
-  auto clipDistanceArray = builder.add(clipDistancesArrayOp);
-
-  const IoVarInfo* positionVar = findIoVar({ SemanticUsage::ePosition, 0u }, false);
-
-  dxbc_spv_assert(positionVar != nullptr);
-  dxbc_spv_assert(positionVar->baseType == ir::BasicType(ir::ScalarType::eF32, 4u));
-
-  std::array<ir::SsaDef, 4u> components;
-  for (uint32_t i = 0u; i < 4u; i++) {
-    dxbc_spv_assert(positionVar->tempDefs[i]);
-    components[i] = builder.add(ir::Op::TmpLoad(positionVar->baseType, positionVar->tempDefs[i]));
-  }
-
-  // Always consider clip planes enabled when doing GPL by forcing 6 for the quick value.
-  auto clipPlaneCount = m_converter.m_specConstants.get(builder, SpecConstantId::eSpecClipPlaneCount);
-
-  auto position = ir::buildVector(builder, ir::ScalarType::eF32, components.size(), components.data());
-
-  for (uint32_t i = 0u; i < MaxClipPlanes; i++) {
-    auto descriptor = builder.add(ir::Op::DescriptorLoad(ir::ScalarType::eCbv, clipPlaneBlock, builder.makeConstant(0u)));
-    auto clipPlane = builder.add(ir::Op::BufferLoad(vec4Type, descriptor, builder.makeConstant(i), 16u));
-    auto dist = builder.add(m_converter.emitFDot(ir::ScalarType::eF32, position, clipPlane));
-
-    auto clipPlaneEnabled = builder.add(ir::Op::ULe(ir::ScalarType::eBool, builder.makeConstant(i), clipPlaneCount));
-    auto value = builder.add(ir::Op::Select(ir::ScalarType::eF32, clipPlaneEnabled, dist, builder.makeConstant(0.0f)));
-    builder.add(ir::Op::OutputStore(clipDistanceArray, builder.makeConstant(i), value));
-  }
+  m_clipDistances = builder.add(clipDistancesArrayOp);
 }
 
 
