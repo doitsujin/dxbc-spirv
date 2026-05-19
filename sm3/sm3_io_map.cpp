@@ -421,12 +421,11 @@ void IoMap::dclPointCoord(ir::Builder& builder) {
 }
 
 
-ir::SsaDef IoMap::emitPointCoordLoad(ir::Builder& builder) {
-  auto pointCoordType = ir::BasicType(ir::ScalarType::eF32, 2u);
-  auto pointCoord = builder.add(ir::Op::InputLoad(pointCoordType, m_pointCoord, ir::SsaDef()));
-  /* Turn it into a vec4 so it can easily be used as the texcoord register value. */
-  std::array<ir::SsaDef, 4u> components = { pointCoord, pointCoord, builder.makeConstant(0.0f), builder.makeConstant(0.0f) };
-  return ir::buildVector(builder, ir::ScalarType::eF32, 4u, components.data());
+ir::SsaDef IoMap::emitPointCoordLoad(ir::Builder& builder, uint32_t componentIndex) {
+  if (componentIndex < 2) // The point coord input is only a vec2
+    return builder.add(ir::Op::InputLoad(ir::ScalarType::eF32, m_pointCoord, builder.makeConstant(componentIndex)));
+  else
+    return builder.makeConstant(0.0f);
 }
 
 
@@ -600,20 +599,21 @@ ir::SsaDef IoMap::emitLoad(
             addressConstant = builder.makeConstant(uint32_t(componentIndex));
 
           value = builder.add(ir::Op::InputLoad(varScalarType, ioVar->baseDef, addressConstant));
+          dxbc_spv_assert(varScalarType == ir::ScalarType::eF32);
 
           if (m_converter.getShaderInfo().getType() == ShaderType::ePixel
             && ioVar->registerType == RegisterType::eInput
             && ioVar->semantic.usage == SemanticUsage::eTexCoord) {
             /* We need to replace TEXCOORD inputs with gl_PointCoord
              * if D3DRS_POINTSPRITEENABLE is set. */
-            auto pointCoord = emitPointCoordLoad(builder);
+            auto pointCoord = emitPointCoordLoad(builder, componentIndex);
 
             auto specConstBit = m_converter.m_specConstants.get(builder, SpecConstantId::eSpecPointMode,
               builder.makeConstant(1u), builder.makeConstant(1u));
-            auto pointSpriteEnabled = builder.add(ir::Op::IEq(ir::ScalarType::eU32, specConstBit, builder.makeConstant(1u)));
+            auto pointSpriteEnabled = builder.add(ir::Op::IEq(ir::ScalarType::eBool, specConstBit, builder.makeConstant(1u)));
 
             value = builder.add(ir::Op::Select(
-              ir::BasicType(ir::ScalarType::eF32, 4u),
+              varScalarType,
               pointSpriteEnabled,
               pointCoord,
               value

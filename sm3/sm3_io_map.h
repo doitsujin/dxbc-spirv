@@ -182,7 +182,7 @@ private:
 
   void dclPointCoord(ir::Builder& builder);
 
-  ir::SsaDef emitPointCoordLoad(ir::Builder& builder);
+  ir::SsaDef emitPointCoordLoad(ir::Builder& builder, uint32_t componentIndex);
 
   /** Turns a front face boolean into a float. 1.0 for the front face, -1.0 for the back face. */
   ir::SsaDef emitFrontFaceFloat(ir::Builder& builder, ir::SsaDef isFrontFaceDef) const;
