@@ -1833,6 +1833,22 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
           auto next = m_builder.rewriteDef(op->getDef(), SsaDef(a.getOperand(0u)));
           return std::make_pair(true, m_builder.iter(next));
         }
+
+        if (isOnlyUse(m_builder, a.getDef(), op->getDef()) || (op->getFlags() & OpFlag::eInvariant)) {
+          /* rcp(rsq(a)) -> sqrt(a) */
+          if (a.getOpCode() == OpCode::eFRsq) {
+            m_builder.rewriteOp(op->getDef(), Op::FSqrt(
+              op->getType(), SsaDef(a.getOperand(0u))).setFlags(op->getFlags()));
+            return std::make_pair(true, op);
+          }
+
+          /* rcp(sqrt(a)) -> rsq(a) */
+          if (a.getOpCode() == OpCode::eFSqrt) {
+            m_builder.rewriteOp(op->getDef(), Op::FRsq(
+              op->getType(), SsaDef(a.getOperand(0u))).setFlags(op->getFlags()));
+            return std::make_pair(true, op);
+          }
+        }
       }
     } break;
 
