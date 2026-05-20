@@ -3510,6 +3510,8 @@ std::pair<bool, Builder::iterator> ArithmeticPass::reorderConstantOperandsOp(Bui
     case OpCode::eFMadLegacy:
     case OpCode::eFMin:
     case OpCode::eFMax:
+    case OpCode::eFDot:
+    case OpCode::eFDotLegacy:
     case OpCode::eIAnd:
     case OpCode::eIOr:
     case OpCode::eIXor:
