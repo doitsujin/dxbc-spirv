@@ -1305,11 +1305,16 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
 bool Converter::handleTexKill(ir::Builder& builder, const Instruction& op) {
   /* Demotes if any of the first 3 components are less than 0.0. */
   dxbc_spv_assert(op.hasDst());
-  auto writeMask = op.getDst().getWriteMask(getShaderInfo());
-  writeMask &= ComponentBit::eX | ComponentBit::eY | ComponentBit::eZ;
   ir::SsaDef dst;
 
+  auto writeMask = op.getDst().getWriteMask(getShaderInfo());
   auto [versionMajor, versionMinor] = getShaderInfo().getVersion();
+
+  /* For Shader Model 1 this operates on the first three components,
+   * otherwise we need to take the full write mask into account */
+  if (versionMajor <= 1u)
+    writeMask &= ComponentBit::eX | ComponentBit::eY | ComponentBit::eZ;
+
   if (versionMajor <= 1u && versionMinor <= 3u) {
     dst = m_ioMap.emitTexCoordLoad(builder,
       op,
