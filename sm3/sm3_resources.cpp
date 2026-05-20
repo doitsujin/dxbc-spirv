@@ -499,7 +499,7 @@ bool ResourceMap::handleDclSampler(ir::Builder& builder, const Instruction& op) 
 bool ResourceMap::dclSamplerAndAllTextureTypes(ir::Builder& builder, uint32_t samplerIndex) {
   auto sampler = dclSampler(builder, samplerIndex);
 
-  std::array<ir::SsaDef, uint32_t(SpecConstTextureType::eTexture3D) + 1u> textures;
+  std::array<ir::SsaDef, uint32_t(SpecConstTextureType::eCount)> textures;
 
   for (uint32_t i = 0; i < textures.size(); i++) {
     SpecConstTextureType textureType = SpecConstTextureType(i);
@@ -681,7 +681,7 @@ ir::SsaDef ResourceMap::emitSampleImageFunction(
     auto textureTypeSwitch = builder.add(ir::Op::ScopedSwitch(ir::SsaDef(), samplerTypeSpecConst));
 
     /* Emit a switch case for each texture type. */
-    for (uint32_t i = 0; i <= uint32_t(SpecConstTextureType::eTexture3D); i++) {
+    for (uint32_t i = 0; i < uint32_t(SpecConstTextureType::eCount); i++) {
       builder.add(ir::Op::ScopedSwitchCase(textureTypeSwitch, i));
 
       auto descriptor = builder.add(ir::Op::DescriptorLoad(ir::ScalarType::eSrv,
