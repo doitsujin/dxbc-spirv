@@ -186,6 +186,36 @@ std::pair<bool, Builder::iterator> CleanupControlFlowPass::handleLabel(Builder::
   if (!isBlockUsed(op->getDef()))
     return std::make_pair(true, m_builder.iter(removeBlock(op->getDef())));
 
+  /* If the block is used but unreachable (which can be the case for merge blocks)
+   * and isn't already marked as unreachable, replace it with an unreachable block. */
+  if (!isBlockReachable(op->getDef()) && !isContinueBlock(op->getDef())) {
+    const auto& nextOp = m_builder.getOp(m_builder.getNext(op->getDef()));
+
+    if (nextOp.getOpCode() == OpCode::eUnreachable)
+      return std::make_pair(false, ++op);
+
+    auto block = m_builder.addBefore(op->getDef(), Op::Label());
+    m_builder.addBefore(op->getDef(), Op::Unreachable());
+
+    auto [a, b] = m_builder.getUses(op->getDef());
+
+    for (auto iter = a; iter != b; iter++) {
+      if (iter->getOpCode() == OpCode::eLabel) {
+        Op labelOp = *iter;
+
+        for (uint32_t i = 0u; i < labelOp.getFirstLiteralOperandIndex(); i++) {
+          if (SsaDef(labelOp.getOperand(i)) == op->getDef())
+            labelOp.setOperand(i, block);
+        }
+
+        m_builder.rewriteOp(iter->getDef(), labelOp);
+      }
+    }
+
+    dxbc_spv_assert(!isBlockUsed(op->getDef()));
+    return std::make_pair(true, m_builder.iter(removeBlock(op->getDef())));
+  }
+
   /* If the block does not serve any special function w.r.t. structured control flow,
    * only has a single predecessor, and if that predecessor is not the header of any
    * construct and unconditionally branches to this block without any trivial phi,
