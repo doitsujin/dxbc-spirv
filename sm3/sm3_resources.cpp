@@ -198,6 +198,7 @@ ir::SsaDef ResourceMap::emitConstantLoad(
 
   /* Find the smallest range that contains the requested constants. */
   const ConstantRange* bestRange = nullptr;
+
   for (const auto& range : constants.constantRanges) {
     if (registerIndex >= range.startIndex
       && registerIndex < range.startIndex + range.count
@@ -206,10 +207,9 @@ ir::SsaDef ResourceMap::emitConstantLoad(
     }
   }
 
-  if (bestRange == nullptr) {
-    dxbc_spv_unreachable();
+  if (!bestRange) {
     Logger::err("Cannot find constant: ", registerIndex, " in ranges.");
-    return ir::SsaDef();
+    return builder.makeUndef(makeVectorType(scalarType, componentMask));
   }
 
   /* In HWVP float constants and int constants are packed into the same buffer and the int constants come first. */
