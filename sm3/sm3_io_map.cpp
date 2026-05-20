@@ -293,10 +293,12 @@ void IoMap::dclIoVar(
   bool isScalar = registerType == RegisterType::eRasterizerOut
     && (registerIndex == uint32_t(RasterizerOutIndex::eRasterOutFog)
     || registerIndex == uint32_t(RasterizerOutIndex::eRasterOutPointSize));
-  isScalar |= registerType == RegisterType::eInput && registerIndex == FogRegisterIndex;
   isScalar |= builtIn == ir::BuiltIn::eIsFrontFace;
   isScalar |= builtIn == ir::BuiltIn::eDepth;
   isScalar |= builtIn == ir::BuiltIn::ePointSize;
+
+  if (shaderType == ShaderType::ePixel)
+    isScalar |= registerType == RegisterType::eInput && registerIndex == FogRegisterIndex;
 
   uint32_t typeVectorSize = isScalar ? 1u : 4u;
   ir::Type type(
