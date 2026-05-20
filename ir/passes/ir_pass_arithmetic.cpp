@@ -1852,9 +1852,11 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
       }
     } break;
 
-    case OpCode::eFMulLegacy: {
+    case OpCode::eFMulLegacy:
+    case OpCode::eFMadLegacy: {
       const auto& a = m_builder.getOpForOperand(*op, 0u);
       const auto& b = m_builder.getOpForOperand(*op, 1u);
+      auto c = SsaDef(op->getOperand(2u));
 
       bool replaceFmul = false;
 
@@ -1871,33 +1873,48 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
         replaceFmul = true;
 
       if (replaceFmul) {
-        m_builder.rewriteOp(op->getDef(),
-          Op::FMul(op->getType(), a.getDef(), b.getDef()).setFlags(op->getFlags()));
+        m_builder.rewriteOp(op->getDef(), c
+          ? Op::FMad(op->getType(), a.getDef(), b.getDef(), c).setFlags(op->getFlags())
+          : Op::FMul(op->getType(), a.getDef(), b.getDef()).setFlags(op->getFlags()));
         return std::make_pair(true, op);
       }
     } [[fallthrough]];
 
-    case OpCode::eFMul: {
+    case OpCode::eFMul:
+    case OpCode::eFMad: {
       const auto& a = m_builder.getOpForOperand(*op, 0u);
       const auto& b = m_builder.getOpForOperand(*op, 1u);
+      auto c = SsaDef(op->getOperand(2u));
 
       if (!(getFpFlags(*op) & OpFlag::ePrecise) && b.isConstant() &&
           op->getType().getBaseType(0u).isScalar()) {
-        /* a * 0 -> 0 */
+        /* a * 0 -> 0
+         * a * 0 + c -> c */
         if (getConstantAsFloat(b, 0u) == 0.0) {
-          auto next = m_builder.rewriteDef(op->getDef(), m_builder.makeConstantZero(op->getType()));
+          auto next = m_builder.rewriteDef(op->getDef(),
+            c ? c : m_builder.makeConstantZero(op->getType()));
           return std::make_pair(true, m_builder.iter(next));
         }
 
-        /* a * 1 -> a */
+        /* a * 1 -> a
+         * a * 1 + c -> a + c */
         if (getConstantAsFloat(b, 0u) == 1.0) {
-          auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
-          return std::make_pair(true, m_builder.iter(next));
+          if (c) {
+            m_builder.rewriteOp(op->getDef(), Op::FAdd(
+              op->getType(), a.getDef(), c).setFlags(op->getFlags()));
+            return std::make_pair(true, op);
+          } else {
+            auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
+            return std::make_pair(true, m_builder.iter(next));
+          }
         }
 
-        /* a * -1 -> -a */
+        /* a * -1 -> -a
+         * a * -1 + c -> c - a */
         if (getConstantAsFloat(b, 0u) == -1.0) {
-          m_builder.rewriteOp(op->getDef(), Op::FNeg(op->getType(), a.getDef()).setFlags(a.getFlags()));
+          m_builder.rewriteOp(op->getDef(), c
+            ? Op::FSub(op->getType(), c, a.getDef()).setFlags(op->getFlags())
+            : Op::FNeg(op->getType(), a.getDef()).setFlags(a.getFlags()));
           return std::make_pair(true, op);
         }
       }
@@ -2970,6 +2987,8 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityOp(Builder::it
     case OpCode::eFSub:
     case OpCode::eFMul:
     case OpCode::eFMulLegacy:
+    case OpCode::eFMad:
+    case OpCode::eFMadLegacy:
     case OpCode::eFDotLegacy:
     case OpCode::eFDiv:
     case OpCode::eFMin:
