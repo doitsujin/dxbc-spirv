@@ -1758,7 +1758,7 @@ bool Converter::handleSetP(ir::Builder& builder, const Instruction& op) {
     components.push_back(comparison);
   }
 
-  auto result = composite(builder, makeVectorType(scalarType, writeMask), components.data(), Swizzle::identity(), writeMask);
+  auto result = composite(builder, makeVectorType(ir::ScalarType::eBool, writeMask), components.data(), Swizzle::identity(), writeMask);
   return storeDstModifiedPredicated(builder, op, dst, result);
 }
 
@@ -2101,6 +2101,10 @@ bool Converter::storeDst(ir::Builder& builder, const Instruction& op, const Oper
   WriteMask writeMask = operand.getWriteMask(getShaderInfo());
 
   switch (operand.getRegisterType()) {
+    case RegisterType::ePredicate:
+      dxbc_spv_assert(op.getOpCode() == OpCode::eSetP);
+      return m_regFile.emitStore(builder, operand, writeMask, predicateVec, value);
+
     case RegisterType::eTemp:
     case RegisterType::eAddr:
       return m_regFile.emitStore(builder, operand, writeMask, predicateVec, value);
