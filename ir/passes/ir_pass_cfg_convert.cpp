@@ -112,6 +112,9 @@ Builder::iterator ConvertControlFlowPass::handleFunction(Builder::iterator op) {
    * to the list of labels to check for removal since it is never directly referenced
    * by any instruction. */
   dxbc_spv_assert(!m_currBlock);
+  dxbc_spv_assert(!m_currFunction);
+
+  m_currFunction = op->getDef();
 
   auto block = m_builder.addAfter(op->getDef(), Op::Label());
   return m_builder.iter(block);
@@ -120,9 +123,17 @@ Builder::iterator ConvertControlFlowPass::handleFunction(Builder::iterator op) {
 
 Builder::iterator ConvertControlFlowPass::handleFunctionEnd(Builder::iterator op) {
   /* Add return instruction to terminate the current block, if any. */
-  m_builder.addBefore(op->getDef(), Op::Return());
+  ir::Type returnType = m_builder.getOp(m_currFunction).getType();
+
+  if (!returnType.isVoidType()) {
+    m_builder.addBefore(op->getDef(), Op::Return(returnType,
+      m_builder.makeUndef(returnType)));
+  } else {
+    m_builder.addBefore(op->getDef(), Op::Return());
+  }
 
   m_currBlock = ir::SsaDef();
+  m_currFunction = ir::SsaDef();
   return ++op;
 }
 
