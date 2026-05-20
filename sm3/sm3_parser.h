@@ -576,7 +576,7 @@ public:
   /** Queries the comparison mode of the instruction.
     * Only relevant for a few control flow instructions. */
   ComparisonMode getComparisonMode() const {
-    dxbc_spv_assert(getOpCode() == OpCode::eIfC || getOpCode() == OpCode::eBreakC || isPredicated());
+    dxbc_spv_assert(getOpCode() == OpCode::eIfC || getOpCode() == OpCode::eSetP || getOpCode() == OpCode::eBreakC || isPredicated());
     return ComparisonMode(util::bextract(m_token, 16u, 8u));
   }
 
