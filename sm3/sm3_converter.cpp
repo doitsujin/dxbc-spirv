@@ -570,7 +570,7 @@ ir::SsaDef Converter::emitComparison(ir::Builder& builder, ir::SsaDef a, ir::Ssa
 bool Converter::handleComment(ir::Builder& builder, const Instruction& op) {
   /* The comment is always at the start of the shader from what we've seen,
    * so no need to get extra clever here. */
-  if (m_options.includeDebugNames && op.getOpCode() == OpCode::eComment && !m_ctab) {
+  if (m_options.includeConstantNames && op.getOpCode() == OpCode::eComment && !m_ctab) {
     auto ctabReader = util::ByteReader(op.getCommentData(), op.getCommentDataSize());
     m_ctab = ConstantTable(ctabReader);
     m_resources.emitNamedConstantRanges(builder, m_ctab);
