@@ -878,7 +878,7 @@ bool Converter::handleLit(ir::Builder& builder, const Instruction& op) {
     auto zTestY = builder.add(ir::Op::FGe(ir::ScalarType::eBool, srcY, zeroFConst));
     auto zTest = builder.add(ir::Op::BAnd(ir::ScalarType::eBool, zTestX, zTestY));
 
-    auto dstZ = builder.add(ir::Op::FPow(scalarType, srcX, power));
+    auto dstZ = builder.add(ir::Op::FPow(scalarType, srcY, power));
 
     components.push_back(builder.add(ir::Op::Select(scalarType, zTest, dstZ, zeroFConst)));
   }
