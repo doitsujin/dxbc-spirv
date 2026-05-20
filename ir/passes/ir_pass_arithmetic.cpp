@@ -2541,6 +2541,37 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityCompareOp(Buil
     }
   }
 
+  /* op(a, -a) = op(a, 0)
+   * op(-a, a) = op(0, a)
+   * op(-a, -b) = op(b, a)
+   * Only works for floats since -INT_MIN == INT_MIN. */
+  if (a.getOpCode() == OpCode::eFNeg || b.getOpCode() == OpCode::eFNeg) {
+    bool aIsNeg = a.getOpCode() == OpCode::eFNeg;
+    bool bIsNeg = b.getOpCode() == OpCode::eFNeg;
+
+    auto aDef = aIsNeg ? SsaDef(a.getOperand(0u)) : a.getDef();
+    auto bDef = bIsNeg ? SsaDef(b.getOperand(0u)) : b.getDef();
+
+    if (aIsNeg && bIsNeg) {
+      m_builder.rewriteOp(op->getDef(), Op(op->getOpCode(), op->getType())
+        .setFlags(op->getFlags())
+        .addOperand(bDef)
+        .addOperand(aDef));
+      return std::make_pair(true, op);
+    }
+
+    /* Exactly one operand is negative */
+    if (aDef == bDef) {
+      auto zero = m_builder.add(Op(OpCode::eConstant, a.getType()).addOperand(Operand()));
+
+      m_builder.rewriteOp(op->getDef(), Op(op->getOpCode(), op->getType())
+        .setFlags(op->getFlags())
+        .addOperand(aIsNeg ? zero : aDef)
+        .addOperand(aIsNeg ? aDef : zero));
+      return std::make_pair(true, op);
+    }
+  }
+
   /* For comparisons, we can only really do anything
    * if the operands are the same */
   if (a.getDef() != b.getDef())
