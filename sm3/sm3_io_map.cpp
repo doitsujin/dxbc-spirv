@@ -601,6 +601,15 @@ ir::SsaDef IoMap::emitLoad(
           value = builder.add(ir::Op::InputLoad(varScalarType, ioVar->baseDef, addressConstant));
           dxbc_spv_assert(varScalarType == ir::ScalarType::eF32);
 
+          /* Apply half-pixel offset to pixel coordinate as necessary.
+           * TODO evaluate whether floor() would be more appropriate,
+           *      given that we may run with sample rate shading. */
+          if (m_converter.getShaderInfo().getType() == ShaderType::ePixel
+           && ioVar->registerType == RegisterType::eMiscType
+           && ioVar->registerIndex == uint32_t(MiscTypeIndex::eMiscTypePosition)
+           && componentIndex < 2u)
+            value = builder.add(ir::Op::FSub(varScalarType, value, builder.makeConstant(0.5f)));
+
           if (m_converter.getShaderInfo().getType() == ShaderType::ePixel
             && ioVar->registerType == RegisterType::eInput
             && ioVar->semantic.usage == SemanticUsage::eTexCoord) {
