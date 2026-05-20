@@ -1856,18 +1856,24 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
       const auto& a = m_builder.getOpForOperand(*op, 0u);
       const auto& b = m_builder.getOpForOperand(*op, 1u);
 
+      bool replaceFmul = false;
+
       if (b.isConstant()) {
-        bool replaceFmul = true;
+        replaceFmul = true;
 
         for (uint32_t i = 0u; i < b.getOperandCount(); i++) {
           auto fpClass = std::fpclassify(getConstantAsFloat(b, i));
           replaceFmul = replaceFmul && fpClass == FP_NORMAL;
         }
+      }
 
-        if (replaceFmul) {
-          m_builder.rewriteOp(op->getDef(), Op::FMul(op->getType(), a.getDef(), b.getDef()));
-          return std::make_pair(true, op);
-        }
+      if (a.getDef() == b.getDef())
+        replaceFmul = true;
+
+      if (replaceFmul) {
+        m_builder.rewriteOp(op->getDef(),
+          Op::FMul(op->getType(), a.getDef(), b.getDef()).setFlags(op->getFlags()));
+        return std::make_pair(true, op);
       }
     } [[fallthrough]];
 
