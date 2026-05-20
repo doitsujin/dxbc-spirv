@@ -61,6 +61,7 @@ private:
   Builder& m_builder;
 
   /* Active label, if any. */
+  SsaDef m_currFunction = { };
   SsaDef m_currBlock = { };
 
   /* Nested control flow constructs, with the innermost block last. */
