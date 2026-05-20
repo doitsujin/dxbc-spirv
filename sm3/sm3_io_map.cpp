@@ -653,11 +653,8 @@ ir::SsaDef IoMap::emitLoad(
     for (auto c : swizzle.getReadMask(componentMask)) {
       auto componentIndex = uint8_t(util::componentFromBit(c));
 
-      components[componentIndex] = convertScalar(
-        builder,
-        type,
-        builder.add(ir::Op::CompositeExtract(type, vec4Value, builder.makeConstant(componentIndex)))
-      );
+      components[componentIndex] = convertScalar(builder, type, builder.add(
+        ir::Op::CompositeExtract(ir::ScalarType::eF32, vec4Value, builder.makeConstant(componentIndex))));
     }
   }
 
