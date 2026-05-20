@@ -1594,9 +1594,18 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectFMul(Builder::iterator 
   auto cond = m_builder.getOpForOperand(select, 0u).getDef();
   auto a = m_builder.getOpForOperand(select, 1u).getDef();
   auto b = m_builder.getOpForOperand(select, 2u).getDef();
+  auto c = SsaDef(op->getOperand(2u));
 
-  a = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType()).addOperands(value.getDef(), a).setFlags(op->getFlags()));
-  b = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType()).addOperands(value.getDef(), b).setFlags(op->getFlags()));
+  auto aOp = Op(op->getOpCode(), op->getType()).addOperands(value.getDef(), a).setFlags(op->getFlags());
+  auto bOp = Op(op->getOpCode(), op->getType()).addOperands(value.getDef(), b).setFlags(op->getFlags());
+
+  if (c) {
+    aOp.addOperand(c);
+    bOp.addOperand(c);
+  }
+
+  a = m_builder.addBefore(op->getDef(), aOp);
+  b = m_builder.addBefore(op->getDef(), bOp);
 
   m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), cond, a, b).setFlags(op->getFlags()));
   return std::make_pair(true, op);
@@ -1679,6 +1688,8 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectOp(Builder::iterator op
 
     case OpCode::eFMul:
     case OpCode::eFMulLegacy:
+    case OpCode::eFMad:
+    case OpCode::eFMadLegacy:
       return selectFMul(op);
 
     case OpCode::eFAdd:
