@@ -947,12 +947,20 @@ ir::SsaDef IoMap::getPositionValue(ir::Builder& builder) {
   }
   dxbc_spv_assert(ioVar != nullptr);
 
-  auto componentType = ioVar->baseType.getBaseType(0u).getBaseType();
-  std::array<ir::SsaDef, 4u> components;
-  for (uint32_t i = 0u; i < components.size(); i++) {
-    components[i] = builder.add(ir::Op::TmpLoad(componentType, ioVar->tempDefs[i]));
+  if (isPS) {
+    dxbc_spv_assert(ioVar->baseDef);
+    dxbc_spv_assert(ioVar->baseType == ir::BasicType(ir::ScalarType::eF32, 4u));
+
+    return builder.add(ir::Op::InputLoad(ioVar->baseType, ioVar->baseDef, ir::SsaDef()));
+  } else {
+    auto componentType = ioVar->baseType.getBaseType(0u).getBaseType();
+    std::array<ir::SsaDef, 4u> components;
+    for (uint32_t i = 0u; i < components.size(); i++) {
+      dxbc_spv_assert(ioVar->tempDefs[i]);
+      components[i] = builder.add(ir::Op::TmpLoad(componentType, ioVar->tempDefs[i]));
+    }
+    return ir::buildVector(builder, componentType, components.size(), components.data());
   }
-  return ir::buildVector(builder, componentType, components.size(), components.data());
 }
 
 
