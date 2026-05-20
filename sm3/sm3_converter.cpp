@@ -2352,10 +2352,14 @@ void Converter::emitFog(ir::Builder& builder) {
 
   auto fogModeSwitch = builder.add(ir::Op::ScopedSwitch(ir::SsaDef(), fogMode));
   for (uint32_t i = 0u; i <= uint32_t(FogMode::eLinear); i++) {
-    builder.add(ir::Op::ScopedSwitchCase(fogModeSwitch, i));
-
     ir::SsaDef fogFactor;
     auto mode = FogMode(i);
+
+    if (mode == FogMode::eNone)
+      builder.add(ir::Op::ScopedSwitchDefault(fogModeSwitch));
+    else
+      builder.add(ir::Op::ScopedSwitchCase(fogModeSwitch, i));
+
     switch (mode) {
       default:
       /* vFog */
