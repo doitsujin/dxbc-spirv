@@ -170,6 +170,10 @@ private:
 
   std::pair<bool, Builder::iterator> selectOp(Builder::iterator op);
 
+  std::pair<bool, Builder::iterator> selectMergeBinaryOp(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> selectMergeOp(Builder::iterator op);
+
   std::pair<bool, Builder::iterator> resolveCastOp(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> resolveIdentityArithmeticOp(Builder::iterator op);
