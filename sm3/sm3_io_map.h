@@ -200,7 +200,7 @@ private:
 
   /** Replaces the given texcoord component with a point coord component if the application has set the point sprite spec const.
    * If the given IoVar has the wrong register type or the wrong semantic, it will just return the given texCoord without change. */
-  ir::SsaDef emitTexCoordPointSpriteAdjustment(ir::Builder& builder, const IoVarInfo& ioVar, ir::SsaDef texCoord, uint32_t componentIndex);
+  ir::SsaDef emitTexCoordPointSpriteAdjustment(ir::Builder& builder, const IoVarInfo& ioVar, ir::SsaDef texCoord, uint32_t componentIndex) const;
 
   void emitDebugName(
     ir::Builder& builder,
