@@ -1616,35 +1616,61 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectFAdd(Builder::iterator 
   if (getFpFlags(*op) & OpFlag::ePrecise)
     return std::make_pair(false, ++op);
 
-  /* If we can statically prove that c0 and c1 are mutually exclusive:
-   * select(c0, a, 0) + select(c1, b, c) -> select(c0, a, select(c1, b, c))
-   * select(c0, a, b) + select(c1, c, 0) -> select(c1, c, select(c0, a, b))
-   * Note that this optimization may eliminate a denorm flush. */
-  const auto& selectA = m_builder.getOpForOperand(*op, 0u);
-  const auto& selectB = m_builder.getOpForOperand(*op, 1u);
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+  const auto& b = m_builder.getOpForOperand(*op, 1u);
 
-  if (selectA.getOpCode() != OpCode::eSelect || selectB.getOpCode() != OpCode::eSelect)
-    return std::make_pair(false, ++op);
+  /* select(c0, a, 0) + b -> select(c0, a + b, b)
+   * select(c0, 0, a) + b -> select(c0, b, a + b) */
+  bool aIsSelect = a.getOpCode() == OpCode::eSelect;
+  bool bIsSelect = b.getOpCode() == OpCode::eSelect;
 
-  const auto& ac = m_builder.getOpForOperand(selectA, 0u);
-  const auto& at = m_builder.getOpForOperand(selectA, 1u);
-  const auto& af = m_builder.getOpForOperand(selectA, 2u);
+  if (aIsSelect && bIsSelect) {
+    /* If we can statically prove that c0 and c1 are mutually exclusive:
+     * select(c0, a, 0) + select(c1, b, c) -> select(c0, a, select(c1, b, c))
+     * select(c0, a, b) + select(c1, c, 0) -> select(c1, c, select(c0, a, b))
+     * Note that this optimization may eliminate a denorm flush. */
+    const auto& ac = m_builder.getOpForOperand(a, 0u);
+    const auto& at = m_builder.getOpForOperand(a, 1u);
+    const auto& af = m_builder.getOpForOperand(a, 2u);
 
-  const auto& bc = m_builder.getOpForOperand(selectB, 0u);
-  const auto& bt = m_builder.getOpForOperand(selectB, 1u);
-  const auto& bf = m_builder.getOpForOperand(selectB, 2u);
+    const auto& bc = m_builder.getOpForOperand(b, 0u);
+    const auto& bt = m_builder.getOpForOperand(b, 1u);
+    const auto& bf = m_builder.getOpForOperand(b, 2u);
 
-  if (evalBAnd(ac, bc) != std::make_optional(false))
-    return std::make_pair(false, ++op);
+    if (evalBAnd(ac, bc) != std::make_optional(false))
+      return std::make_pair(false, ++op);
 
-  if (isConstantValue(bf, 0)) {
-    m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), bc.getDef(), bt.getDef(), selectA.getDef()).setFlags(op->getFlags()));
-    return std::make_pair(true, op);
-  }
+    if (isConstantValue(bf, 0)) {
+      m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), bc.getDef(), bt.getDef(), a.getDef()).setFlags(op->getFlags()));
+      return std::make_pair(true, op);
+    }
 
-  if (isConstantValue(af, 0)) {
-    m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), ac.getDef(), at.getDef(), selectB.getDef()).setFlags(op->getFlags()));
-    return std::make_pair(true, op);
+    if (isConstantValue(af, 0)) {
+      m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), ac.getDef(), at.getDef(), b.getDef()).setFlags(op->getFlags()));
+      return std::make_pair(true, op);
+    }
+  } else if ((aIsSelect || bIsSelect) && (getFpFlags(*op) & OpFlag::eNoSz)) {
+    /* select(a, b, 0) + c -> select(a, b + c, c)
+     * select(a, 0, b) + c -> select(a, c, b + c) */
+    const auto& selectOp = aIsSelect ? a : b;
+    const auto& valueOp = aIsSelect ? b : a;
+
+    if (isOnlyUse(m_builder, selectOp.getDef(), op->getDef()) || (getFpFlags(*op) & OpFlag::eInvariant)) {
+      const auto& sc = m_builder.getOpForOperand(selectOp, 0u);
+      const auto& st = m_builder.getOpForOperand(selectOp, 1u);
+      const auto& sf = m_builder.getOpForOperand(selectOp, 2u);
+
+      /* Add with constant 0 will be optimized away separately */
+      bool stIsZero = isConstantValue(st, 0);
+      bool sfIsZero = isConstantValue(sf, 0);
+
+      if (stIsZero || sfIsZero) {
+        m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), sc.getDef(),
+          m_builder.addBefore(op->getDef(), Op::FAdd(op->getType(), st.getDef(), valueOp.getDef())),
+          m_builder.addBefore(op->getDef(), Op::FAdd(op->getType(), sf.getDef(), valueOp.getDef()))).setFlags(op->getFlags()));
+        return std::make_pair(true, op);
+      }
+    }
   }
 
   return std::make_pair(false, ++op);
