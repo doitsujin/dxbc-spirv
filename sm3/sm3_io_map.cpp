@@ -246,6 +246,7 @@ std::optional<ir::BuiltIn> IoMap::determineBuiltinForRegister(RegisterType regTy
       }
 
       if (regIndex == uint32_t(MiscTypeIndex::eMiscTypePosition)) {
+        dxbc_spv_assert(semantic.usage == SemanticUsage::ePosition && semantic.index == 0u);
         return std::make_optional(ir::BuiltIn::ePosition);
       }
 
