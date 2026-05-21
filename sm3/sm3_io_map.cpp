@@ -425,14 +425,6 @@ void IoMap::dclPointCoord(ir::Builder& builder) {
 }
 
 
-ir::SsaDef IoMap::emitPointCoordLoad(ir::Builder& builder, uint32_t componentIndex) {
-  if (componentIndex < 2) // The point coord input is only a vec2
-    return builder.add(ir::Op::InputLoad(ir::ScalarType::eF32, m_pointCoord, builder.makeConstant(componentIndex)));
-  else
-    return builder.makeConstant(0.0f);
-}
-
-
 void IoMap::emitIoVarDefaults(ir::Builder& builder) {
   for (const IoVarInfo& ioVar : m_variables) {
     emitIoVarDefault(builder, ioVar);
@@ -614,24 +606,7 @@ ir::SsaDef IoMap::emitLoad(
            && componentIndex < 2u)
             value = builder.add(ir::Op::FSub(varScalarType, value, builder.makeConstant(0.5f)));
 
-          if (m_converter.getShaderInfo().getType() == ShaderType::ePixel
-            && (ioVar->registerType == RegisterType::eInput || ioVar->registerType == RegisterType::ePixelTexCoord)
-            && ioVar->semantic.usage == SemanticUsage::eTexCoord) {
-            /* We need to replace TEXCOORD inputs with gl_PointCoord
-             * if D3DRS_POINTSPRITEENABLE is set. */
-            auto pointCoord = emitPointCoordLoad(builder, componentIndex);
-
-            auto specConstBit = m_converter.m_specConstants.get(builder, SpecConstantId::eSpecPointMode,
-              builder.makeConstant(1u), builder.makeConstant(1u));
-            auto pointSpriteEnabled = builder.add(ir::Op::IEq(ir::ScalarType::eBool, specConstBit, builder.makeConstant(1u)));
-
-            value = builder.add(ir::Op::Select(
-              varScalarType,
-              pointSpriteEnabled,
-              pointCoord,
-              value
-            ));
-          }
+          value = emitTexCoordPointSpriteAdjustment(builder, *ioVar, value, componentIndex);
 
         } else {
           /* The input register is writable. (SM 1 Texture register) */
@@ -712,10 +687,43 @@ ir::SsaDef IoMap::emitTexCoordLoad(
     ir::SsaDef addressConstant = builder.makeConstant(componentIndex);
     auto value = builder.add(ir::Op::InputLoad(varScalarType, ioVar->baseDef, addressConstant));
 
+    value = emitTexCoordPointSpriteAdjustment(builder, *ioVar, value, componentIndex);
+
     components[componentIndex] = convertScalar(builder, type, value);
   }
 
   return composite(builder, ir::BasicType(type, util::popcnt(uint8_t(componentMask))), components.data(), swizzle, componentMask);
+}
+
+
+ir::SsaDef IoMap::emitTexCoordPointSpriteAdjustment(ir::Builder& builder, const IoVarInfo& ioVar, ir::SsaDef texCoordComponent, uint32_t componentIndex) {
+  if (m_converter.getShaderInfo().getType() != ShaderType::ePixel
+    || (ioVar.registerType != RegisterType::eInput && ioVar.registerType != RegisterType::ePixelTexCoord)
+    || ioVar.semantic.usage != SemanticUsage::eTexCoord)
+    return texCoordComponent;
+
+  /* We need to replace TEXCOORD inputs with gl_PointCoord
+   * if D3DRS_POINTSPRITEENABLE is set. */
+
+  ir::SsaDef pointCoord;
+
+  if (componentIndex < 2) // The point coord input is only a vec2
+    pointCoord = builder.add(ir::Op::InputLoad(ir::ScalarType::eF32, m_pointCoord, builder.makeConstant(componentIndex)));
+  else
+    pointCoord = builder.makeConstant(0.0f);
+
+  auto specConstBit = m_converter.m_specConstants.get(builder, SpecConstantId::eSpecPointMode,
+    builder.makeConstant(1u), builder.makeConstant(1u));
+  auto pointSpriteEnabled = builder.add(ir::Op::IEq(ir::ScalarType::eBool, specConstBit, builder.makeConstant(1u)));
+
+  auto texCoordComponentType = builder.getOp(texCoordComponent).getType();
+
+  return builder.add(ir::Op::Select(
+    texCoordComponentType,
+    pointSpriteEnabled,
+    pointCoord,
+    texCoordComponent
+  ));
 }
 
 
