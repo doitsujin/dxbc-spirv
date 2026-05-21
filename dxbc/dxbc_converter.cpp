@@ -697,8 +697,10 @@ bool Converter::handleCustomData(ir::Builder& builder, const Instruction& op) {
 bool Converter::handleDclGlobalFlags(ir::Builder& builder, const Instruction& op) {
   auto flags = op.getOpToken().getGlobalFlags();
 
-  if (flags & GlobalFlag::eRefactoringAllowed)
+  if (flags & GlobalFlag::eRefactoringAllowed) {
     m_fpMode.defaultFlags -= ir::OpFlag::ePrecise;
+    m_fpMode.defaultFlags |= ir::OpFlag::eNoSz;
+  }
 
   if (flags & (GlobalFlag::eEnableFp64 | GlobalFlag::eEnableExtFp64))
     m_fpMode.hasFp64 = true;
