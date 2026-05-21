@@ -639,7 +639,7 @@ ir::SsaDef IoMap::emitLoad(
         .addOperand(index));
 
     for (auto c : swizzle.getReadMask(componentMask)) {
-      auto componentIndex = uint8_t(util::componentFromBit(c));
+      auto componentIndex = uint32_t(util::componentFromBit(c));
 
       components[componentIndex] = convertScalar(builder, type, builder.add(
         ir::Op::CompositeExtract(ir::ScalarType::eF32, vec4Value, builder.makeConstant(componentIndex))));
@@ -675,7 +675,7 @@ ir::SsaDef IoMap::emitTexCoordLoad(
   }
 
   for (auto c : swizzle.getReadMask(componentMask)) {
-    auto componentIndex = uint8_t(util::componentFromBit(c));
+    auto componentIndex = uint32_t(util::componentFromBit(c));
 
     if (!ioVar) {
       components[componentIndex] = builder.add(ir::Op::Undef(type));
