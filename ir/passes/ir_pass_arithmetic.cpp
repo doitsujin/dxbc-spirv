@@ -1792,7 +1792,17 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveCastOp(Builder::iterat
 
 std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(Builder::iterator op) {
   switch (op->getOpCode()) {
-    case OpCode::eFAbs:
+    case OpCode::eFAbs: {
+      /* |a*a| -> a*a */
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+      if ((a.getOpCode() == OpCode::eFMul || a.getOpCode() == OpCode::eFDot) &&
+          SsaDef(a.getOperand(0u)) == SsaDef(a.getOperand(1u))) {
+        auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
+        return std::make_pair(true, m_builder.iter(next));
+      }
+    } [[fallthrough]];
+
     case OpCode::eIAbs: {
       /* |(|a|)| -> |a|
        * |-a| -> |a| */
