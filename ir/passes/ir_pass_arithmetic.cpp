@@ -1939,6 +1939,27 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
           return std::make_pair(true, op);
         }
       }
+
+      /* mad(a, b, 0) -> a * b */
+      if (c && !(getFpFlags(*op) & OpFlag::ePrecise) && (getFpFlags(*op) & OpFlag::eNoSz)) {
+        const auto& cOp = m_builder.getOp(c);
+        bool optimize = cOp.isConstant();
+
+        for (uint32_t i = 0u; i < cOp.getOperandCount() && optimize; i++)
+          optimize = std::fpclassify(getConstantAsFloat(cOp, i)) == FP_ZERO;
+
+        if (optimize) {
+          auto opCode = op->getOpCode() == OpCode::eFMadLegacy
+            ? OpCode::eFMulLegacy
+            : OpCode::eFMul;
+
+          m_builder.rewriteOp(op->getDef(), Op(opCode, op->getType())
+            .addOperand(a.getDef())
+            .addOperand(b.getDef())
+            .setFlags(op->getFlags()));
+          return std::make_pair(true, op);
+        }
+      }
     } break;
 
     case OpCode::eFDiv: {
