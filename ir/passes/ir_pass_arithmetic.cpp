@@ -2162,8 +2162,8 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
       }
     } [[fallthrough]];
 
-    case OpCode::eFAdd:
-    case OpCode::eFSub: {
+    case OpCode::eFSub:
+    case OpCode::eFAdd: {
       bool isInt = op->getOpCode() == OpCode::eIAdd || op->getOpCode() == OpCode::eISub;
       bool isSub = op->getOpCode() == OpCode::eISub || op->getOpCode() == OpCode::eFSub;
 
@@ -2294,6 +2294,25 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
             baseOp.getDef(), RoundMode::ePositiveInf).setFlags(op->getFlags()));
           return std::make_pair(true, op);
         }
+      }
+
+      /* a - fract(a) -> floor(a)
+       * fract(a) - a -> -floor(a) */
+      if (isSub && !preserveNanSz &&
+          ((a.getOpCode() == OpCode::eFFract && SsaDef(a.getOperand(0u)) == b.getDef()) ||
+           (b.getOpCode() == OpCode::eFFract && SsaDef(b.getOperand(0u)) == a.getDef()))) {
+        bool negate = a.getOpCode() == OpCode::eFFract;
+
+        auto base = negate ? b.getDef() : a.getDef();
+        auto newOp = Op::FRound(op->getType(), base, RoundMode::eNegativeInf).setFlags(op->getFlags());
+
+        if (negate) {
+          auto newDef = m_builder.addBefore(op->getDef(), std::move(newOp));
+          newOp = Op::FNeg(op->getType(), newDef).setFlags(op->getFlags());
+        }
+
+        m_builder.rewriteOp(op->getDef(), std::move(newOp));
+        return std::make_pair(true, op);
       }
     } break;
 
