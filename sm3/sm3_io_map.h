@@ -182,8 +182,6 @@ private:
 
   void dclPointCoord(ir::Builder& builder);
 
-  ir::SsaDef emitPointCoordLoad(ir::Builder& builder, uint32_t componentIndex);
-
   /** Turns a front face boolean into a float. 1.0 for the front face, -1.0 for the back face. */
   ir::SsaDef emitFrontFaceFloat(ir::Builder& builder, ir::SsaDef isFrontFaceDef) const;
 
@@ -199,6 +197,10 @@ private:
 
   /** Determines the appropriate semantic for a given register in shader model 1/2 */
   std::optional<Semantic> determineSemanticForRegister(RegisterType regType, uint32_t regIndex);
+
+  /** Replaces the given texcoord component with a point coord component if the application has set the point sprite spec const.
+   * If the given IoVar has the wrong register type or the wrong semantic, it will just return the given texCoord without change. */
+  ir::SsaDef emitTexCoordPointSpriteAdjustment(ir::Builder& builder, const IoVarInfo& ioVar, ir::SsaDef texCoord, uint32_t componentIndex);
 
   void emitDebugName(
     ir::Builder& builder,
