@@ -2198,6 +2198,18 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
             isConstantNegative = isConstantNegative || (uint64_t(posOperand) & signBit);
             isConstantPositive = isConstantPositive || !(uint64_t(posOperand) & signBit);
 
+            /* Eliminate addition with signed zero. If we don't care about
+             * signed zeroes anyway, eliminage any addition with zero. */
+            auto zeroCandidate = uint64_t(isSub ? posOperand : negOperand);
+
+            if (getFpFlags(*op) & OpFlag::eNoSz)
+              zeroCandidate &= ~signBit;
+
+            if (!zeroCandidate) {
+              isConstantPositive = false;
+              isConstantNegative = false;
+            }
+
             constant.addOperand(negOperand);
           }
         }
