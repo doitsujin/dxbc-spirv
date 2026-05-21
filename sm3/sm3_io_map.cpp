@@ -234,9 +234,10 @@ std::optional<ir::BuiltIn> IoMap::determineBuiltinForRegister(RegisterType regTy
 
   } else {
 
-    /* Position must not be mapped to a regular input. SM3 still has a separate register for that. */
+    /* Position 0 must not be mapped to a regular input. SM3 still has a separate register for that. */
     dxbc_spv_assert(shaderInfo.getType() == ShaderType::eVertex
       || semantic.usage != SemanticUsage::ePosition
+      || semantic.index != 0u
       || regType != RegisterType::eInput);
 
     if (regType == RegisterType::eMiscType) {
