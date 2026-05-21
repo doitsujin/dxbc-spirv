@@ -2714,6 +2714,16 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityCompareOp(Buil
     }
   }
 
+  /* op(-a, const) -> op(-const, a) */
+  if (a.getOpCode() == OpCode::eFNeg && b.isConstant()) {
+    auto newConst = m_builder.addBefore(op->getDef(), Op::FNeg(b.getType(), b.getDef()));
+    auto newValue = m_builder.getOpForOperand(a, 0u).getDef();
+
+    m_builder.rewriteOp(op->getDef(), Op(op->getOpCode(), op->getType())
+      .addOperands(newConst, newValue).setFlags(op->getFlags()));
+    return std::make_pair(true, op);
+  }
+
   /* For comparisons, we can only really do anything
    * if the operands are the same */
   if (a.getDef() != b.getDef())
