@@ -2858,8 +2858,11 @@ void SpirvBuilder::emitFpMode(const ir::Op& op, uint32_t id, uint32_t mask) {
   if (m_options.floatControls2) {
     /* Fp mode flags in our IR are additive, only emit a decoration if
      * the instruction sets any flags not included in the default. */
+    if (!(desiredMode & ir::OpFlag::ePrecise))
+      desiredMode |= defaultMode;
+
     auto defaultFlags = getFpModeFlags(defaultMode);
-    auto desiredFlags = getFpModeFlags(defaultMode | desiredMode) | mask;
+    auto desiredFlags = getFpModeFlags(desiredMode) | mask;
 
     if (desiredFlags != defaultFlags) {
       enableCapability(spv::CapabilityFloatControls2);
