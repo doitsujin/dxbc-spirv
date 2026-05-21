@@ -4418,6 +4418,9 @@ OpFlags ArithmeticPass::getFpFlags(const Op& op) const {
   auto type = op.getType().getBaseType(0u).getBaseType();
   auto flags = op.getFlags();
 
+  if (flags & OpFlag::ePrecise)
+    return flags;
+
   switch (type) {
     case ScalarType::eF16: return flags | m_fp16Flags;
     case ScalarType::eF32: return flags | m_fp32Flags;
