@@ -615,7 +615,7 @@ ir::SsaDef IoMap::emitLoad(
             value = builder.add(ir::Op::FSub(varScalarType, value, builder.makeConstant(0.5f)));
 
           if (m_converter.getShaderInfo().getType() == ShaderType::ePixel
-            && ioVar->registerType == RegisterType::eInput
+            && (ioVar->registerType == RegisterType::eInput || ioVar->registerType == RegisterType::ePixelTexCoord)
             && ioVar->semantic.usage == SemanticUsage::eTexCoord) {
             /* We need to replace TEXCOORD inputs with gl_PointCoord
              * if D3DRS_POINTSPRITEENABLE is set. */
