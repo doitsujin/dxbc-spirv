@@ -2940,6 +2940,69 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentitySelect(Builder
     }
   }
 
+  /* select(fract(x) <= 0 || x >= 0, floor(a), floor(a) + 1) -> trunc(x)
+   * select(fract(x) > 0 && x < 0, floor(a) + 1, floor(a)) -> trunc(x)
+   * Handle this pattern last due to complexity. */
+  if (a.getOpCode() == OpCode::eFRound || b.getOpCode() == OpCode::eFRound) {
+    const auto& floorOp = a.getOpCode() == OpCode::eFRound ? a : b;
+    const auto& addOp = a.getOpCode() == OpCode::eFRound ? b : a;
+
+    /* Verify that the round op is actually floor() */
+    if (RoundMode(floorOp.getOperand(1u)) != RoundMode::eNegativeInf ||
+        (getFpFlags(floorOp) & OpFlag::ePrecise))
+      return std::make_pair(false, ++op);
+
+    /* Ensure that the addition is floor(x) + 1 */
+    if (addOp.getOpCode() != OpCode::eFAdd || (getFpFlags(addOp) & OpFlag::ePrecise))
+      return std::make_pair(false, ++op);
+
+    const auto& addA = m_builder.getOpForOperand(addOp, 0u);
+    const auto& addB = m_builder.getOpForOperand(addOp, 1u);
+
+    if (addA.getDef() != floorOp.getDef() || !addB.isConstant() || getConstantAsFloat(addB, 0u) != 1.0f)
+      return std::make_pair(false, ++op);
+
+    /* Make sure the floor op is on the correct side of the select */
+    if ((cond.getOpCode() != OpCode::eBAnd || b.getDef() != floorOp.getDef()) &&
+        (cond.getOpCode() != OpCode::eBOr  || a.getDef() != floorOp.getDef()))
+      return std::make_pair(false, ++op);
+
+    /* Depending on the pattern used, check for the fract compare and raw compare.
+     * We can ignore nan behaviour because the addition would return nan anyway */
+    const auto& valueOp = m_builder.getOpForOperand(floorOp, 0u);
+
+    auto fractCompare = cond.getOpCode() == OpCode::eBOr ? OpCode::eFLe : OpCode::eFGt;
+    auto valueCompare = cond.getOpCode() == OpCode::eBOr ? OpCode::eFGe : OpCode::eFLt;
+
+    for (uint32_t i = 0u; i < cond.getOperandCount(); i++) {
+      const auto& cmpOp = m_builder.getOpForOperand(cond, 0u);
+
+      if (cmpOp.getOpCode() != fractCompare && cmpOp.getOpCode() != valueCompare)
+        return std::make_pair(false, ++op);
+
+      /* Second operand must be constant 0 no matter what */
+      const auto& cmpA = m_builder.getOpForOperand(cmpOp, 0u);
+      const auto& cmpB = m_builder.getOpForOperand(cmpOp, 1u);
+
+      if (!cmpB.isConstant() || std::fpclassify(getConstantAsFloat(cmpB, 0u)) != FP_ZERO)
+        return std::make_pair(false, ++op);
+
+      if (cmpOp.getOpCode() == fractCompare) {
+        if (cmpA.getOpCode() != OpCode::eFFract || m_builder.getOpForOperand(cmpA, 0u).getDef() != valueOp.getDef())
+          return std::make_pair(false, ++op);
+      }
+
+      if (cmpOp.getOpCode() == valueCompare) {
+        if (cmpA.getDef() != valueOp.getDef())
+          return std::make_pair(false, ++op);
+      }
+    }
+
+    m_builder.rewriteOp(op->getDef(), Op::FRound(op->getType(),
+      valueOp.getDef(), RoundMode::eZero).setFlags(op->getFlags()));
+    return std::make_pair(true, op);
+  }
+
   return std::make_pair(false, ++op);
 }
 
