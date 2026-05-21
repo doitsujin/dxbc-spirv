@@ -2277,6 +2277,24 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
           return std::make_pair(true, m_builder.iter(next));
         }
       }
+
+      /* a + fract(-a) -> ceil(a) */
+      bool preserveNanSz = ((getFpFlags(*op) | getFpFlags(a) | getFpFlags(b)) & OpFlag::ePrecise) &&
+        (!((getFpFlags(a) & getFpFlags(b)) & OpFlag::eNoInf) || !(getFpFlags(*op) & OpFlag::eNoSz));
+
+      if (!isSub && !preserveNanSz && (a.getOpCode() == OpCode::eFFract || b.getOpCode() == OpCode::eFFract)) {
+        const auto& fractOp = m_builder.getOpForOperand(a.getOpCode() == OpCode::eFFract ? a : b, 0u);
+        const auto& baseOp = a.getOpCode() == OpCode::eFFract ? b : a;
+
+        bool isCeil = fractOp.getOpCode() == OpCode::eFNeg &&
+          m_builder.getOpForOperand(fractOp, 0u).getDef() == baseOp.getDef();
+
+        if (isCeil) {
+          m_builder.rewriteOp(op->getDef(), Op::FRound(op->getType(),
+            baseOp.getDef(), RoundMode::ePositiveInf).setFlags(op->getFlags()));
+          return std::make_pair(true, op);
+        }
+      }
     } break;
 
     case OpCode::eINot: {
