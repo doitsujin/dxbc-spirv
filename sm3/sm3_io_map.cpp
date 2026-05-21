@@ -696,7 +696,7 @@ ir::SsaDef IoMap::emitTexCoordLoad(
 }
 
 
-ir::SsaDef IoMap::emitTexCoordPointSpriteAdjustment(ir::Builder& builder, const IoVarInfo& ioVar, ir::SsaDef texCoordComponent, uint32_t componentIndex) {
+ir::SsaDef IoMap::emitTexCoordPointSpriteAdjustment(ir::Builder& builder, const IoVarInfo& ioVar, ir::SsaDef texCoordComponent, uint32_t componentIndex) const {
   if (m_converter.getShaderInfo().getType() != ShaderType::ePixel
     || (ioVar.registerType != RegisterType::eInput && ioVar.registerType != RegisterType::ePixelTexCoord)
     || ioVar.semantic.usage != SemanticUsage::eTexCoord)
@@ -1030,7 +1030,8 @@ ir::SsaDef IoMap::emitDynamicLoadFunction(ir::Builder& builder) const {
 
       for (uint32_t j = 0u; j < 4u; j++) {
         if ((baseType.isScalar() && j == 0) || j < baseType.getVectorSize()) {
-          components[j] = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eF32, input, builder.makeConstant(i)));;
+          auto value = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eF32, input, builder.makeConstant(i)));
+          components[j] = emitTexCoordPointSpriteAdjustment(builder, *ioVar, value, i);
         } else {
           components[j] = builder.makeConstant(0.0f);
         }
