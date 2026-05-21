@@ -61,6 +61,9 @@ bool ArithmeticPass::runPass() {
       std::tie(status, next) = selectOp(iter);
 
     if (!status)
+      std::tie(status, next) = selectMergeOp(iter);
+
+    if (!status)
       std::tie(status, next) = resolveIntSignOp(iter);
 
     if (!status)
@@ -1720,6 +1723,115 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectOp(Builder::iterator op
 
     case OpCode::eFAdd:
       return selectFAdd(op);
+
+    default:
+      return std::make_pair(false, ++op);
+  }
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::selectMergeBinaryOp(Builder::iterator op) {
+  /* op(select(cond, a0, a1), select(cond, b0, b1)) -> select(cond, op(a0, b0), op(a1, b1)))
+   * Only optimize this pattern if there is only one use of either select op. */
+  SsaDef selectCond = { };
+
+  auto aOp = Op(op->getOpCode(), op->getType()).setFlags(op->getFlags());
+  auto bOp = Op(op->getOpCode(), op->getType()).setFlags(op->getFlags());
+
+  for (uint32_t i = 0u; i < op->getOperandCount(); i++) {
+    const auto& arg = m_builder.getOpForOperand(*op, i);
+
+    if (arg.getOpCode() != OpCode::eSelect)
+      return std::make_pair(false, ++op);
+
+    /* Ignore if operands are the same as that would only increase the
+     * instruction count, e.g. when a number is being squared or doubled. */
+    for (uint32_t j = 0u; j < i; j++) {
+      if (m_builder.getOpForOperand(*op, j).getDef() == arg.getDef())
+        return std::make_pair(false, ++op);
+    }
+
+    /* Don't skip the pattern for invariant float ops */
+    if (!isOnlyUse(m_builder, arg.getDef(), op->getDef())) {
+      bool isFloat = op->getType().getBaseType(0u).isFloatType();
+
+      if (!isFloat || !(getFpFlags(*op) & OpFlag::eInvariant))
+        return std::make_pair(false, ++op);
+    }
+
+    /* Ensure that the condition is the same for all selects */
+    const auto& cond = m_builder.getOpForOperand(arg, 0u);
+
+    if (!selectCond)
+      selectCond = cond.getDef();
+
+    if (selectCond != cond.getDef())
+      return std::make_pair(false, ++op);
+
+    aOp.addOperand(m_builder.getOpForOperand(arg, 1u).getDef());
+    bOp.addOperand(m_builder.getOpForOperand(arg, 2u).getDef());
+  }
+
+  auto aDef = m_builder.addBefore(op->getDef(), std::move(aOp));
+  auto bDef = m_builder.addBefore(op->getDef(), std::move(bOp));
+
+  m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(),
+    selectCond, aDef, bDef).setFlags(op->getFlags()));
+  return std::make_pair(true, op);
+}
+
+
+std::pair<bool, Builder::iterator> ArithmeticPass::selectMergeOp(Builder::iterator op) {
+  switch (op->getOpCode()) {
+    case OpCode::eBAnd:
+    case OpCode::eBOr:
+    case OpCode::eBEq:
+    case OpCode::eBNe:
+    case OpCode::eIAnd:
+    case OpCode::eIOr:
+    case OpCode::eIXor:
+    case OpCode::eIAdd:
+    case OpCode::eISub:
+    case OpCode::eIMul:
+    case OpCode::eUDiv:
+    case OpCode::eUMod:
+    case OpCode::eSMax:
+    case OpCode::eSMin:
+    case OpCode::eSClamp:
+    case OpCode::eUMax:
+    case OpCode::eUMin:
+    case OpCode::eUClamp:
+    case OpCode::eIShl:
+    case OpCode::eUShr:
+    case OpCode::eSShr:
+    case OpCode::eIEq:
+    case OpCode::eINe:
+    case OpCode::eSLt:
+    case OpCode::eSLe:
+    case OpCode::eSGt:
+    case OpCode::eSGe:
+    case OpCode::eULt:
+    case OpCode::eULe:
+    case OpCode::eUGt:
+    case OpCode::eUGe:
+    case OpCode::eFEq:
+    case OpCode::eFNe:
+    case OpCode::eFGt:
+    case OpCode::eFGe:
+    case OpCode::eFLt:
+    case OpCode::eFLe:
+    case OpCode::eFAdd:
+    case OpCode::eFSub:
+    case OpCode::eFMul:
+    case OpCode::eFMulLegacy:
+    case OpCode::eFMad:
+    case OpCode::eFMadLegacy:
+    case OpCode::eFPow:
+    case OpCode::eFPowLegacy:
+    case OpCode::eFMin:
+    case OpCode::eFMax:
+    case OpCode::eFClamp:
+      return selectMergeBinaryOp(op);
 
     default:
       return std::make_pair(false, ++op);
