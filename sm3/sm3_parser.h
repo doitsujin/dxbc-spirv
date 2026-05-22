@@ -54,7 +54,7 @@ public:
     auto [major, minor] = getVersion();
     bool isPs = getType() == ShaderType::ePixel;
 
-    return (major == 1u && minor >= 1u && minor <= (isPs ? 4u : 1u))
+    return (major == 1u && minor <= (isPs ? 4u : 1u))
         || (major == 2u)
         || (major == 3u && !minor);
   }
