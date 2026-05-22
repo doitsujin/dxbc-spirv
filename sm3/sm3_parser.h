@@ -46,9 +46,17 @@ public:
       util::bextract(m_token, 0u, 8u));
   }
 
-  /** Checks whether shader header is valid */
+  /** Checks whether shader header and shader model are valid */
   explicit operator bool () const {
-    return util::bextract(m_token, 17u, 15u) == 0x7fff;
+    if (util::bextract(m_token, 17u, 15u) != 0x7fff)
+      return false;
+
+    auto [major, minor] = getVersion();
+    bool isPs = getType() == ShaderType::ePixel;
+
+    return (major == 1u && minor >= 1u && minor <= (isPs ? 4u : 1u))
+        || (major == 2u)
+        || (major == 3u && !minor);
   }
 
   /** Writes code header to binary blob. */
