@@ -1358,16 +1358,26 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectBitOp(Builder::iterator
         const auto& a = m_builder.getOpForOperand(*op, i);
         const auto& b = m_builder.getOpForOperand(*op, i ^ 1u);
 
-        if (isConstantSelect(a)) {
-          auto trueDef = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType())
-            .addOperands(SsaDef(a.getOperand(1u)), b.getDef()));
-          auto falseDef = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType())
-            .addOperands(SsaDef(a.getOperand(2u)), b.getDef()));
+        if (a.getOpCode() == OpCode::eSelect) {
+          const auto& trueOp = m_builder.getOpForOperand(a, 1u);
+          const auto& falseOp = m_builder.getOpForOperand(a, 2u);
 
-          m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(),
-            SsaDef(a.getOperand(0u)), trueDef, falseDef).setFlags(a.getFlags()));
+          if (trueOp.getDef() != falseOp.getDef()) {
+            /* Also allow cases where we can constant-fold one select branch */
+            bool merge = (trueOp.isConstant() && falseOp.isConstant()) ||
+              ((trueOp.isConstant() || falseOp.isConstant()) && b.isConstant() && isOnlyUse(m_builder, a.getDef(), op->getDef()));
 
-          return std::make_pair(true, m_builder.iter(trueDef));
+            if (merge) {
+              auto trueDef = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType())
+                .addOperands(trueOp.getDef(), b.getDef()));
+              auto falseDef = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType())
+                .addOperands(falseOp.getDef(), b.getDef()));
+
+              m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(),
+                SsaDef(a.getOperand(0u)), trueDef, falseDef).setFlags(a.getFlags()));
+              return std::make_pair(true, m_builder.iter(trueDef));
+            }
+          }
         }
       }
     } break;
