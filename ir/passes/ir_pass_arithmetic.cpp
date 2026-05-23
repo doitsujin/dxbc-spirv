@@ -1675,19 +1675,20 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectFAdd(Builder::iterator 
     const auto& bt = m_builder.getOpForOperand(b, 1u);
     const auto& bf = m_builder.getOpForOperand(b, 2u);
 
-    if (evalBAnd(ac, bc) != std::make_optional(false))
-      return std::make_pair(false, ++op);
+    if (evalBAnd(ac, bc) == std::make_optional(false)) {
+      if (isConstantValue(bf, 0.0) || isConstantValue(bf, -0.0)) {
+        m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), bc.getDef(), bt.getDef(), a.getDef()).setFlags(op->getFlags()));
+        return std::make_pair(true, op);
+      }
 
-    if (isConstantValue(bf, 0.0) || isConstantValue(bf, -0.0)) {
-      m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), bc.getDef(), bt.getDef(), a.getDef()).setFlags(op->getFlags()));
-      return std::make_pair(true, op);
+      if (isConstantValue(af, 0.0) || isConstantValue(af, -0.0)) {
+        m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), ac.getDef(), at.getDef(), b.getDef()).setFlags(op->getFlags()));
+        return std::make_pair(true, op);
+      }
     }
+  }
 
-    if (isConstantValue(af, 0.0) || isConstantValue(af, -0.0)) {
-      m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), ac.getDef(), at.getDef(), b.getDef()).setFlags(op->getFlags()));
-      return std::make_pair(true, op);
-    }
-  } else if ((aIsSelect || bIsSelect) && (getFpFlags(*op) & OpFlag::eNoSz)) {
+  if ((aIsSelect || bIsSelect) && (getFpFlags(*op) & OpFlag::eNoSz)) {
     /* select(a, b, 0) + c -> select(a, b + c, c)
      * select(a, 0, b) + c -> select(a, c, b + c) */
     const auto& selectOp = aIsSelect ? a : b;
