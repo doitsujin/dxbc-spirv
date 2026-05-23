@@ -2098,7 +2098,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
           op->getType().getBaseType(0u).isScalar()) {
         /* a * 0 -> 0
          * a * 0 + c -> c */
-        if (getConstantAsFloat(b, 0u) == 0.0) {
+        if (isConstantValue(b, 0.0) || isConstantValue(b, -0.0)) {
           auto next = m_builder.rewriteDef(op->getDef(),
             c ? c : m_builder.makeConstantZero(op->getType()));
           return std::make_pair(true, m_builder.iter(next));
@@ -2106,7 +2106,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
 
         /* a * 1 -> a
          * a * 1 + c -> a + c */
-        if (getConstantAsFloat(b, 0u) == 1.0) {
+        if (isConstantValue(b, 1.0)) {
           if (c) {
             m_builder.rewriteOp(op->getDef(), Op::FAdd(
               op->getType(), a.getDef(), c).setFlags(op->getFlags()));
@@ -2119,7 +2119,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
 
         /* a * -1 -> -a
          * a * -1 + c -> c - a */
-        if (getConstantAsFloat(b, 0u) == -1.0) {
+        if (isConstantValue(b, -1.0)) {
           m_builder.rewriteOp(op->getDef(), c
             ? Op::FSub(op->getType(), c, a.getDef()).setFlags(op->getFlags())
             : Op::FNeg(op->getType(), a.getDef()).setFlags(a.getFlags()));
@@ -2128,12 +2128,11 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
       }
 
       /* mad(a, b, 0) -> a * b */
-      if (c && !(getFpFlags(*op) & OpFlag::ePrecise) && (getFpFlags(*op) & OpFlag::eNoSz)) {
+      if (c && !(getFpFlags(*op) & OpFlag::ePrecise)) {
         const auto& cOp = m_builder.getOp(c);
-        bool optimize = cOp.isConstant();
 
-        for (uint32_t i = 0u; i < cOp.getOperandCount() && optimize; i++)
-          optimize = std::fpclassify(getConstantAsFloat(cOp, i)) == FP_ZERO;
+        bool optimize = isConstantValue(cOp, -0.0) ||
+          (isConstantValue(cOp, 0.0) && (getFpFlags(*op) & OpFlag::eNoSz));
 
         if (optimize) {
           auto opCode = op->getOpCode() == OpCode::eFMadLegacy
@@ -2156,19 +2155,11 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
       /* +/- 1.0 / a -> rcp(a) */
       if (!(getFpFlags(*op) & OpFlag::ePrecise)) {
         if (a.isConstant()) {
-          bool isPosRcp = true;
-          bool isNegRcp = true;
-
-          for (uint32_t i = 0u; i < a.getOperandCount(); i++) {
-            isPosRcp = isPosRcp && getConstantAsFloat(a, i) ==  1.0;
-            isNegRcp = isNegRcp && getConstantAsFloat(a, i) == -1.0;
-          }
-
-          if (isPosRcp) {
+          if (isConstantValue(a, 1.0)) {
             m_builder.rewriteOp(op->getDef(),
               Op::FRcp(op->getType(), b.getDef()).setFlags(op->getFlags()));
             return std::make_pair(true, op);
-          } else if (isNegRcp) {
+          } else if (isConstantValue(a, -1.0)) {
             auto rcpDef = m_builder.addBefore(op->getDef(),
               Op::FRcp(op->getType(), b.getDef()).setFlags(op->getFlags()));
             m_builder.rewriteOp(op->getDef(),
@@ -3120,7 +3111,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentitySelect(Builder
     const auto& addA = m_builder.getOpForOperand(addOp, 0u);
     const auto& addB = m_builder.getOpForOperand(addOp, 1u);
 
-    if (addA.getDef() != floorOp.getDef() || !addB.isConstant() || getConstantAsFloat(addB, 0u) != 1.0f)
+    if (addA.getDef() != floorOp.getDef() || !addB.isConstant() || !isConstantValue(addB, 1.0))
       return std::make_pair(false, ++op);
 
     /* Make sure the floor op is on the correct side of the select */
@@ -3145,7 +3136,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentitySelect(Builder
       const auto& cmpA = m_builder.getOpForOperand(cmpOp, 0u);
       const auto& cmpB = m_builder.getOpForOperand(cmpOp, 1u);
 
-      if (!cmpB.isConstant() || std::fpclassify(getConstantAsFloat(cmpB, 0u)) != FP_ZERO)
+      if (!isConstantValue(cmpB, 0.0) && !isConstantValue(cmpB, -0.0))
         return std::make_pair(false, ++op);
 
       if (cmpOp.getOpCode() == fractCompare) {
