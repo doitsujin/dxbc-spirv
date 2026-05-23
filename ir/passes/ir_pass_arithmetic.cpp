@@ -2997,6 +2997,28 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityCompareOp(Buil
     return std::make_pair(true, op);
   }
 
+  if (b.isConstant() && b.getType().getBaseType(0u).isIntType() && isConstantValue(b, 0) &&
+      a.getOpCode() == OpCode::eIOr && isOnlyUse(m_builder, a.getDef(), op->getDef())) {
+    const auto& a0 = m_builder.getOpForOperand(a, 0u);
+    const auto& a1 = m_builder.getOpForOperand(a, 1u);
+
+    if (op->getOpCode() == OpCode::eIEq || op->getOpCode() == OpCode::eULe) {
+      /* a | b == 0 -> a == 0 && b == 0 */
+      auto c0 = m_builder.addBefore(op->getDef(), Op::IEq(ScalarType::eBool, a0.getDef(), b.getDef()));
+      auto c1 = m_builder.addBefore(op->getDef(), Op::IEq(ScalarType::eBool, a1.getDef(), b.getDef()));
+
+      m_builder.rewriteOp(op->getDef(), Op::BAnd(ScalarType::eBool, c0, c1));
+      return std::make_pair(true, m_builder.iter(c0));
+    } else if (op->getOpCode() == OpCode::eINe || op->getOpCode() == OpCode::eUGt) {
+      /* a | b != 0 -> a != 0 || b != 0 */
+      auto c0 = m_builder.addBefore(op->getDef(), Op::INe(ScalarType::eBool, a0.getDef(), b.getDef()));
+      auto c1 = m_builder.addBefore(op->getDef(), Op::INe(ScalarType::eBool, a1.getDef(), b.getDef()));
+
+      m_builder.rewriteOp(op->getDef(), Op::BOr(ScalarType::eBool, c0, c1));
+      return std::make_pair(true, m_builder.iter(c0));
+    }
+  }
+
   /* For comparisons, we can only really do anything
    * if the operands are the same */
   if (a.getDef() != b.getDef())
