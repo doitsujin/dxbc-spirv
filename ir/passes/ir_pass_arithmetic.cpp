@@ -2913,6 +2913,14 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityCompareOp(Buil
     return std::make_pair(true, op);
   }
 
+  /* op(a, -0) -> op(a, 0). Signed zero always compares the same as regular zero. */
+  if (b.isConstant() && b.getType().getBaseType(0u).isFloatType() && isConstantValue(b, -0.0)) {
+    m_builder.rewriteOp(op->getDef(), Op(op->getOpCode(), op->getType())
+      .addOperands(a.getDef(), m_builder.makeConstantZero(b.getType()))
+      .setFlags(op->getFlags()));
+    return std::make_pair(true, op);
+  }
+
   /* For comparisons, we can only really do anything
    * if the operands are the same */
   if (a.getDef() != b.getDef())
