@@ -1213,6 +1213,21 @@ Builder::iterator ArithmeticPass::tryFuseClamp(Builder::iterator op) {
   const auto& lo = m_builder.getOpForOperand(aIsMax ? a : b, 1u);
   const auto& hi = aIsMax ? b : a;
 
+  /* This transform is only valid if we can prove that lo < hi */
+  bool canFuse = lo.isConstant() && hi.isConstant();
+
+  for (uint32_t i = 0u; i < op->getType().getBaseType(0u).getVectorSize() && canFuse; i++) {
+    switch (clampOpCode) {
+      case OpCode::eFClamp: canFuse = getConstantAsFloat(lo, i) < getConstantAsFloat(hi, i); break;
+      case OpCode::eUClamp: canFuse = getConstantAsUint(lo, i) < getConstantAsFloat(hi, i); break;
+      case OpCode::eSClamp: canFuse = getConstantAsSint(lo, i) < getConstantAsFloat(hi, i); break;
+      default: dxbc_spv_unreachable();
+    }
+  }
+
+  if (!canFuse)
+    return ++op;
+
   auto clampOp = Op(clampOpCode, op->getType())
     .setFlags(op->getFlags() | (aIsMax ? a : b).getFlags())
     .addOperands(v.getDef(), lo.getDef(), hi.getDef());
