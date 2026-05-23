@@ -168,6 +168,8 @@ private:
 
   std::pair<bool, Builder::iterator> selectFAdd(Builder::iterator op);
 
+  std::pair<bool, Builder::iterator> selectFMinMax(Builder::iterator op);
+
   std::pair<bool, Builder::iterator> selectOp(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> selectMergeBinaryOp(Builder::iterator op);

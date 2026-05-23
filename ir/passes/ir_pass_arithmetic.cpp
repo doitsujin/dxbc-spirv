@@ -1719,6 +1719,60 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectFAdd(Builder::iterator 
 }
 
 
+std::pair<bool, Builder::iterator> ArithmeticPass::selectFMinMax(Builder::iterator op) {
+  /* Given two constants a and b where a < b, we can optimize:
+   * min(select(c0, a, b), select(c1, a, b)) -> select(c0 || c1, a, b)
+   * max(select(c0, a, b), select(c1, a, b)) -> select(c0 && c1, a, b) */
+  const auto& aOp = m_builder.getOpForOperand(*op, 0u);
+  const auto& bOp = m_builder.getOpForOperand(*op, 1u);
+
+  if (!isConstantSelect(aOp) || !isConstantSelect(bOp) || !op->getType().isScalarType())
+    return std::make_pair(false, ++op);
+
+  /* Ensure that the constants involved are actually identical */
+  const auto& aT = m_builder.getOpForOperand(aOp, 1u);
+  const auto& aF = m_builder.getOpForOperand(aOp, 2u);
+
+  const auto& bT = m_builder.getOpForOperand(bOp, 1u);
+  const auto& bF = m_builder.getOpForOperand(bOp, 2u);
+
+  bool sameConstants = (aT.getDef() == bT.getDef() && aF.getDef() == bF.getDef())
+                    || (aT.getDef() == bF.getDef() && aF.getDef() == bT.getDef());
+
+  if (!sameConstants)
+    return std::make_pair(false, ++op);
+
+  /* Ensure none of the values are not NaN. Infinity or denorm
+   * is fine since we will preserve bit patterns. */
+  double tValue = getConstantAsFloat(aT, 0u);
+  double fValue = getConstantAsFloat(aF, 0u);
+
+  if (std::fpclassify(tValue) == FP_NAN || std::fpclassify(fValue) == FP_NAN || tValue == fValue)
+    return std::make_pair(false, ++op);
+
+  /* Determine low and high operands and flip conditions as necessary */
+  auto lo = tValue < fValue ? aT.getDef() : aF.getDef();
+  auto hi = tValue < fValue ? aF.getDef() : aT.getDef();
+
+  auto aCond = m_builder.getOpForOperand(aOp, 0u).getDef();
+  auto bCond = m_builder.getOpForOperand(bOp, 0u).getDef();
+
+  if (lo != aT.getDef())
+    aCond = m_builder.addBefore(op->getDef(), Op::BNot(ScalarType::eBool, aCond));
+
+  if (lo != bT.getDef())
+    bCond = m_builder.addBefore(op->getDef(), Op::BNot(ScalarType::eBool, bCond));
+
+  auto cond = m_builder.addBefore(op->getDef(), op->getOpCode() == OpCode::eFMin
+    ? Op::BOr(ScalarType::eBool, aCond, bCond)
+    : Op::BAnd(ScalarType::eBool, aCond, bCond));
+
+  m_builder.rewriteOp(op->getDef(), Op::Select(
+    op->getType(), cond, lo, hi).setFlags(op->getFlags()));
+  return std::make_pair(true, op);
+}
+
+
 std::pair<bool, Builder::iterator> ArithmeticPass::selectOp(Builder::iterator op) {
   switch (op->getOpCode()) {
     case OpCode::eIAbs:
@@ -1774,6 +1828,10 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectOp(Builder::iterator op
 
     case OpCode::eFAdd:
       return selectFAdd(op);
+
+    case OpCode::eFMin:
+    case OpCode::eFMax:
+      return selectFMinMax(op);
 
     default:
       return std::make_pair(false, ++op);
