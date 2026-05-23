@@ -1780,11 +1780,14 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectOp(Builder::iterator op
 
 std::pair<bool, Builder::iterator> ArithmeticPass::selectMergeBinaryOp(Builder::iterator op) {
   /* op(select(cond, a0, a1), select(cond, b0, b1)) -> select(cond, op(a0, b0), op(a1, b1)))
-   * Only optimize this pattern if there is only one use of either select op. */
+   * Only optimize this pattern if there is only one use of either select op, or if at
+   * least one side of the selection can be constant-folded. */
   SsaDef selectCond = { };
 
   auto aOp = Op(op->getOpCode(), op->getType()).setFlags(op->getFlags());
   auto bOp = Op(op->getOpCode(), op->getType()).setFlags(op->getFlags());
+
+  bool optimizePattern = true;
 
   for (uint32_t i = 0u; i < op->getOperandCount(); i++) {
     const auto& arg = m_builder.getOpForOperand(*op, i);
@@ -1796,7 +1799,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectMergeBinaryOp(Builder::
      * instruction count, e.g. when a number is being squared or doubled. */
     for (uint32_t j = 0u; j < i; j++) {
       if (m_builder.getOpForOperand(*op, j).getDef() == arg.getDef())
-        return std::make_pair(false, ++op);
+        optimizePattern = false;
     }
 
     /* Don't skip the pattern for invariant float ops */
@@ -1804,7 +1807,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectMergeBinaryOp(Builder::
       bool isFloat = op->getType().getBaseType(0u).isFloatType();
 
       if (!isFloat || !(getFpFlags(*op) & OpFlag::eInvariant))
-        return std::make_pair(false, ++op);
+        optimizePattern = false;
     }
 
     /* Ensure that the condition is the same for all selects */
@@ -1818,6 +1821,19 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectMergeBinaryOp(Builder::
 
     aOp.addOperand(m_builder.getOpForOperand(arg, 1u).getDef());
     bOp.addOperand(m_builder.getOpForOperand(arg, 2u).getDef());
+  }
+
+  if (!optimizePattern) {
+    bool aIsConstant = true;
+    bool bIsConstant = true;
+
+    for (uint32_t i = 0u; i < op->getOperandCount(); i++) {
+      aIsConstant = aIsConstant && m_builder.getOpForOperand(aOp, i).isConstant();
+      bIsConstant = bIsConstant && m_builder.getOpForOperand(bOp, i).isConstant();
+    }
+
+    if (!aIsConstant && !bIsConstant)
+      return std::make_pair(false, ++op);
   }
 
   auto aDef = m_builder.addBefore(op->getDef(), std::move(aOp));
