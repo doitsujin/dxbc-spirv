@@ -1269,8 +1269,20 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectCompare(Builder::iterat
       !b.isConstant()))
     return std::make_pair(false, ++op);
 
-  tDef = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType()).addOperands(tDef, b.getDef()));
-  fDef = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType()).addOperands(fDef, b.getDef()));
+  /* Preserve operand order for inequalities */
+  auto tOp = Op(op->getOpCode(), op->getType()).setFlags(op->getFlags());
+  auto fOp = Op(op->getOpCode(), op->getType()).setFlags(op->getFlags());
+
+  if (selectOperand) {
+    tOp.addOperands(b.getDef(), tDef);
+    fOp.addOperands(b.getDef(), fDef);
+  } else {
+    tOp.addOperands(tDef, b.getDef());
+    fOp.addOperands(fDef, b.getDef());
+  }
+
+  tDef = m_builder.addBefore(op->getDef(), std::move(tOp));
+  fDef = m_builder.addBefore(op->getDef(), std::move(fOp));
 
   /* Avoid looping indefinitely if we create a new instance of the same pattern */
   auto ref = op->getDef();
@@ -1729,8 +1741,20 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectOp(Builder::iterator op
 
     case OpCode::eIEq:
     case OpCode::eINe:
+    case OpCode::eULt:
+    case OpCode::eULe:
+    case OpCode::eUGt:
+    case OpCode::eUGe:
+    case OpCode::eSLt:
+    case OpCode::eSLe:
+    case OpCode::eSGt:
+    case OpCode::eSGe:
     case OpCode::eFEq:
     case OpCode::eFNe:
+    case OpCode::eFLt:
+    case OpCode::eFLe:
+    case OpCode::eFGt:
+    case OpCode::eFGe:
       return selectCompare(op);
 
     case OpCode::ePhi:
