@@ -1389,8 +1389,11 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectBitOp(Builder::iterator
 
           if (trueOp.getDef() != falseOp.getDef()) {
             /* Also allow cases where we can constant-fold one select branch */
-            bool merge = (trueOp.isConstant() && falseOp.isConstant()) ||
-              ((trueOp.isConstant() || falseOp.isConstant()) && b.isConstant() && isOnlyUse(m_builder, a.getDef(), op->getDef()));
+            bool merge = (trueOp.isConstant() && falseOp.isConstant()) || (
+              isOnlyUse(m_builder, a.getDef(), op->getDef()) && (
+                ((trueOp.isConstant() || falseOp.isConstant()) && b.isConstant()) ||
+                isConstantValue(trueOp, 0) || isConstantValue(trueOp, -1) ||
+                isConstantValue(falseOp, 0) || isConstantValue(falseOp, -1)));
 
             if (merge) {
               auto trueDef = m_builder.addBefore(op->getDef(), Op(op->getOpCode(), op->getType())
