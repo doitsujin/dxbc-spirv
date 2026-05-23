@@ -1219,8 +1219,8 @@ Builder::iterator ArithmeticPass::tryFuseClamp(Builder::iterator op) {
   for (uint32_t i = 0u; i < op->getType().getBaseType(0u).getVectorSize() && canFuse; i++) {
     switch (clampOpCode) {
       case OpCode::eFClamp: canFuse = getConstantAsFloat(lo, i) < getConstantAsFloat(hi, i); break;
-      case OpCode::eUClamp: canFuse = getConstantAsUint(lo, i) < getConstantAsFloat(hi, i); break;
-      case OpCode::eSClamp: canFuse = getConstantAsSint(lo, i) < getConstantAsFloat(hi, i); break;
+      case OpCode::eUClamp: canFuse = getConstantAsUint(lo, i) < getConstantAsUint(hi, i); break;
+      case OpCode::eSClamp: canFuse = getConstantAsSint(lo, i) < getConstantAsSint(hi, i); break;
       default: dxbc_spv_unreachable();
     }
   }
