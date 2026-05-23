@@ -238,7 +238,8 @@ private:
 
   bool isConstantSelect(const Op& op) const;
 
-  bool isConstantValue(const Op& op, int64_t value) const;
+  template<typename T>
+  bool isConstantValue(const Op& op, T value) const;
 
   std::optional<bool> evalBAnd(const Op& a, const Op& b) const;
 

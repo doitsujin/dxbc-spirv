@@ -1653,7 +1653,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectFMul(Builder::iterator 
 
 
 std::pair<bool, Builder::iterator> ArithmeticPass::selectFAdd(Builder::iterator op) {
-  if (getFpFlags(*op) & OpFlag::ePrecise)
+  if ((getFpFlags(*op) & OpFlag::ePrecise) || !(getFpFlags(*op) & OpFlag::eNoSz))
     return std::make_pair(false, ++op);
 
   const auto& a = m_builder.getOpForOperand(*op, 0u);
@@ -1680,12 +1680,12 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectFAdd(Builder::iterator 
     if (evalBAnd(ac, bc) != std::make_optional(false))
       return std::make_pair(false, ++op);
 
-    if (isConstantValue(bf, 0)) {
+    if (isConstantValue(bf, 0.0) || isConstantValue(bf, -0.0)) {
       m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), bc.getDef(), bt.getDef(), a.getDef()).setFlags(op->getFlags()));
       return std::make_pair(true, op);
     }
 
-    if (isConstantValue(af, 0)) {
+    if (isConstantValue(af, 0.0) || isConstantValue(af, -0.0)) {
       m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), ac.getDef(), at.getDef(), b.getDef()).setFlags(op->getFlags()));
       return std::make_pair(true, op);
     }
@@ -1701,8 +1701,8 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectFAdd(Builder::iterator 
       const auto& sf = m_builder.getOpForOperand(selectOp, 2u);
 
       /* Add with constant 0 will be optimized away separately */
-      bool stIsZero = isConstantValue(st, 0);
-      bool sfIsZero = isConstantValue(sf, 0);
+      bool stIsZero = isConstantValue(st, 0.0) || isConstantValue(st, -0.0);
+      bool sfIsZero = isConstantValue(sf, 0.0) || isConstantValue(sf, -0.0);
 
       if (stIsZero || sfIsZero) {
         m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), sc.getDef(),
@@ -3081,7 +3081,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentitySelect(Builder
   }
 
   /* select(x != 0, ufindmsb(x), -1) -> ufindmsb(x) */
-  if (isConstantValue(b, -1u)) {
+  if (isConstantValue(b, -1)) {
     SsaDef msbOperand = { };
 
     if (a.getOpCode() == OpCode::eUFindMsb) {
@@ -4510,10 +4510,8 @@ bool ArithmeticPass::isFloatSelect(const Op& op) const {
   const auto& a = m_builder.getOpForOperand(op, 1u);
   const auto& b = m_builder.getOpForOperand(op, 2u);
 
-  if (!isConstantValue(a, 0) && !isConstantValue(b, 0))
-    return false;
-
-  return true;
+  return isConstantValue(a, 0.0) || isConstantValue(a, -0.0)
+      || isConstantValue(b, 0.0) || isConstantValue(b, -0.0);
 }
 
 
@@ -4527,7 +4525,8 @@ bool ArithmeticPass::isConstantSelect(const Op& op) const {
 }
 
 
-bool ArithmeticPass::isConstantValue(const Op& op, int64_t value) const {
+template<typename T>
+bool ArithmeticPass::isConstantValue(const Op& op, T value) const {
   if (!op.isConstant())
     return false;
 
@@ -4617,7 +4616,7 @@ Operand ArithmeticPass::makeScalarOperand(const Type& type, T value) {
     case ScalarType::eU32:  return Operand(uint32_t(value));
     case ScalarType::eI64:  return Operand(int64_t(value));
     case ScalarType::eU64:  return Operand(uint64_t(value));
-    case ScalarType::eF16:  return Operand(float16_t(double(value)));
+    case ScalarType::eF16:  return Operand(float16_t(float(value)));
     case ScalarType::eF32:  return Operand(float(value));
     case ScalarType::eF64:  return Operand(double(value));
     default:                break;
