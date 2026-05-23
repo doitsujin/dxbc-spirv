@@ -1263,10 +1263,8 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectCompare(Builder::iterat
 
   /* Be a bit more conservative around floats and only allow checking for constant
    * operands that we can easily eliminate. Resolves some SM3 comparison patterns. */
-  if (b.getType().getBaseType(0u).isFloatType() && (
-      !m_builder.getOp(tDef).isConstant() ||
-      !m_builder.getOp(fDef).isConstant() ||
-      !b.isConstant()))
+  if (b.getType().getBaseType(0u).isFloatType() && (!b.isConstant() ||
+      !(m_builder.getOp(tDef).isConstant() || m_builder.getOp(fDef).isConstant())))
     return std::make_pair(false, ++op);
 
   /* Preserve operand order for inequalities */
