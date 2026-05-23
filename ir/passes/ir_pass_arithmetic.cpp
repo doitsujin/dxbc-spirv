@@ -3019,6 +3019,40 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityCompareOp(Buil
     }
   }
 
+  /* |a| == 0 -> a == 0
+   * |a| != 0 -> a != 0
+   * |a| <= 0 -> a == 0
+   * |a| >  0 -> a != 0
+   * |a| <  0 -> false
+   * |a| >= 0 -> true */
+  if (a.getOpCode() == OpCode::eFAbs && isConstantValue(b, 0.0)) {
+    auto leftSide = isOnlyUse(m_builder, a.getDef(), op->getDef())
+      ? m_builder.getOpForOperand(a, 0u).getDef() : a.getDef();
+
+    switch (op->getOpCode()) {
+      case OpCode::eFEq:
+      case OpCode::eFLe: {
+        m_builder.rewriteOp(op->getDef(), Op::FEq(op->getType(),
+          leftSide, b.getDef()).setFlags(op->getFlags()));
+      } return std::make_pair(true, op);
+
+      case OpCode::eFNe:
+      case OpCode::eFGt: {
+        m_builder.rewriteOp(op->getDef(), Op::FNe(op->getType(),
+          leftSide, b.getDef()).setFlags(op->getFlags()));
+      } return std::make_pair(true, op);
+
+      case OpCode::eFLt:
+      case OpCode::eFGe: {
+        auto next = m_builder.rewriteDef(op->getDef(), m_builder.makeConstant(op->getOpCode() == OpCode::eFGe));
+        return std::make_pair(true, m_builder.iter(next));
+      }
+
+      default:
+        dxbc_spv_unreachable();
+    }
+  }
+
   /* For comparisons, we can only really do anything
    * if the operands are the same */
   if (a.getDef() != b.getDef())
