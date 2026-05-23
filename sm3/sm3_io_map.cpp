@@ -772,7 +772,8 @@ bool IoMap::emitStore(
 
       valueScalar = convertScalar(builder, ioVarScalarType, valueScalar);
 
-      if (ioVar->semantic.usage == SemanticUsage::eColor && ioVar->semantic.index < 2u && m_converter.getShaderInfo().getVersion().first < 3u) {
+      if (m_converter.getShaderInfo().getType() == ShaderType::eVertex && m_converter.getShaderInfo().getVersion().first < 3u
+        && ioVar->semantic.usage == SemanticUsage::eColor && ioVar->semantic.index < 2u) {
         /* The color register cannot be dynamically indexed, so there's no need to do this in the dynamic store function. */
         valueScalar = builder.add(ir::Op::FClamp(ioVarScalarType, valueScalar,
           builder.makeConstant(0.0f), builder.makeConstant(1.0f)));
