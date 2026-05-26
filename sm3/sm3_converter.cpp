@@ -1351,10 +1351,12 @@ bool Converter::handleTexKill(ir::Builder& builder, const Instruction& op) {
 
 bool Converter::handleTexDepth(ir::Builder& builder, const Instruction& op) {
   /* Writes the fragment depth */
-  /* It always uses temporary register r5. */
-  auto val = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX | ComponentBit::eY, ir::ScalarType::eF32);
+
+  /* It always uses temporary register r5, which is encoded as a destination operand. */
+  auto val = loadSrc(builder, op, op.getDst(), ComponentBit::eX | ComponentBit::eY, Swizzle::identity(), ir::ScalarType::eF32);
   auto r = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eF32, val, builder.makeConstant(0u)));
   auto g = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eF32, val, builder.makeConstant(1u)));
+
   /* depth = r5.r / r5.g */
   auto depth = builder.add(ir::Op::FDiv(ir::ScalarType::eF32, r, g));
   return m_ioMap.emitDepthStore(builder, op, depth);
