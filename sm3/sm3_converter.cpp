@@ -1624,13 +1624,13 @@ bool Converter::handlePow(ir::Builder& builder, const Instruction& op) {
 
   auto dst = op.getDst();
   auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+
   WriteMask writeMask = dst.getWriteMask(getShaderInfo());
-  Swizzle src0Swizzle = op.getSrc(0u).getSwizzle(getShaderInfo());
-  Swizzle src1Swizzle = op.getSrc(1u).getSwizzle(getShaderInfo());
 
   /* The swizzles must be replicate swizzles. */
-  dxbc_spv_assert(src0Swizzle.x() == src0Swizzle.y() && src0Swizzle.y() == src0Swizzle.z() && src0Swizzle.z() == src0Swizzle.w());
-  dxbc_spv_assert(src1Swizzle.x() == src1Swizzle.y() && src1Swizzle.y() == src1Swizzle.z() && src1Swizzle.z() == src1Swizzle.w());
+  dxbc_spv_assert(op.getSrc(0u).getSwizzle(getShaderInfo()) == Swizzle(op.getSrc(0u).getSwizzle(getShaderInfo()).x()));
+  dxbc_spv_assert(op.getSrc(1u).getSwizzle(getShaderInfo()) == Swizzle(op.getSrc(1u).getSwizzle(getShaderInfo()).x()));
+
   auto src0 = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX, scalarType);
   auto src1 = loadSrcModified(builder, op, op.getSrc(1u), ComponentBit::eX, scalarType);
 
