@@ -288,7 +288,8 @@ void IoMap::dclIoVar(
     }
   }
 
-  dxbc_spv_assert(!foundExisting);
+  if (foundExisting)
+    dxbc_spv_assert(!foundExisting);
 
   auto builtIn = determineBuiltinForRegister(registerType, registerIndex, semantic);
 
