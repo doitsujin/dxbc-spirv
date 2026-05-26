@@ -3022,9 +3022,8 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityCompareOp(Buil
   /* |a| == 0 -> a == 0
    * |a| != 0 -> a != 0
    * |a| <= 0 -> a == 0
-   * |a| >  0 -> a != 0
    * |a| <  0 -> false
-   * |a| >= 0 -> true */
+   * |a| >= 0 -> a == a */
   if (a.getOpCode() == OpCode::eFAbs && isConstantValue(b, 0.0)) {
     auto leftSide = m_builder.getOpForOperand(a, 0u).getDef();
 
@@ -3035,17 +3034,30 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityCompareOp(Buil
           leftSide, b.getDef()).setFlags(op->getFlags()));
       } return std::make_pair(true, op);
 
-      case OpCode::eFNe:
-      case OpCode::eFGt: {
+      case OpCode::eFNe: {
         m_builder.rewriteOp(op->getDef(), Op::FNe(op->getType(),
           leftSide, b.getDef()).setFlags(op->getFlags()));
       } return std::make_pair(true, op);
 
-      case OpCode::eFLt:
-      case OpCode::eFGe: {
-        auto next = m_builder.rewriteDef(op->getDef(), m_builder.makeConstant(op->getOpCode() == OpCode::eFGe));
+      case OpCode::eFLt: {
+        auto next = m_builder.rewriteDef(op->getDef(), m_builder.makeConstant(false));
         return std::make_pair(true, m_builder.iter(next));
       }
+
+      case OpCode::eFGe: {
+        m_builder.rewriteOp(op->getDef(), Op::FEq(op->getType(),
+          leftSide, leftSide).setFlags(op->getFlags()));
+      } return std::make_pair(true, op);
+
+      case OpCode::eFGt: {
+        /* This is equivalent to a < 0 || a > 0, which in turn is
+         * only equivalent to a != 0 if a cannot be nan. */
+        if (getFpFlags(m_builder.getOp(leftSide)) & OpFlag::eNoNan) {
+          m_builder.rewriteOp(op->getDef(), Op::FNe(op->getType(),
+            leftSide, b.getDef()).setFlags(op->getFlags()));
+          return std::make_pair(true, op);
+        }
+      } break;
 
       default:
         dxbc_spv_unreachable();
