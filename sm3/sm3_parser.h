@@ -307,6 +307,13 @@ public:
     return WriteMask(util::bextract(m_token, 16u, 4u));
   }
 
+  /** Adjusts write mask */
+  Operand setWriteMask(const WriteMask& mask) const {
+    Operand result = *this;
+    result.m_token = util::binsert<uint32_t>(m_token, uint8_t(mask), 16u, 4u);
+    return result;
+  }
+
   /** Queries whether the results of the instruction get saturated (clamped to 0..1) before
     * writing them to the destination register. Only relevant for destination register operands. */
   bool isSaturated() const {

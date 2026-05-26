@@ -903,13 +903,15 @@ bool Converter::handleMatrixArithmetic(ir::Builder& builder, const Instruction& 
   uint32_t columnCount = matrixSize.value().first;
   uint32_t rowCount = matrixSize.value().second;
 
-  /* Instruction type */
-  const auto& dst = op.getDst();
+  /* Build a write mask that determines how many components we'll load. */
+  WriteMask srcMask = util::makeWriteMaskForComponents(columnCount);
+  WriteMask dstMask = util::makeWriteMaskForComponents(rowCount);
+
+  /* Docs say write mask has to be .xyz for m3x3, but clearly that is a lie */
+  auto dst = op.getDst();
+  dst = dst.setWriteMask(dstMask & dst.getWriteMask(m_parser.getShaderInfo()));
 
   auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
-
-  /* Build a write mask that determines how many components we'll load. */
-  WriteMask srcMask = WriteMask((1u << columnCount) - 1u);
 
   /* Load source operands */
   auto src0 = loadSrcModified(builder, op, op.getSrc(0u), srcMask, scalarType);
