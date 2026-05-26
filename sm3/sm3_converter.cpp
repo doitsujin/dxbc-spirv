@@ -1682,8 +1682,9 @@ bool Converter::handleDerivatives(ir::Builder& builder, const Instruction& op) {
 
   auto dst = op.getDst();
 
+  /* Derivatives cannot support FP16 in SPIR-V */
   WriteMask writeMask = dst.getWriteMask(m_parser.getShaderInfo());
-  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+  auto scalarType = ir::ScalarType::eF32;
 
   auto src0 = loadSrcModified(builder, op, op.getSrc(0u), writeMask, scalarType);
   auto type = makeVectorType(scalarType, writeMask);
