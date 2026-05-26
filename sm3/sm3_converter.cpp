@@ -846,7 +846,7 @@ bool Converter::handleLit(ir::Builder& builder, const Instruction& op) {
   const auto& dst = op.getDst();
   WriteMask writeMask = dst.getWriteMask(getShaderInfo());
   auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
-  auto src = loadSrcModified(builder, op, op.getSrc(0u), writeMask, scalarType);
+  auto src = loadSrcModified(builder, op, op.getSrc(0u), util::makeWriteMaskForComponents(4u), scalarType);
 
   auto srcX = ir::extractFromVector(builder, src, 0u);
   auto srcY = ir::extractFromVector(builder, src, 1u);
