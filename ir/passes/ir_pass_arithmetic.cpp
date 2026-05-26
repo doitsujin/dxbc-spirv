@@ -3026,8 +3026,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityCompareOp(Buil
    * |a| <  0 -> false
    * |a| >= 0 -> true */
   if (a.getOpCode() == OpCode::eFAbs && isConstantValue(b, 0.0)) {
-    auto leftSide = isOnlyUse(m_builder, a.getDef(), op->getDef())
-      ? m_builder.getOpForOperand(a, 0u).getDef() : a.getDef();
+    auto leftSide = m_builder.getOpForOperand(a, 0u).getDef();
 
     switch (op->getOpCode()) {
       case OpCode::eFEq:
