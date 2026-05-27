@@ -1,8 +1,6 @@
 #include <iostream>
 
-#include "../config.h"
-
-#ifdef ENABLE_SM5
+#ifdef DXBC_SPV_ENABLE_SM5
 #include "./dxbc/test_dxbc.h"
 #endif
 
@@ -18,7 +16,7 @@ void runTests() {
   util::runTests();
   ir::runTests();
 
-#ifdef ENABLE_SM5
+#ifdef DXBC_SPV_ENABLE_SM5
   dxbc::runTests();
 #endif
 

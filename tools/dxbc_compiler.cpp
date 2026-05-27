@@ -5,8 +5,6 @@
 #include <sstream>
 #include <vector>
 
-#include "../config.h"
-
 #include "../ir/ir.h"
 #include "../ir/ir_builder.h"
 #include "../ir/ir_disasm.h"
@@ -18,7 +16,7 @@
 #include "../util/util_byte_stream.h"
 #include "../util/util_log.h"
 
-#ifdef ENABLE_SM5
+#ifdef DXBC_SPV_ENABLE_SM5
 #include "../dxbc/dxbc_api.h"
 #include "../dxbc/dxbc_container.h"
 #include "../dxbc/dxbc_converter.h"
@@ -27,11 +25,11 @@
 #include "../dxbc/dxbc_signature.h"
 #endif
 
-#ifdef ENABLE_SM3
+#ifdef DXBC_SPV_ENABLE_SM3
 #include "../sm3/sm3_converter.h"
 #endif
 
-#ifdef ENABLE_SPIRV
+#ifdef DXBC_SPV_ENABLE_SPIRV
 #include "../spirv/spirv_builder.h"
 #include "../spirv/spirv_mapping.h"
 #endif
@@ -82,7 +80,7 @@ private:
 };
 
 
-#ifdef ENABLE_SM3
+#ifdef DXBC_SPV_ENABLE_SM3
 class SM3SpecConstantsLayout : public sm3::SpecializationConstantLayout {
 
 public:
@@ -103,7 +101,7 @@ public:
     return shaderType == sm3::ShaderType::eVertex ? FirstVSSamplerSlot + perShaderSamplerIndex : perShaderSamplerIndex;
   }
 };
-#endif /* ENABLE_SM3 */
+#endif /* DXBC_SPV_ENABLE_SM3 */
 
 
 struct Timers {
@@ -204,7 +202,7 @@ bool writeIrBinary(const ir::Builder& builder, const Options& options, Timers& t
 }
 
 bool writeSpirvBinary(ir::Builder builder, const Options& options, Timers& timers) {
-#ifdef ENABLE_SPIRV
+#ifdef DXBC_SPV_ENABLE_SPIRV
   timers.tLowerSpirvBegin = std::chrono::high_resolution_clock::now();
 
   { ir::LowerIoPass pass(builder);
@@ -251,7 +249,7 @@ bool writeSpirvBinary(ir::Builder builder, const Options& options, Timers& timer
 #else
   std::cerr << "Error: dxbc-spirv built without SPIR-V support." << std::endl;
   return false;
-#endif /* ENABLE_SPIRV */
+#endif /* DXBC_SPV_ENABLE_SPIRV */
 }
 
 
@@ -264,7 +262,7 @@ bool compileShader(util::ByteReader reader, const Options& options) {
   if (!options.irInput) {
     bool status = false;
 
-#ifdef ENABLE_SM3
+#ifdef DXBC_SPV_ENABLE_SM3
     if (!dxbc::Container::checkFourCC(reader)) {
       sm3::Converter::Options sm3Options = { };
       sm3Options.includeDebugNames = !options.noDebug;
@@ -276,7 +274,7 @@ bool compileShader(util::ByteReader reader, const Options& options) {
     }
 #endif
 
-#ifdef ENABLE_SM5
+#ifdef DXBC_SPV_ENABLE_SM5
     if (!status) {
       /* Parse file header */
       dxbc::Container container(reader);
@@ -305,7 +303,7 @@ bool compileShader(util::ByteReader reader, const Options& options) {
       else
         status = converter.convertShader(builder);
     }
-#endif /* ENABLE_SM5 */
+#endif /* DXBC_SPV_ENABLE_SM5 */
 
     if (!status) {
       std::cerr << "Error: Failed to convert shader." << std::endl;

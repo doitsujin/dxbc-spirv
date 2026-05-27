@@ -1,6 +1,0 @@
-#pragma once
-
-#mesondefine ENABLE_SM3
-#mesondefine ENABLE_SM5
-#mesondefine ENABLE_SPIRV
-

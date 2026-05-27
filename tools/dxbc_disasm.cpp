@@ -5,9 +5,7 @@
 #include <sstream>
 #include <vector>
 
-#include "../config.h"
-
-#ifdef ENABLE_SM5
+#ifdef DXBC_SPV_ENABLE_SM5
 #include "../dxbc/dxbc_container.h"
 #include "../dxbc/dxbc_disasm.h"
 #include "../dxbc/dxbc_interface.h"
@@ -15,7 +13,7 @@
 #include "../dxbc/dxbc_signature.h"
 #endif
 
-#ifdef ENABLE_SM3
+#ifdef DXBC_SPV_ENABLE_SM3
 #include "../sm3/sm3_disasm.h"
 #include "../sm3/sm3_parser.h"
 #endif
@@ -24,7 +22,7 @@
 
 using namespace dxbc_spv;
 
-#ifdef ENABLE_SM5
+#ifdef DXBC_SPV_ENABLE_SM5
 bool printSignature(util::ByteReader reader) {
   if (!reader)
     return true;
@@ -89,7 +87,7 @@ bool printCode(util::ByteReader reader) {
 }
 #endif /* ENABLE_SM5 */
 
-#ifdef ENABLE_SM3
+#ifdef DXBC_SPV_ENABLE_SM3
 bool printCodeSM3(util::ByteReader reader, bool useDebugNames) {
   if (!reader) {
     std::cout << "(no code)" << std::endl;
@@ -126,11 +124,11 @@ bool printCodeSM3(util::ByteReader reader, bool useDebugNames) {
 
   return true;
 }
-#endif /* ENABLE_SM3 */
+#endif /* DXBC_SPV_ENABLE_SM3 */
 
 
 bool disassembleShader(util::ByteReader reader, bool useDebugNames) {
-#ifdef ENABLE_SM5
+#ifdef DXBC_SPV_ENABLE_SM5
   if (dxbc::Container::checkFourCC(reader)) {
     dxbc::Container container(reader);
 
@@ -142,7 +140,7 @@ bool disassembleShader(util::ByteReader reader, bool useDebugNames) {
   }
 #endif /* ENABLE_SM5 */
 
-#ifdef ENABLE_SM3
+#ifdef DXBC_SPV_ENABLE_SM3
   return printCodeSM3(reader, useDebugNames);
 #else
   return false;

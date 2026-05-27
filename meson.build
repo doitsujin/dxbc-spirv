@@ -68,27 +68,24 @@ dxbc_spv_files = files([
   'util/util_swizzle.cpp',
 ])
 
+dxbc_spv_args = []
+
 if get_option('enable_sm3')
   dxbc_spv_files += sm3_files
+  dxbc_spv_args += '-DDXBC_SPV_ENABLE_SM3'
 endif
 
 if get_option('enable_sm5')
   dxbc_spv_files += sm5_files
+  dxbc_spv_args += '-DDXBC_SPV_ENABLE_SM5'
 endif
 
 if get_option('enable_spirv')
   dxbc_spv_files += spv_files
+  dxbc_spv_args += '-DDXBC_SPV_ENABLE_SPIRV'
 endif
 
-conf_data = configuration_data()
-conf_data.set('ENABLE_SM3', get_option('enable_sm3'))
-conf_data.set('ENABLE_SM5', get_option('enable_sm5'))
-conf_data.set('ENABLE_SPIRV', get_option('enable_spirv'))
-
-configure_file(
-  input : 'config.h.in',
-  output : 'config.h',
-  configuration : conf_data)
+add_project_arguments(dxbc_spv_args, language : 'cpp')
 
 lib_dxbc_spv = static_library('dxbc_spv', dxbc_spv_files)
 
