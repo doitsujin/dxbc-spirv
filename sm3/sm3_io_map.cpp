@@ -344,8 +344,11 @@ void IoMap::dclIoVar(
       .addOperand(location)
       .addOperand(0u);
 
-    if (isInput && shaderType == ShaderType::ePixel && semantic.usage == SemanticUsage::eColor) {
-      declaration.addOperand(ir::InterpolationModes(ir::InterpolationMode::eCentroid));
+
+    if (isInput && shaderType == ShaderType::ePixel) {
+      declaration.addOperand((semantic.usage == SemanticUsage::eColor)
+        ? ir::InterpolationModes(ir::InterpolationMode::eCentroid)
+        : ir::InterpolationModes());
     }
 
     if (!isInput && shaderType == ShaderType::eVertex && semantic.usage == SemanticUsage::ePosition)
@@ -366,6 +369,9 @@ void IoMap::dclIoVar(
     auto declaration = ir::Op(opCode, type)
       .addOperand(m_converter.getEntryPoint())
       .addOperand(*builtIn);
+
+    if (isInput && shaderType == ShaderType::ePixel)
+      declaration.addOperand(ir::InterpolationModes());
 
     declarationDef = builder.addBefore(builder.getCode().first->getDef(), std::move(declaration));
     cursor = builder.setCursor(declarationDef);
@@ -422,7 +428,7 @@ void IoMap::dclIoVar(
 
 void IoMap::dclPointCoord(ir::Builder& builder) {
   auto type = ir::BasicType(ir::ScalarType::eF32, 2u);
-  m_pointCoord = builder.add(ir::Op::DclInputBuiltIn(type, m_converter.getEntryPoint(), ir::BuiltIn::ePointCoord));
+  m_pointCoord = builder.add(ir::Op::DclInputBuiltIn(type, m_converter.getEntryPoint(), ir::BuiltIn::ePointCoord, ir::InterpolationModes()));
 }
 
 
