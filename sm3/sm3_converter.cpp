@@ -1601,7 +1601,7 @@ bool Converter::handleSinCos(ir::Builder& builder, const Instruction& op) {
   auto dst = op.getDst();
   WriteMask writeMask = dst.getWriteMask(getShaderInfo());
 
-  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+  auto scalarType = ir::ScalarType::eF32;
   auto val = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX, scalarType);
 
   dxbc_spv_assert((writeMask & (ComponentBit::eZ | ComponentBit::eW)) == WriteMask());
