@@ -141,6 +141,14 @@ public:
 
   void emitClipPlaneStore(ir::Builder& builder, uint32_t index, ir::SsaDef value);
 
+  /** Looks up fixed-function I/O variable location by semantic */
+  static std::optional<uint32_t> findFixedFunctionLocation(Semantic semantic);
+
+  /** Total number of reserved fixed-function I/O locations */
+  static uint32_t getFixedFunctionLocationCount() {
+    return uint32_t(s_ffLocations.size());
+  }
+
 private:
 
   Converter&      m_converter;
@@ -158,6 +166,8 @@ private:
 
   ir::SsaDef emitDynamicLoadFunction(ir::Builder& builder) const;
   ir::SsaDef emitDynamicStoreFunction(ir::Builder& builder) const;
+
+  static const std::array<Semantic, 12u> s_ffLocations;
 
   void emitIoVarDefault(
           ir::Builder& builder,

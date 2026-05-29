@@ -9,7 +9,7 @@
 
 namespace dxbc_spv::sm3 {
 
-static std::array<Semantic, 12u> s_ffLocations = {{
+const std::array<Semantic, 12u> IoMap::s_ffLocations = {{
   {SemanticUsage::eNormal,   0u},
   {SemanticUsage::eTexCoord, 0u},
   {SemanticUsage::eTexCoord, 1u},
@@ -996,6 +996,16 @@ void IoMap::emitClipPlaneStore(ir::Builder& builder, uint32_t index, ir::SsaDef 
   dxbc_spv_assert(index < MaxClipPlanes);
 
   builder.add(ir::Op::OutputStore(m_clipDistances, builder.makeConstant(index), value));
+}
+
+
+std::optional<uint32_t> IoMap::findFixedFunctionLocation(Semantic semantic) {
+  for (uint32_t i = 0u; i < s_ffLocations.size(); i++) {
+    if (s_ffLocations[i] == semantic)
+      return std::make_optional(i);
+  }
+
+  return std::nullopt;
 }
 
 
