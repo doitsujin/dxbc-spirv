@@ -351,9 +351,6 @@ void IoMap::dclIoVar(
         : ir::InterpolationModes());
     }
 
-    if (!isInput && shaderType == ShaderType::eVertex && semantic.usage == SemanticUsage::ePosition)
-      declaration.setFlags(ir::OpFlag::eInvariant);
-
     declarationDef = builder.addBefore(builder.getCode().first->getDef(), std::move(declaration));
     cursor = builder.setCursor(declarationDef);
 
@@ -372,6 +369,9 @@ void IoMap::dclIoVar(
 
     if (isInput && shaderType == ShaderType::ePixel)
       declaration.addOperand(ir::InterpolationModes());
+
+    if (!isInput && shaderType == ShaderType::eVertex && semantic.usage == SemanticUsage::ePosition)
+      declaration.setFlags(ir::OpFlag::eInvariant);
 
     declarationDef = builder.addBefore(builder.getCode().first->getDef(), std::move(declaration));
     cursor = builder.setCursor(declarationDef);
