@@ -285,7 +285,6 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
       emitFog(builder);
     }
   } else {
-    m_clipPlanes = emitClipPlanes(builder);
     emitClipping(builder);
   }
 
@@ -411,22 +410,6 @@ ir::SsaDef Converter::emitSharedConstants(ir::Builder& builder) {
   }
 
   return buffer;
-}
-
-
-ir::SsaDef Converter::emitClipPlanes(ir::Builder& builder) {
-  dxbc_spv_assert(getShaderInfo().getType() == ShaderType::eVertex);
-
-  /* Declare Cbv containing clip planes */
-  auto clipPlaneArrayType = ir::Type(ir::BasicType(ir::ScalarType::eF32, 4u));
-  clipPlaneArrayType.addArrayDimension(MaxClipPlanes);
-  auto clipPlaneBlock = builder.add(ir::Op::DclCbv(clipPlaneArrayType, getEntryPoint(),
-    0u, VSClipPlanesCbvRegIdx, 1u));
-
-  if (getOptions().includeDebugNames)
-    builder.add(ir::Op::DebugName(clipPlaneBlock, "ClipPlanes"));
-
-  return clipPlaneBlock;
 }
 
 
@@ -2446,7 +2429,28 @@ void Converter::emitFog(ir::Builder& builder) {
 }
 
 
+ir::SsaDef Converter::emitClippingInput(ir::Builder& builder) {
+  auto input = builder.add(ir::Op::DclInputBuiltIn(
+    ir::makeLegacyClipPlaneType(), m_entryPoint.def,
+    ir::BuiltIn::eLegacyClipPlanes));
+
+  if (m_options.includeDebugNames) {
+    builder.add(ir::Op::DebugName(input, "clipPlanes"));
+    builder.add(ir::Op::DebugMemberName(input, uint32_t(ir::LegacyClipPlaneLayout::eClipPlaneCount), "count"));
+
+    for (uint32_t i = 0u; i < MaxClipPlanes; i++) {
+      builder.add(ir::Op::DebugMemberName(input, uint32_t(ir::LegacyClipPlaneLayout::eClipPlane0) + i,
+        (std::string("plane") + std::to_string(i)).c_str()));
+    }
+  }
+
+  return input;
+}
+
+
 void Converter::emitClipping(ir::Builder& builder) {
+  auto clipPlanes = emitClippingInput(builder);
+
   auto vec4Type = ir::BasicType(ir::ScalarType::eF32, 4u);
 
   auto positionParam = builder.add(ir::Op::DclParam(vec4Type));
@@ -2463,14 +2467,14 @@ void Converter::emitClipping(ir::Builder& builder) {
   }
 
   // Always consider clip planes enabled when doing GPL by forcing 6 for the quick value.
-  auto clipPlaneCount = m_specConstants.get(builder, SpecConstantId::eSpecClipPlaneCount);
-
+  auto clipPlaneCount = builder.add(ir::Op::InputLoad(ir::ScalarType::eU32, clipPlanes,
+    builder.makeConstant(uint32_t(ir::LegacyClipPlaneLayout::eClipPlaneCount))));
   auto position = builder.add(ir::Op::ParamLoad(vec4Type, m_clippingFunction, positionParam));
 
   for (uint32_t i = 0u; i < MaxClipPlanes; i++) {
-    auto descriptor = builder.add(ir::Op::DescriptorLoad(ir::ScalarType::eCbv, m_clipPlanes, builder.makeConstant(0u)));
-    auto clipPlane = builder.add(ir::Op::BufferLoad(vec4Type, descriptor, builder.makeConstant(i), 16u));
-    auto dist = builder.add(emitFDot(ir::ScalarType::eF32, position, clipPlane));
+    auto dist = builder.add(emitFDot(ir::ScalarType::eF32, position,
+      builder.add(ir::Op::InputLoad(vec4Type, clipPlanes, builder.makeConstant(
+        uint32_t(ir::LegacyClipPlaneLayout::eClipPlane0) + i)))));
 
     auto clipPlaneEnabled = builder.add(ir::Op::ULt(ir::ScalarType::eBool, builder.makeConstant(i), clipPlaneCount));
     auto value = builder.add(ir::Op::Select(ir::ScalarType::eF32, clipPlaneEnabled, dist, builder.makeConstant(0.0f)));
