@@ -80,30 +80,6 @@ private:
 };
 
 
-#ifdef DXBC_SPV_ENABLE_SM3
-class SM3SpecConstantsLayout : public sm3::SpecializationConstantLayout {
-
-public:
-
-  SM3SpecConstantsLayout() { }
-
-  uint32_t getOptimizedDwordOffset() const override {
-    return 1u;
-  }
-
-  sm3::SpecializationConstantBits getSpecConstantLayout(sm3::SpecConstantId /* id */) const override {
-    return { 0u, 0u, 32u };
-  }
-
-  uint32_t getSamplerSpecConstIndex(sm3::ShaderType shaderType, uint32_t perShaderSamplerIndex) override {
-    constexpr uint32_t MaxTexturesPS      = 16u;
-    constexpr uint32_t FirstVSSamplerSlot = MaxTexturesPS + 1u;
-    return shaderType == sm3::ShaderType::eVertex ? FirstVSSamplerSlot + perShaderSamplerIndex : perShaderSamplerIndex;
-  }
-};
-#endif /* DXBC_SPV_ENABLE_SM3 */
-
-
 struct Timers {
   std::chrono::high_resolution_clock::time_point tConvertBegin;
   std::chrono::high_resolution_clock::time_point tConvertEnd;
@@ -267,8 +243,7 @@ bool compileShader(util::ByteReader reader, const Options& options) {
       sm3::Converter::Options sm3Options = { };
       sm3Options.includeDebugNames = !options.noDebug;
 
-      auto specConstLayout = SM3SpecConstantsLayout();
-      sm3::Converter converter(reader, specConstLayout, sm3Options);
+      sm3::Converter converter(reader, sm3Options);
 
       status = converter.convertShader(builder);
     }
