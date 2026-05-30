@@ -766,6 +766,73 @@ enum class BuiltIn : uint32_t {
 };
 
 
+/** Legacy alpha test struct layout */
+enum class LegacyAlphaTestLayout : uint32_t {
+  eAlphaCompareOp   = 0u,
+  eAlphaPrecision   = 1u,
+  eAlphaRef         = 2u,
+};
+
+Type makeLegacyAlphaTestType();
+
+/** Legacy fog struct layout */
+enum class LegacyFogLayout : uint32_t {
+  eFogEnable        = 0u,
+  eFogMode          = 1u,
+  eFogColor         = 2u,
+  eFogScale         = 3u,
+  eFogEnd           = 4u,
+  eFogDensity       = 5u,
+};
+
+Type makeLegacyFogType();
+
+/** Legacy clip plane struct layout */
+enum class LegacyClipPlaneLayout : uint32_t {
+  eClipPlaneCount   = 0u,
+  eClipPlane0       = 1u,
+  eClipPlane1       = 2u,
+  eClipPlane2       = 3u,
+  eClipPlane3       = 4u,
+  eClipPlane4       = 5u,
+  eClipPlane5       = 6u,
+};
+
+Type makeLegacyClipPlaneType();
+
+/** Legacy point size struct layout */
+enum class LegacyPointArgsLayout : uint32_t {
+  eIsPointSprite    = 0u,
+  ePointSize        = 1u,
+  ePointSizeMin     = 2u,
+  ePointSizeMax     = 3u,
+};
+
+Type makeLegacyPointArgsType();
+
+/** Legacy sampler state layout */
+enum class LegacySamplerStateLayout : uint32_t {
+  eTextureType      = 0u,
+  eUseDepthCompare  = 1u,
+  eUseProjection    = 2u,
+  eIsNull           = 3u,
+  eUseGather        = 4u,
+  eDrefClamp        = 5u,
+  eDrefScale        = 6u,
+};
+
+Type makeLegacySamplerStateType(uint32_t count);
+
+/** Legacy texture stage parameters */
+enum class LegacyTextureStageLayout : uint32_t {
+  eBumpMat0         = 0u,
+  eBumpMat1         = 1u,
+  eBumpScale        = 2u,
+  eBumpOffset       = 3u,
+};
+
+Type makeLegacyTextureStageType(uint32_t count);
+
 /** Atomic operation type */
 enum class AtomicOp : uint32_t {
   eLoad             = 0u,

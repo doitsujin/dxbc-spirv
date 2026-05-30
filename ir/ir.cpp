@@ -202,6 +202,76 @@ bool Type::operator != (const Type& other) const {
 }
 
 
+Type makeLegacyAlphaTestType() {
+  return Type()
+    .addStructMember(ScalarType::eU32)  /* compare op */
+    .addStructMember(ScalarType::eU32)  /* precision */
+    .addStructMember(ScalarType::eU32); /* alpha ref */
+}
+
+
+Type makeLegacyFogType() {
+  return Type()
+    .addStructMember(ScalarType::eBool)     /* fog enable */
+    .addStructMember(ScalarType::eU32)      /* fog mode */
+    .addStructMember(ScalarType::eF32, 3u)  /* color */
+    .addStructMember(ScalarType::eF32)      /* distance scale */
+    .addStructMember(ScalarType::eF32)      /* distance end */
+    .addStructMember(ScalarType::eF32);     /* density */
+}
+
+
+Type makeLegacyClipPlaneType() {
+  auto type = Type()
+    .addStructMember(ScalarType::eU32);     /* plane count */
+
+  for (uint32_t i = 0u; i < 6u; i++)
+    type.addStructMember(ScalarType::eF32, 4u);
+
+  return type;
+}
+
+
+Type makeLegacyPointArgsType() {
+  return Type()
+    .addStructMember(ScalarType::eBool)     /* point sprite */
+    .addStructMember(ScalarType::eF32)      /* point size */
+    .addStructMember(ScalarType::eF32)      /* min size */
+    .addStructMember(ScalarType::eF32);     /* max size */
+}
+
+
+Type makeLegacySamplerStateType(uint32_t count) {
+  auto type = Type()
+    .addStructMember(ScalarType::eU32)      /* texture type */
+    .addStructMember(ScalarType::eBool)     /* depth compare */
+    .addStructMember(ScalarType::eBool)     /* projection */
+    .addStructMember(ScalarType::eBool)     /* null */
+    .addStructMember(ScalarType::eBool)     /* gather */
+    .addStructMember(ScalarType::eBool)     /* dref clamp */
+    .addStructMember(ScalarType::eF32);     /* dref scale */
+
+  if (count)
+    type.addArrayDimension(count);
+
+  return type;
+}
+
+
+Type makeLegacyTextureStageType(uint32_t count) {
+  auto type = Type()
+    .addStructMember(ScalarType::eF32, 2u)  /* matrix row 0 */
+    .addStructMember(ScalarType::eF32, 2u)  /* matrix row 1 */
+    .addStructMember(ScalarType::eF32)      /* scale */
+    .addStructMember(ScalarType::eF32);     /* offset */
+
+  if (count)
+    type.addArrayDimension(count);
+
+  return type;
+}
+
+
 bool Operand::getToString(std::string& str) const {
   uint64_t lit = m_data;
 
