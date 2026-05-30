@@ -221,6 +221,8 @@ private:
 
   bool storeDstModifiedPredicated(ir::Builder& builder, const Instruction& op, const Operand& operand, ir::SsaDef value);
 
+  ir::SsaDef emitAlphaTestInput(ir::Builder& builder);
+
   void emitAlphaTest(ir::Builder& builder);
 
   void emitFog(ir::Builder& builder);
