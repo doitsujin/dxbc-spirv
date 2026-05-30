@@ -184,6 +184,17 @@ bool writeSpirvBinary(ir::Builder builder, const Options& options, Timers& timer
   { ir::LowerIoPass pass(builder);
 
     pass.lowerSampleCountToSpecConstant(0u);
+
+    uint32_t cbv = 0u;
+    pass.lowerLegacyBuiltInToCbv(ir::BuiltIn::eLegacyConstFloat, 0u, cbv++);
+    pass.lowerLegacyBuiltInToCbv(ir::BuiltIn::eLegacyConstInt, 0u, cbv++);
+    pass.lowerLegacyBuiltInToCbv(ir::BuiltIn::eLegacyConstBool, 0u, cbv++);
+    pass.lowerLegacyBuiltInToCbv(ir::BuiltIn::eLegacyAlphaTest, 0u, cbv++);
+    pass.lowerLegacyBuiltInToCbv(ir::BuiltIn::eLegacyFog, 0u, cbv++);
+    pass.lowerLegacyBuiltInToCbv(ir::BuiltIn::eLegacyClipPlanes, 0u, cbv++);
+    pass.lowerLegacyBuiltInToCbv(ir::BuiltIn::eLegacyPointArgs, 0u, cbv++);
+    pass.lowerLegacyBuiltInToCbv(ir::BuiltIn::eLegacySamplerState, 0u, cbv++);
+    pass.lowerLegacyBuiltInToCbv(ir::BuiltIn::eLegacyTextureStage, 0u, cbv++);
   }
 
   spirv::BasicResourceMapping mapping = { };
