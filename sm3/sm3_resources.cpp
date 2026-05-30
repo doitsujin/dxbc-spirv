@@ -473,7 +473,7 @@ bool ResourceMap::handleDclSampler(ir::Builder& builder, const Instruction& op) 
 
   dxbc_spv_assert(dst.getRegisterType() == RegisterType::eSampler);
 
-  SpecConstTextureType textureType = specConstTextureTypeFromTextureType(dcl.getTextureType());
+  SamplerStateType textureType = samplerStateTypeFromTextureType(dcl.getTextureType());
 
   auto sampler = dclSampler(builder, samplerIndex);
   auto texture = dclTexture(builder, textureType, samplerIndex);
@@ -490,10 +490,10 @@ bool ResourceMap::handleDclSampler(ir::Builder& builder, const Instruction& op) 
 bool ResourceMap::dclSamplerAndAllTextureTypes(ir::Builder& builder, uint32_t samplerIndex) {
   auto sampler = dclSampler(builder, samplerIndex);
 
-  std::array<ir::SsaDef, uint32_t(SpecConstTextureType::eCount)> textures;
+  std::array<ir::SsaDef, uint32_t(SamplerStateType::eCount)> textures;
 
   for (uint32_t i = 0; i < textures.size(); i++) {
-    SpecConstTextureType textureType = SpecConstTextureType(i);
+    SamplerStateType textureType = SamplerStateType(i);
     textures[i] = dclTexture(builder, textureType, samplerIndex);
   }
 
@@ -538,9 +538,9 @@ ir::SsaDef ResourceMap::dclSampler(ir::Builder& builder, uint32_t samplerIndex) 
 }
 
 
-ir::SsaDef ResourceMap::dclTexture(ir::Builder& builder, SpecConstTextureType textureType, uint32_t samplerIndex) {
+ir::SsaDef ResourceMap::dclTexture(ir::Builder& builder, SamplerStateType textureType, uint32_t samplerIndex) {
   auto textureDef = builder.add(ir::Op::DclSrv(ir::ScalarType::eF32, m_converter.getEntryPoint(), TextureBindingsRegSpace,
-    samplerIndex, 1u, resourceKindFromTextureType(textureTypeFromSpecConstTextureType(textureType))));
+    samplerIndex, 1u, resourceKindFromTextureType(textureTypeFromSamplerStateType(textureType))));
 
   if (m_converter.m_options.includeDebugNames) {
     const ConstantInfo* ctabEntry = nullptr;
@@ -565,7 +565,7 @@ ir::SsaDef ResourceMap::dclTexture(ir::Builder& builder, SpecConstTextureType te
     }
 
     nameStream << "_";
-    nameStream << textureTypeFromSpecConstTextureType(textureType);
+    nameStream << textureTypeFromSamplerStateType(textureType);
 
     std::string name = nameStream.str();
     builder.add(ir::Op::DebugName(textureDef, name.c_str()));
@@ -662,14 +662,14 @@ ir::SsaDef ResourceMap::emitSampleImageFunction(
     auto textureTypeSwitch = builder.add(ir::Op::ScopedSwitch(ir::SsaDef(), samplerType));
 
     /* Emit a switch case for each texture type. */
-    for (uint32_t i = 0; i < uint32_t(SpecConstTextureType::eCount); i++) {
+    for (uint32_t i = 0; i < uint32_t(SamplerStateType::eCount); i++) {
       builder.add(ir::Op::ScopedSwitchCase(textureTypeSwitch, i));
 
       auto descriptor = builder.add(ir::Op::DescriptorLoad(ir::ScalarType::eSrv,
         samplerInfo.textureDefs[i],
         builder.makeConstant(0u)));
 
-      auto typeResult = emitSampleColorOrDref(builder, texCoord, SpecConstTextureType(i),
+      auto typeResult = emitSampleColorOrDref(builder, texCoord, SamplerStateType(i),
         samplerIndex, descriptor, sampler, lod, lodBias, dx, dy);
 
       builder.add(ir::Op::TmpStore(resultTmp, typeResult));
@@ -730,7 +730,7 @@ ir::SsaDef ResourceMap::emitSampleImageFunction(
 ir::SsaDef ResourceMap::emitSampleColorOrDref(
   ir::Builder& builder,
   ir::SsaDef texCoord,
-  SpecConstTextureType textureType,
+  SamplerStateType textureType,
   uint32_t samplerIndex,
   ir::SsaDef descriptor,
   ir::SsaDef sampler,
@@ -738,7 +738,7 @@ ir::SsaDef ResourceMap::emitSampleColorOrDref(
   ir::SsaDef lodBias,
   ir::SsaDef dx,
   ir::SsaDef dy) {
-  if (textureType != SpecConstTextureType::eTexture3D) {
+  if (textureType != SamplerStateType::eTexture3D) {
     auto resultTmp = builder.add(ir::Op::DclTmp(ir::BasicType(ir::ScalarType::eF32, 4u), m_converter.getEntryPoint()));
 
     auto isDepth = loadSamplerState(builder, samplerIndex,
@@ -768,7 +768,7 @@ ir::SsaDef ResourceMap::emitSampleColorOrDref(
 ir::SsaDef ResourceMap::emitSampleColorImageType(
   ir::Builder& builder,
   ir::SsaDef texCoord,
-  SpecConstTextureType textureType,
+  SamplerStateType textureType,
   uint32_t samplerIndex,
   ir::SsaDef descriptor,
   ir::SsaDef sampler,
@@ -776,7 +776,7 @@ ir::SsaDef ResourceMap::emitSampleColorImageType(
   ir::SsaDef lodBias,
   ir::SsaDef dx,
   ir::SsaDef dy) {
-  uint32_t texCoordComponentCount = textureType == SpecConstTextureType::eTexture2D ? 2u : 3u;
+  uint32_t texCoordComponentCount = textureType == SamplerStateType::eTexture2D ? 2u : 3u;
   std::array<ir::SsaDef, 4u> texCoordComponents;
 
   for (uint32_t i = 0u; i < texCoordComponentCount; i++) {
@@ -810,19 +810,19 @@ ir::SsaDef ResourceMap::emitSampleColorImageType(
 
   /* Fetch4
    * D3D9 does support gather on 3D but we cannot :< */
-  if (m_converter.getShaderInfo().getType() == ShaderType::ePixel && textureType != SpecConstTextureType::eTexture3D) {
+  if (m_converter.getShaderInfo().getType() == ShaderType::ePixel && textureType != SamplerStateType::eTexture3D) {
     /* Load the spec constant that tells us if fetch4 (gather) is enabled for the sampler. */
     auto fetch4Enabled = loadSamplerState(builder, samplerIndex,
       ir::LegacySamplerStateLayout::eUseGather);
 
     /* Account for half texel offset */
-    if (textureType == SpecConstTextureType::eTexture2D) {
+    if (textureType == SamplerStateType::eTexture2D) {
       /* Doesn't really work for cubes...
        * Nothing probably relies on that though.
        * If we come back to this ever, make sure to handle cube/3d differences.
        *   texcoord += (1.0f - 1.0f / 256.0f) / float(2 * textureSize(sampler, 0))
        * = texcoord += (256.0f / 512.0f) / textureSize(sampler, 0) */
-      auto coordDims = ir::resourceDimensions(resourceKindFromTextureType(textureTypeFromSpecConstTextureType(textureType)));
+      auto coordDims = ir::resourceDimensions(resourceKindFromTextureType(textureTypeFromSamplerStateType(textureType)));
 
       auto sizeType = ir::Type()
         .addStructMember(ir::ScalarType::eU32, coordDims)   /* size   */
@@ -875,7 +875,7 @@ ir::SsaDef ResourceMap::emitSampleColorImageType(
 ir::SsaDef ResourceMap::emitSampleDref(
   ir::Builder &builder,
   ir::SsaDef texCoord,
-  SpecConstTextureType textureType,
+  SamplerStateType textureType,
   uint32_t samplerIndex,
   ir::SsaDef descriptor,
   ir::SsaDef sampler,
@@ -884,7 +884,7 @@ ir::SsaDef ResourceMap::emitSampleDref(
   ir::SsaDef dx,
   ir::SsaDef dy) {
   /* We don't check for NULL here because if there's no texture bound, we always end up in the color path. */
-  uint32_t texCoordComponentCount = textureType == SpecConstTextureType::eTexture2D ? 2u : 3u;
+  uint32_t texCoordComponentCount = textureType == SamplerStateType::eTexture2D ? 2u : 3u;
   auto reference = ir::extractFromVector(builder, texCoord, texCoordComponentCount);
 
   /* [D3D8] Scale Dref from [0..(2^N - 1)] for D24S8 and D16 if Dref scaling is enabled */
