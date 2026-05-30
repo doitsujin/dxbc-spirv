@@ -10,7 +10,6 @@ sm3_files = files([
   'sm3/sm3_converter.cpp',
   'sm3/sm3_io_map.cpp',
   'sm3/sm3_registers.cpp',
-  'sm3/sm3_spec_constants.cpp',
   'sm3/sm3_resources.cpp',
 ])
 

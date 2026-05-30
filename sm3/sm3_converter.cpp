@@ -34,15 +34,12 @@ constexpr uint32_t TextureStageCount = 8u;
  *   Everything else. Has partial precision flag in Dst operand.
  */
 
-Converter::Converter(util::ByteReader code,
-        SpecializationConstantLayout& specConstantsLayout,
-  const Options& options)
+Converter::Converter(util::ByteReader code, const Options& options)
 : m_code(code)
 , m_options(options)
 , m_ioMap(*this)
 , m_regFile(*this)
-, m_resources(*this)
-, m_specConstants(*this, specConstantsLayout) {
+, m_resources(*this) {
 }
 
 Converter::~Converter() {
@@ -265,7 +262,6 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
     builder.add(ir::Op::DebugName(m_entryPoint.def, m_options.name));
 
   emitFloatModes(builder);
-  m_specConstants.initialize(builder);
   m_ioMap.initialize(builder);
   m_regFile.initialize(builder);
   m_resources.initialize(builder);
