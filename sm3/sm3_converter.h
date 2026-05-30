@@ -74,7 +74,6 @@ private:
   SpecializationConstantsMap m_specConstants;
 
   ir::SsaDef       m_psSharedData;
-  ir::SsaDef       m_clipPlanes = { };
 
   ir::SsaDef       m_alphaTestFunction;
   ir::SsaDef       m_fogFunction = { };
@@ -133,8 +132,6 @@ private:
   ir::SsaDef emitTexMatMul(ir::Builder& builder, const Instruction& op);
 
   ir::SsaDef emitSharedConstants(ir::Builder& builder);
-
-  ir::SsaDef emitClipPlanes(ir::Builder& builder);
 
   ir::SsaDef applyBumpMapping(ir::Builder& builder, uint32_t stageIdx, ir::SsaDef src0, ir::SsaDef src1);
 
@@ -225,6 +222,8 @@ private:
   ir::SsaDef emitFogInput(ir::Builder& builder);
 
   void emitFog(ir::Builder& builder);
+
+  ir::SsaDef emitClippingInput(ir::Builder& builder);
 
   void emitClipping(ir::Builder& builder);
 
