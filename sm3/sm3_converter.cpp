@@ -2326,6 +2326,31 @@ void Converter::emitAlphaTest(ir::Builder& builder) {
 }
 
 
+ir::SsaDef Converter::emitFogInput(ir::Builder& builder) {
+  auto input = builder.add(ir::Op::DclInputBuiltIn(
+    ir::makeLegacyFogType(), m_entryPoint.def,
+    ir::BuiltIn::eLegacyFog, ir::InterpolationMode::eFlat));
+
+  if (m_options.includeDebugNames) {
+    static const std::array<std::pair<ir::LegacyFogLayout, const char*>, 6u> s_names = {{
+      { ir::LegacyFogLayout::eFogEnable,  "enable"      },
+      { ir::LegacyFogLayout::eFogMode,    "mode"        },
+      { ir::LegacyFogLayout::eFogColor,   "color"       },
+      { ir::LegacyFogLayout::eFogScale,   "distScale"   },
+      { ir::LegacyFogLayout::eFogEnd,     "distEnd"     },
+      { ir::LegacyFogLayout::eFogDensity, "density"     },
+    }};
+
+    builder.add(ir::Op::DebugName(input, "fog"));
+
+    for (const auto& e : s_names)
+      builder.add(ir::Op::DebugMemberName(input, uint32_t(e.first), e.second));
+  }
+
+  return input;
+}
+
+
 void Converter::emitFog(ir::Builder& builder) {
   dxbc_spv_assert(getShaderInfo().getType() == ShaderType::ePixel);
 
@@ -2345,35 +2370,37 @@ void Converter::emitFog(ir::Builder& builder) {
     builder.add(ir::Op::DebugName(colorParam, "oColor"));
   }
 
-  /* Read the required values. */
   auto position = builder.add(ir::Op::ParamLoad(ir::BasicType(ir::ScalarType::eF32, 4u), m_fogFunction, posParam));
   auto color = builder.add(ir::Op::ParamLoad(ir::BasicType(ir::ScalarType::eF32, 4u), m_fogFunction, colorParam));
 
-  auto fogColor = builder.add(ir::Op::PushDataLoad(ir::BasicType(ir::ScalarType::eF32, 3u),
-    m_renderState, builder.makeConstant(uint32_t(RenderStateItem::eFogColor))));
-
-  auto fogScale = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32,
-    m_renderState, builder.makeConstant(uint32_t(RenderStateItem::eFogScale))));
-
-  auto fogEnd = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32,
-    m_renderState, builder.makeConstant(uint32_t(RenderStateItem::eFogEnd))));
-
-  auto fogDensity = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32,
-    m_renderState, builder.makeConstant(uint32_t(RenderStateItem::eFogDensity))));
-
-  auto fogMode = m_specConstants.get(builder,
-     SpecConstantId::eSpecPixelFogMode);
-
-  auto fogEnabledInt = m_specConstants.get(builder, SpecConstantId::eSpecFogEnabled);
-  auto fogDisabled = builder.add(ir::Op::IEq(ir::ScalarType::eBool, fogEnabledInt, builder.makeConstant(0u)));
+  /* Declare fog parameter input */
+  auto fogInput = emitFogInput(builder);
 
   /* Check if fog is disabled and return early. */
-  auto fogDisabledIf = builder.add(ir::Op::ScopedIf(ir::SsaDef(), fogDisabled));
+  auto fogEnabled = builder.add(ir::Op::InputLoad(ir::ScalarType::eBool,
+    fogInput, builder.makeConstant(uint32_t(ir::LegacyFogLayout::eFogEnable))));
 
+  auto fogDisabledIf = builder.add(ir::Op::ScopedIf(ir::SsaDef(),
+    builder.add(ir::Op::BNot(ir::ScalarType::eBool, fogEnabled))));
   builder.add(ir::Op::Return(returnType, color));
-
   auto fogDisabledIfEnd = builder.add(ir::Op::ScopedEndIf(fogDisabledIf));
   builder.rewriteOp(fogDisabledIf, ir::Op(builder.getOp(fogDisabledIf)).setOperand(0u, fogDisabledIfEnd));
+
+  /* Read fog parameters */
+  auto fogMode = builder.add(ir::Op::InputLoad(ir::ScalarType::eU32,
+    fogInput, builder.makeConstant(uint32_t(ir::LegacyFogLayout::eFogMode))));
+
+  auto fogColor = builder.add(ir::Op::InputLoad(ir::BasicType(ir::ScalarType::eF32, 3u),
+    fogInput, builder.makeConstant(uint32_t(ir::LegacyFogLayout::eFogColor))));
+
+  auto fogScale = builder.add(ir::Op::InputLoad(ir::ScalarType::eF32,
+    fogInput, builder.makeConstant(uint32_t(ir::LegacyFogLayout::eFogScale))));
+
+  auto fogEnd = builder.add(ir::Op::InputLoad(ir::ScalarType::eF32,
+    fogInput, builder.makeConstant(uint32_t(ir::LegacyFogLayout::eFogEnd))));
+
+  auto fogDensity = builder.add(ir::Op::InputLoad(ir::ScalarType::eF32,
+    fogInput, builder.makeConstant(uint32_t(ir::LegacyFogLayout::eFogDensity))));
 
   /* Actually calculate the fog factor now we have all the vars in-place. */
   auto z = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eF32, position, builder.makeConstant(2u)));

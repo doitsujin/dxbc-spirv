@@ -225,6 +225,8 @@ private:
 
   void emitAlphaTest(ir::Builder& builder);
 
+  ir::SsaDef emitFogInput(ir::Builder& builder);
+
   void emitFog(ir::Builder& builder);
 
   void emitClipping(ir::Builder& builder);
