@@ -53,34 +53,16 @@ struct SamplerRegister {
   std::array<ir::SsaDef, 8u> samplingFunctions = { };
 };
 
-struct ConstantRange {
-  /** Declaration of a buffer that has the debug CTAB name. (Only used for debugging.). */
-  ir::SsaDef namedBufferDef = { };
-
-  /** The constant register index of the element in this array. */
-  uint32_t startIndex = 0u;
-
-  /** The amount of constants in this array. */
-  uint32_t count = 256u;
-};
-
 struct ImmediateConstDef {
   uint32_t index;
   ir::SsaDef def;
 };
 
 struct Constants {
-  /** All constant array ranges for this constant type. This will only contain more than
-   * one element if debug names are enabled. */
-  util::small_vector<ConstantRange, 8u> constantRanges;
-
-  /** The highest index of any constant of this type that gets read. */
-  uint32_t maxAccessedConstant = 0u;
-
   /** All statically defined constants of this constant type. */
-  util::small_vector<ImmediateConstDef, 2u> immediateConstants;
+  util::small_vector<ImmediateConstDef, 16u> immediateConstants;
 
-  ir::SsaDef bufferDef = { };
+  ir::SsaDef inputDef = { };
 
   ConstantType type;
 };
@@ -98,8 +80,6 @@ public:
   ~ResourceMap();
 
   void initialize(ir::Builder& builder);
-
-  void emitNamedConstantRanges(ir::Builder& builder, const ConstantTable& ctab);
 
   /** Handles Dcl instructions on SM 2+ with Sampler as the register type. */
   bool handleDclSampler(ir::Builder& builder, const Instruction& op);

@@ -139,7 +139,7 @@ private:
 
   ir::SsaDef emitComparison(ir::Builder& builder, ir::SsaDef a, ir::SsaDef b, ComparisonMode comparisonMode);
 
-  bool handleComment(ir::Builder& builder, const Instruction& op);
+  bool handleComment(const Instruction& op);
 
   bool handleDef(ir::Builder& builder, const Instruction& op);
 
