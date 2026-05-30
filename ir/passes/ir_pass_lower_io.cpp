@@ -855,6 +855,87 @@ void LowerIoPass::lowerSampleCountToSpecConstant(uint32_t specId) {
 }
 
 
+void LowerIoPass::lowerLegacyBuiltInToCbv(ir::BuiltIn builtIn, uint32_t regSpace, uint32_t regIndex) {
+  SsaDef inputDef = { };
+
+  /* Find corresponding input, if any */
+  auto [a, b] = m_builder.getDeclarations();
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::eDclInputBuiltIn &&
+        ir::BuiltIn(iter->getOperand(iter->getFirstLiteralOperandIndex())) == builtIn) {
+      inputDef = iter->getDef();
+      break;
+    }
+  }
+
+  if (!inputDef)
+    return;
+
+  auto entryPoint = SsaDef(m_builder.getOp(inputDef).getOperand(0u));
+
+  /* Override type. Specifically, replace any boolean with uint32. */
+  auto oldType = m_builder.getOp(inputDef).getType();
+  auto newType = Type();
+
+  for (uint32_t i = 0u; i < oldType.getStructMemberCount(); i++) {
+    auto ty = oldType.getBaseType(i);
+
+    if (ty.getBaseType() == ScalarType::eBool)
+      ty = BasicType(ScalarType::eU32, ty.getVectorSize());
+
+    newType.addStructMember(ty);
+  }
+
+  for (uint32_t i = 0u; i < oldType.getArrayDimensions(); i++)
+    newType.addArrayDimension(oldType.getArraySize(i));
+
+  /* Declare constant buffer and replace all input loads with actual
+   * constant buffer loads. Add extra code to handle bools. */
+  auto cbvDef = m_builder.add(Op::DclCbv(newType, entryPoint, regSpace, regIndex, 1u));
+
+  small_vector<SsaDef, 32u> uses;
+  m_builder.getUses(inputDef, uses);
+
+  for (auto use : uses) {
+    const auto& useOp = m_builder.getOp(use);
+
+    switch (useOp.getOpCode()) {
+      case OpCode::eInputLoad: {
+        auto descriptor = m_builder.addBefore(use, Op::DescriptorLoad(
+          ScalarType::eCbv, cbvDef, m_builder.makeConstant(0u)));
+
+        auto loadType = useOp.getType().getBaseType(0u);
+
+        if (loadType.isBoolType())
+          loadType = BasicType(ScalarType::eU32, loadType.getVectorSize());
+
+        auto result = m_builder.addBefore(use, Op::BufferLoad(loadType,
+          descriptor, SsaDef(useOp.getOperand(1u)), 4u));
+
+        if (useOp.getType().getBaseType(0u).isBoolType()) {
+          result = m_builder.addBefore(use, Op::INe(useOp.getType(),
+            result, m_builder.makeConstantZero(loadType)));
+        }
+
+        m_builder.rewriteDef(use, result);
+      } break;
+
+      case OpCode::eDebugName:
+      case OpCode::eDebugMemberName: {
+        m_builder.add(Op(useOp).setOperand(0u, cbvDef));
+      } break;
+
+      default:
+        break;
+    }
+  }
+
+  /* Nuke the old built-in out of existence */
+  RemoveUnusedPass::runPass(m_builder);
+}
+
+
 void LowerIoPass::scalarizeInputLoads() {
   auto [a, b] = m_builder.getDeclarations();
 

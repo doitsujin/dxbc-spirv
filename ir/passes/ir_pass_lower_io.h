@@ -342,6 +342,11 @@ public:
    *  for debugging purposes and standalone tools. */
   void lowerSampleCountToSpecConstant(uint32_t specId);
 
+  /** Lowers legacy input to constant buffer. Exists as a default lowering for
+   *  those inputs that clients are encouraged to replace with a more efficient
+   *  ABI. */
+  void lowerLegacyBuiltInToCbv(ir::BuiltIn builtIn, uint32_t regSpace, uint32_t regIndex);
+
 private:
 
   struct OutputInfo {
