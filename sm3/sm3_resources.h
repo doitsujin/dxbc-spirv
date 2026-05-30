@@ -183,6 +183,7 @@ private:
     ir::Builder& builder,
     ir::SsaDef texCoord,
     SpecConstTextureType textureType,
+    uint32_t samplerIndex,
     ir::SsaDef descriptor,
     ir::SsaDef sampler,
     ir::SsaDef lod,
