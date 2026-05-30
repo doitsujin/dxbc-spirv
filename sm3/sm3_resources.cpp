@@ -449,27 +449,16 @@ ir::SsaDef ResourceMap::emitSample(
 
 ir::SsaDef ResourceMap::projectTexCoord(ir::Builder& builder, uint32_t samplerIndex, ir::SsaDef texCoord, bool controlWithSpecConst) {
   auto texCoordType = builder.getOp(texCoord).getType().getBaseType(0u);
-
   auto texCoordW = ir::extractFromVector(builder, texCoord, 3u);
-  auto projectedTexCoord = builder.add(ir::Op::FDiv(
-    texCoordType,
-    texCoord,
-    broadcastScalar(builder, texCoordW, ComponentBit::eAll)
-  ));
+
+  auto projectedTexCoord = builder.add(ir::Op::FDiv(texCoordType,
+    texCoord, broadcastScalar(builder, texCoordW, ComponentBit::eAll)));
 
   if (controlWithSpecConst) {
-    uint32_t specConstIdx = m_converter.m_specConstants.getSamplerSpecConstIndex(
-      m_converter.getShaderInfo().getType(), samplerIndex);
+    auto isProjected = loadSamplerState(builder, samplerIndex, ir::LegacySamplerStateLayout::eUseProjection);
 
-    auto isProjectedSpecConst = m_converter.m_specConstants.get(
-      builder,
-      SpecConstantId::eSpecSamplerProjected,
-      builder.makeConstant(specConstIdx),
-      builder.makeConstant(1u)
-    );
-    auto isProjectedBool = builder.add(ir::Op::INe(ir::ScalarType::eBool, isProjectedSpecConst, builder.makeConstant(0u)));
-
-    return builder.add(ir::Op::Select(texCoordType, broadcastScalar(builder, isProjectedBool, WriteMask(ComponentBit::eAll)),
+    projectedTexCoord = builder.add(ir::Op::Select(texCoordType,
+      broadcastScalar(builder, isProjected, WriteMask(ComponentBit::eAll)),
       projectedTexCoord, texCoord));
   }
 
