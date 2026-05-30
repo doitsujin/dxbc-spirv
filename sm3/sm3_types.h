@@ -14,23 +14,10 @@ using util::WriteMask;
 using util::Swizzle;
 
 /* Texture sampling binding constants */
-
 constexpr uint32_t TextureBindingsRegSpace = 0u;
 constexpr uint32_t SamplerBindingsRegSpace = 1u;
 
-/* CBV Register indices */
-
-constexpr uint32_t FastSpecConstCbvRegIdx = 0u;
-constexpr uint32_t PSSharedDataCbvRegIdx  = 1u;
-constexpr uint32_t VSClipPlanesCbvRegIdx  = 1u;
-
-constexpr uint32_t FloatIntCbvRegIdx  = 2u;
-constexpr uint32_t SWVPFloatCbvRegIdx = 2u;
-constexpr uint32_t SWVPIntCbvRegIdx   = 3u;
-constexpr uint32_t SWVPBoolCbvRegIdx  = 4u;
-
 /* Constant limits */
-
 constexpr uint32_t MaxFloatConstantsVS       = 256;
 constexpr uint32_t MaxFloatConstantsPS       = 224;
 constexpr uint32_t MaxOtherConstants         = 16;
