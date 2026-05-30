@@ -46,6 +46,9 @@ void IoMap::initialize(ir::Builder& builder) {
     m_nextInputLocation = s_ffLocations.size();
   }
 
+  /* Declare external point size parameters */
+  m_pointArgs = emitPointArgs(builder);
+
   if (info.getVersion().first >= 3u) {
     /* Assume that shader model 3 vertex shaders hardly ever get mixed with fixed function pixel processing
      * If they do, the backend handles it. Color 0 is the exception because that needs a different value.
@@ -463,12 +466,12 @@ void IoMap::emitIoVarDefault(
         builder.add(ir::Op::TmpStore(ioVar.tempDefs[i], builder.makeConstant(i == 3u ? 1.0f : 0.0f)));
       }
     } else if (ioVar.semantic.usage == SemanticUsage::ePointSize) {
-      auto pointSize = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32, m_converter.m_renderState,
-        builder.makeConstant(uint32_t(RenderStateItem::ePointSize))));
-      auto pointSizeMin = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32, m_converter.m_renderState,
-        builder.makeConstant(uint32_t(RenderStateItem::ePointSizeMin))));
-      auto pointSizeMax = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32, m_converter.m_renderState,
-        builder.makeConstant(uint32_t(RenderStateItem::ePointSizeMax))));
+      auto pointSize = builder.add(ir::Op::InputLoad(ir::ScalarType::eF32, m_pointArgs,
+        builder.makeConstant(uint32_t(ir::LegacyPointArgsLayout::ePointSize))));
+      auto pointSizeMin = builder.add(ir::Op::InputLoad(ir::ScalarType::eF32, m_pointArgs,
+        builder.makeConstant(uint32_t(ir::LegacyPointArgsLayout::ePointSizeMin))));
+      auto pointSizeMax = builder.add(ir::Op::InputLoad(ir::ScalarType::eF32, m_pointArgs,
+        builder.makeConstant(uint32_t(ir::LegacyPointArgsLayout::ePointSizeMax))));
 
       auto finalSize = builder.add(ir::Op::FClamp(ir::ScalarType::eF32, pointSize, pointSizeMin, pointSizeMax));
       builder.add(ir::Op::TmpStore(ioVar.tempDefs[0], finalSize));
@@ -711,7 +714,6 @@ ir::SsaDef IoMap::emitTexCoordPointSpriteAdjustment(ir::Builder& builder, const 
 
   /* We need to replace TEXCOORD inputs with gl_PointCoord
    * if D3DRS_POINTSPRITEENABLE is set. */
-
   ir::SsaDef pointCoord;
 
   if (componentIndex < 2) // The point coord input is only a vec2
@@ -719,18 +721,14 @@ ir::SsaDef IoMap::emitTexCoordPointSpriteAdjustment(ir::Builder& builder, const 
   else
     pointCoord = builder.makeConstant(0.0f);
 
-  auto specConstBit = m_converter.m_specConstants.get(builder, SpecConstantId::eSpecPointMode,
-    builder.makeConstant(1u), builder.makeConstant(1u));
-  auto pointSpriteEnabled = builder.add(ir::Op::IEq(ir::ScalarType::eBool, specConstBit, builder.makeConstant(1u)));
-
+  auto pointSpriteEnabled = builder.add(ir::Op::InputLoad(ir::ScalarType::eBool, m_pointArgs,
+    builder.makeConstant(uint32_t(ir::LegacyPointArgsLayout::eIsPointSprite))));
   auto texCoordComponentType = builder.getOp(texCoordComponent).getType();
 
-  return builder.add(ir::Op::Select(
-    texCoordComponentType,
-    pointSpriteEnabled,
-    pointCoord,
-    texCoordComponent
-  ));
+  pointCoord = builder.add(ir::Op::ConsumeAs(texCoordComponentType, pointCoord));
+
+  return builder.add(ir::Op::Select(texCoordComponentType,
+    pointSpriteEnabled, pointCoord, texCoordComponent));
 }
 
 
@@ -786,10 +784,10 @@ bool IoMap::emitStore(
           builder.makeConstant(0.0f), builder.makeConstant(1.0f)));
       } else if (ioVar->semantic.usage == SemanticUsage::ePointSize) {
         /* Clamp value between D3DRS_POINTSIZE_MIN and D3DRS_POINTSIZE_MAX. */
-        auto pointSizeMin = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32, m_converter.m_renderState,
-          builder.makeConstant(uint32_t(RenderStateItem::ePointSizeMin))));
-        auto pointSizeMax = builder.add(ir::Op::PushDataLoad(ir::ScalarType::eF32, m_converter.m_renderState,
-          builder.makeConstant(uint32_t(RenderStateItem::ePointSizeMax))));
+        auto pointSizeMin = builder.add(ir::Op::InputLoad(ir::ScalarType::eF32, m_pointArgs,
+          builder.makeConstant(uint32_t(ir::LegacyPointArgsLayout::ePointSizeMin))));
+        auto pointSizeMax = builder.add(ir::Op::InputLoad(ir::ScalarType::eF32, m_pointArgs,
+          builder.makeConstant(uint32_t(ir::LegacyPointArgsLayout::ePointSizeMax))));
         valueScalar = builder.add(ir::Op::FClamp(ioVarScalarType, valueScalar, pointSizeMin, pointSizeMax));
       }
 
@@ -1204,6 +1202,28 @@ ir::SsaDef IoMap::convertScalar(ir::Builder& builder, ir::ScalarType dstType, ir
     return value;
 
   return builder.add(ir::Op::ConsumeAs(dstType, value));
+}
+
+
+ir::SsaDef IoMap::emitPointArgs(ir::Builder& builder) {
+  auto input = builder.add(ir::Op::DclInputBuiltIn(ir::makeLegacyPointArgsType(),
+    m_converter.getEntryPoint(), ir::BuiltIn::eLegacyPointArgs));
+
+  if (m_converter.getOptions().includeDebugNames) {
+    static const std::array<std::pair<ir::LegacyPointArgsLayout, const char*>, 4u> s_names = {{
+      { ir::LegacyPointArgsLayout::eIsPointSprite, "isPointSprite" },
+      { ir::LegacyPointArgsLayout::ePointSize,     "pointSize" },
+      { ir::LegacyPointArgsLayout::ePointSizeMin,  "pointSizeMin" },
+      { ir::LegacyPointArgsLayout::ePointSizeMax,  "pointSizeMax" },
+    }};
+
+    builder.add(ir::Op::DebugName(input, "pointArgs"));
+
+    for (const auto& e : s_names)
+      builder.add(ir::Op::DebugMemberName(input, uint32_t(e.first), e.second));
+  }
+
+  return input;
 }
 
 
