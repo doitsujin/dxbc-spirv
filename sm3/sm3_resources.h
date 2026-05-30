@@ -137,6 +137,7 @@ public:
 private:
 
   Converter& m_converter;
+  ir::SsaDef m_samplerState = {};
 
   std::array<SamplerRegister, 32> m_samplers;
 
@@ -189,6 +190,13 @@ private:
     ir::SsaDef dx,
     ir::SsaDef dy
   );
+
+  ir::SsaDef emitSamplerState(ir::Builder& builder);
+
+  ir::SsaDef loadSamplerState(
+          ir::Builder&                  builder,
+          uint32_t                      sampler,
+          ir::LegacySamplerStateLayout  member);
 
 };
 

@@ -74,6 +74,8 @@ void ResourceMap::initialize(ir::Builder& builder) {
     boolRange.count = (MaxOtherConstantsSoftware + 31u) / 32u;
     boolRange.namedBufferDef = m_constants[uint32_t(ConstantType::eBool)].bufferDef;
   }
+
+  m_samplerState = emitSamplerState(builder);
 }
 
 
@@ -989,6 +991,58 @@ ir::SsaDef ResourceMap::emitSampleDref(
     sizedDx, sizedDy, reference ));
 
   return broadcastScalar(builder, drefResult, WriteMask(ComponentBit::eAll));
+}
+
+
+ir::SsaDef ResourceMap::emitSamplerState(ir::Builder& builder) {
+  /* Declare sampler state with the maximum number of samplers that
+   * the current shader stage can declare. This will be lowered to
+   * some other kind of data structure anyway. */
+  ShaderType shaderType = m_converter.getShaderInfo().getType();
+
+  uint32_t maxSamplerCount = shaderType == ShaderType::ePixel
+    ? MaxSamplerCountPs
+    : MaxSamplerCountVs;
+
+  auto samplerState = ir::Op::DclInputBuiltIn(
+    ir::makeLegacySamplerStateType(maxSamplerCount),
+    m_converter.getEntryPoint(), ir::BuiltIn::eLegacySamplerState);
+
+  if (shaderType == ShaderType::ePixel)
+    samplerState.addOperand(ir::InterpolationMode::eFlat);
+
+  auto input = builder.add(std::move(samplerState));
+
+  if (m_converter.getOptions().includeDebugNames) {
+    static const std::array<std::pair<ir::LegacySamplerStateLayout, const char*>, 7u> s_names = {{
+      { ir::LegacySamplerStateLayout::eTextureType,     "texture_type"  },
+      { ir::LegacySamplerStateLayout::eUseDepthCompare, "use_dref"      },
+      { ir::LegacySamplerStateLayout::eUseProjection,   "use_proj"      },
+      { ir::LegacySamplerStateLayout::eIsNull,          "is_null"       },
+      { ir::LegacySamplerStateLayout::eUseGather,       "use_gather"    },
+      { ir::LegacySamplerStateLayout::eDrefClamp,       "dref_clamp"    },
+      { ir::LegacySamplerStateLayout::eDrefScale,       "dref_scale"    },
+    }};
+
+    builder.add(ir::Op::DebugName(input, "sampler_state"));
+
+    for (const auto& e : s_names)
+      builder.add(ir::Op::DebugMemberName(input, uint32_t(e.first), e.second));
+  }
+
+  return input;
+}
+
+
+ir::SsaDef ResourceMap::loadSamplerState(
+        ir::Builder&                  builder,
+        uint32_t                      sampler,
+        ir::LegacySamplerStateLayout  member) {
+  auto memberIndex = uint32_t(member);
+  auto memberType = builder.getOp(m_samplerState).getType().getBaseType(memberIndex);
+
+  return builder.add(ir::Op::InputLoad(memberType, m_samplerState,
+    builder.makeConstant(sampler, memberIndex)));
 }
 
 }

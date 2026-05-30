@@ -37,6 +37,10 @@ constexpr uint32_t MaxOtherConstants         = 16;
 constexpr uint32_t MaxFloatConstantsSoftware = 8192;
 constexpr uint32_t MaxOtherConstantsSoftware = 2048;
 
+/* Texture register limit */
+constexpr uint32_t MaxSamplerCountPs = 16u;
+constexpr uint32_t MaxSamplerCountVs =  4u;
+
 /* Other */
 constexpr uint32_t MaxClipPlanes = 6u;
 
