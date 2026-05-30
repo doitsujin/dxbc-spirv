@@ -74,7 +74,6 @@ private:
   SpecializationConstantsMap m_specConstants;
 
   ir::SsaDef       m_psSharedData;
-  ir::SsaDef       m_renderState;
   ir::SsaDef       m_clipPlanes = { };
 
   ir::SsaDef       m_alphaTestFunction;
@@ -134,8 +133,6 @@ private:
   ir::SsaDef emitTexMatMul(ir::Builder& builder, const Instruction& op);
 
   ir::SsaDef emitSharedConstants(ir::Builder& builder);
-
-  ir::SsaDef emitRenderStatePushData(ir::Builder& builder);
 
   ir::SsaDef emitClipPlanes(ir::Builder& builder);
 
