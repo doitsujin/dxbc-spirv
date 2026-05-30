@@ -12,7 +12,7 @@ namespace dxbc_spv::sm3 {
 
 class Converter;
 
-enum class SpecConstTextureType : uint32_t {
+enum class SamplerStateType : uint32_t {
   eTexture2D   = 0u,
   eTexture3D   = 1u,
   eTextureCube = 2u,
@@ -40,7 +40,7 @@ struct SamplerRegister {
 
   /** The type of the texture. This is only set on SM2+ as there are no dcl_samplerType instructions
    * on SM1. This texture type represents the index of the one valid `textureDef` on SM2. */
-  std::optional<SpecConstTextureType> textureType = std::nullopt;
+  std::optional<SamplerStateType> textureType = std::nullopt;
 
   /** Declaration of the sampler */
   ir::SsaDef samplerDef = { };
@@ -145,7 +145,7 @@ private:
 
   ir::SsaDef dclSampler(ir::Builder& builder, uint32_t samplerIndex);
 
-  ir::SsaDef dclTexture(ir::Builder& builder, SpecConstTextureType textureType, uint32_t samplerIndex);
+  ir::SsaDef dclTexture(ir::Builder& builder, SamplerStateType textureType, uint32_t samplerIndex);
 
   ir::SsaDef emitSampleImageFunction(
     ir::Builder& builder,
@@ -156,7 +156,7 @@ private:
   ir::SsaDef emitSampleColorOrDref(
     ir::Builder& builder,
     ir::SsaDef texCoord,
-    SpecConstTextureType textureType,
+    SamplerStateType textureType,
     uint32_t samplerIndex,
     ir::SsaDef descriptor,
     ir::SsaDef sampler,
@@ -169,7 +169,7 @@ private:
   ir::SsaDef emitSampleColorImageType(
     ir::Builder& builder,
     ir::SsaDef texCoord,
-    SpecConstTextureType textureType,
+    SamplerStateType textureType,
     uint32_t samplerIndex,
     ir::SsaDef descriptor,
     ir::SsaDef sampler,
@@ -182,7 +182,7 @@ private:
   ir::SsaDef emitSampleDref(
     ir::Builder& builder,
     ir::SsaDef texCoord,
-    SpecConstTextureType textureType,
+    SamplerStateType textureType,
     uint32_t samplerIndex,
     ir::SsaDef descriptor,
     ir::SsaDef sampler,
@@ -214,35 +214,35 @@ inline ir::ResourceKind resourceKindFromTextureType(TextureType textureType) {
   return ir::ResourceKind::eBufferRaw;
 }
 
-inline SpecConstTextureType specConstTextureTypeFromTextureType(TextureType textureType) {
+inline SamplerStateType samplerStateTypeFromTextureType(TextureType textureType) {
   switch (textureType) {
     default:
-    case TextureType::eTexture2D: return SpecConstTextureType::eTexture2D;
-    case TextureType::eTexture3D: return SpecConstTextureType::eTexture3D;
-    case TextureType::eTextureCube: return SpecConstTextureType::eTextureCube;
+    case TextureType::eTexture2D: return SamplerStateType::eTexture2D;
+    case TextureType::eTexture3D: return SamplerStateType::eTexture3D;
+    case TextureType::eTextureCube: return SamplerStateType::eTextureCube;
   }
 }
 
-inline TextureType textureTypeFromSpecConstTextureType(SpecConstTextureType specConstTextureType) {
-  switch (specConstTextureType) {
+inline TextureType textureTypeFromSamplerStateType(SamplerStateType SamplerStateType) {
+  switch (SamplerStateType) {
     default:
-    case SpecConstTextureType::eTexture2D: return TextureType::eTexture2D;
-    case SpecConstTextureType::eTexture3D: return TextureType::eTexture3D;
-    case SpecConstTextureType::eTextureCube: return TextureType::eTextureCube;
+    case SamplerStateType::eTexture2D: return TextureType::eTexture2D;
+    case SamplerStateType::eTexture3D: return TextureType::eTexture3D;
+    case SamplerStateType::eTextureCube: return TextureType::eTextureCube;
   }
 }
 
-inline SpecConstTextureType specConstTextureTypeFromResourceKind(ir::ResourceKind resourceKind) {
+inline SamplerStateType samplerStateTypeFromResourceKind(ir::ResourceKind resourceKind) {
   switch (resourceKind) {
     case ir::ResourceKind::eImage2D:
-      return SpecConstTextureType::eTexture2D;
+      return SamplerStateType::eTexture2D;
     case ir::ResourceKind::eImage3D:
-      return SpecConstTextureType::eTexture3D;
+      return SamplerStateType::eTexture3D;
     case ir::ResourceKind::eImageCube:
-      return SpecConstTextureType::eTextureCube;
+      return SamplerStateType::eTextureCube;
     default:
       dxbc_spv_unreachable();
-      return SpecConstTextureType::eTexture2D;
+      return SamplerStateType::eTexture2D;
   }
 }
 
