@@ -161,6 +161,7 @@ private:
   ir::SsaDef      m_outputSwitchFunction = { };
 
   ir::SsaDef      m_pointCoord = { };
+  ir::SsaDef      m_pointArgs = { };
 
   ir::SsaDef      m_clipDistances = { };
 
@@ -211,6 +212,9 @@ private:
   /** Replaces the given texcoord component with a point coord component if the application has set the point sprite spec const.
    * If the given IoVar has the wrong register type or the wrong semantic, it will just return the given texCoord without change. */
   ir::SsaDef emitTexCoordPointSpriteAdjustment(ir::Builder& builder, const IoVarInfo& ioVar, ir::SsaDef texCoord, uint32_t componentIndex) const;
+
+  /** Emits built-in point scaling arguments */
+  ir::SsaDef emitPointArgs(ir::Builder& builder);
 
   void emitDebugName(
     ir::Builder& builder,
