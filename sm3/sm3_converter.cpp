@@ -360,56 +360,25 @@ bool Converter::initParser(Parser& parser, util::ByteReader reader) {
 
 
 ir::SsaDef Converter::emitSharedConstants(ir::Builder& builder) {
-  /*
-   * struct PSSharedData {
-   *    vec4 Constant0;
-   *    vec2 BumpEnvMat0_0;
-   *    vec2 BumpEnvMat1_0;
-   *    float BumpEnvLScale0;
-   *    float BumpEnvLScale1;
-   *    // ... repeat for 1 - 7
-   * }
-   */
-  ir::Type bufferStruct = ir::Type();
+  auto input = builder.add(ir::Op::DclInputBuiltIn(
+    ir::makeLegacyTextureStageType(MaxSamplerCountPs), getEntryPoint(),
+    ir::BuiltIn::eLegacyTextureStage, ir::InterpolationMode::eFlat));
 
-  for (uint32_t i = 0u; i  < TextureStageCount; i++) {
-    bufferStruct.addStructMember(ir::BasicType(ir::ScalarType::eF32, 4u));
-    bufferStruct.addStructMember(ir::BasicType(ir::ScalarType::eF32, 2u));
-    bufferStruct.addStructMember(ir::BasicType(ir::ScalarType::eF32, 2u));
-    bufferStruct.addStructMember(ir::ScalarType::eF32);
-    bufferStruct.addStructMember(ir::ScalarType::eF32);
+  if (m_options.includeDebugNames) {
+    static const std::array<std::pair<ir::LegacyTextureStageLayout, const char*>, 4u> s_names = {{
+      { ir::LegacyTextureStageLayout::eBumpMat0,    "bump_mat0" },
+      { ir::LegacyTextureStageLayout::eBumpMat1,    "bump_mat1" },
+      { ir::LegacyTextureStageLayout::eBumpScale,   "bump_lscale" },
+      { ir::LegacyTextureStageLayout::eBumpOffset,  "bump_loffset" },
+    }};
+
+    builder.add(ir::Op::DebugName(input, "texture_stages"));
+
+    for (const auto& e : s_names)
+      builder.add(ir::Op::DebugMemberName(input, uint32_t(e.first), e.second));
   }
 
-  auto buffer = builder.add(ir::Op::DclCbv(bufferStruct, getEntryPoint(), 0u, PSSharedDataCbvRegIdx, 1u));
-
-  if (getOptions().includeDebugNames) {
-    builder.add(ir::Op::DebugName(buffer, "PSSharedData"));
-
-    for (uint32_t i = 0u; i < TextureStageCount; i++) {
-      std::stringstream namestream;
-      namestream << "Constant" << i;
-      builder.add(ir::Op::DebugMemberName(buffer, i, namestream.str().c_str()));
-      namestream.clear();
-
-      namestream << "BumpEnvMat0_" << i;
-      builder.add(ir::Op::DebugMemberName(buffer, i + 1u, namestream.str().c_str()));
-      namestream.clear();
-
-      namestream << "BumpEnvMat1_" << i;
-      builder.add(ir::Op::DebugMemberName(buffer, i + 2u, namestream.str().c_str()));
-      namestream.clear();
-
-      namestream << "BumpEnvLScale" << i;
-      builder.add(ir::Op::DebugMemberName(buffer, i + 3u, namestream.str().c_str()));
-      namestream.clear();
-
-      namestream << "BumpEnvLOffset" << i;
-      builder.add(ir::Op::DebugMemberName(buffer, i + 4u, namestream.str().c_str()));
-      namestream.clear();
-    }
-  }
-
-  return buffer;
+  return input;
 }
 
 
@@ -426,11 +395,11 @@ ir::SsaDef Converter::applyBumpMapping(ir::Builder& builder, uint32_t stageIdx, 
   auto scalarType = type.getBaseType();
   dxbc_spv_assert(scalarType == builder.getOp(src1).getType().getBaseType(0u).getBaseType());
 
-  auto descriptor = builder.add(ir::Op::DescriptorLoad(ir::ScalarType::eCbv, m_psSharedData, builder.makeConstant(0u)));
-
   /* Load bump matrix */
-  auto bumpEnvMat0 = builder.add(ir::Op::BufferLoad(ir::BasicType(ir::ScalarType::eF32, 2u), descriptor, builder.makeConstant(stageIdx * 5u + 1u), 16u));
-  auto bumpEnvMat1 = builder.add(ir::Op::BufferLoad(ir::BasicType(ir::ScalarType::eF32, 2u), descriptor, builder.makeConstant(stageIdx * 5u + 2u), 8u));
+  auto bumpEnvMat0 = builder.add(ir::Op::InputLoad(ir::BasicType(ir::ScalarType::eF32, 2u), m_psSharedData,
+    builder.makeConstant(stageIdx, uint32_t(ir::LegacyTextureStageLayout::eBumpMat0))));
+  auto bumpEnvMat1 = builder.add(ir::Op::InputLoad(ir::BasicType(ir::ScalarType::eF32, 2u), m_psSharedData,
+    builder.makeConstant(stageIdx, uint32_t(ir::LegacyTextureStageLayout::eBumpMat1))));
 
   if (scalarType != ir::ScalarType::eF32) {
     bumpEnvMat0 = builder.add(ir::Op::ConsumeAs(ir::BasicType(scalarType, 2u), bumpEnvMat0));
@@ -871,7 +840,7 @@ bool Converter::handleBem(ir::Builder& builder, const Instruction& op) {
   /* Apply a fake bump environment-map transform. */
   dxbc_spv_assert(op.getSrcCount() == 2u);
   dxbc_spv_assert(op.hasDst());
-  dxbc_spv_assert(!!m_psSharedData);
+  dxbc_spv_assert(m_psSharedData);
 
   auto dst = op.getDst();
   auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
@@ -1198,24 +1167,22 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
          * m = dst index
          * n = src0 index
          * = sampled(t(m)) * (t(n).b * D3DTSS_BUMPENVLSCALE(stage m) + D3DTSS_BUMPENVLOFFSET(stage m)) */
-
-        auto descriptor = builder.add(ir::Op::DescriptorLoad(ir::ScalarType::eCbv, m_psSharedData, builder.makeConstant(0u)));
-        auto bumpEnvLScale = builder.add(ir::Op::BufferLoad(ir::BasicType(ir::ScalarType::eF32, 2u),
-          descriptor, builder.makeConstant(samplerIdx * 5u + 3u), 16u));
-        auto bumpEnvLOffset = builder.add(ir::Op::BufferLoad(ir::BasicType(ir::ScalarType::eF32, 2u),
-          descriptor, builder.makeConstant(samplerIdx * 5u + 2u), 8u));
+        auto bumpEnvLScale = builder.add(ir::Op::InputLoad(ir::ScalarType::eF32,
+          m_psSharedData, builder.makeConstant(samplerIdx, uint32_t(ir::LegacyTextureStageLayout::eBumpScale))));
+        auto bumpEnvLOffset = builder.add(ir::Op::InputLoad(ir::ScalarType::eF32,
+          m_psSharedData, builder.makeConstant(samplerIdx, uint32_t(ir::LegacyTextureStageLayout::eBumpOffset))));
 
         if (scalarType != ir::ScalarType::eF32) {
-          bumpEnvLScale = builder.add(ir::Op::ConsumeAs(ir::BasicType(scalarType, 2u), bumpEnvLScale));
-          bumpEnvLOffset = builder.add(ir::Op::ConsumeAs(ir::BasicType(scalarType, 2u), bumpEnvLOffset));
+          bumpEnvLScale = builder.add(ir::Op::ConsumeAs(scalarType, bumpEnvLScale));
+          bumpEnvLOffset = builder.add(ir::Op::ConsumeAs(scalarType, bumpEnvLOffset));
         }
 
         auto scale = builder.add(ir::Op::CompositeExtract(scalarType, src0, builder.makeConstant(2u)));
-        scale = builder.add(emitFMul(scalarType, scale, bumpEnvLScale));
-        scale = builder.add(ir::Op::FAdd(scalarType, scale, bumpEnvLOffset));
+        scale = builder.add(emitFMad(scalarType, scale, bumpEnvLScale, bumpEnvLOffset));
         scale = builder.add(ir::Op::FClamp(scalarType, scale, ir::makeTypedConstant(builder, scalarType, 0.0f), ir::makeTypedConstant(builder, scalarType, 1.0f)));
 
         std::array<ir::SsaDef, 4u> scaledComponents = {};
+
         for (uint32_t i = 0u; i < 4u; i++) {
           auto resultComponent = builder.add(ir::Op::CompositeExtract(scalarType, result, builder.makeConstant(i)));
           scaledComponents[i] = builder.add(emitFMul(scalarType, resultComponent, scale));
