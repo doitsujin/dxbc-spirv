@@ -539,6 +539,15 @@ Scope DivergenceAnalysis::determineScopeForBuiltIn(const Op& op) {
     case BuiltIn::eTessControlPointCountIn:
     case BuiltIn::eSampleCount:
     case BuiltIn::eTessFactorLimit:
+    case BuiltIn::eLegacyAlphaTest:
+    case BuiltIn::eLegacyFog:
+    case BuiltIn::eLegacyClipPlanes:
+    case BuiltIn::eLegacyPointArgs:
+    case BuiltIn::eLegacySamplerState:
+    case BuiltIn::eLegacyTextureStage:
+    case BuiltIn::eLegacyConstBool:
+    case BuiltIn::eLegacyConstInt:
+    case BuiltIn::eLegacyConstFloat:
       return Scope::eGlobal;
 
     /* Quads all compute the same sample in different pixels */

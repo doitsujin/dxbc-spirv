@@ -719,6 +719,50 @@ enum class BuiltIn : uint32_t {
   eTessFactorLimit    = 28u,
   /** Coordinate of a fragment within a point */
   ePointCoord         = 29u,
+  /** Alpha test parameters, laid out as follows:
+   *  - Alpha test comparison mode (u32)
+   *  - Alpha test precision bits (u32, 4 bits)
+   *  - Alpha reference value (u32, 8 bits) */
+  eLegacyAlphaTest    = 30u,
+  /** Fog parameters, laid out as follows:
+   *  - Fog enablement (bool)
+   *  - Fog mode for the current stage (u32)
+   *  - Fog color (vec3<f32>)
+   *  - Fog distance scale (f32)
+   *  - Fog distance end (f32)
+   *  - Fog density (f32) */
+  eLegacyFog          = 31u,
+  /** Clipping planes, laid out as follows:
+   *  - Number of enabled planes (u32)
+   *  - Actual plane parameters (six vec4<f32>) */
+  eLegacyClipPlanes   = 32u,
+  /** Point size parameters, laid out as follows:
+   *  - Point sprite mode enablement (bool)
+   *  - Point size render state (f32)
+   *  - Minimum point size (f32)
+   *  - Maximum point size (f32) */
+  eLegacyPointArgs    = 33u,
+  /** Bound sampler and texture parameters, as
+   *  an array of structures laid out as follows:
+   *  - Bound texture type (u32)
+   *  - Flag indicating whether depth compare should be used (bool)
+   *  - Flag indicating whether coordinates should be projected (bool)
+   *  - Flag indicating whether the bound texture is null (bool)
+   *  - Flag indicating whether gather instructions should be used (bool)
+   *  - Depth reference scaling factor (f32), usually 1.0 */
+  eLegacySamplerState = 34u,
+  /** Legacy fixed-function texture stage data required for certain
+   *  texture instructions. Array of structures laid out as follows:
+   *  - Bump matrix (two vec2<f32>)
+   *  - Bump scale (f32)
+   *  - Bump offset (f32) */
+  eLegacyTextureStage = 35u,
+  /** Legacy boolean constants, as an array of bools. */
+  eLegacyConstBool    = 36u,
+  /** Legacy integer constants, as an array of vec4<i32>. */
+  eLegacyConstInt     = 37u,
+  /** Legacy float constants, as an array of vec4<f32>. */
+  eLegacyConstFloat   = 38u,
 };
 
 

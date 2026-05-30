@@ -996,6 +996,15 @@ void SpirvBuilder::emitDclBuiltInIoVar(const ir::Op& op) {
         return spv::BuiltInTessLevelOuter;
 
       case ir::BuiltIn::eSampleCount:
+      case ir::BuiltIn::eLegacyAlphaTest:
+      case ir::BuiltIn::eLegacyFog:
+      case ir::BuiltIn::eLegacyClipPlanes:
+      case ir::BuiltIn::eLegacyPointArgs:
+      case ir::BuiltIn::eLegacySamplerState:
+      case ir::BuiltIn::eLegacyTextureStage:
+      case ir::BuiltIn::eLegacyConstBool:
+      case ir::BuiltIn::eLegacyConstInt:
+      case ir::BuiltIn::eLegacyConstFloat:
         /* must be lowered */
         break;
 

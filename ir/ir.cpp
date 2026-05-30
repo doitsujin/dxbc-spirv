@@ -500,6 +500,15 @@ std::ostream& operator << (std::ostream& os, const BuiltIn& builtIn) {
     case BuiltIn::ePointSize:           return os << "PointSize";
     case BuiltIn::eTessFactorLimit:     return os << "TessFactorLimit";
     case BuiltIn::ePointCoord:          return os << "PointCoord";
+    case BuiltIn::eLegacyAlphaTest:     return os << "LegacyAlphaTest";
+    case BuiltIn::eLegacyFog:           return os << "LegacyFog";
+    case BuiltIn::eLegacyClipPlanes:    return os << "LegacyClipPlanes";
+    case BuiltIn::eLegacyPointArgs:     return os << "LegacyPointArgs";
+    case BuiltIn::eLegacySamplerState:  return os << "LegacySamplerState";
+    case BuiltIn::eLegacyTextureStage:  return os << "LegacyTextureStage";
+    case BuiltIn::eLegacyConstBool:     return os << "ConstBool";
+    case BuiltIn::eLegacyConstInt:      return os << "ConstInt";
+    case BuiltIn::eLegacyConstFloat:    return os << "ConstFloat";
   }
 
   return os << "BuiltIn(" << uint32_t(builtIn) << ")";
