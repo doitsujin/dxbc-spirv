@@ -36,9 +36,6 @@ public:
      *  semantic names for I/O variables. */
     bool includeDebugNames = false;
 
-    /** Whether to emit named constant buffer aliases based on ctab. */
-    bool includeConstantNames = false;
-
     /** Whether the shader uses the software vertex processing
      * limits. Only applies to vertex shaders. */
     bool isSWVP = false;
