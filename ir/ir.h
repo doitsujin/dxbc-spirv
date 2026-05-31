@@ -296,7 +296,7 @@ class Type {
 public:
 
   static constexpr uint32_t MaxArrayDimensions = 3u;
-  static constexpr uint32_t MaxStructMembers = 128u;
+  static constexpr uint32_t MaxStructMembers = 512u;
 
   /** Initializes void type */
   Type() { }
