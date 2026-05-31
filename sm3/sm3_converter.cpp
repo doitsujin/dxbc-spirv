@@ -93,7 +93,7 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return true;
 
     case OpCode::eComment:
-      return handleComment(op);
+      return handleComment(builder, op);
 
     case OpCode::eDef:
     case OpCode::eDefI:
@@ -468,12 +468,14 @@ ir::SsaDef Converter::emitComparison(ir::Builder& builder, ir::SsaDef a, ir::Ssa
 }
 
 
-bool Converter::handleComment(const Instruction& op) {
+bool Converter::handleComment(ir::Builder& builder, const Instruction& op) {
   /* The comment is always at the start of the shader from what we've seen,
    * so no need to get extra clever here. */
   if (m_options.includeConstantNames && op.getOpCode() == OpCode::eComment && !m_ctab) {
     auto ctabReader = util::ByteReader(op.getCommentData(), op.getCommentDataSize());
     m_ctab = ConstantTable(ctabReader);
+
+    m_resources.emitConstantNames(builder, m_ctab);
   }
 
   return true;
