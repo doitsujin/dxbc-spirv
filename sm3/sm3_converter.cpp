@@ -413,10 +413,11 @@ ir::SsaDef Converter::applyBumpMapping(ir::Builder& builder, uint32_t stageIdx, 
     auto bumpEnv1 = ir::extractFromVector(builder, bumpEnvMat1, i);
     auto bumped1 = builder.add(emitFMul(scalarType, bumpEnv1, src1g));
 
-    auto bumpedSum = builder.add(ir::Op::FAdd(scalarType, bumped0, bumped1));
-    auto src0Component = ir::extractFromVector(builder, src0, i);
+    auto bumpedSum = ir::extractFromVector(builder, src0, i);
+    bumpedSum = builder.add(ir::Op::FAdd(scalarType, bumpedSum, bumped0));
+    bumpedSum = builder.add(ir::Op::FAdd(scalarType, bumpedSum, bumped1));
 
-    components[i] = builder.add(ir::Op::FAdd(scalarType, src0Component, bumpedSum));
+    components[i] = bumpedSum;
   }
 
   return buildVector(builder, scalarType, components.size(), components.data());
