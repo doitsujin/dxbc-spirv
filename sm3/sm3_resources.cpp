@@ -191,6 +191,37 @@ void ResourceMap::emitImmediateConstant(
 }
 
 
+void ResourceMap::emitConstantNames(
+        ir::Builder&            builder,
+  const ConstantTable&          ctab) {
+  for (const auto& e : ctab.entries()) {
+    auto setIndex = uint32_t(e.registerSet);
+
+    /* Shouldn't happen, not fatal */
+    if (setIndex >= m_constants.size() || !e.count || e.name.empty())
+      continue;
+
+    /* Don't evaluate debug names for out-of-bounds constants */
+    const auto& input = builder.getOp(m_constants.at(setIndex).inputDef);
+
+    if (e.index + e.count > input.getType().getArraySize(0u))
+      continue;
+
+    if (e.count == 1u) {
+      /* Trivial case, use name as-is and avoid a temporary copy */
+      builder.add(ir::Op::DebugMemberName(input.getDef(), e.index, e.name.c_str()));
+    } else {
+      /* Otherwise, append the index to the name to
+       * distinguish matrix rows or array elements. */
+      for (uint32_t i = 0u; i < e.count; i++) {
+        auto name = e.name + std::to_string(i);
+        builder.add(ir::Op::DebugMemberName(input.getDef(), e.index + i, name.c_str()));
+      }
+    }
+  }
+}
+
+
 ir::SsaDef ResourceMap::emitSample(
             ir::Builder&   builder,
             uint32_t       samplerIndex,

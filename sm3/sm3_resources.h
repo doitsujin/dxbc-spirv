@@ -114,6 +114,11 @@ public:
           uint32_t index,
     const Operand& imm);
 
+  /** Emits debug names for all known constants */
+  void emitConstantNames(
+          ir::Builder&            builder,
+    const ConstantTable&          ctab);
+
 private:
 
   Converter& m_converter;
