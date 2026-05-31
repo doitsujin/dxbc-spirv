@@ -17,9 +17,52 @@ void RemoveUnusedPass::run() {
   /* Gather ops that are unused as-is */
   std::vector<SsaDef> ops;
 
+  auto currFn = ir::SsaDef();
+  auto currFnHasSideEffects = false;
+
   for (const auto& op : m_builder) {
-    if (canRemoveOp(op))
-      ops.push_back(op.getDef());
+    switch (op.getOpCode()) {
+      case OpCode::eFunction: {
+        currFn = op.getDef();
+      } break;
+
+      case OpCode::eFunctionEnd: {
+        m_functionsWithSideEffects.emplace_back(currFn, currFnHasSideEffects);
+
+        currFn = ir::SsaDef();
+        currFnHasSideEffects = false;
+      } break;
+
+      /* Skip control flow since we cannot optimize it away, but it
+       * also does not strictly have side effects for functions. */
+      case OpCode::eLabel:
+      case OpCode::eBranch:
+      case OpCode::eBranchConditional:
+      case OpCode::eSwitch:
+      case OpCode::eUnreachable:
+      case OpCode::eReturn:
+      case OpCode::eScopedIf:
+      case OpCode::eScopedElse:
+      case OpCode::eScopedEndIf:
+      case OpCode::eScopedLoop:
+      case OpCode::eScopedLoopBreak:
+      case OpCode::eScopedLoopContinue:
+      case OpCode::eScopedEndLoop:
+      case OpCode::eScopedSwitch:
+      case OpCode::eScopedSwitchCase:
+      case OpCode::eScopedSwitchDefault:
+      case OpCode::eScopedSwitchBreak:
+      case OpCode::eScopedEndSwitch:
+        break;
+
+      default: {
+        if (!currFnHasSideEffects)
+          currFnHasSideEffects = hasSideEffect(op);
+
+        if (canRemoveOp(op))
+          ops.push_back(op.getDef());
+      }
+    }
   }
 
   /* Recursively remove unused operations and any of their
@@ -117,7 +160,7 @@ bool RemoveUnusedPass::canRemoveOp(const Op& op) const {
       return false;
   }
 
-  return !hasSideEffect(op.getOpCode());
+  return !hasSideEffect(op);
 }
 
 
@@ -137,13 +180,29 @@ void RemoveUnusedPass::removeOp(SsaDef def) {
 }
 
 
-bool RemoveUnusedPass::hasSideEffect(OpCode opCode) {
-  switch (opCode) {
+bool RemoveUnusedPass::functionHasSideEffects(const Op& op) const {
+  for (const auto& e : m_functionsWithSideEffects) {
+    if (e.first == op.getDef())
+      return e.second;
+  }
+
+  /* Be conservative and assume that any function we
+   * haven't encountered yet cannot be optimized away */
+  return true;
+}
+
+
+bool RemoveUnusedPass::hasSideEffect(const Op& op) const {
+  switch (op.getOpCode()) {
     /* Invalid opcodes */
     case OpCode::eUnknown:
     case OpCode::eLastDeclarative:
     case OpCode::Count:
       break;
+
+    /* Keep calls if they may have side effects */
+    case OpCode::eFunctionCall:
+      return functionHasSideEffects(m_builder.getOpForOperand(op, 0u));
 
     /* Debug instructions for instructions that may be in use. We remove these
      * explicitly when removing instructions that are actually not in use. */
@@ -170,9 +229,6 @@ bool RemoveUnusedPass::hasSideEffect(OpCode opCode) {
     case OpCode::eDclXfb:
     case OpCode::eFunction:
     case OpCode::eFunctionEnd:
-
-    /* Keep calls since functions may have side effects */
-    case OpCode::eFunctionCall:
 
     /* Structured control flow instructions */
     case OpCode::eLabel:

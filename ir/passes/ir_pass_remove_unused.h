@@ -44,11 +44,15 @@ private:
 
   Builder& m_builder;
 
+  small_vector<std::pair<ir::SsaDef, bool>, 64u> m_functionsWithSideEffects;
+
   bool canRemoveOp(const Op& op) const;
 
   void removeOp(SsaDef def);
 
-  static bool hasSideEffect(OpCode opCode);
+  bool functionHasSideEffects(const Op& op) const;
+
+  bool hasSideEffect(const Op& op) const;
 
 };
 
