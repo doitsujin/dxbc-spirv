@@ -46,7 +46,9 @@ void FunctionCleanupPass::runResolveSharedTempPass(Builder& builder) {
 }
 
 
-void FunctionCleanupPass::removeUnusedParameters() {
+bool FunctionCleanupPass::removeUnusedParameters() {
+  bool progress = false;
+
   std::unordered_set<ParamEntry, ParamEntryHash> usedParams;
   std::set<SsaDef> functions;
 
@@ -134,12 +136,15 @@ void FunctionCleanupPass::removeUnusedParameters() {
     }
 
     m_builder.rewriteOp(function, std::move(newFunctionOp));
+    progress = true;
   }
+
+  return progress;
 }
 
 
-void FunctionCleanupPass::runRemoveParameterPass(Builder& builder) {
-  FunctionCleanupPass(builder).removeUnusedParameters();
+bool FunctionCleanupPass::runRemoveParameterPass(Builder& builder) {
+  return FunctionCleanupPass(builder).removeUnusedParameters();
 }
 
 

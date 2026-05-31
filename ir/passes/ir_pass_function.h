@@ -31,9 +31,9 @@ public:
   static void runResolveSharedTempPass(Builder& builder);
 
   /* Removes unused parameters and return values from functions */
-  void removeUnusedParameters();
+  bool removeUnusedParameters();
 
-  static void runRemoveParameterPass(Builder& builder);
+  static bool runRemoveParameterPass(Builder& builder);
 
 private:
 
