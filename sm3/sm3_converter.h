@@ -70,6 +70,7 @@ private:
 
   ir::SsaDef       m_alphaTestFunction;
   ir::SsaDef       m_fogFunction = { };
+  ir::SsaDef       m_fogInput = { };
   ir::SsaDef       m_clippingFunction = { };
 
   uint32_t m_instructionCount = 0u;
