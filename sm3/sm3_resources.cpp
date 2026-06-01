@@ -492,6 +492,16 @@ ir::SsaDef ResourceMap::emitSampleImageFunction(
   auto function = builder.addBefore(builder.getCode().first->getDef(), std::move(functionOp));
   auto cursor = builder.setCursor(function);
 
+  /* If the sampler is unbound, return (0,0,0,1). We cannot rely on
+   * null descriptors here since those would return 0 in alpha. */
+  auto isNull = loadSamplerState(builder, samplerIndex, ir::LegacySamplerStateLayout::eIsNull);
+
+  auto ifNull = builder.add(ir::Op::ScopedIf(ir::SsaDef(), isNull));
+  builder.add(ir::Op::Return(vec4FType, builder.makeConstant(0.0f, 0.0f, 0.0f, 1.0f)));
+  builder.rewriteOp(ifNull, ir::Op(builder.getOp(ifNull)).setOperand(0u,
+    builder.add(ir::Op::ScopedEndIf(ifNull))));
+
+  /* Emit the actual sampling code */
   auto texCoord = builder.add(ir::Op::ParamLoad(vec4FType, function, texCoordParam));
   auto lod = lodParam ? builder.add(ir::Op::ParamLoad(ir::ScalarType::eF32, function, lodParam)) : ir::SsaDef();
   auto lodBias = lodBiasParam ? builder.add(ir::Op::ParamLoad(ir::ScalarType::eF32, function, lodBiasParam)) : ir::SsaDef();
@@ -511,18 +521,12 @@ ir::SsaDef ResourceMap::emitSampleImageFunction(
     auto descriptor = builder.add(ir::Op::DescriptorLoad(ir::ScalarType::eSrv,
       samplerInfo.textureDefs[uint32_t(textureType)], builder.makeConstant(0u)));
 
-    builder.add(ir::Op::Return(ir::BasicType(ir::ScalarType::eF32, 4u),
-      emitSampleColorOrDref(builder, texCoord, textureType, samplerIndex, descriptor, sampler, lod, lodBias, dx, dy)));
+    emitSampleColorOrDref(builder, texCoord, textureType,
+      samplerIndex, descriptor, sampler, lod, lodBias, dx, dy);
   } else {
     /* Shader model 1 does not require declaring samplers/textures with a DCL instruction.
      * We emit a switch() block with one case for each texture type. Decide based on sampler state. */
-    auto resultTmp = builder.add(ir::Op::DclTmp(ir::BasicType(ir::ScalarType::eF32, 4u), m_converter.getEntryPoint()));
-    builder.add(ir::Op::TmpStore(resultTmp, ir::broadcastScalar(builder, builder.makeConstant(0.0f), ComponentBit::eAll)));
-
-    /* Load spec constant. */
-    auto samplerType = loadSamplerState(builder,
-      samplerIndex, ir::LegacySamplerStateLayout::eTextureType);
-
+    auto samplerType = loadSamplerState(builder, samplerIndex, ir::LegacySamplerStateLayout::eTextureType);
     auto textureTypeSwitch = builder.add(ir::Op::ScopedSwitch(ir::SsaDef(), samplerType));
 
     /* Emit a switch case for each texture type. */
@@ -533,19 +537,14 @@ ir::SsaDef ResourceMap::emitSampleImageFunction(
         samplerInfo.textureDefs[i],
         builder.makeConstant(0u)));
 
-      auto typeResult = emitSampleColorOrDref(builder, texCoord, SamplerStateType(i),
+      emitSampleColorOrDref(builder, texCoord, SamplerStateType(i),
         samplerIndex, descriptor, sampler, lod, lodBias, dx, dy);
 
-      builder.add(ir::Op::TmpStore(resultTmp, typeResult));
       builder.add(ir::Op::ScopedSwitchBreak(textureTypeSwitch));
     }
 
     auto textureTypeSwitchEnd = builder.add(ir::Op::ScopedEndSwitch(textureTypeSwitch));
     builder.rewriteOp(textureTypeSwitch, ir::Op(builder.getOp(textureTypeSwitch)).setOperand(0u, textureTypeSwitchEnd));
-
-    /* Return whatever value we loaded in the texture type switch. */
-    auto returnVal = builder.add(ir::Op::TmpLoad(ir::BasicType(ir::ScalarType::eF32, 4u), resultTmp));
-    builder.add(ir::Op::Return(ir::BasicType(ir::ScalarType::eF32, 4u), returnVal));
   }
 
   builder.add(ir::Op::FunctionEnd());
@@ -581,7 +580,6 @@ ir::SsaDef ResourceMap::emitSampleImageFunction(
     if (config & SamplingConfigBit::eExplicitDerivatives)
       nameStream << "_grad";
 
-
     std::string name = nameStream.str();
     builder.add(ir::Op::DebugName(function, name.c_str()));
   }
@@ -591,45 +589,36 @@ ir::SsaDef ResourceMap::emitSampleImageFunction(
 }
 
 
-ir::SsaDef ResourceMap::emitSampleColorOrDref(
-  ir::Builder& builder,
-  ir::SsaDef texCoord,
-  SamplerStateType textureType,
-  uint32_t samplerIndex,
-  ir::SsaDef descriptor,
-  ir::SsaDef sampler,
-  ir::SsaDef lod,
-  ir::SsaDef lodBias,
-  ir::SsaDef dx,
-  ir::SsaDef dy) {
+void ResourceMap::emitSampleColorOrDref(
+        ir::Builder&      builder,
+        ir::SsaDef        texCoord,
+        SamplerStateType  textureType,
+        uint32_t          samplerIndex,
+        ir::SsaDef        descriptor,
+        ir::SsaDef        sampler,
+        ir::SsaDef        lod,
+        ir::SsaDef        lodBias,
+        ir::SsaDef        dx,
+        ir::SsaDef        dy) {
   if (textureType != SamplerStateType::eTexture3D) {
-    auto resultTmp = builder.add(ir::Op::DclTmp(ir::BasicType(ir::ScalarType::eF32, 4u), m_converter.getEntryPoint()));
-
     auto isDepth = loadSamplerState(builder, samplerIndex,
       ir::LegacySamplerStateLayout::eUseDepthCompare);
 
-    /* if (samplerState[idx].useDepthCompare) */
+    /* if (isDepth) return sampleDref(...); */
     auto isDepthIf = builder.add(ir::Op::ScopedIf(ir::SsaDef(), isDepth));
-    auto depthResult = emitSampleDref(builder, texCoord, textureType, samplerIndex, descriptor, sampler, lod, lodBias, dx, dy);
-    builder.add(ir::Op::TmpStore(resultTmp, depthResult));
+    emitSampleDref(builder, texCoord, textureType, samplerIndex,
+      descriptor, sampler, lod, lodBias, dx, dy);
 
-    /* else */
-    builder.add(ir::Op::ScopedElse(isDepthIf));
-    auto colorResult = emitSampleColorImageType(builder, texCoord, textureType, samplerIndex, descriptor, sampler, lod, lodBias, dx, dy);
-    builder.add(ir::Op::TmpStore(resultTmp, colorResult));
-
-    /* endif */
     auto isDepthEnd = builder.add(ir::Op::ScopedEndIf(isDepthIf));
     builder.rewriteOp(isDepthIf, ir::Op(builder.getOp(isDepthIf)).setOperand(0u, isDepthEnd));
-
-    return builder.add(ir::Op::TmpLoad(ir::BasicType(ir::ScalarType::eF32, 4u), resultTmp));
-  } else {
-    return emitSampleColorImageType(builder, texCoord, textureType, samplerIndex, descriptor, sampler, lod, lodBias, dx, dy);
   }
+
+  /* return sampleColor(...) */
+  emitSampleColorImageType(builder, texCoord, textureType, samplerIndex, descriptor, sampler, lod, lodBias, dx, dy);
 }
 
 
-ir::SsaDef ResourceMap::emitSampleColorImageType(
+void ResourceMap::emitSampleColorImageType(
   ir::Builder& builder,
   ir::SsaDef texCoord,
   SamplerStateType textureType,
@@ -640,12 +629,15 @@ ir::SsaDef ResourceMap::emitSampleColorImageType(
   ir::SsaDef lodBias,
   ir::SsaDef dx,
   ir::SsaDef dy) {
+  /* Declare result variable */
+  auto colorType = ir::BasicType(ir::ScalarType::eF32, 4u);
+
+  /* Extract exact number of texture coordinates required */
   uint32_t texCoordComponentCount = textureType == SamplerStateType::eTexture2D ? 2u : 3u;
   std::array<ir::SsaDef, 4u> texCoordComponents;
 
-  for (uint32_t i = 0u; i < texCoordComponentCount; i++) {
+  for (uint32_t i = 0u; i < texCoordComponentCount; i++)
     texCoordComponents[i] = ir::extractFromVector(builder, texCoord, i);
-  }
 
   auto sizedTexCoord = buildVector(builder, ir::ScalarType::eF32, texCoordComponentCount, texCoordComponents.data());
 
@@ -666,20 +658,14 @@ ir::SsaDef ResourceMap::emitSampleColorImageType(
     sizedDy = buildVector(builder, ir::ScalarType::eF32, texCoordComponentCount, dyComponents.data());
   }
 
-  auto color = builder.add(ir::Op::ImageSample(
-    ir::BasicType(ir::ScalarType::eF32, 4u),
-    descriptor, sampler, ir::SsaDef(), sizedTexCoord,
-    ir::SsaDef(), lod, lodBias, ir::SsaDef(),
-    sizedDx, sizedDy, ir::SsaDef() ));
-
-  /* Fetch4
-   * D3D9 does support gather on 3D but we cannot :< */
+  /* Emit fetch4 block for 2D and cube in PS. It's not a thing in VS. */
   if (m_converter.getShaderInfo().getType() == ShaderType::ePixel && textureType != SamplerStateType::eTexture3D) {
-    /* Load the spec constant that tells us if fetch4 (gather) is enabled for the sampler. */
-    auto fetch4Enabled = loadSamplerState(builder, samplerIndex,
-      ir::LegacySamplerStateLayout::eUseGather);
+    auto fetch4Enabled = loadSamplerState(builder, samplerIndex, ir::LegacySamplerStateLayout::eUseGather);
+    auto ifFetch4 = builder.add(ir::Op::ScopedIf(ir::SsaDef(), fetch4Enabled));
 
     /* Account for half texel offset */
+    auto fetch4Coord = sizedTexCoord;
+
     if (textureType == SamplerStateType::eTexture2D) {
       /* Doesn't really work for cubes...
        * Nothing probably relies on that though.
@@ -707,46 +693,39 @@ ir::SsaDef ResourceMap::emitSampleColorImageType(
       auto invTextureSize = builder.add(ir::Op::FDiv(textureSizeType, numeratorVec, textureSizeF));
 
       /* texcoord += invTextureSize */
-      sizedTexCoord = builder.add(ir::Op::FAdd(textureSizeType, sizedTexCoord, invTextureSize));
+      fetch4Coord = builder.add(ir::Op::FAdd(textureSizeType, sizedTexCoord, invTextureSize));
     }
 
-    auto fetch4Val = builder.add(ir::Op::ImageGather(
-      ir::BasicType(ir::ScalarType::eF32, 4u),
-      descriptor, sampler, ir::SsaDef(), sizedTexCoord,
-      ir::SsaDef(), ir::SsaDef(), 0u ));
+    auto fetch4Val = builder.add(ir::Op::ImageGather(colorType, descriptor,
+      sampler, ir::SsaDef(), fetch4Coord, ir::SsaDef(), ir::SsaDef(), 0u));
 
     /* Shuffle the vector to match the funny D3D9 order: B R G A */
     fetch4Val = swizzleVector(builder, fetch4Val, Swizzle(Component::eZ, Component::eX, Component::eY, Component::eW), WriteMask(ComponentBit::eAll));
+    builder.add(ir::Op::Return(colorType, fetch4Val));
 
-    /* Use Fetch4 value if spec constant bit is set and regular sampled color if not. */
-    color = builder.add(ir::Op::Select(ir::BasicType(ir::ScalarType::eF32, 4u),
-    broadcastScalar(builder, fetch4Enabled, WriteMask(ComponentBit::eAll)),
-    fetch4Val, color));
+    builder.rewriteOp(ifFetch4, ir::Op(builder.getOp(ifFetch4)).setOperand(0u,
+      builder.add(ir::Op::ScopedEndIf(ifFetch4))));
   }
 
-  /* Load the spec constant that tells us if the texture is unbound. */
-  auto isNull = loadSamplerState(builder, samplerIndex,
-    ir::LegacySamplerStateLayout::eIsNull);
-
-  return builder.add(ir::Op::Select(
-    ir::BasicType(ir::ScalarType::eF32, 4u),
-    broadcastScalar(builder, isNull, WriteMask(ComponentBit::eAll)),
-    builder.makeConstant(0.0f, 0.0f, 0.0f, 1.0f),
-    color));
+  /* Emit regular texture sample */
+  auto color = builder.add(ir::Op::ImageSample(colorType,
+    descriptor, sampler, ir::SsaDef(), sizedTexCoord, ir::SsaDef(), lod, lodBias,
+    ir::SsaDef(), sizedDx, sizedDy, ir::SsaDef()));
+  builder.add(ir::Op::Return(colorType, color));
 }
 
 
-ir::SsaDef ResourceMap::emitSampleDref(
-  ir::Builder &builder,
-  ir::SsaDef texCoord,
-  SamplerStateType textureType,
-  uint32_t samplerIndex,
-  ir::SsaDef descriptor,
-  ir::SsaDef sampler,
-  ir::SsaDef lod,
-  ir::SsaDef lodBias,
-  ir::SsaDef dx,
-  ir::SsaDef dy) {
+void ResourceMap::emitSampleDref(
+        ir::Builder&      builder,
+        ir::SsaDef        texCoord,
+        SamplerStateType  textureType,
+        uint32_t          samplerIndex,
+        ir::SsaDef        descriptor,
+        ir::SsaDef        sampler,
+        ir::SsaDef        lod,
+        ir::SsaDef        lodBias,
+        ir::SsaDef        dx,
+        ir::SsaDef        dy) {
   /* We don't check for NULL here because if there's no texture bound, we always end up in the color path. */
   uint32_t texCoordComponentCount = textureType == SamplerStateType::eTexture2D ? 2u : 3u;
   auto reference = ir::extractFromVector(builder, texCoord, texCoordComponentCount);
@@ -788,13 +767,11 @@ ir::SsaDef ResourceMap::emitSampleDref(
     sizedDy = buildVector(builder, ir::ScalarType::eF32, texCoordComponentCount, dyComponents.data());
   }
 
-  auto drefResult = builder.add(ir::Op::ImageSample(
-    ir::ScalarType::eF32, descriptor, sampler,
-    ir::SsaDef(), sizedTexCoord, ir::SsaDef(),
-    lod, lodBias, ir::SsaDef(),
-    sizedDx, sizedDy, reference));
-
-  return broadcastScalar(builder, drefResult, WriteMask(ComponentBit::eAll));
+  auto drefResult = builder.add(ir::Op::ImageSample(ir::ScalarType::eF32,
+    descriptor, sampler, ir::SsaDef(), sizedTexCoord, ir::SsaDef(),
+    lod, lodBias, ir::SsaDef(), sizedDx, sizedDy, reference));
+  drefResult = broadcastScalar(builder, drefResult, WriteMask(ComponentBit::eAll));
+  builder.add(ir::Op::Return(ir::BasicType(ir::ScalarType::eF32, 4u), drefResult));
 }
 
 
