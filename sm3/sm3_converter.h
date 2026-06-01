@@ -35,13 +35,17 @@ public:
      *  includes resources, scratch and shared variables, as well as
      *  semantic names for I/O variables. */
     bool includeDebugNames = false;
-
     /** Whether the shader uses the software vertex processing
-     * limits. Only applies to vertex shaders. */
+     *  limits. Must only be set for vertex shaders. */
     bool isSWVP = false;
-
-    /** Whether D3D9 fmulz floats are emulated by strategically clamping in the right spots. */
+    /** Whether D3D9 fmulz floats are emulated by strategically clamping
+     *  in the right spots. Resulting code may be faster on some GPUs,
+     *  but there is a risk of not handling certain NaN cases correctly. */
     bool fastFloatEmulation = false;
+    /** Whether to determine texture sampling paths based on the bound
+     *  texture type rather than the shader declaration in Shader Model 2
+     *  and 3 content. Must only be enabled for pixel shaders. */
+    bool forceDynamicTextureType = false;
   };
 
   Converter(util::ByteReader code, const Options& options);

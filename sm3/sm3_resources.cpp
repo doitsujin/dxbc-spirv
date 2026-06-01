@@ -337,6 +337,9 @@ bool ResourceMap::handleDclSampler(ir::Builder& builder, const Instruction& op) 
 
   dxbc_spv_assert(dst.getRegisterType() == RegisterType::eSampler);
 
+  if (m_converter.getOptions().forceDynamicTextureType)
+    return dclSamplerAndAllTextureTypes(builder, samplerIndex);
+
   SamplerStateType textureType = samplerStateTypeFromTextureType(dcl.getTextureType());
 
   auto sampler = dclSampler(builder, samplerIndex);
@@ -440,9 +443,9 @@ ir::SsaDef ResourceMap::dclTexture(ir::Builder& builder, SamplerStateType textur
 
 
 ir::SsaDef ResourceMap::emitSampleImageFunction(
-  ir::Builder &builder,
-  uint32_t samplerIndex,
-  SamplingConfig config) {
+        ir::Builder&      builder,
+        uint32_t          samplerIndex,
+        SamplingConfig    config) {
   auto vec4FType = ir::BasicType(ir::ScalarType::eF32, 4u);
   auto functionOp = ir::Op::Function(vec4FType);
 
@@ -512,7 +515,7 @@ ir::SsaDef ResourceMap::emitSampleImageFunction(
   dxbc_spv_assert(samplerInfo.regIndex == samplerIndex);
   auto sampler = builder.add(ir::Op::DescriptorLoad(ir::ScalarType::eSampler, samplerInfo.samplerDef, builder.makeConstant(0u)));
 
-  if (m_converter.getShaderInfo().getVersion().first >= 2) {
+  if (m_converter.getShaderInfo().getVersion().first >= 2 && !m_converter.getOptions().forceDynamicTextureType) {
     /* Shader model 2+ requires declaring samplers/textures with a DCL instruction first. */
     dxbc_spv_assert(samplerInfo.textureType.has_value());
 
@@ -524,6 +527,8 @@ ir::SsaDef ResourceMap::emitSampleImageFunction(
     emitSampleColorOrDref(builder, texCoord, textureType,
       samplerIndex, descriptor, sampler, lod, lodBias, dx, dy);
   } else {
+    dxbc_spv_assert(m_converter.getShaderInfo().getType() == ShaderType::ePixel);
+
     /* Shader model 1 does not require declaring samplers/textures with a DCL instruction.
      * We emit a switch() block with one case for each texture type. Decide based on sampler state. */
     auto samplerType = loadSamplerState(builder, samplerIndex, ir::LegacySamplerStateLayout::eTextureType);
