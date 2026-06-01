@@ -466,15 +466,8 @@ void IoMap::emitIoVarDefault(
         builder.add(ir::Op::TmpStore(ioVar.tempDefs[i], builder.makeConstant(i == 3u ? 1.0f : 0.0f)));
       }
     } else if (ioVar.semantic.usage == SemanticUsage::ePointSize) {
-      auto pointSize = builder.add(ir::Op::InputLoad(ir::ScalarType::eF32, m_pointArgs,
-        builder.makeConstant(uint32_t(ir::LegacyPointArgsLayout::ePointSize))));
-      auto pointSizeMin = builder.add(ir::Op::InputLoad(ir::ScalarType::eF32, m_pointArgs,
-        builder.makeConstant(uint32_t(ir::LegacyPointArgsLayout::ePointSizeMin))));
-      auto pointSizeMax = builder.add(ir::Op::InputLoad(ir::ScalarType::eF32, m_pointArgs,
-        builder.makeConstant(uint32_t(ir::LegacyPointArgsLayout::ePointSizeMax))));
-
-      auto finalSize = builder.add(ir::Op::FClamp(ir::ScalarType::eF32, pointSize, pointSizeMin, pointSizeMax));
-      builder.add(ir::Op::TmpStore(ioVar.tempDefs[0], finalSize));
+      /* Take point size from render state */
+      builder.add(ir::Op::TmpStore(ioVar.tempDefs[0], emitDefaultPointSize(builder)));
     } else if (ioVar.semantic == Semantic { SemanticUsage::eFog, 0u }) {
       /* The default for fog is 1.0 */
       builder.add(ir::Op::TmpStore(ioVar.tempDefs[0u], builder.makeConstant(1.0f)));
@@ -1132,21 +1125,35 @@ ir::SsaDef IoMap::emitDynamicStoreFunction(ir::Builder& builder) const {
 
 
 void IoMap::flushOutputs(ir::Builder& builder) {
+  bool needsPointSize = m_converter.getShaderInfo().getType() == ShaderType::eVertex;
+
   for (const auto& variable : m_variables) {
     if (!variable.tempDefs[0u])
       continue;
 
     auto op = builder.getOp(variable.baseDef);
 
-    if (op.getOpCode() != ir::OpCode::eDclOutput && op.getOpCode() != ir::OpCode::eDclOutputBuiltIn)
+    if (op.getOpCode() != ir::OpCode::eDclOutput &&
+        op.getOpCode() != ir::OpCode::eDclOutputBuiltIn)
       continue;
+
+    if (op.getOpCode() == ir::OpCode::eDclOutputBuiltIn &&
+        ir::BuiltIn(op.getOperand(op.getFirstLiteralOperandIndex())) == ir::BuiltIn::ePointSize)
+      needsPointSize = false;
 
     auto baseType = variable.baseType.getBaseType(0u);
 
     for (uint32_t i = 0u; i < baseType.getVectorSize(); i++) {
       auto temp = builder.add(ir::Op::TmpLoad(variable.baseType, variable.tempDefs[i]));
-      builder.add(ir::Op::OutputStore(variable.baseDef, baseType.getVectorSize() > 1u ? builder.makeConstant(i) : ir::SsaDef(), temp));
+      builder.add(ir::Op::OutputStore(op.getDef(), baseType.getVectorSize() > 1u ? builder.makeConstant(i) : ir::SsaDef(), temp));
     }
+  }
+
+  /* If shader doesn't export point size, export the render state */
+  if (needsPointSize) {
+    auto pointSize = builder.add(ir::Op::DclOutputBuiltIn(ir::ScalarType::eF32,
+      m_converter.getEntryPoint(), ir::BuiltIn::ePointSize));
+    builder.add(ir::Op::OutputStore(pointSize, ir::SsaDef(), emitDefaultPointSize(builder)));
   }
 }
 
@@ -1224,6 +1231,17 @@ ir::SsaDef IoMap::emitPointArgs(ir::Builder& builder) {
   }
 
   return input;
+}
+
+
+ir::SsaDef IoMap::emitDefaultPointSize(ir::Builder& builder) {
+  auto pointSize = builder.add(ir::Op::InputLoad(ir::ScalarType::eF32, m_pointArgs,
+    builder.makeConstant(uint32_t(ir::LegacyPointArgsLayout::ePointSize))));
+  auto pointSizeMin = builder.add(ir::Op::InputLoad(ir::ScalarType::eF32, m_pointArgs,
+    builder.makeConstant(uint32_t(ir::LegacyPointArgsLayout::ePointSizeMin))));
+  auto pointSizeMax = builder.add(ir::Op::InputLoad(ir::ScalarType::eF32, m_pointArgs,
+    builder.makeConstant(uint32_t(ir::LegacyPointArgsLayout::ePointSizeMax))));
+  return builder.add(ir::Op::FClamp(ir::ScalarType::eF32, pointSize, pointSizeMin, pointSizeMax));
 }
 
 
