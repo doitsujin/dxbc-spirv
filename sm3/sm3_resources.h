@@ -133,49 +133,45 @@ private:
   ir::SsaDef dclTexture(ir::Builder& builder, SamplerStateType textureType, uint32_t samplerIndex);
 
   ir::SsaDef emitSampleImageFunction(
-    ir::Builder& builder,
-    uint32_t samplerIndex,
-    SamplingConfig config
-  );
+          ir::Builder&      builder,
+          uint32_t          samplerIndex,
+          SamplingConfig    config);
 
-  ir::SsaDef emitSampleColorOrDref(
-    ir::Builder& builder,
-    ir::SsaDef texCoord,
-    SamplerStateType textureType,
-    uint32_t samplerIndex,
-    ir::SsaDef descriptor,
-    ir::SsaDef sampler,
-    ir::SsaDef lod,
-    ir::SsaDef lodBias,
-    ir::SsaDef dx,
-    ir::SsaDef dy
-  );
+  void emitSampleColorOrDref(
+          ir::Builder&      builder,
+          ir::SsaDef        texCoord,
+          SamplerStateType  textureType,
+          uint32_t          samplerIndex,
+          ir::SsaDef        descriptor,
+          ir::SsaDef        sampler,
+          ir::SsaDef        lod,
+          ir::SsaDef        lodBias,
+          ir::SsaDef        dx,
+          ir::SsaDef        dy);
 
-  ir::SsaDef emitSampleColorImageType(
-    ir::Builder& builder,
-    ir::SsaDef texCoord,
-    SamplerStateType textureType,
-    uint32_t samplerIndex,
-    ir::SsaDef descriptor,
-    ir::SsaDef sampler,
-    ir::SsaDef lod,
-    ir::SsaDef lodBias,
-    ir::SsaDef dx,
-    ir::SsaDef dy
-  );
+  void emitSampleColorImageType(
+          ir::Builder&      builder,
+          ir::SsaDef        texCoord,
+          SamplerStateType  textureType,
+          uint32_t          samplerIndex,
+          ir::SsaDef        descriptor,
+          ir::SsaDef        sampler,
+          ir::SsaDef        lod,
+          ir::SsaDef        lodBias,
+          ir::SsaDef        dx,
+          ir::SsaDef        dy);
 
-  ir::SsaDef emitSampleDref(
-    ir::Builder& builder,
-    ir::SsaDef texCoord,
-    SamplerStateType textureType,
-    uint32_t samplerIndex,
-    ir::SsaDef descriptor,
-    ir::SsaDef sampler,
-    ir::SsaDef lod,
-    ir::SsaDef lodBias,
-    ir::SsaDef dx,
-    ir::SsaDef dy
-  );
+  void emitSampleDref(
+          ir::Builder&      builder,
+          ir::SsaDef        texCoord,
+          SamplerStateType  textureType,
+          uint32_t          samplerIndex,
+          ir::SsaDef        descriptor,
+          ir::SsaDef        sampler,
+          ir::SsaDef        lod,
+          ir::SsaDef        lodBias,
+          ir::SsaDef        dx,
+          ir::SsaDef        dy);
 
   ir::SsaDef emitSamplerState(ir::Builder& builder);
 
