@@ -216,6 +216,9 @@ private:
   /** Emits built-in point scaling arguments */
   ir::SsaDef emitPointArgs(ir::Builder& builder);
 
+  /** Computes default point size calculation based on render state */
+  ir::SsaDef emitDefaultPointSize(ir::Builder& builder);
+
   void emitDebugName(
     ir::Builder& builder,
     ir::SsaDef def,
