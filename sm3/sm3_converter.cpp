@@ -1022,9 +1022,8 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
       ir::SsaDef lodBias = ir::SsaDef();
       ir::SsaDef lod = ir::SsaDef();
 
-      if (getShaderInfo().getType() == ShaderType::eVertex) {
+      if (getShaderInfo().getType() == ShaderType::eVertex)
         lod = builder.makeConstant(0u);
-      }
 
       if (getShaderInfo().getVersion().first <= 1u) {
         dxbc_spv_assert(getShaderInfo().getType() == ShaderType::ePixel);
@@ -1137,9 +1136,11 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
       auto depth = builder.add(ir::Op::Select(scalarType, isZero,
         makeTypedConstant(builder, scalarType, 1.0f),
         builder.add(ir::Op::FDiv(scalarType, z, w))));
-      m_ioMap.emitDepthStore(builder, op, depth);
+
+      /* We store depth, not the destination register */
+      return m_ioMap.emitDepthStore(builder, op, depth);
       /* Docs: After running texm3x2depth, register t(m+1) is no longer available for use in the shader. */
-    } break;
+    }
 
 
     case OpCode::eTexM3x3: {
@@ -1296,10 +1297,11 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
     } break;
   }
 
-  /* The sampling functions return an unswizzled vec4 that hasn't applied the write mask yet.
-   * So do that now. */
-  result = ir::swizzleVector(builder, result, swizzle, dst.getWriteMask(getShaderInfo()));
+  /* The sampling functions return an unswizzled vec4 that
+   * hasn't applied the write mask yet. So do that now. */
+  dxbc_spv_assert(result);
 
+  result = ir::swizzleVector(builder, result, swizzle, dst.getWriteMask(getShaderInfo()));
   return storeDstModifiedPredicated(builder, op, dst, result);
 }
 
