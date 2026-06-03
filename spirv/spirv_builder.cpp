@@ -827,7 +827,8 @@ void SpirvBuilder::emitDclLds(const ir::Op& op) {
 
 
 void SpirvBuilder::emitDclScratch(const ir::Op& op) {
-  /* Declare scratch as a simpe private variable */
+  /* Declare scratch as a simpe private variable. Do not zero-initialize
+   * scratch for perf reasons, some games heavily abuse this feature. */
   auto varId = getIdForDef(op.getDef());
 
   emitDebugName(op.getDef(), varId);
@@ -835,8 +836,7 @@ void SpirvBuilder::emitDclScratch(const ir::Op& op) {
   auto typeId = getIdForType(op.getType());
   auto ptrTypeId = getIdForPtrType(typeId, spv::StorageClassPrivate);
 
-  pushOp(m_declarations, spv::OpVariable, ptrTypeId, varId,
-    spv::StorageClassPrivate, getIdForConstantNull(op.getType()));
+  pushOp(m_declarations, spv::OpVariable, ptrTypeId, varId, spv::StorageClassPrivate);
 
   addEntryPointId(varId);
 }
