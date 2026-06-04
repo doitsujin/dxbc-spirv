@@ -108,9 +108,13 @@ bool printCodeSM3(util::ByteReader reader, bool useDebugNames) {
 
   while (parser) {
     auto op = parser.parseInstruction();
-    if (useDebugNames && op.getOpCode() == sm3::OpCode::eComment && !ctab) {
-      auto ctabReader = util::ByteReader(op.getCommentData(), op.getCommentDataSize());
-      ctab = sm3::ConstantTable(ctabReader);
+    if (op.getOpCode() == sm3::OpCode::eComment) {
+      if (useDebugNames && !ctab) {
+        auto ctabReader = util::ByteReader(op.getCommentData(), op.getCommentDataSize());
+        ctab = sm3::ConstantTable(ctabReader);
+      }
+
+      continue;
     }
 
     if (!op) {
