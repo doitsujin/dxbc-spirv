@@ -1164,7 +1164,9 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
        * texbem(l) t(m), t(n) */
       uint32_t samplerIdx = dst.getIndex();
       auto texCoord = m_ioMap.emitTexCoordLoad(builder, op, samplerIdx, ComponentBit::eAll, Swizzle::identity(), scalarType);
-      auto src0 = loadSrcModified(builder, op, op.getSrc(0u), WriteMask(ComponentBit::eX | ComponentBit::eY), scalarType);
+
+      auto src0Mask = util::makeWriteMaskForComponents(2u + uint32_t(opCode == OpCode::eTexBemL));
+      auto src0 = loadSrcModified(builder, op, op.getSrc(0u), src0Mask, scalarType);
 
       dxbc_spv_assert(getShaderInfo().getVersion().first < 2u);
       /* The projection (/.w) happens before this... */
@@ -1199,7 +1201,9 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
 
         auto scale = builder.add(ir::Op::CompositeExtract(scalarType, src0, builder.makeConstant(2u)));
         scale = builder.add(emitFMad(scalarType, scale, bumpEnvLScale, bumpEnvLOffset));
-        scale = builder.add(ir::Op::FClamp(scalarType, scale, ir::makeTypedConstant(builder, scalarType, 0.0f), ir::makeTypedConstant(builder, scalarType, 1.0f)));
+        scale = builder.add(ir::Op::FClamp(scalarType, scale,
+          ir::makeTypedConstant(builder, scalarType, 0.0f),
+          ir::makeTypedConstant(builder, scalarType, 1.0f)));
 
         std::array<ir::SsaDef, 4u> scaledComponents = {};
 
