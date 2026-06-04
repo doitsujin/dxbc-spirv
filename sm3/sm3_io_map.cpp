@@ -195,10 +195,8 @@ std::optional<ir::BuiltIn> IoMap::determineBuiltinForRegister(RegisterType regTy
   auto shaderInfo = m_converter.getShaderInfo();
 
   if (!registerTypeIsInput(regType, shaderInfo.getType())) {
-
-    if (regType == RegisterType::eDepthOut) {
+    if (regType == RegisterType::eDepthOut)
       return std::make_optional(ir::BuiltIn::eDepth);
-    }
 
     if (regType == RegisterType::eRasterizerOut) {
       if (regIndex == uint32_t(RasterizerOutIndex::eRasterOutPointSize)) {
@@ -222,7 +220,6 @@ std::optional<ir::BuiltIn> IoMap::determineBuiltinForRegister(RegisterType regTy
 
     /* The dcl instructions with a semantic only exist in SM3
      * and SM3 uses generic output registers. */
-
     if (semantic.usage == SemanticUsage::ePosition && semantic.index == 0u) {
       dxbc_spv_assert(regType == RegisterType::eOutput);
       return std::make_optional(ir::BuiltIn::ePosition);
@@ -234,29 +231,20 @@ std::optional<ir::BuiltIn> IoMap::determineBuiltinForRegister(RegisterType regTy
     }
 
     return std::nullopt;
-
   } else {
-
-    /* Position 0 must not be mapped to a regular input. SM3 still has a separate register for that. */
-    dxbc_spv_assert(shaderInfo.getType() == ShaderType::eVertex
-      || semantic.usage != SemanticUsage::ePosition
-      || semantic.index != 0u
-      || regType != RegisterType::eInput);
-
     if (regType == RegisterType::eMiscType) {
-      if (regIndex == uint32_t(MiscTypeIndex(MiscTypeIndex::eMiscTypeFace))) {
-        return std::make_optional(ir::BuiltIn::eIsFrontFace);
-      }
+      switch (regIndex) {
+        case uint32_t(MiscTypeIndex(MiscTypeIndex::eMiscTypeFace)):
+          return std::make_optional(ir::BuiltIn::eIsFrontFace);
 
-      if (regIndex == uint32_t(MiscTypeIndex::eMiscTypePosition)) {
-        dxbc_spv_assert(semantic.usage == SemanticUsage::ePosition && semantic.index == 0u);
-        return std::make_optional(ir::BuiltIn::ePosition);
-      }
+        /* SM3 special input register for PS position */
+        case uint32_t(MiscTypeIndex::eMiscTypePosition):
+          return std::make_optional(ir::BuiltIn::ePosition);
 
-      /* Invalid MiscType */
-      dxbc_spv_assert(false);
+        default:
+          dxbc_spv_unreachable();
+      }
     }
-
   }
 
   return std::nullopt;
