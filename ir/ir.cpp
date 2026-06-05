@@ -916,6 +916,8 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eFMax: return os << "FMax";
     case OpCode::eFDot: return os << "FDot";
     case OpCode::eFDotLegacy: return os << "FDotLegacy";
+    case OpCode::eFDotAdd: return os << "FDotAdd";
+    case OpCode::eFDotAddLegacy: return os << "FDotAddLegacy";
     case OpCode::eFClamp: return os << "FClamp";
     case OpCode::eFSin: return os << "FSin";
     case OpCode::eFCos: return os << "FCos";

@@ -1187,6 +1187,8 @@ enum class OpCode : uint16_t {
   eFPow                         = 695u,
   eFPowLegacy                   = 696u,
   eFSgn                         = 697u,
+  eFDotAdd                      = 698u,
+  eFDotAddLegacy                = 699u,
 
   eIAnd                         = 704u,
   eIOr                          = 705u,
@@ -2603,6 +2605,20 @@ public:
     return Op(OpCode::eFDotLegacy, type)
       .addOperand(a)
       .addOperand(b);
+  }
+
+  static Op FDotAdd(Type type, SsaDef a, SsaDef b, SsaDef c) {
+    return Op(OpCode::eFDotAdd, type)
+      .addOperand(a)
+      .addOperand(b)
+      .addOperand(c);
+  }
+
+  static Op FDotAddLegacy(Type type, SsaDef a, SsaDef b, SsaDef c) {
+    return Op(OpCode::eFDotAddLegacy, type)
+      .addOperand(a)
+      .addOperand(b)
+      .addOperand(c);
   }
 
   static Op FClamp(Type type, SsaDef a, SsaDef lo, SsaDef hi) {
