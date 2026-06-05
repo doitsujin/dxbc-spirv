@@ -202,7 +202,9 @@ void ArithmeticPass::lowerInstructionsPostTransform() {
       } continue;
 
       case OpCode::eFDot:
-      case OpCode::eFDotLegacy: {
+      case OpCode::eFDotLegacy:
+      case OpCode::eFDotAdd:
+      case OpCode::eFDotAddLegacy: {
         if (m_options.lowerDot) {
           iter = lowerDot(iter);
           continue;
@@ -442,6 +444,12 @@ Builder::iterator ArithmeticPass::lowerLegacyOp(Builder::iterator op) {
 
 
 Builder::iterator ArithmeticPass::lowerDot(Builder::iterator op) {
+  bool isLegacy = op->getOpCode() == OpCode::eFDotLegacy ||
+                  op->getOpCode() == OpCode::eFDotAddLegacy;
+
+  bool isDotAdd = op->getOpCode() == OpCode::eFDotAdd ||
+                  op->getOpCode() == OpCode::eFDotAddLegacy;
+
   const auto& srcA = m_builder.getOpForOperand(*op, 0u);
   const auto& srcB = m_builder.getOpForOperand(*op, 1u);
 
@@ -470,20 +478,35 @@ Builder::iterator ArithmeticPass::lowerDot(Builder::iterator op) {
     /* Declare actual conversion function */
     auto paramA = m_builder.add(Op::DclParam(vectorType));
     auto paramB = m_builder.add(Op::DclParam(vectorType));
+    auto paramC = ir::SsaDef();
+
+    m_builder.add(Op::DclParam(vectorType));
 
     m_builder.add(Op::DebugName(paramA, "a"));
     m_builder.add(Op::DebugName(paramB, "b"));
 
-    fn.function = m_builder.addBefore(m_builder.getCode().first->getDef(),
-      Op::Function(op->getType()).addParam(paramA).addParam(paramB));
+    auto functionOp = Op::Function(op->getType()).addParam(paramA).addParam(paramB);
+
+    if (isDotAdd) {
+      paramC = m_builder.add(Op::DclParam(resultType));
+      m_builder.add(Op::DebugName(paramC, "c"));
+      functionOp.addParam(paramC);
+    }
+
+    fn.function = m_builder.addBefore(m_builder.getCode().first->getDef(), functionOp);
 
     std::stringstream debugName;
-    debugName << "dp" << vectorType.getVectorSize() << "_" << resultType;
+    debugName << "dp" << vectorType.getVectorSize();
+
+    if (isDotAdd)
+      debugName << "add";
+
+    debugName << "_" << resultType;
 
     if (resultType != vectorType.getBaseType())
       debugName << "_" << vectorType.getBaseType();
 
-    if (op->getOpCode() == OpCode::eFDotLegacy)
+    if (isLegacy)
       debugName << "_legacy";
 
     m_builder.add(Op::DebugName(fn.function, debugName.str().c_str()));
@@ -495,8 +518,6 @@ Builder::iterator ArithmeticPass::lowerDot(Builder::iterator op) {
     auto vectorB = m_builder.add(Op::ParamLoad(vectorType, fn.function, paramB));
 
     /* Determine which opcodes to use */
-    bool isLegacy = op->getOpCode() == OpCode::eFDotLegacy;
-
     auto mulOp = isLegacy ? OpCode::eFMulLegacy : OpCode::eFMul;
     auto madOp = isLegacy ? OpCode::eFMadLegacy : OpCode::eFMad;
 
@@ -504,17 +525,22 @@ Builder::iterator ArithmeticPass::lowerDot(Builder::iterator op) {
      * it, otherwise we run into rendering issues in e.g. Trails through Daybreak. */
     SsaDef result = { };
 
-    auto a = m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorA, m_builder.makeConstant(0u)));
-    auto b = m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorB, m_builder.makeConstant(0u)));
+    if (isDotAdd) {
+      /* Load accumulator and use it in the multiply-add chain below */
+      result = m_builder.add(Op::ParamLoad(resultType, fn.function, paramC));
+    } else {
+      auto a = m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorA, m_builder.makeConstant(0u)));
+      auto b = m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorB, m_builder.makeConstant(0u)));
 
-    if (isLegacy && m_options.lowerMulLegacy)
-      result = m_builder.add(emitMulLegacy(op->getType(), a, b).setFlags(OpFlag::ePrecise));
-    else
-      result = m_builder.add(Op(mulOp, op->getType()).setFlags(OpFlag::ePrecise).addOperands(a, b));
+      if (isLegacy && m_options.lowerMulLegacy)
+        result = m_builder.add(emitMulLegacy(op->getType(), a, b).setFlags(OpFlag::ePrecise));
+      else
+        result = m_builder.add(Op(mulOp, op->getType()).setFlags(OpFlag::ePrecise).addOperands(a, b));
+    }
 
-    for (uint32_t i = 1u; i < srcA.getType().getBaseType(0u).getVectorSize(); i++) {
-      a = m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorA, m_builder.makeConstant(i)));
-      b = m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorB, m_builder.makeConstant(i)));
+    for (uint32_t i = (isDotAdd ? 0u : 1u); i < srcA.getType().getBaseType(0u).getVectorSize(); i++) {
+      auto a = m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorA, m_builder.makeConstant(i)));
+      auto b = m_builder.add(Op::CompositeExtract(vectorType.getBaseType(), vectorB, m_builder.makeConstant(i)));
 
       if (isLegacy && m_options.lowerMulLegacy)
         result = m_builder.add(emitMadLegacy(op->getType(), a, b, result).setFlags(OpFlag::ePrecise));
@@ -528,10 +554,18 @@ Builder::iterator ArithmeticPass::lowerDot(Builder::iterator op) {
     e = m_dotFunctions.insert(m_dotFunctions.end(), fn);
   }
 
-  m_builder.rewriteOp(op->getDef(), Op::FunctionCall(op->getType(), e->function)
+  auto callOp = Op::FunctionCall(op->getType(), e->function)
     .setFlags(op->getFlags())
     .addParam(srcA.getDef())
-    .addParam(srcB.getDef()));
+    .addParam(srcB.getDef());
+
+  if (isDotAdd) {
+    const auto& srcC = m_builder.getOpForOperand(*op, 2u);
+    dxbc_spv_assert(srcC.getType() == op->getType());
+    callOp.addParam(srcC.getDef());
+  }
+
+  m_builder.rewriteOp(op->getDef(), std::move(callOp));
   return ++op;
 }
 
