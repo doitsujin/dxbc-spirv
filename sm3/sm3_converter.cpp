@@ -751,12 +751,14 @@ bool Converter::handleDot(ir::Builder& builder, const Instruction& op) {
   auto vectorA = loadSrcModified(builder, op, op.getSrc(0u), readMask, scalarType);
   auto vectorB = loadSrcModified(builder, op, op.getSrc(1u), readMask, scalarType);
 
-  auto result = builder.add(emitFDot(scalarType, vectorA, vectorB));
+  ir::SsaDef result = {};
 
   if (opCode == OpCode::eDp2Add) {
     /* src2 needs to have a replicate swizzle, so just get the first component. */
-    auto summandC = loadSrcModified(builder, op, op.getSrc(2u), WriteMask(ComponentBit::eX), scalarType);
-    result = builder.add(ir::Op::FAdd(scalarType, result, summandC));
+    result = builder.add(emitFDotAdd(scalarType, vectorA, vectorB,
+      loadSrcModified(builder, op, op.getSrc(2u), ComponentBit::eX, scalarType)));
+  } else {
+    result = builder.add(emitFDot(scalarType, vectorA, vectorB));
   }
 
   WriteMask writeMask = dst.getWriteMask(getShaderInfo());
