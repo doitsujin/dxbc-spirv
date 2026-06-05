@@ -589,6 +589,8 @@ Maps boolean values to values of any other type.
 | `FMax`                    | float        | `%a`         | `%b`    |       |
 | `FDot`                    | float        | `%a`         | `%b`    |       |
 | `FDotLegacy`              | float        | `%a`         | `%b`    |       |
+| `FDotAdd`                 | float        | `%a`         | `%b`    | `%c`  |
+| `FDotAddLegacy`           | float        | `%a`         | `%b`    | `%c`  |
 | `FClamp`                  | float        | `%a`         | `%lo`   | `%hi` |
 | `FSin`                    | `f32`        | `%a`         |         |       |
 | `FCos`                    | `f32`        | `%a`         |         |       |

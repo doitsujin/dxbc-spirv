@@ -398,6 +398,8 @@ bool RemoveUnusedPass::hasSideEffect(const Op& op) const {
     case OpCode::eFMax:
     case OpCode::eFDot:
     case OpCode::eFDotLegacy:
+    case OpCode::eFDotAdd:
+    case OpCode::eFDotAddLegacy:
     case OpCode::eFClamp:
     case OpCode::eFSin:
     case OpCode::eFCos:

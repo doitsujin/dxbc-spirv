@@ -588,6 +588,8 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eConsumeAs:
     case ir::OpCode::eFDot:
     case ir::OpCode::eFDotLegacy:
+    case ir::OpCode::eFDotAdd:
+    case ir::OpCode::eFDotAddLegacy:
     case ir::OpCode::eFMulLegacy:
     case ir::OpCode::eFMadLegacy:
     case ir::OpCode::eFPowLegacy:
