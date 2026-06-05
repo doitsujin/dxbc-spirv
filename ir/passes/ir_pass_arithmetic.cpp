@@ -2280,8 +2280,30 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
       }
     } break;
 
-    case OpCode::eFDotLegacy:
+    case OpCode::eFDotAdd:
     case OpCode::eFDotAddLegacy: {
+      /* While the dot product's execution itself is precise, optimize
+       * DotAdd to Dot if the accumulator is zero, unless the entire
+       * instruction is precise or cares about signed zero. */
+      const auto& c = m_builder.getOpForOperand(*op, 2u);
+
+      if (!(getFpFlags(*op) & ir::OpFlag::ePrecise) &&
+          (getFpFlags(*op) & ir::OpFlag::eNoSz) && isConstantValue(c, 0.0)) {
+        const auto& a = m_builder.getOpForOperand(*op, 0u);
+        const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+        m_builder.rewriteOp(op->getDef(), (op->getOpCode() == OpCode::eFDotAdd
+          ? ir::Op::FDot(op->getType(), a.getDef(), b.getDef())
+          : ir::Op::FDotLegacy(op->getType(), a.getDef(), b.getDef())).setFlags(op->getFlags()));
+        return std::make_pair(true, op);
+      }
+
+      /* Next pass is just for legacy */
+      if (op->getOpCode() == ir::OpCode::eFDotAdd)
+        break;
+    } [[fallthrough]];
+
+    case OpCode::eFDotLegacy: {
       const auto& a = m_builder.getOpForOperand(*op, 0u);
       const auto& b = m_builder.getOpForOperand(*op, 1u);
 
@@ -3543,6 +3565,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityOp(Builder::it
     case OpCode::eFMad:
     case OpCode::eFMadLegacy:
     case OpCode::eFDotLegacy:
+    case OpCode::eFDotAdd:
     case OpCode::eFDotAddLegacy:
     case OpCode::eFDiv:
     case OpCode::eFMin:
