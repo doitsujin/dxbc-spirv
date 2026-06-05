@@ -2208,34 +2208,25 @@ void Converter::emitAlphaTest(ir::Builder& builder) {
   /* Perform comparison and return result */
   auto switchDef = builder.add(ir::Op::ScopedSwitch(ir::SsaDef(), alphaComparisonMode));
 
-  for (uint32_t i = 0u; i < uint32_t(AlphaTestComparisonMode::eAlways); i++) {
-    builder.add(ir::Op::ScopedSwitchCase(switchDef, i));
+  static const std::array<std::pair<AlphaTestComparisonMode, ir::OpCode>, 6u> s_ops = {{
+    { AlphaTestComparisonMode::eLess,           ir::OpCode::eFLt },
+    { AlphaTestComparisonMode::eEqual,          ir::OpCode::eFEq },
+    { AlphaTestComparisonMode::eLessOrEqual,    ir::OpCode::eFLe },
+    { AlphaTestComparisonMode::eGreater,        ir::OpCode::eFGt },
+    { AlphaTestComparisonMode::eNotEqual,       ir::OpCode::eFNe },
+    { AlphaTestComparisonMode::eGreaterOrEqual, ir::OpCode::eFGe },
+  }};
 
-    ir::Op comparisonOp = {};
-
-    switch (AlphaTestComparisonMode(i)) {
-      case AlphaTestComparisonMode::eNever:
-        comparisonOp = ir::Op::Constant(false); break;
-      case AlphaTestComparisonMode::eLess:
-        comparisonOp = ir::Op::FLt(ir::ScalarType::eBool, alpha, alphaRef); break;
-      case AlphaTestComparisonMode::eEqual:
-        comparisonOp = ir::Op::FEq(ir::ScalarType::eBool, alpha, alphaRef); break;
-      case AlphaTestComparisonMode::eLessOrEqual:
-        comparisonOp = ir::Op::FLe(ir::ScalarType::eBool, alpha, alphaRef); break;
-      case AlphaTestComparisonMode::eGreater:
-        comparisonOp = ir::Op::FGt(ir::ScalarType::eBool, alpha, alphaRef); break;
-      case AlphaTestComparisonMode::eNotEqual:
-        comparisonOp = ir::Op::FNe(ir::ScalarType::eBool, alpha, alphaRef); break;
-      case AlphaTestComparisonMode::eGreaterOrEqual:
-        comparisonOp = ir::Op::FGe(ir::ScalarType::eBool, alpha, alphaRef); break;
-      case AlphaTestComparisonMode::eAlways:
-        comparisonOp = ir::Op::Constant(true); break;
-      default:
-        dxbc_spv_unreachable();
-    }
-    auto comparisonBool = builder.add(comparisonOp);
-    builder.add(ir::Op::Return(ir::ScalarType::eBool, comparisonBool));
+  for (const auto& op : s_ops) {
+    builder.add(ir::Op::ScopedSwitchCase(switchDef, uint32_t(op.first)));
+    builder.add(ir::Op::Return(ir::ScalarType::eBool, builder.add(
+      ir::Op(op.second, ir::ScalarType::eBool).addOperands(alpha, alphaRef))));
   }
+
+  /* AlphaTestComparisonMode::eNever. We already handled eAlways. */
+  builder.add(ir::Op::ScopedSwitchDefault(switchDef));
+  builder.add(ir::Op::Return(ir::ScalarType::eBool, builder.makeConstant(false)));
+
   auto switchEnd = builder.add(ir::Op::ScopedEndSwitch(switchDef));
   builder.rewriteOp(switchDef, ir::Op(builder.getOp(switchDef)).setOperand(0u, switchEnd));
 
