@@ -2280,15 +2280,17 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
       }
     } break;
 
-    case OpCode::eFDotLegacy: {
+    case OpCode::eFDotLegacy:
+    case OpCode::eFDotAddLegacy: {
       const auto& a = m_builder.getOpForOperand(*op, 0u);
       const auto& b = m_builder.getOpForOperand(*op, 1u);
 
       /* Replace with non-legacy dot if operands are the same
        * since we're just squaring numbers at that point */
       if (a.getDef() == b.getDef()) {
-        m_builder.rewriteOp(op->getDef(),
-          Op::FDot(op->getType(), a.getDef(), b.getDef()).setFlags(op->getFlags()));
+        m_builder.rewriteOp(op->getDef(), op->getOpCode() == OpCode::eFDotLegacy
+          ? Op::FDot(op->getType(), a.getDef(), b.getDef()).setFlags(op->getFlags())
+          : Op::FDotAdd(op->getType(), a.getDef(), b.getDef(), ir::SsaDef(op->getOperand(2u))).setFlags(op->getFlags()));
         return std::make_pair(true, op);
       }
     } break;
@@ -3541,6 +3543,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityOp(Builder::it
     case OpCode::eFMad:
     case OpCode::eFMadLegacy:
     case OpCode::eFDotLegacy:
+    case OpCode::eFDotAddLegacy:
     case OpCode::eFDiv:
     case OpCode::eFMin:
     case OpCode::eFMax:
