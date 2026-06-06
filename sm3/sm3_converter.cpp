@@ -236,6 +236,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
 
     case OpCode::eCall:
     case OpCode::eCallNz:
+      return handleCall(builder, op);
+
     case OpCode::eRet:
       return logOpError(op, "Function calls aren't supported.");
   }
@@ -1918,6 +1920,38 @@ bool Converter::handleLabel(ir::Builder& builder, const Instruction& op) {
     return logOpError(op, "'Label' operand missing or not a label");
 
   builder.setCursor(m_regFile.getOrDeclareLabel(builder, op.getDst()));
+  return true;
+}
+
+
+bool Converter::handleCall(ir::Builder& builder, const Instruction& op) {
+  const auto& target = op.getSrc(0u);
+
+  if (!target || target.getRegisterType() != RegisterType::eLabel)
+    return logOpError(op, "'Call' label missing or not a label");
+
+  auto fn = m_regFile.getOrDeclareLabel(builder, target);
+  auto ifCall = ir::SsaDef();
+
+  if (op.getOpCode() == OpCode::eCallNz) {
+    auto condReg = op.getSrc(1u);
+    auto cond = loadSrc(builder, op, condReg, ComponentBit::eX, condReg.getSwizzle(getShaderInfo()), ir::ScalarType::eBool);
+
+    if (condReg.getModifier() == OperandModifier::eNot)
+      cond = builder.add(ir::Op::BNot(ir::ScalarType::eBool, cond));
+    else if (condReg.getModifier() != OperandModifier::eNone)
+      return logOpError(op, "Unknown callnz condition modifier: ", uint32_t(condReg.getModifier()));
+
+    ifCall = builder.add(ir::Op::ScopedIf(ir::SsaDef(), cond));
+  }
+
+  builder.add(ir::Op::FunctionCall(ir::ScalarType::eVoid, fn));
+
+  if (ifCall) {
+    builder.rewriteOp(ifCall, ir::Op(builder.getOp(ifCall)).setOperand(0u,
+      builder.add(ir::Op::ScopedEndIf(ifCall))));
+  }
+
   return true;
 }
 
