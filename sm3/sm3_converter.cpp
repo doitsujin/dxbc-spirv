@@ -1505,10 +1505,21 @@ bool Converter::handleNrm(ir::Builder& builder, const Instruction& op) {
 
   auto dst = op.getDst();
   WriteMask writeMask = dst.getWriteMask(m_parser.getShaderInfo());
-  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
 
-  auto src0 = loadSrcModified(builder, op, op.getSrc(0u), writeMask, scalarType);
-  auto result = normalizeVector(builder, src0);
+  auto scalarType = dst.isPartialPrecision() ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32;
+  auto vectorType = makeVectorType(scalarType, writeMask);
+
+  /* For some godforsaken reason this doesn't actually normalize the vector given
+   * by the write mask, but divides everything in the write mask (even .w) by the
+   * length of the .xyz vector of the source instead. */
+  auto xyz = loadSrcModified(builder, op, op.getSrc(0u),
+    util::makeWriteMaskForComponents(3u), scalarType);
+
+  auto scale = builder.add(ir::Op::FRsq(scalarType,
+    builder.add(emitFDot(scalarType, xyz, xyz))));
+
+  auto src = loadSrcModified(builder, op, op.getSrc(0u), writeMask, scalarType);
+  auto result = builder.add(emitFMul(vectorType, src, broadcastScalar(builder, scale, writeMask)));
 
   if (m_options.fastFloatEmulation) {
     auto vectorType = ir::makeVectorType(scalarType, writeMask);
