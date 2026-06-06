@@ -280,4 +280,31 @@ void RegisterFile::emitBufferedStores(ir::Builder& builder) {
   m_stores.clear();
 }
 
+
+ir::SsaDef RegisterFile::getOrDeclareLabel(
+        ir::Builder&            builder,
+  const Operand&                operand) {
+  dxbc_spv_assert(operand.getRegisterType() == RegisterType::eLabel);
+
+  auto index = operand.getIndex();
+
+  if (index >= m_labels.size())
+    m_labels.resize(index + 1u);
+
+  auto& fn = m_labels[index];
+
+  if (!fn) {
+    /* Declare function right after declaration section and begin/end
+     * it immediately. We will move the cursor once the corresponding
+     * label instruction is encountered. */
+    auto ref = builder.getCode().first->getDef();
+
+    fn = builder.addBefore(ref, ir::Op::Function(ir::ScalarType::eVoid));
+    builder.addAfter(fn, ir::Op::FunctionEnd());
+    builder.add(ir::Op::DebugName(fn, (std::string("l") + std::to_string(index)).c_str()));
+  }
+
+  return fn;
+}
+
 }

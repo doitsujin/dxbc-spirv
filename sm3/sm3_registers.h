@@ -61,6 +61,11 @@ public:
           WriteMask               componentMask,
           ir::ScalarType          type);
 
+  /** Retrieves or declares label as function */
+  ir::SsaDef getOrDeclareLabel(
+          ir::Builder&            builder,
+    const Operand&                operand);
+
 private:
 
   ir::SsaDef getOrDeclareTemp(ir::Builder& builder, uint32_t index, Component component);
@@ -94,6 +99,9 @@ private:
 
   /* In shader model 1.1 - 1.3, you put either texture data (from sampling) or texcoords into a texture register. */
   std::array<ir::SsaDef, 8u * 4u> m_textureRegs = { };
+
+  /** Label functions */
+  util::small_vector<ir::SsaDef, 8u> m_labels = { };
 
 };
 
