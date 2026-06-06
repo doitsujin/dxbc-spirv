@@ -239,7 +239,7 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return handleCall(builder, op);
 
     case OpCode::eRet:
-      return logOpError(op, "Function calls aren't supported.");
+      return handleRet(builder);
   }
 
   return logOpError(op, "Unhandled opcode.");
@@ -250,7 +250,6 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
   /* A valid debug namee is required for the main function */
   m_entryPoint.mainFunc = builder.add(ir::Op::Function(ir::ScalarType::eVoid));
   builder.add(ir::Op::FunctionEnd());
-  builder.add(ir::Op::DebugName(m_entryPoint.mainFunc, "main"));
 
   /* Emit entry point instruction as the first instruction of the
    * shader. This is technically not needed, but makes things more
@@ -299,6 +298,28 @@ bool Converter::initialize(ir::Builder& builder, ShaderType shaderType) {
 
 
 bool Converter::finalize(ir::Builder& builder, ShaderType shaderType) {
+  if (m_entryPoint.needsWrapper) {
+    // Adjust current 'main' function
+    auto wrapped = m_entryPoint.mainFunc;
+    builder.add(ir::Op::DebugName(wrapped, "main_wrapped"));
+    builder.setCursor(ir::SsaDef());
+
+    // Emit wrapper function that calls the main entry point first
+    auto wrapper = builder.add(ir::Op::Function(ir::ScalarType::eVoid));
+    auto call = builder.add(ir::Op::FunctionCall(ir::ScalarType::eVoid, wrapped));
+    builder.add(ir::Op::FunctionEnd());
+
+    // Rewrite entry point to point to the 'new' main function
+    builder.rewriteOp(m_entryPoint.def, ir::Op(builder.getOp(m_entryPoint.def)).setOperand(0u, wrapper));
+    m_entryPoint.mainFunc = wrapper;
+
+    // Put all the finalization code after the wrapper call
+    builder.setCursor(call);
+  }
+
+  // Emit debug name for the actual entry point function
+  builder.add(ir::Op::DebugName(m_entryPoint.mainFunc, "main"));
+
   if (shaderType == ShaderType::ePixel && getShaderInfo().getVersion().first == 1u) {
     /* Shader model 1 doesn't have special color output registers.
      * Instead, it simply outputs what was in Temp register 0 (r0) at the end. */
@@ -360,7 +381,6 @@ bool Converter::finalize(ir::Builder& builder, ShaderType shaderType) {
   }
 
   m_ioMap.finalize(builder);
-
   return true;
 }
 
@@ -1952,6 +1972,16 @@ bool Converter::handleCall(ir::Builder& builder, const Instruction& op) {
       builder.add(ir::Op::ScopedEndIf(ifCall))));
   }
 
+  return true;
+}
+
+
+bool Converter::handleRet(ir::Builder& builder) {
+  // Need to wrap the main function so that we have a valid
+  // place to put all the output stores and processing.
+  m_entryPoint.needsWrapper = true;
+
+  builder.add(ir::Op::Return());
   return true;
 }
 

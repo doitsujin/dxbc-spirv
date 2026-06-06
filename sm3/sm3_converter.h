@@ -81,9 +81,9 @@ private:
 
   /* Entry point definition and function definitions. */
   struct {
-    ir::SsaDef def;
-
-    ir::SsaDef mainFunc;
+    ir::SsaDef def {};
+    ir::SsaDef mainFunc = {};
+    bool needsWrapper = false;
   } m_entryPoint;
 
   bool convertInstruction(ir::Builder& builder, const Instruction& op);
@@ -213,6 +213,8 @@ private:
   bool handleLabel(ir::Builder& builder, const Instruction& op);
 
   bool handleCall(ir::Builder& builder, const Instruction& op);
+
+  bool handleRet(ir::Builder& builder);
 
   ir::SsaDef loadSrc(ir::Builder& builder, const Instruction& op, const Operand& operand, WriteMask mask, Swizzle swizzle, ir::ScalarType type);
 
