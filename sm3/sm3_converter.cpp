@@ -232,6 +232,8 @@ bool Converter::convertInstruction(ir::Builder& builder, const Instruction& op) 
       return handleEndRep(builder, op);
 
     case OpCode::eLabel:
+      return handleLabel(builder, op);
+
     case OpCode::eCall:
     case OpCode::eCallNz:
     case OpCode::eRet:
@@ -1907,6 +1909,15 @@ bool Converter::handleEndRep(ir::Builder &builder, const Instruction &op) {
   builder.rewriteOp(construct->def, ir::Op(builder.getOp(construct->def)).setOperand(0u, constructEnd));
 
   m_controlFlow.pop();
+  return true;
+}
+
+
+bool Converter::handleLabel(ir::Builder& builder, const Instruction& op) {
+  if (!op.hasDst() || op.getDst().getRegisterType() != RegisterType::eLabel)
+    return logOpError(op, "'Label' operand missing or not a label");
+
+  builder.setCursor(m_regFile.getOrDeclareLabel(builder, op.getDst()));
   return true;
 }
 
