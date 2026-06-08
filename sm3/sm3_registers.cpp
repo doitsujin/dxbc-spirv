@@ -154,7 +154,8 @@ ir::SsaDef RegisterFile::emitPredicateLoad(
 ir::SsaDef RegisterFile::emitAddressLoad(
             ir::Builder&            builder,
             RegisterType            registerType,
-            Swizzle                 swizzle) {
+            Swizzle                 swizzle,
+            ir::SsaDef              loopCounter) {
   Component component = swizzle.get(0u);
 
   if (registerType == RegisterType::eAddr) {
@@ -168,7 +169,12 @@ ir::SsaDef RegisterFile::emitAddressLoad(
   } else if (registerType == RegisterType::eLoop) {
     dxbc_spv_assert(component == Component::eX);
 
-    return builder.add(ir::Op::TmpLoad(ir::ScalarType::eI32, m_aLReg));
+    if (!loopCounter) {
+      Logger::err("No valid loop counter found in current context.");
+      return builder.makeUndef(ir::ScalarType::eI32);
+    }
+
+    return builder.add(ir::Op::TmpLoad(ir::ScalarType::eI32, loopCounter));
   } else {
     ShaderInfo info = m_converter.getShaderInfo();
 
@@ -273,25 +279,5 @@ void RegisterFile::emitBufferedStores(ir::Builder& builder) {
 
   m_stores.clear();
 }
-
-
-ir::SsaDef RegisterFile::emitLoopCounterLoad(
-            ir::Builder&            builder) {
-  return builder.add(ir::Op::TmpLoad(ir::ScalarType::eI32, m_aLReg));
-}
-
-
-void RegisterFile::emitLoopCounterStore(
-            ir::Builder&            builder,
-            ir::SsaDef              value) {
-  auto op = builder.getOp(value);
-  auto type = op.getType();
-
-  if (type != ir::ScalarType::eI32)
-    value = builder.add(ir::Op::ConsumeAs(ir::ScalarType::eI32, value));
-
-  builder.add(ir::Op::TmpStore(m_aLReg, value));
-}
-
 
 }
