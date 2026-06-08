@@ -672,14 +672,13 @@ bool Converter::handleArithmetic(ir::Builder& builder, const Instruction& op) {
       case OpCode::eSub:        return ir::Op::FSub(vectorType, src.at(0u), src.at(1u));
       case OpCode::eExp:        return ir::Op::FExp2(vectorType, src.at(0u));
       case OpCode::eFrc:        return ir::Op::FFract(vectorType, src.at(0u));
-      case OpCode::eLog:        return ir::Op::FLog2(vectorType, src.at(0u));
-      case OpCode::eLogP:       return ir::Op::FLog2(vectorType, src.at(0u));
+      case OpCode::eLog:
+      case OpCode::eLogP:       return ir::Op::FLog2Legacy(vectorType, src.at(0u));
       case OpCode::eMax:        return ir::Op::FMax(vectorType, src.at(0u), src.at(1u));
       case OpCode::eMin:        return ir::Op::FMin(vectorType, src.at(0u), src.at(1u));
       case OpCode::eMul:        return emitFMul(vectorType, src.at(0u), src.at(1u));
       case OpCode::eRcp:        return ir::Op::FRcp(vectorType, src.at(0u));
-      case OpCode::eRsq:        return ir::Op::FRsq(vectorType,
-                                  builder.add(ir::Op::FAbs(vectorType, src.at(0u))));
+      case OpCode::eRsq:        return ir::Op::FRsq(vectorType, builder.add(ir::Op::FAbs(vectorType, src.at(0u))));
       case OpCode::eAbs:        return ir::Op::FAbs(vectorType, src.at(0u));
       case OpCode::eSgn:        return ir::Op::FSgn(vectorType, src.at(0u));
       case OpCode::eMad:        return emitFMad(vectorType, src.at(0u), src.at(1u), src.at(2u));
