@@ -2627,6 +2627,18 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
       }
     } break;
 
+    case OpCode::eFRound: {
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+      /* round(round(a, mode0), mode1) -> round(a, mode0).
+       * round(itof(a, mode0), mode1) -> itof(a, mode0).
+       * Rounding a known integer value does nothing. */
+      if (a.getOpCode() == OpCode::eFRound || a.getOpCode() == OpCode::eConvertItoF) {
+        auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
+        return std::make_pair(true, m_builder.iter(next));
+      }
+    } break;
+
     case OpCode::eIMul:
     case OpCode::eUDiv: {
       /* a * 1 -> a
@@ -3596,6 +3608,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityOp(Builder::it
     case OpCode::eFMin:
     case OpCode::eFMax:
     case OpCode::eFRcp:
+    case OpCode::eFRound:
     case OpCode::eIAnd:
     case OpCode::eIOr:
     case OpCode::eIXor:
