@@ -213,7 +213,8 @@ void ArithmeticPass::lowerInstructionsPostTransform() {
 
       case OpCode::eFMulLegacy:
       case OpCode::eFMadLegacy:
-      case OpCode::eFPowLegacy: {
+      case OpCode::eFPowLegacy:
+      case OpCode::eFLog2Legacy: {
         if (m_options.lowerMulLegacy) {
           iter = lowerLegacyOp(iter);
           continue;
@@ -429,9 +430,25 @@ Builder::iterator ArithmeticPass::fuseMad(Builder::iterator op) {
 
 
 Builder::iterator ArithmeticPass::lowerLegacyOp(Builder::iterator op) {
-  auto function = op->getOpCode() == OpCode::eFPowLegacy
-    ? buildPowLegacyFunc(op->getType().getBaseType(0u))
-    : buildMulLegacyFunc(op->getOpCode(), op->getType().getBaseType(0u));
+  SsaDef function = {};
+
+  switch (op->getOpCode()) {
+    case OpCode::eFPowLegacy: {
+      function = buildPowLegacyFunc(op->getType().getBaseType(0u));
+    } break;
+
+    case OpCode::eFMulLegacy:
+    case OpCode::eFMadLegacy: {
+      function = buildMulLegacyFunc(op->getOpCode(), op->getType().getBaseType(0u));
+    } break;
+
+    case OpCode::eFLog2Legacy: {
+      function = buildLog2LegacyFunc(op->getType().getBaseType(0u));
+    } break;
+
+    default:
+      dxbc_spv_unreachable();
+  }
 
   auto functionCall = Op::FunctionCall(op->getType(), function).setFlags(op->getFlags());
 
@@ -1171,6 +1188,63 @@ SsaDef ArithmeticPass::buildPowLegacyFunc(BasicType type) {
     result = m_builder.add(Op::FExp2(type, result));
 
     m_builder.add(Op::Return(type, result));
+    m_builder.add(Op::FunctionEnd());
+  }
+
+  return entry->function;
+}
+
+
+SsaDef ArithmeticPass::buildLog2LegacyFunc(BasicType type) {
+  auto entry = std::find_if(m_logLegacyFunctions.begin(), m_logLegacyFunctions.end(),
+    [type] (const PowLegacyFunc& func) {
+      return func.type == type;
+    });
+
+  if (entry == m_logLegacyFunctions.end()) {
+    dxbc_spv_assert(type.isScalar());
+
+    entry = &m_logLegacyFunctions.emplace_back();
+    entry->type = type;
+
+    SsaDef param = m_builder.add(Op::DclParam(type));
+
+    m_builder.add(Op::DebugName(param, "a"));
+
+    std::stringstream debugName;
+    debugName << "log2_legacy_" << type;
+
+    entry->function = m_builder.addBefore(m_builder.getCode().first->getDef(),
+      Op::Function(type).addParam(param));
+
+    m_builder.add(Op::DebugName(entry->function, debugName.str().c_str()));
+
+    m_builder.setCursor(entry->function);
+    m_builder.add(Op::Label());
+
+    /* Apparently we're supposed to return -FLT_MAX in case
+     * the input is 0, but propagate NaN. */
+    SsaDef maxValue = [this, type] {
+      switch (type.getBaseType()) {
+        case ir::ScalarType::eF16: return m_builder.makeConstant(float16_t::maxValue());
+        case ir::ScalarType::eF32: return m_builder.makeConstant(std::numeric_limits<float>::max());
+        case ir::ScalarType::eF64: return m_builder.makeConstant(std::numeric_limits<double>::max());
+        default:
+          dxbc_spv_unreachable();
+          return SsaDef();
+      }
+    } ();
+
+    SsaDef minValue = m_builder.add(ir::Op::FNeg(type, maxValue));
+
+    SsaDef value = m_builder.add(Op::ParamLoad(type, entry->function, param));
+    value = m_builder.add(Op::FAbs(type, value));
+
+    SsaDef cond = m_builder.add(Op::FNe(ir::ScalarType::eBool, value, m_builder.makeConstantZero(type)));
+    value = m_builder.add(Op::FLog2(type, value));
+    value = m_builder.add(Op::Select(type, cond, value, minValue));
+
+    m_builder.add(Op::Return(type, value));
     m_builder.add(Op::FunctionEnd());
   }
 

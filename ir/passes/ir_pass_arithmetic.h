@@ -102,7 +102,8 @@ private:
   util::small_vector<ConvertFunc, 8u> m_convertFunctions;
   util::small_vector<DotFunc, 8u> m_dotFunctions;
   util::small_vector<MulLegacyFunc, 8u> m_mulLegacyFunctions;
-  util::small_vector<PowLegacyFunc, 8u> m_powLegacyFunctions;
+  util::small_vector<PowLegacyFunc, 4u> m_powLegacyFunctions;
+  util::small_vector<PowLegacyFunc, 4u> m_logLegacyFunctions;
 
   SsaDef m_f32tof16Function = { };
   SsaDef m_msadFunction = { };
@@ -151,6 +152,8 @@ private:
   SsaDef buildMulLegacyFunc(OpCode opCode, BasicType type);
 
   SsaDef buildPowLegacyFunc(BasicType type);
+
+  SsaDef buildLog2LegacyFunc(BasicType type);
 
   SsaDef buildF32toF16Func();
 
