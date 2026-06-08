@@ -2639,6 +2639,22 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
       }
     } break;
 
+    case OpCode::eConvertFtoI: {
+      /* Integer conversion rounds toward zero, so remove any redundant
+       * trunc() if it is only used in the conversion. */
+      const auto& a = m_builder.getOpForOperand(*op, 0u);
+
+      if (a.getOpCode() == OpCode::eFRound
+       && RoundMode(a.getOperand(1u)) == RoundMode::eZero
+       && isOnlyUse(m_builder, a.getDef(), op->getDef())) {
+        const auto& inner = m_builder.getOpForOperand(a, 0u);
+
+        m_builder.rewriteOp(op->getDef(), Op::ConvertFtoI(op->getType(),
+          inner.getDef()).setFlags(op->getFlags()));
+        return std::make_pair(true, op);
+      }
+    } break;
+
     case OpCode::eIMul:
     case OpCode::eUDiv: {
       /* a * 1 -> a
@@ -3609,6 +3625,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityOp(Builder::it
     case OpCode::eFMax:
     case OpCode::eFRcp:
     case OpCode::eFRound:
+    case OpCode::eConvertFtoI:
     case OpCode::eIAnd:
     case OpCode::eIOr:
     case OpCode::eIXor:
