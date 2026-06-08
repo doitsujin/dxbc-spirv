@@ -583,6 +583,7 @@ Maps boolean values to values of any other type.
 | `FRsq`                    | float        | `%a`         |         |       |
 | `FExp2`                   | `f32`        | `%a`         |         |       |
 | `FLog2`                   | `f32`        | `%a`         |         |       |
+| `FLog2Legacy`             | `f32`        | `%a`         |         |       |
 | `FFract`                  | float        | `%a`         |         |       |
 | `FRound`                  | float        | `%a`         | `mode`  |       |
 | `FMin`                    | float        | `%a`         | `%b`    |       |
@@ -603,6 +604,8 @@ Note that `FDot*` instructions takes vector arguments and returns a scalar. This
 The `mode` parameter for `FRound` is a constant enum `ir::RoundMode`.
 
 The `*Legacy` instructions follow D3D9 rules w.r.t. multiplication by zero and **must** be lowered.
+
+The `FLog2Legacy` opcode clamps negative infinity to `-FLT_MAX`.
 
 ### Bitwise instructions
 | `ir::OpCode`              | Return type  | Arguments... |           |           |          |

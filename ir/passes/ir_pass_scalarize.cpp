@@ -112,6 +112,7 @@ void ScalarizePass::scalarizeVectorOps() {
       case OpCode::eFRsq:
       case OpCode::eFExp2:
       case OpCode::eFLog2:
+      case OpCode::eFLog2Legacy:
       case OpCode::eFSin:
       case OpCode::eFCos:
       case OpCode::eFPow:
