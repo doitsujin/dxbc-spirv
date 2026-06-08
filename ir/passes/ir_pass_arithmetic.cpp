@@ -2237,8 +2237,8 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
         }
       }
 
-      /* mad(a, b, 0) -> a * b */
       if (c && !(getFpFlags(*op) & OpFlag::ePrecise)) {
+        /* mad(a, b, 0) -> a * b */
         const auto& cOp = m_builder.getOp(c);
 
         bool optimize = isConstantValue(cOp, -0.0) ||
@@ -2254,6 +2254,31 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
             .addOperand(b.getDef())
             .setFlags(op->getFlags()));
           return std::make_pair(true, op);
+        }
+
+        /* mad(a, b, -fract(a * b)) -> floor(a * b) */
+        if (cOp.getOpCode() == OpCode::eFNeg
+         && (getFpFlags(*op) & OpFlag::eNoSz)
+         && !(getFpFlags(cOp) & OpFlag::ePrecise)) {
+          auto fractOp = m_builder.getOpForOperand(c, 0u);
+
+          if (fractOp.getOpCode() == OpCode::eFFract) {
+            auto mulOp = m_builder.getOpForOperand(fractOp, 0u);
+
+            if (!(getFpFlags(mulOp) & OpFlag::ePrecise)
+             && ((mulOp.getOpCode() == OpCode::eFMul && op->getOpCode() == OpCode::eFMad)
+              || (mulOp.getOpCode() == OpCode::eFMulLegacy && op->getOpCode() == OpCode::eFMadLegacy))) {
+              auto mulA = m_builder.getOpForOperand(mulOp, 0u);
+              auto mulB = m_builder.getOpForOperand(mulOp, 1u);
+
+              if ((a.getDef() == mulA.getDef() && b.getDef() == mulB.getDef())
+               || (a.getDef() == mulB.getDef() && b.getDef() == mulA.getDef())) {
+                m_builder.rewriteOp(op->getDef(), Op::FRound(op->getType(),
+                  mulOp.getDef(), RoundMode::eNegativeInf).setFlags(op->getFlags()));
+                return std::make_pair(true, op);
+              }
+            }
+          }
         }
       }
     } break;
