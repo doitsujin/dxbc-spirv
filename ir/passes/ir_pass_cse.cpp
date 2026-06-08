@@ -234,6 +234,7 @@ CseOpFlags CsePass::classifyOp(const Op& op) const {
     case OpCode::eFRsq:
     case OpCode::eFExp2:
     case OpCode::eFLog2:
+    case OpCode::eFLog2Legacy:
     case OpCode::eFFract:
     case OpCode::eFRound:
     case OpCode::eFMin:

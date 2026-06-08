@@ -1189,6 +1189,7 @@ enum class OpCode : uint16_t {
   eFSgn                         = 697u,
   eFDotAdd                      = 698u,
   eFDotAddLegacy                = 699u,
+  eFLog2Legacy                  = 700u,
 
   eIAnd                         = 704u,
   eIOr                          = 705u,
@@ -2569,6 +2570,11 @@ public:
 
   static Op FLog2(Type type, SsaDef a) {
     return Op(OpCode::eFLog2, type)
+      .addOperand(a);
+  }
+
+  static Op FLog2Legacy(Type type, SsaDef a) {
+    return Op(OpCode::eFLog2Legacy, type)
       .addOperand(a);
   }
 

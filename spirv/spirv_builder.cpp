@@ -593,6 +593,7 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eFMulLegacy:
     case ir::OpCode::eFMadLegacy:
     case ir::OpCode::eFPowLegacy:
+    case ir::OpCode::eFLog2Legacy:
     case ir::OpCode::eUMSad:
     case ir::OpCode::Count:
       /* Invalid opcodes */
