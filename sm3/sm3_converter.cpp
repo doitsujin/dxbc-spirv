@@ -1837,11 +1837,9 @@ bool Converter::handleLoop(ir::Builder& builder, const Instruction& op) {
   auto breakEndIf = builder.add(ir::Op::ScopedEndIf(breakIf));
   builder.rewriteOp(breakIf, ir::Op(builder.getOp(breakIf)).setOperand(0u, breakEndIf));
 
-  /* Store loop counter in proper register so shader can use it for relative addressing. */
-  m_regFile.emitLoopCounterStore(builder, loopCounterVal);
-
   loop.loopStep = stepSize;
   loop.loopCounter = loopCounter;
+  loop.exposeCounter = true;
   return true;
 }
 
@@ -1888,8 +1886,6 @@ bool Converter::handleRep(ir::Builder& builder, const Instruction& op) {
   builder.add(ir::Op::ScopedLoopBreak(loopDef));
   auto breakEndIf = builder.add(ir::Op::ScopedEndIf(breakIf));
   builder.rewriteOp(breakIf, ir::Op(builder.getOp(breakIf)).setOperand(0u, breakEndIf));
-
-  m_regFile.emitLoopCounterStore(builder, loopCounterVal);
 
   loop.loopStep = ir::SsaDef();
   loop.loopCounter = loopCounter;
@@ -2458,7 +2454,8 @@ ir::SsaDef Converter::calculateAddress(
             Swizzle                 swizzle,
             uint32_t                baseAddress,
             ir::ScalarType          type) {
-  auto relativeOffset = m_regFile.emitAddressLoad(builder, registerType, swizzle);
+  auto loopCounter = m_controlFlow.getLoopCounter();
+  auto relativeOffset = m_regFile.emitAddressLoad(builder, registerType, swizzle, loopCounter);
 
   ir::SsaDef baseAddressDef = builder.makeConstant(int32_t(baseAddress));
   ir::SsaDef address = builder.add(ir::Op::IAdd(ir::ScalarType::eI32, baseAddressDef, relativeOffset));

@@ -8,9 +8,10 @@
 namespace dxbc_spv::sm3 {
 
 struct ControlFlowConstruct {
-  ir::SsaDef def;
-  ir::SsaDef loopCounter;
-  ir::SsaDef loopStep;
+  ir::SsaDef def = {};
+  ir::SsaDef loopCounter = {};
+  ir::SsaDef loopStep = {};
+  bool exposeCounter = false;
 };
 
 /** Control flow tracker. Provides some convenience functions to deal with nested
@@ -35,6 +36,19 @@ public:
 
     const auto& construct = m_constructs.back();
     return &construct;
+  }
+
+
+  /** Returns definition of innermost (i.e. last in the array) exposed loop counter */
+  ir::SsaDef getLoopCounter() const {
+    ir::SsaDef result = {};
+
+    for (auto& e : m_constructs) {
+      if (e.exposeCounter)
+        result = e.loopCounter;
+    }
+
+    return result;
   }
 
 

@@ -38,7 +38,8 @@ public:
   ir::SsaDef emitAddressLoad(
           ir::Builder&            builder,
           RegisterType            registerType,
-          Swizzle                 swizzle);
+          Swizzle                 swizzle,
+          ir::SsaDef              loopCounter);
 
   /** Stores temporary register or address register. */
   bool emitStore(
@@ -59,13 +60,6 @@ public:
           Swizzle                 swizzle,
           WriteMask               componentMask,
           ir::ScalarType          type);
-
-  ir::SsaDef emitLoopCounterLoad(
-          ir::Builder&            builder);
-
-  void emitLoopCounterStore(
-          ir::Builder&            builder,
-          ir::SsaDef              value);
 
 private:
 
