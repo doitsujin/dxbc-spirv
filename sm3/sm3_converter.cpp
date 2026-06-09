@@ -1392,50 +1392,69 @@ bool Converter::handleExpP(ir::Builder& builder, const Instruction& op) {
   auto dst = op.getDst();
   auto info = m_parser.getShaderInfo();
   WriteMask writeMask = dst.getWriteMask(info);
-  /* ExpP is the partial precision variant. Always use MinF16 here. */
-  auto scalarType = ir::ScalarType::eMinF16;
-
-  /* src0 has to have a replicate swizzle, so just load x */
-  auto src0 = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX, scalarType);
-
+  /* src0 has to have a replicate swizzle, so just load x. */
   util::small_vector<ir::SsaDef, 4u> components;
 
+  ir::ScalarType scalarType;
+
   if (info.getVersion().first >= 2u) {
+    scalarType = ir::ScalarType::eMinF16;
+
+    auto src0 = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX, scalarType);
+
     for (auto _ : writeMask) {
-      components.push_back(builder.add(ir::Op::FExp2(scalarType, src0)));
+      auto value = builder.add(ir::Op::FExp2(scalarType, src0));
+
+      if (m_options.fastFloatEmulation) {
+        /* If FP16 is used, the constant will be rounded down accordingly */
+        value = builder.add(ir::Op::FMin(scalarType, value,
+          ir::makeTypedConstant(builder, scalarType, std::numeric_limits<float>::max())));
+      }
+
+      components.push_back(value);
     }
   } else {
+    /* According to the docs, only .z is actually computed with min precision. */
+    scalarType = ir::ScalarType::eF32;
+    auto src0 = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX, scalarType);
+
+    /* dst.x = pow(2.0, floor(src0)) */
     if (writeMask & ComponentBit::eX) {
-      /* dst.x = pow(2.0, floor(src0)) */
-      components.push_back(builder.add(ir::Op::FExp2(scalarType, src0)));
+      auto value = builder.add(ir::Op::FExp2(scalarType, builder.add(
+        ir::Op::FRound(scalarType, src0, ir::RoundMode::eNegativeInf))));
+
+      if (m_options.fastFloatEmulation) {
+        value = builder.add(ir::Op::FMin(scalarType, value,
+          ir::makeTypedConstant(builder, scalarType, std::numeric_limits<float>::max())));
+      }
+
+      components.push_back(value);
     }
 
-    if (writeMask & ComponentBit::eY) {
-      /* dst.y = src0 - floor(src0) */
-      components.push_back(builder.add(ir::Op::FSub(scalarType, src0, builder.add(ir::Op::FRound(scalarType, src0, ir::RoundMode::eNegativeInf)))));
-    }
+    /* dst.y = src0 - floor(src0) = fract(src0) */
+    if (writeMask & ComponentBit::eY)
+      components.push_back(builder.add(ir::Op::FFract(scalarType, src0)));
 
+    /* dst.z = pow(2.0, src0) as partial precision */
     if (writeMask & ComponentBit::eZ) {
-      /* dst.z = pow(2.0, floor(src0)) */
-      components.push_back(builder.add(ir::Op::FExp2(scalarType, src0)));
+      auto input = builder.add(ir::Op::ConsumeAs(ir::ScalarType::eMinF16, src0));
+      auto value = builder.add(ir::Op::FExp2(ir::ScalarType::eMinF16, input));
+
+      if (m_options.fastFloatEmulation) {
+        /* If FP16 is used, the constant will be rounded down accordingly */
+        value = builder.add(ir::Op::FMin(ir::ScalarType::eMinF16, value,
+          ir::makeTypedConstant(builder, ir::ScalarType::eMinF16, std::numeric_limits<float>::max())));
+      }
+
+      components.push_back(builder.add(ir::Op::ConsumeAs(scalarType, value)));
     }
 
-    if (writeMask & ComponentBit::eW) {
-      /* dst.w 1.0 */
+    /* dst.w = 1.0 */
+    if (writeMask & ComponentBit::eW)
       components.push_back(makeTypedConstant(builder, scalarType, 1.0f));
-    }
   }
 
   auto result = ir::buildVector(builder, scalarType, components.size(), components.data());
-
-  if (m_options.fastFloatEmulation) {
-    /* makeTypedConstant handles the conversion to F16. */
-
-    auto vectorType = ir::makeVectorType(scalarType, writeMask);
-    result = builder.add(ir::Op::FMin(vectorType, result,
-      ir::makeTypedConstant(builder, vectorType, std::numeric_limits<float>::max())));
-  }
-
   return storeDstModifiedPredicated(builder, op, dst, result);
 }
 
