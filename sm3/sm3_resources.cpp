@@ -389,7 +389,7 @@ ir::SsaDef ResourceMap::dclSampler(ir::Builder& builder, uint32_t samplerIndex) 
     }
 
     std::stringstream nameStream;
-    nameStream << "s_";
+    nameStream << "s";
     nameStream << samplerIndex;
 
     if (ctabEntry) {
@@ -423,7 +423,7 @@ ir::SsaDef ResourceMap::dclTexture(ir::Builder& builder, SamplerStateType textur
     }
 
     std::stringstream nameStream;
-    nameStream << "s_";
+    nameStream << "s";
     nameStream << samplerIndex;
 
     if (ctabEntry) {
