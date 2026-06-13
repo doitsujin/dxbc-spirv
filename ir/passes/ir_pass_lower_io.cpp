@@ -936,6 +936,95 @@ void LowerIoPass::lowerLegacyBuiltInToCbv(ir::BuiltIn builtIn, uint32_t regSpace
 }
 
 
+SsaDef LowerIoPass::lowerSpecConstantsToCbv(uint32_t regSpace, uint32_t regIndex) {
+  // Gather type information for each spec ID
+  small_vector<SsaDef, 32> specConstants;
+
+  for (auto iter = m_builder.getDeclarations().first;
+            iter != m_builder.getDeclarations().second; iter++) {
+    switch (iter->getOpCode()) {
+      case ir::OpCode::eDclSpecConstant: {
+        auto specId = uint32_t(iter->getOperand(iter->getFirstLiteralOperandIndex()));
+
+        if (specId >= specConstants.size())
+          specConstants.resize(specId + 1u);
+
+        dxbc_spv_assert(iter->getType().isBasicType());
+        specConstants.at(specId) = iter->getDef();
+      } break;
+
+      default:
+        break;
+    }
+  }
+
+  // Nothing to do if there are no spec constants
+  if (specConstants.empty())
+    return SsaDef();
+
+  // Build constant buffer with appropriate type
+  Type cbvType = {};
+
+  for (auto spec : specConstants) {
+    BasicType ty = ScalarType::eU32;
+
+    if (spec) {
+      const auto& specOp = m_builder.getOp(spec);
+      ty = specOp.getType().getBaseType(0u);
+      dxbc_spv_assert(specOp.getType() == ty);
+    }
+
+    cbvType.addStructMember(ty);
+  }
+
+  // Declare the actual constant buffer
+  SsaDef cbv = m_builder.add(Op::DclCbv(std::move(cbvType),
+    m_entryPoint, regSpace, regIndex, 1u));
+  m_builder.add(Op::DebugName(cbv, "specData"));
+
+  for (auto spec : specConstants) {
+    if (!spec)
+      continue;
+
+    small_vector<SsaDef, 64u> uses;
+    m_builder.getUses(spec, uses);
+
+    const auto& specOp = m_builder.getOp(spec);
+
+    auto specId = uint32_t(specOp.getOperand(specOp.getFirstLiteralOperandIndex()));
+    auto specType = specOp.getType().getBaseType(0u);
+
+    for (auto use : uses) {
+      auto useOp = m_builder.getOp(use);
+
+      if (!useOp.isDeclarative()) {
+        // Insert buffer load before the consuming instruction
+        // and replace the spec ID with the load
+        auto descriptor = m_builder.addBefore(use, Op::DescriptorLoad(
+          ir::ScalarType::eCbv, cbv, m_builder.makeConstant(0u)));
+        auto load = m_builder.addBefore(use, Op::BufferLoad(specType, descriptor,
+          m_builder.makeConstant(specId), byteSize(specType.getBaseType())));
+
+        for (uint32_t i = 0u; i < useOp.getFirstLiteralOperandIndex(); i++) {
+          if (SsaDef(useOp.getOperand(i)) == spec)
+            useOp.setOperand(i, load);
+        }
+
+        m_builder.rewriteOp(use, std::move(useOp));
+      } else if (useOp.getOpCode() == OpCode::eDebugName) {
+        // Set debug name for the corresponding struct member
+        m_builder.add(Op::DebugMemberName(cbv, specId,
+          useOp.getLiteralString(useOp.getFirstLiteralOperandIndex()).c_str()));
+      }
+    }
+  }
+
+  // Get rid of unused spec constant declarations
+  RemoveUnusedPass::runPass(m_builder);
+  return cbv;
+}
+
+
 void LowerIoPass::scalarizeInputLoads() {
   auto [a, b] = m_builder.getDeclarations();
 

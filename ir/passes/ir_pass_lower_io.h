@@ -347,6 +347,11 @@ public:
    *  ABI. */
   void lowerLegacyBuiltInToCbv(ir::BuiltIn builtIn, uint32_t regSpace, uint32_t regIndex);
 
+  /** Lowers specialization constants to constant buffer in such a way that any
+   *  constant with a spec id N is mapped to a struct member N of the resulting
+   *  CBV. Returns the generated CBV for callers to inspect the type. */
+  SsaDef lowerSpecConstantsToCbv(uint32_t regSpace, uint32_t regIndex);
+
 private:
 
   struct OutputInfo {
