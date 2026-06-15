@@ -978,9 +978,11 @@ SsaDef LowerIoPass::lowerSpecConstantsToCbv(uint32_t regSpace, uint32_t regIndex
   }
 
   // Declare the actual constant buffer
-  SsaDef cbv = m_builder.add(Op::DclCbv(std::move(cbvType),
+  SsaDef cbv = m_builder.add(Op::DclCbv(cbvType,
     m_entryPoint, regSpace, regIndex, 1u));
-  m_builder.add(Op::DebugName(cbv, "specData"));
+
+  if (cbvType.isStructType())
+    m_builder.add(Op::DebugName(cbv, "specData"));
 
   for (auto spec : specConstants) {
     if (!spec)
@@ -1002,8 +1004,13 @@ SsaDef LowerIoPass::lowerSpecConstantsToCbv(uint32_t regSpace, uint32_t regIndex
         // and replace the spec ID with the load
         auto descriptor = m_builder.addBefore(use, Op::DescriptorLoad(
           ir::ScalarType::eCbv, cbv, m_builder.makeConstant(0u)));
-        auto load = m_builder.addBefore(use, Op::BufferLoad(specType, descriptor,
-          m_builder.makeConstant(specId), byteSize(specType.getBaseType())));
+
+        auto address = cbvType.isStructType()
+          ? m_builder.makeConstant(specId)
+          : SsaDef();
+
+        auto load = m_builder.addBefore(use, Op::BufferLoad(specType,
+          descriptor, address, byteSize(specType.getBaseType())));
 
         for (uint32_t i = 0u; i < useOp.getFirstLiteralOperandIndex(); i++) {
           if (SsaDef(useOp.getOperand(i)) == spec)
@@ -1013,8 +1020,12 @@ SsaDef LowerIoPass::lowerSpecConstantsToCbv(uint32_t regSpace, uint32_t regIndex
         m_builder.rewriteOp(use, std::move(useOp));
       } else if (useOp.getOpCode() == OpCode::eDebugName) {
         // Set debug name for the corresponding struct member
-        m_builder.add(Op::DebugMemberName(cbv, specId,
-          useOp.getLiteralString(useOp.getFirstLiteralOperandIndex()).c_str()));
+        std::string name = useOp.getLiteralString(useOp.getFirstLiteralOperandIndex());
+
+        if (cbvType.isStructType())
+          m_builder.add(Op::DebugMemberName(cbv, specId, name.c_str()));
+        else
+          m_builder.add(Op::DebugName(cbv, name.c_str()));
       }
     }
   }
