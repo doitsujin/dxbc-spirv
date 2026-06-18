@@ -778,11 +778,12 @@ Type makeLegacyAlphaTestType();
 /** Legacy fog struct layout */
 enum class LegacyFogLayout : uint32_t {
   eFogEnable        = 0u,
-  eFogMode          = 1u,
-  eFogColor         = 2u,
-  eFogScale         = 3u,
-  eFogEnd           = 4u,
-  eFogDensity       = 5u,
+  eFogUseZ          = 1u,
+  eFogMode          = 2u,
+  eFogColor         = 3u,
+  eFogScale         = 4u,
+  eFogEnd           = 5u,
+  eFogDensity       = 6u,
 };
 
 Type makeLegacyFogType();

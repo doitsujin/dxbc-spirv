@@ -2346,8 +2346,9 @@ ir::SsaDef Converter::emitFogInput(ir::Builder& builder) {
     ir::BuiltIn::eLegacyFog, ir::InterpolationMode::eFlat));
 
   if (m_options.includeDebugNames) {
-    static const std::array<std::pair<ir::LegacyFogLayout, const char*>, 6u> s_names = {{
+    static const std::array<std::pair<ir::LegacyFogLayout, const char*>, 7u> s_names = {{
       { ir::LegacyFogLayout::eFogEnable,  "enable"      },
+      { ir::LegacyFogLayout::eFogUseZ,    "useZ"        },
       { ir::LegacyFogLayout::eFogMode,    "mode"        },
       { ir::LegacyFogLayout::eFogColor,   "color"       },
       { ir::LegacyFogLayout::eFogScale,   "distScale"   },
@@ -2384,6 +2385,9 @@ void Converter::emitFog(ir::Builder& builder) {
   auto color = builder.add(ir::Op::ParamLoad(ir::BasicType(ir::ScalarType::eF32, 3u), m_fogFunction, colorParam));
 
   /* Read fog parameters */
+  auto fogUseZ = builder.add(ir::Op::InputLoad(ir::ScalarType::eBool,
+    m_fogInput, builder.makeConstant(uint32_t(ir::LegacyFogLayout::eFogUseZ))));
+
   auto fogMode = builder.add(ir::Op::InputLoad(ir::ScalarType::eU32,
     m_fogInput, builder.makeConstant(uint32_t(ir::LegacyFogLayout::eFogMode))));
 
@@ -2402,8 +2406,10 @@ void Converter::emitFog(ir::Builder& builder) {
   /* Actually calculate the fog factor now we have all the vars in-place. */
   auto z = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eF32, position, builder.makeConstant(2u)));
   auto w = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eF32, position, builder.makeConstant(3u)));
+  w = builder.add(ir::Op::FRcp(ir::ScalarType::eF32, w));
 
-  auto depth = builder.add(ir::Op::FDiv(ir::ScalarType::eF32, z, w));
+  /* W fog is not influenced by Z at all, Z fog is not in world space */
+  auto depth = builder.add(ir::Op::Select(ir::ScalarType::eF32, fogUseZ, z, w));
 
   /* There are a few different fog formulas for the user to choose. */
   auto fogFactorTmp = builder.add(ir::Op::DclTmp(ir::ScalarType::eF32, getEntryPoint()));

@@ -213,6 +213,7 @@ Type makeLegacyAlphaTestType() {
 Type makeLegacyFogType() {
   return Type()
     .addStructMember(ScalarType::eBool)     /* fog enable */
+    .addStructMember(ScalarType::eBool)     /* use Z fog */
     .addStructMember(ScalarType::eU32)      /* fog mode */
     .addStructMember(ScalarType::eF32, 3u)  /* color */
     .addStructMember(ScalarType::eF32)      /* distance scale */
