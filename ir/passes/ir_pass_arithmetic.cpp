@@ -4405,14 +4405,14 @@ std::pair<bool, Builder::iterator> ArithmeticPass::constantFoldArithmeticOp(Buil
           const auto& a = getConstantAsUint(m_builder.getOpForOperand(*op, 0u), i);
           const auto& b = getConstantAsUint(m_builder.getOpForOperand(*op, 1u), i);
 
-          return makeScalarOperand(op->getType(), a / b);
+          return makeScalarOperand(op->getType(), b ? a / b : -1ull);
         }
 
         case OpCode::eUMod: {
           const auto& a = getConstantAsUint(m_builder.getOpForOperand(*op, 0u), i);
           const auto& b = getConstantAsUint(m_builder.getOpForOperand(*op, 1u), i);
 
-          return makeScalarOperand(op->getType(), a % b);
+          return makeScalarOperand(op->getType(), b ? a / b : -1ull);
         }
 
         case OpCode::eSMin: {
