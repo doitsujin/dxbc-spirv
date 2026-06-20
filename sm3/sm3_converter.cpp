@@ -1920,27 +1920,34 @@ bool Converter::handleRep(ir::Builder& builder, const Instruction& op) {
 
   /* Assume that modifiers aren't supported here. We only implement them for floats right now. */
   dxbc_spv_assert(op.getSrc(0u).getModifier() == OperandModifier::eNone);
-  auto iterationCount = loadSrc(
-    builder, op, op.getSrc(0u),
-    ComponentBit::eX,
-    op.getSrc(0u).getSwizzle(getShaderInfo()),
+
+  auto iterationCount = loadSrc(builder, op, op.getSrc(0u),
+    ComponentBit::eX, op.getSrc(0u).getSwizzle(getShaderInfo()),
     ir::ScalarType::eU32);
 
-  auto loopCounter =  builder.add(ir::Op::DclTmp(ir::ScalarType::eU32, m_entryPoint.def));
-  builder.add(ir::Op::TmpStore(loopCounter, iterationCount));
+  /* Set up iteration counter */
+  auto iterCounter = builder.add(ir::Op::DclTmp(ir::ScalarType::eU32, m_entryPoint.def));
+  builder.add(ir::Op::TmpStore(iterCounter, iterationCount));
 
   auto loopDef = builder.add(ir::Op::ScopedLoop(ir::SsaDef()));
   auto& loop = m_controlFlow.push(loopDef);
 
-  auto loopCounterVal = builder.add(ir::Op::TmpLoad(ir::ScalarType::eU32, loopCounter));
-  auto breakCondition = builder.add(ir::Op::IEq(ir::ScalarType::eBool, loopCounterVal, builder.makeConstant(0u)));
+  /* Exit condition */
+  auto iterIndex = builder.add(ir::Op::TmpLoad(ir::ScalarType::eU32, iterCounter));
+
+  auto breakCondition = builder.add(ir::Op::IEq(ir::ScalarType::eBool, iterIndex, builder.makeConstant(0u)));
   auto breakIf = builder.add(ir::Op::ScopedIf(ir::SsaDef(), breakCondition));
   builder.add(ir::Op::ScopedLoopBreak(loopDef));
   auto breakEndIf = builder.add(ir::Op::ScopedEndIf(breakIf));
   builder.rewriteOp(breakIf, ir::Op(builder.getOp(breakIf)).setOperand(0u, breakEndIf));
 
+  /* Decrement iteration counter right away, no need to
+   * wait since it's not shader-visible. */
+  iterIndex = builder.add(ir::Op::ISub(ir::ScalarType::eU32, iterIndex, builder.makeConstant(1u)));
+  builder.add(ir::Op::TmpStore(iterCounter, iterIndex));
+
   loop.loopStep = ir::SsaDef();
-  loop.loopCounter = loopCounter;
+  loop.loopCounter = ir::SsaDef();
   return true;
 }
 
@@ -1950,10 +1957,6 @@ bool Converter::handleEndRep(ir::Builder &builder, const Instruction &op) {
 
   if (type != ir::OpCode::eScopedLoop)
     return logOpError(op, "'EndRep' occurred outside of 'Rep' or 'Rep' is straddling 'If'.");
-
-  auto loopCounterVal = builder.add(ir::Op::TmpLoad(ir::ScalarType::eU32, construct->loopCounter));
-  loopCounterVal = builder.add(ir::Op::ISub(ir::ScalarType::eU32, loopCounterVal, builder.makeConstant(1u)));
-  builder.add(ir::Op::TmpStore(construct->loopCounter, loopCounterVal));
 
   auto constructEnd = builder.add(ir::Op::ScopedEndLoop(construct->def));
   builder.rewriteOp(construct->def, ir::Op(builder.getOp(construct->def)).setOperand(0u, constructEnd));
