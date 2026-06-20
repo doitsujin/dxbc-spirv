@@ -1849,14 +1849,15 @@ bool Converter::handleLoop(ir::Builder& builder, const Instruction& op) {
 
   /* Assume that modifiers aren't supported here. We only implement them for floats right now. */
   dxbc_spv_assert(op.getSrc(0u).getModifier() == OperandModifier::eNone);
-  auto src0 = loadSrc(
-    builder, op, op.getSrc(0u),
-    ComponentBit::eX | ComponentBit::eY | ComponentBit::eZ,
-    op.getSrc(0u).getSwizzle(getShaderInfo()),
-    ir::ScalarType::eI32);
 
-  /* Load loop parameters */
+  auto src0 = loadSrc(builder, op, op.getSrc(0u),
+    ComponentBit::eX | ComponentBit::eY | ComponentBit::eZ,
+    op.getSrc(0u).getSwizzle(getShaderInfo()), ir::ScalarType::eI32);
+
+  /* Load loop parameters. Iteration count is treated as unsigned on native. */
   auto iterationCount = ir::extractFromVector(builder, src0, 0u);
+  iterationCount = builder.add(ir::Op::ConsumeAs(ir::ScalarType::eU32, iterationCount));
+
   auto initialValue = ir::extractFromVector(builder, src0, 1u);
   auto stepSize = ir::extractFromVector(builder, src0, 2u);
 
@@ -1864,21 +1865,29 @@ bool Converter::handleLoop(ir::Builder& builder, const Instruction& op) {
   auto loopCounter = builder.add(ir::Op::DclTmp(ir::ScalarType::eI32, m_entryPoint.def));
   builder.add(ir::Op::TmpStore(loopCounter, initialValue));
 
-  /* Calculate final loop value */
-  auto totalSteps = builder.add(ir::Op::IMul(ir::ScalarType::eI32, stepSize, iterationCount));
-  auto finalCounterValue = builder.add(ir::Op::IAdd(ir::ScalarType::eI32, initialValue, totalSteps));
+  /* We can't actually use the loop counter as an exit condition because the
+   * step size may be 0. Set up a temporary variable for the actual iteration
+   * count instead and decrement it until it reaches zero. */
+  auto iterCounter = builder.add(ir::Op::DclTmp(ir::ScalarType::eU32, m_entryPoint.def));
+  builder.add(ir::Op::TmpStore(iterCounter, iterationCount));
 
   /* Begin loop */
   auto loopDef = builder.add(ir::Op::ScopedLoop(ir::SsaDef()));
   auto& loop = m_controlFlow.push(loopDef);
 
   /* Loop step: Exit condition first */
-  auto loopCounterVal = builder.add(ir::Op::TmpLoad(ir::ScalarType::eI32, loopCounter));
-  auto breakCondition = builder.add(ir::Op::IEq(ir::ScalarType::eBool, loopCounterVal, finalCounterValue));
+  auto iterIndex = builder.add(ir::Op::TmpLoad(ir::ScalarType::eU32, iterCounter));
+
+  auto breakCondition = builder.add(ir::Op::IEq(ir::ScalarType::eBool, iterIndex, builder.makeConstant(0u)));
   auto breakIf = builder.add(ir::Op::ScopedIf(ir::SsaDef(), breakCondition));
   builder.add(ir::Op::ScopedLoopBreak(loopDef));
   auto breakEndIf = builder.add(ir::Op::ScopedEndIf(breakIf));
   builder.rewriteOp(breakIf, ir::Op(builder.getOp(breakIf)).setOperand(0u, breakEndIf));
+
+  /* Decrement iteration counter by 1. This is not visible to the shader,
+   * so we don't need to wait until the end of the loop. */
+  iterIndex = builder.add(ir::Op::ISub(ir::ScalarType::eU32, iterIndex, builder.makeConstant(1u)));
+  builder.add(ir::Op::TmpStore(iterCounter, iterIndex));
 
   loop.loopStep = stepSize;
   loop.loopCounter = loopCounter;
