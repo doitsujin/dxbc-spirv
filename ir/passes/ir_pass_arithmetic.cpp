@@ -2466,7 +2466,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
 
       /* max(-a, a) -> |a|
        * min(-a, a) -> -|a| */
-      if ((a.getOpCode() == negOp || b.getOpCode() == negOp) && !isUInt) {
+      if (((a.getOpCode() == negOp) != (b.getOpCode() == negOp)) && !isUInt) {
         const auto& aOp = a.getOpCode() == negOp ? m_builder.getOpForOperand(a, 0u) : a;
         const auto& bOp = b.getOpCode() == negOp ? m_builder.getOpForOperand(b, 0u) : b;
 
