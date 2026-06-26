@@ -1567,6 +1567,11 @@ bool Converter::handleNrm(ir::Builder& builder, const Instruction& op) {
   auto scale = builder.add(ir::Op::FRsq(scalarType,
     builder.add(emitFDot(scalarType, xyz, xyz))));
 
+  if (m_options.fastFloatEmulation) {
+    scale = builder.add(ir::Op::FMin(scalarType, scale,
+      ir::makeTypedConstant(builder, scalarType, std::numeric_limits<float>::max())));
+  }
+
   auto src = loadSrcModified(builder, op, op.getSrc(0u), writeMask, scalarType);
   auto result = builder.add(emitFMul(vectorType, src, broadcastScalar(builder, scale, writeMask)));
 
