@@ -475,6 +475,13 @@ ir::SsaDef Converter::normalizeVector(ir::Builder& builder, ir::SsaDef def) {
   uint32_t vecSize = type.getVectorSize();
   auto lengthSquared = builder.add(emitFDot(scalarType, def, def));
   auto lengthInv = builder.add(ir::Op::FRsq(scalarType, lengthSquared));
+
+  // Clamp inverse length in case the vector is 0
+  if (m_options.fastFloatEmulation) {
+    lengthInv = builder.add(ir::Op::FMin(scalarType, lengthInv,
+      ir::makeTypedConstant(builder, scalarType, std::numeric_limits<float>::max())));
+  }
+
   return builder.add(emitFMul(type, def, broadcastScalar(builder, lengthInv, WriteMask((1u << vecSize) - 1u))));
 }
 
