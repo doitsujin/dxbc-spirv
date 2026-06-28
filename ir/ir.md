@@ -21,9 +21,7 @@ Instruction return types have the following properties, as a top-down structure:
 - Number of structure members. If the type is an array, each element will be one instance of the given structure. If the struct
   member count is 1, the element type is a scalar or vector. If the member count is 0, the type is considered `void` and the
   instruction does not return a value. In this case, the array dimension count must also be 0.
-- Each struct member is represented as a scalar type (`ir::Type`) with a vector size. In the C API, the vector size is biased by 1,
-  so that a vector size of 0 unambiguously refers to a scalar and a vector size of 1 refers to a `vec2`, etc. The maximum
-  vector size is a `vec4`.
+- Each struct member is represented as a scalar type (`ir::Type`) with a vector size.
 
 The `ir::Type::Unknown` scalar type is used when, at the time of recording an instruction, the exact type is not known. This is
 often the case with load-store pairs. Unknown types will generally be resolved after SSA construction, and will be promoted to
@@ -89,8 +87,6 @@ for debugging purposes and will not be included in any valid shader program.
 |----------------------|-------------|---------------------------------|
 | `Constant`           | any         | Literals for each member        |
 | `Undef`              | any         | None                            |
-| `MinValue`           | scalar      | None                            |
-| `MaxValue`           | scalar      | None                            |
 
 Constant literals are flattened according to the type definition:
 - For a scalar, one token is used.
@@ -101,11 +97,6 @@ Constant literals are flattened according to the type definition:
 `Undef` returns an undefined value of any given type, and is commonly found as an operand
 to `Phi` instructions. For robustness reasons, it is advised to zero-initialize variables
 anyway.
-
-`MinValue` and `MaxValue` instructions can occur anywhere in the code and return the
-lowest and highest representable number for a given data type that is not infinite.
-These instructions are useful for handling min-precision types in some cases, and
-**must** be lowered to constants before lowering to the target IR.
 
 ### Mode setting instructions
 
