@@ -108,63 +108,6 @@ private:
 
 };
 
-
-template<typename T>
-class AtomicFlags {
-  static_assert(std::is_enum_v<T>);
-public:
-
-  using FlagType = Flags<T>;
-  using IntType = typename FlagType::IntType;
-
-  AtomicFlags() = default;
-
-  AtomicFlags(FlagType flags)
-  : m_raw(IntType(flags)) { }
-
-  AtomicFlags(const AtomicFlags& other)
-  : m_raw(other.m_raw.load(std::memory_order_relaxed)) { }
-
-  AtomicFlags& operator = (const AtomicFlags& other) {
-    m_raw.store(other.m_raw.load(std::memory_order_relaxed), std::memory_order_relaxed);
-    return *this;
-  }
-
-  AtomicFlags& operator = (FlagType flags) {
-    m_raw = IntType(flags);
-    return *this;
-  }
-
-  FlagType load(std::memory_order memoryOrder = std::memory_order_seq_cst) const {
-    return FlagType(m_raw.load(memoryOrder));
-  }
-
-  void store(FlagType flags,
-          std::memory_order memoryOrder = std::memory_order_seq_cst) {
-    m_raw.store(IntType(flags), memoryOrder);
-  }
-
-  FlagType set(FlagType flags,
-          std::memory_order memoryOrder = std::memory_order_seq_cst) {
-    return FlagType(m_raw.fetch_or(IntType(flags), memoryOrder));
-  }
-
-  FlagType clr(FlagType flags,
-          std::memory_order memoryOrder = std::memory_order_seq_cst) {
-    return FlagType(m_raw.fetch_and(~IntType(flags), memoryOrder));
-  }
-
-  FlagType exchange(FlagType flags,
-          std::memory_order memoryOrder = std::memory_order_seq_cst) {
-    return FlagType(m_raw.exchange(IntType(flags), memoryOrder));
-  }
-
-private:
-
-  std::atomic<IntType> m_raw;
-
-};
-
 template<typename T>
 std::ostream& operator << (std::ostream& os, Flags<T> flags) {
   if (!flags) {
