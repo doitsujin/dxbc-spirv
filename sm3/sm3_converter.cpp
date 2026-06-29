@@ -1000,6 +1000,10 @@ bool Converter::handleTextureSample(ir::Builder& builder, const Instruction& op)
         /* texld - sm_2_0 and up */
         auto src0 = op.getSrc(0u);
         auto src1 = op.getSrc(1u);
+
+        if (getShaderInfo().getVersion().first >= 3u)
+          swizzle = src1.getSwizzle(getShaderInfo());
+
         texCoord = loadSrcModified(builder, op, src0, ComponentBit::eAll, scalarType);
         samplerIdx = src1.getIndex();
 
