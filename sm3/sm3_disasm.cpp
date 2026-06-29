@@ -230,20 +230,20 @@ void Disassembler::disassembleOperand(std::ostream& stream, const Instruction& o
 
   stream << UnambiguousRegisterType { arg.getRegisterType(), m_info.getType(), m_info.getVersion().first };
   disassembleRegisterAddressing(stream, arg, ctab);
-  disassembleSwizzleWriteMask(stream, op, arg);
+  disassembleSwizzleWriteMask(stream, arg);
 
   if (arg.getInfo().kind == OperandKind::eSrcReg
     && (modifier == OperandModifier::eDz || modifier == OperandModifier::eDw)) {
     stream << " / ";
     stream << UnambiguousRegisterType { arg.getRegisterType(), m_info.getType(), m_info.getVersion().first };
     disassembleRegisterAddressing(stream, arg, ctab);
-    disassembleSwizzleWriteMask(stream, op, arg);
+    disassembleSwizzleWriteMask(stream, arg);
   }
 
   stream << suffix;
 }
 
-void Disassembler::disassembleSwizzleWriteMask(std::ostream& stream, const Instruction& op, const Operand& arg) const {
+void Disassembler::disassembleSwizzleWriteMask(std::ostream& stream, const Operand& arg) const {
   switch (arg.getSelectionMode(m_info)) {
     case SelectionMode::eMask:
       if (arg.getWriteMask(m_info) != WriteMask(ComponentBit::eAll))
@@ -251,15 +251,15 @@ void Disassembler::disassembleSwizzleWriteMask(std::ostream& stream, const Instr
       break;
     case SelectionMode::eSwizzle: {
       Swizzle swizzle = arg.getSwizzle(m_info);
-      WriteMask dstWriteMask = op.hasDst() ? op.getDst().getWriteMask(m_info) : WriteMask(ComponentBit::eAll);
 
       if (swizzle != Swizzle::identity()) {
-        /* Only print the components that are relevant according to the write mask. */
         stream << ".";
-        for (uint32_t i = 0u; i < 4u; i++) {
-          if (dstWriteMask & WriteMask(ComponentBit(1u << i))) {
-            stream << swizzle.get(i);
-          }
+
+        /* If all components are the same, just print it once. */
+        bool swizzleRepetitive = swizzle == Swizzle(swizzle.x());
+
+        for (uint32_t i = 0u; i < (swizzleRepetitive ? 1u : 4u); i++) {
+          stream << swizzle.get(i);
         }
       }
     } break;

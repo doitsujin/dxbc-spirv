@@ -45,7 +45,7 @@ private:
 
   void disassembleRegisterAddressing(std::ostream& stream, const Operand& arg, const ConstantTable& ctab) const;
 
-  void disassembleSwizzleWriteMask(std::ostream& stream, const Instruction& op, const Operand& arg) const;
+  void disassembleSwizzleWriteMask(std::ostream& stream, const Operand& arg) const;
 
   void emitLineNumber(std::ostream& stream);
 
