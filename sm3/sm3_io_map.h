@@ -189,7 +189,8 @@ private:
     ir::Builder& builder,
     RegisterType registerType,
     uint32_t     registerIndex,
-    Semantic     semantic);
+    Semantic     semantic,
+    bool         isCentroid);
 
   void dclPointCoord(ir::Builder& builder);
 
