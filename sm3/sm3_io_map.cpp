@@ -80,53 +80,37 @@ void IoMap::initialize(ir::Builder& builder) {
       /* There is no register for the normal, we emit it in case the VS is used with fixed function.
        * So we get a little tricky and use an imaginary 13th output register.
        * Register type & index are only used for emitting debug naming and we handle that edge case there. */
-      dclIoVar(
-        builder,
-        RegisterType::eOutput,
-        SM3VSOutputArraySize,
-        { SemanticUsage::eNormal, 0u }
-      );
+      dclIoVar(builder, RegisterType::eOutput, SM3VSOutputArraySize,
+        { SemanticUsage::eNormal, 0u }, false);
     }
 
     /* Texture coords */
     for (uint32_t i = 0u; i < SM2TexCoordCount; i++) {
-      dclIoVar(
-        builder,
+      dclIoVar(builder,
         isPS ? RegisterType::ePixelTexCoord : RegisterType::eTexCoordOut,
-        i,
-        { SemanticUsage::eTexCoord, i }
-      );
+        i, { SemanticUsage::eTexCoord, i }, false);
     }
 
     /* Colors */
     for (uint32_t i = 0u; i < SM2ColorCount; i++) {
-      dclIoVar(
-        builder,
+      dclIoVar(builder,
         isPS ? RegisterType::eInput : RegisterType::eAttributeOut,
-        i,
-        { SemanticUsage::eColor, i }
-      );
+        i, { SemanticUsage::eColor, i }, false);
     }
 
     /* Fog
      * There is no fog input register in the pixel shader that is accessible
      * to the shader. We do however need to pass the fog value calculated by the vertex shader
      * the fragment shader. Use an imaginary 11th input register. */
-    dclIoVar(
-      builder,
+    dclIoVar(builder,
       isPS ? RegisterType::eInput : RegisterType::eRasterizerOut,
       isPS ? FogRegisterIndex : uint32_t(RasterizerOutIndex::eRasterOutFog),
-      { SemanticUsage::eFog, 0u }
-    );
+      { SemanticUsage::eFog, 0u }, false);
 
     if (isPS) {
       /* Declare a output register for PS 1 shaders. */
-      dclIoVar(
-        builder,
-        RegisterType::eColorOut,
-        0u,
-        { SemanticUsage::eColor, 0u }
-      );
+      dclIoVar(builder, RegisterType::eColorOut, 0u,
+        { SemanticUsage::eColor, 0u }, false);
     }
   }
 
@@ -185,7 +169,8 @@ bool IoMap::handleDclIoVar(ir::Builder& builder, const Instruction& op) {
     semantic = semanticOpt.value();
   }
 
-  dclIoVar(builder, dst.getRegisterType(), dst.getIndex(), semantic);
+  dclIoVar(builder, dst.getRegisterType(), dst.getIndex(), semantic,
+    info.getVersion().first >= 2u && dst.isCentroid());
   emitIoVarDefault(builder, m_variables.back());
   return true;
 }
@@ -255,7 +240,8 @@ void IoMap::dclIoVar(
    ir::Builder& builder,
    RegisterType registerType,
    uint32_t     registerIndex,
-   Semantic     semantic) {
+   Semantic     semantic,
+   bool         isCentroid) {
 
   auto shaderType = m_converter.getShaderInfo().getType();
   bool isInput = registerTypeIsInput(registerType, shaderType);
@@ -337,7 +323,7 @@ void IoMap::dclIoVar(
 
 
     if (isInput && shaderType == ShaderType::ePixel) {
-      declaration.addOperand((semantic.usage == SemanticUsage::eColor)
+      declaration.addOperand(isCentroid || (semantic.usage == SemanticUsage::eColor)
         ? ir::InterpolationModes(ir::InterpolationMode::eCentroid)
         : ir::InterpolationModes());
     }
@@ -558,7 +544,7 @@ ir::SsaDef IoMap::emitLoad(
       if (!semantic.has_value()) {
         m_converter.logOpError(op, "Failed to process I/O load.");
       } else {
-        dclIoVar(builder, operand.getRegisterType(), operand.getIndex(), semantic.value());
+        dclIoVar(builder, operand.getRegisterType(), operand.getIndex(), semantic.value(), false);
         ioVar = &m_variables.back();
         emitIoVarDefault(builder, *ioVar);
       }
@@ -660,7 +646,7 @@ ir::SsaDef IoMap::emitTexCoordLoad(
     if (!semantic.has_value()) {
       m_converter.logOpError(op, "Failed to process I/O load.");
     } else {
-      dclIoVar(builder, RegisterType::ePixelTexCoord, regIdx, semantic.value());
+      dclIoVar(builder, RegisterType::ePixelTexCoord, regIdx, semantic.value(), false);
       ioVar = &m_variables.back();
     }
   }
@@ -736,7 +722,7 @@ bool IoMap::emitStore(
         return false;
       }
 
-      dclIoVar(builder, operand.getRegisterType(), operand.getIndex(), semantic.value());
+      dclIoVar(builder, operand.getRegisterType(), operand.getIndex(), semantic.value(), false);
       ioVar = &m_variables.back();
       emitIoVarDefault(builder, *ioVar);
     }
@@ -850,7 +836,7 @@ bool IoMap::emitDepthStore(ir::Builder &builder, const Instruction &op, ir::SsaD
       return false;
     }
 
-    dclIoVar(builder, RegisterType::eDepthOut, 0u, semantic.value());
+    dclIoVar(builder, RegisterType::eDepthOut, 0u, semantic.value(), false);
     ioVar = &m_variables.back();
   }
 
@@ -873,7 +859,7 @@ bool IoMap::emitColorStore(ir::Builder& builder, ir::SsaDef value) {
       Logger::err("Failed to process I/O color store.");
       return false;
     }
-    dclIoVar(builder, RegisterType::eColorOut, 0u, semantic.value());
+    dclIoVar(builder, RegisterType::eColorOut, 0u, semantic.value(), false);
     ioVar = &m_variables.back();
   }
   for (uint32_t i = 0u; i < 4u; i++) {
@@ -911,7 +897,7 @@ void IoMap::emitFogStore(ir::Builder& builder, ir::SsaDef value) {
 
   if (ioVar == nullptr) {
     dclIoVar(builder, RegisterType::eRasterizerOut, uint32_t(RasterizerOutIndex::eRasterOutFog),
-      { SemanticUsage::eFog, 0u });
+      { SemanticUsage::eFog, 0u }, false);
     ioVar = &m_variables.back();
   }
   dxbc_spv_assert(ioVar != nullptr);
@@ -928,7 +914,7 @@ ir::SsaDef IoMap::getFogValue(ir::Builder& builder) {
 
   const IoVarInfo* ioVar = findIoVar(Semantic { SemanticUsage::eFog, 0u }, true);
   if (ioVar == nullptr) {
-    dclIoVar(builder, RegisterType::eInput, FogRegisterIndex, { SemanticUsage::eFog, 0u });
+    dclIoVar(builder, RegisterType::eInput, FogRegisterIndex, { SemanticUsage::eFog, 0u }, false);
     ioVar = &m_variables.back();
   }
   dxbc_spv_assert(ioVar != nullptr);
@@ -946,7 +932,7 @@ ir::SsaDef IoMap::getPositionValue(ir::Builder& builder) {
     /* Only lazily declare it for pixel shaders. In vertex shaders the user HAS TO declare one output register
      * as position 0, and we can't do it lazily because we don't know which output register index is available. */
     dclIoVar(builder, RegisterType::eMiscType, uint32_t(MiscTypeIndex::eMiscTypePosition),
-      { SemanticUsage::ePosition, 0u });
+      { SemanticUsage::ePosition, 0u }, false);
     ioVar = &m_variables.back();
     emitIoVarDefault(builder, *ioVar);
   }
