@@ -1581,8 +1581,9 @@ bool Converter::handleNrm(ir::Builder& builder, const Instruction& op) {
 
   if (m_options.fastFloatEmulation) {
     auto vectorType = ir::makeVectorType(scalarType, writeMask);
-    result = builder.add(ir::Op::FMin(vectorType, result,
-      ir::makeTypedConstant(builder, vectorType, std::numeric_limits<float>::max())));
+    result = builder.add(ir::Op::FClamp(vectorType, result,
+      ir::makeTypedConstant(builder, vectorType, -std::numeric_limits<float>::max()),
+      ir::makeTypedConstant(builder, vectorType,  std::numeric_limits<float>::max())));
   }
 
   return storeDstModifiedPredicated(builder, op, dst, result);
