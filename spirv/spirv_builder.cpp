@@ -1494,7 +1494,8 @@ void SpirvBuilder::emitBufferLoad(const ir::Op& op) {
         getIdForDef(descriptorOp.getDef()), addressDef));
 
       memoryOperands.flags |= spv::MemoryAccessAlignedMask;
-      memoryOperands.alignment = uint32_t(op.getOperand(2u));
+      memoryOperands.alignment = uint32_t(op.getOperand(2u)) | accessType.byteSize();
+      memoryOperands.alignment &= -memoryOperands.alignment;
 
       addressedType = accessType;
     } else if (addressedType == accessType) {
@@ -1592,7 +1593,8 @@ void SpirvBuilder::emitBufferStore(const ir::Op& op) {
         accessType, dclOp, getIdForDef(descriptorOp.getDef()), addressDef);
 
       memoryOperands.flags |= spv::MemoryAccessAlignedMask;
-      memoryOperands.alignment = uint32_t(op.getOperand(3u));
+      memoryOperands.alignment = uint32_t(op.getOperand(3u)) | accessType.byteSize();
+      memoryOperands.alignment &= -memoryOperands.alignment;
 
       storeIds.push_back(std::make_pair(accessChainId, getIdForDef(valueOp.getDef())));
     } else if (addressedType == accessType) {
