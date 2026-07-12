@@ -490,12 +490,12 @@ Operand::Operand(util::ByteReader& reader, const OperandInfo& info, Instruction&
     }
   }
 
-  if ((info.kind == OperandKind::eDstReg || info.kind == OperandKind::eSrcReg)
-    && !util::bextract(m_token, 31u, 1u)) {
-    Logger::err("Token is not an operand.");
-    resetOnError();
-    return;
-  }
+  /* Do not reject register operands whose bit 31 is clear. Bit 31 is not a
+   * reliable operand marker: real D3D9 bytecode leaves it clear on destination
+   * and dcl register tokens, and neither the D3D9 runtime, the legacy dxso
+   * decoder nor wined3d inspect it. Operand counts come from the instruction
+   * length field / layout table and are bounded by the token sub-range, so no
+   * such check is needed (or correct) here. */
 
   if ((info.kind == OperandKind::eDstReg || info.kind == OperandKind::eSrcReg) && hasRelativeAddressing()) {
     RegisterType registerType = getRegisterType();
