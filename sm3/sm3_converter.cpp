@@ -2498,12 +2498,13 @@ void Converter::emitFog(ir::Builder& builder) {
   auto fogModeSwitchEnd = builder.add(ir::Op::ScopedEndSwitch(fogModeSwitch));
   builder.rewriteOp(fogModeSwitch, ir::Op(builder.getOp(fogModeSwitch)).setOperand(0u, fogModeSwitchEnd));
 
-  /* Fog factor controls 'the visibility' of the original color of the pixel.
-   * So a fog factor of 0 means 100% fog and a fog factor of 1 means no fog at all and the original color is
-   * completely visible. It's called that way because the D3D9 docs call it that. */
-  auto fogFactor = builder.add(ir::Op::FClamp(ir::ScalarType::eF32,
-    builder.add(ir::Op::TmpLoad(ir::ScalarType::eF32, fogFactorTmp)),
-    builder.makeConstant(0.0f), builder.makeConstant(1.0f)));
+  /* Fog factor controls 'the visibility' of the original color of the pixel. So a fog
+   * factor of 0 means 100% fog and a fog factor of 1 means no fog at all and the original
+   * color is completely visible. It's called that way because the D3D9 docs call it that.
+   * Clamp fog factor in such a way that nan gets flushed to 1 instead of 0. */
+  auto fogFactor = builder.add(ir::Op::TmpLoad(ir::ScalarType::eF32, fogFactorTmp));
+  fogFactor = builder.add(ir::Op::FMin(ir::ScalarType::eF32, fogFactor, builder.makeConstant(1.0f)));
+  fogFactor = builder.add(ir::Op::FMax(ir::ScalarType::eF32, fogFactor, builder.makeConstant(0.0f)));
 
   /* Calculate the color of the pixel with fog in pixel shaders and return that. */
   dxbc_spv_assert(color);
