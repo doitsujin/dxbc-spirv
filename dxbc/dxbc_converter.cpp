@@ -1479,6 +1479,7 @@ bool Converter::handleIntDivide(ir::Builder& builder, const Instruction& op) {
   /* Process division one component at a time */
   auto zero = makeTypedConstant(builder, scalarType,  0u);
   auto neg1 = makeTypedConstant(builder, scalarType, -1u);
+  auto one  = makeTypedConstant(builder, scalarType,  1u);
 
   util::small_vector<ir::SsaDef, 4u> divScalars;
   util::small_vector<ir::SsaDef, 4u> modScalars;
@@ -1489,15 +1490,20 @@ bool Converter::handleIntDivide(ir::Builder& builder, const Instruction& op) {
 
     auto cond = builder.add(ir::Op::INe(ir::ScalarType::eBool, den, zero));
 
+    /* UDiv and UMod by zero is undefined behavior. This allows compilers to remove
+     * the select guard since it can be assumed den is never zero. To prevent this
+     * use a safe divisor to ensure the compiler won't optimize away the select */
+    auto safeDen = builder.add(ir::Op::Select(scalarType, cond, den, one));
+
     if (dstDiv.getWriteMask() & c) {
       auto& scalar = divScalars.emplace_back();
-      scalar = builder.add(ir::Op::UDiv(scalarType, num, den));
+      scalar = builder.add(ir::Op::UDiv(scalarType, num, safeDen));
       scalar = builder.add(ir::Op::Select(scalarType, cond, scalar, neg1));
     }
 
     if (dstMod.getWriteMask() & c) {
       auto& scalar = modScalars.emplace_back();
-      scalar = builder.add(ir::Op::UMod(scalarType, num, den));
+      scalar = builder.add(ir::Op::UMod(scalarType, num, safeDen));
       scalar = builder.add(ir::Op::Select(scalarType, cond, scalar, neg1));
     }
   }
