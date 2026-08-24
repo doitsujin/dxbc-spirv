@@ -13,6 +13,7 @@
 #include "../ir/ir_builder.h"
 
 #include "../util/util_log.h"
+#include "../util/util_small_vector.h"
 
 namespace dxbc_spv::dxbc {
 
@@ -82,6 +83,14 @@ private:
   uint32_t      m_instructionCount = 0u;
 
   ir::SsaDef    m_icb = { };
+
+  /* Helper functions for udiv/umod */
+  struct DivisionFn {
+    ir::ScalarType type = ir::ScalarType::eUnknown;
+    ir::SsaDef function = {};
+  };
+
+  util::small_vector<DivisionFn, 2u> m_divisionHelpers;
 
   /* Entry point definition and function definitions. The main function
    * will point to the control point function for hull shaders. */
@@ -173,6 +182,8 @@ private:
   bool emitDsStateSetup(ir::Builder& builder);
 
   bool emitGsStateSetup(ir::Builder& builder);
+
+  ir::SsaDef emitUdivHelper(ir::Builder& builder, ir::ScalarType type);
 
   bool handleCustomData(ir::Builder& builder, const Instruction& op);
 
