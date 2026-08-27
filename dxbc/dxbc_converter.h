@@ -183,8 +183,6 @@ private:
 
   bool emitGsStateSetup(ir::Builder& builder);
 
-  ir::SsaDef emitUdivHelper(ir::Builder& builder, ir::ScalarType type);
-
   bool handleCustomData(ir::Builder& builder, const Instruction& op);
 
   bool handleDclGlobalFlags(ir::Builder& builder, const Instruction& op);

@@ -658,69 +658,6 @@ bool Converter::emitGsStateSetup(ir::Builder& builder) {
 }
 
 
-ir::SsaDef Converter::emitUdivHelper(ir::Builder& builder, ir::ScalarType type) {
-  for (const auto& helper : m_divisionHelpers) {
-    if (helper.type == type)
-      return helper.function;
-  }
-
-  /* UDiv / UMod are annoying in that division by 0 is fully undefined
-   * behaviour in our target IRs, and some drivers will optimize any
-   * trivial checks for the divisor being zero if we don't wrap it in
-   * control flow or otherwise ensure that the divisor itself cannot be 0.
-   *
-   * Go for the control flow approach here; NIR will deal with it on Mesa. */
-  auto paramA = builder.add(ir::Op::DclParam(type));
-  auto paramB = builder.add(ir::Op::DclParam(type));
-
-  auto resultType = ir::BasicType(type, 2u);
-
-  auto& helper = m_divisionHelpers.emplace_back();
-  helper.type = type;
-  helper.function = builder.addBefore(builder.getCode().first->getDef(),
-    ir::Op::Function(resultType).addOperands(paramA, paramB));
-
-  if (m_options.includeDebugNames) {
-    builder.add(ir::Op::DebugName(paramA, "a"));
-    builder.add(ir::Op::DebugName(paramB, "b"));
-
-    std::stringstream name;
-    name << "udiv_" << type;
-
-    builder.add(ir::Op::DebugName(helper.function, name.str().c_str()));
-  }
-
-  auto cursor = builder.setCursor(helper.function);
-
-  auto a = builder.add(ir::Op::ParamLoad(type, helper.function, paramA));
-  auto b = builder.add(ir::Op::ParamLoad(type, helper.function, paramB));
-
-  /* If b is non-zero, compute a/b and a%b, otherwise return (-1, -1) */
-  auto isNz = builder.add(ir::Op::INe(ir::ScalarType::eBool, b,
-    makeTypedConstant(builder, type,  0u)));
-  auto ifNz = builder.add(ir::Op::ScopedIf(ir::SsaDef(), isNz));
-
-  auto result = builder.add(ir::Op::CompositeConstruct(resultType,
-    builder.add(ir::Op::UDiv(type, a, b)),
-    builder.add(ir::Op::UMod(type, a, b))));
-
-  builder.add(ir::Op::Return(resultType, result));
-
-  builder.add(ir::Op::ScopedElse(ifNz));
-
-  builder.add(ir::Op::Return(resultType,
-    makeTypedConstant(builder, resultType, -1u)));
-
-  builder.rewriteOp(ifNz, ir::Op(builder.getOp(ifNz))
-    .setOperand(0u, builder.add(ir::Op::ScopedEndIf(ifNz))));
-
-  builder.add(ir::Op::FunctionEnd());
-
-  builder.setCursor(cursor);
-  return helper.function;
-}
-
-
 bool Converter::handleCustomData(ir::Builder& builder, const Instruction& op) {
   if (op.getOpToken().getCustomDataType() != CustomDataType::eDclIcb) {
     logOpMessage(LogLevel::eDebug, op, "Skipping custom data block of type ", uint32_t(op.getOpToken().getCustomDataType()));
@@ -1539,8 +1476,6 @@ bool Converter::handleIntDivide(ir::Builder& builder, const Instruction& op) {
     ? determineOperandType(dstDiv, ir::ScalarType::eU32)
     : determineOperandType(dstMod, ir::ScalarType::eU32);
 
-  auto vectorType = ir::BasicType(scalarType, 2u);
-
   /* Process division one component at a time */
   util::small_vector<ir::SsaDef, 4u> divScalars;
   util::small_vector<ir::SsaDef, 4u> modScalars;
@@ -1549,14 +1484,11 @@ bool Converter::handleIntDivide(ir::Builder& builder, const Instruction& op) {
     const auto& num = loadSrcModified(builder, op, op.getSrc(0u), c, scalarType);
     const auto& den = loadSrcModified(builder, op, op.getSrc(1u), c, scalarType);
 
-    auto value = builder.add(ir::Op::FunctionCall(vectorType,
-      emitUdivHelper(builder, scalarType)).addOperands(num, den));
-
     if (dstDiv.getWriteMask() & c)
-      divScalars.push_back(builder.add(ir::Op::CompositeExtract(scalarType, value, builder.makeConstant(0u))));
+      divScalars.push_back(builder.add(ir::Op::UDiv(scalarType, num, den)));
 
     if (dstMod.getWriteMask() & c)
-      modScalars.push_back(builder.add(ir::Op::CompositeExtract(scalarType, value, builder.makeConstant(1u))));
+      modScalars.push_back(builder.add(ir::Op::UMod(scalarType, num, den)));
   }
 
   /* Either result operand may be null, only store the ones that are defined. */
