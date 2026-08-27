@@ -163,6 +163,11 @@ void ArithmeticPass::lowerInstructionsPreTransform() {
         ++iter;
       } continue;
 
+      case OpCode::eUDiv:
+      case OpCode::eUMod: {
+        iter = lowerUDiv(iter);
+      } continue;
+
       case OpCode::eFClamp:
       case OpCode::eSClamp:
       case OpCode::eUClamp: {
@@ -584,6 +589,36 @@ Builder::iterator ArithmeticPass::lowerDot(Builder::iterator op) {
 
   m_builder.rewriteOp(op->getDef(), std::move(callOp));
   return ++op;
+}
+
+
+Builder::iterator ArithmeticPass::lowerUDiv(Builder::iterator op) {
+  const auto& a = m_builder.getOpForOperand(*op, 0u);
+  const auto& b = m_builder.getOpForOperand(*op, 1u);
+
+  if (b.isConstant()) {
+    if (bool(b.getOperand(0u))) {
+      /* Divisor is not zero, forward as-is */
+      return ++op;
+    } else {
+      /* Divisor is zero, return -1. */
+      return m_builder.iter(m_builder.rewriteDef(op->getDef(),
+        makeTypedConstant(m_builder, op->getType().getBaseType(0u), -1)));
+    }
+  } else {
+    /* Call helper function to compute div or mod.
+     * CSE can deduplicate calls as necessary. */
+    auto function = buildUdivFunc(op->getType().getBaseType(0u).getBaseType());
+
+    auto functionType = m_builder.getOp(function).getType();
+    auto functionCall = m_builder.addBefore(op->getDef(),
+      Op::FunctionCall(functionType, function).addOperands(a.getDef(), b.getDef()));
+
+    m_builder.rewriteOp(op->getDef(),
+      Op::CompositeExtract(op->getType(), functionCall,
+      m_builder.makeConstant(op->getOpCode() == OpCode::eUDiv ? 0u : 1u)));
+    return op;
+  }
 }
 
 
@@ -1292,6 +1327,68 @@ SsaDef ArithmeticPass::buildF32toF16Func() {
   }
 
   return m_f32tof16Function;
+}
+
+
+SsaDef ArithmeticPass::buildUdivFunc(ScalarType type) {
+  auto entry = std::find_if(m_udivFunctions.begin(), m_udivFunctions.end(),
+    [type] (const UdivFunc& func) {
+      return func.type == type;
+    });
+
+  /* UDiv / UMod are annoying in that division by 0 is fully undefined
+   * behaviour in our target IRs, and some drivers will optimize any
+   * trivial checks for the divisor being zero if we don't wrap it in
+   * control flow or otherwise ensure that the divisor itself cannot be 0.
+   *
+   * Go for the control flow approach here; NIR will deal with it on Mesa. */
+  if (entry == m_udivFunctions.end()) {
+    entry = &m_udivFunctions.emplace_back();
+    entry->type = type;
+
+    auto paramA = m_builder.add(Op::DclParam(type));
+    auto paramB = m_builder.add(Op::DclParam(type));
+
+    m_builder.add(Op::DebugName(paramA, "a"));
+    m_builder.add(Op::DebugName(paramB, "b"));
+
+    auto resultType = BasicType(type, 2u);
+
+    std::stringstream name;
+    name << "udiv_" << type;
+
+    entry->function = m_builder.addBefore(m_builder.getCode().first->getDef(),
+      Op::Function(resultType).addOperands(paramA, paramB));
+    m_builder.setCursor(entry->function);
+
+    m_builder.add(Op::DebugName(entry->function, name.str().c_str()));
+    auto ifHeader = m_builder.add(Op::Label());
+
+    auto a = m_builder.add(Op::ParamLoad(type, entry->function, paramA));
+    auto b = m_builder.add(Op::ParamLoad(type, entry->function, paramB));
+
+    /* If b is non-zero, compute a/b and a%b, otherwise return (-1, -1) */
+    auto isNz = m_builder.add(Op::INe(ScalarType::eBool, b, m_builder.makeConstantZero(type)));
+    auto ifValid = m_builder.add(Op::Label());
+
+    auto result = m_builder.add(Op::CompositeConstruct(resultType,
+      m_builder.add(Op::UDiv(type, a, b)),
+      m_builder.add(Op::UMod(type, a, b))));
+    m_builder.add(Op::Return(resultType, result));
+
+    auto ifZero = m_builder.add(Op::Label());
+    m_builder.add(Op::Return(resultType,
+      makeTypedConstant(m_builder, resultType, -1)));
+
+    auto ifMerge = m_builder.add(Op::Label());
+    m_builder.addBefore(ifValid, Op::BranchConditional(isNz, ifValid, ifZero));
+    m_builder.rewriteOp(ifHeader, Op::LabelSelection(ifMerge));
+
+    m_builder.add(Op::Unreachable());
+    m_builder.add(Op::FunctionEnd());
+  }
+
+  return entry->function;
 }
 
 

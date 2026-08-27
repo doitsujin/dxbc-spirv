@@ -122,6 +122,8 @@ void ScalarizePass::scalarizeVectorOps() {
       case OpCode::eISubBorrow:
       case OpCode::eSMulExtended:
       case OpCode::eUMulExtended:
+      case OpCode::eUDiv:
+      case OpCode::eUMod:
         iter = handleGenericOp(iter, false);
         continue;
 
@@ -162,8 +164,6 @@ void ScalarizePass::scalarizeVectorOps() {
       case OpCode::eIAbs:
       case OpCode::eINeg:
       case OpCode::eIMul:
-      case OpCode::eUDiv:
-      case OpCode::eUMod:
       case OpCode::eSMin:
       case OpCode::eSMax:
       case OpCode::eSClamp:

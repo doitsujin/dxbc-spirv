@@ -23,6 +23,10 @@ public:
     /** Whether to lower D3D9 legacy instructions to a sequence
      *  that drivers are known to optimize. */
     bool lowerMulLegacy = true;
+    /** Whether to lower udiv and umod with non-constant divisors
+     *  to handle division by zero. Must be set, unless the target
+     *  IR deals with this case explicitly, to avoid UB. */
+    bool lowerUdiv = false;
     /** Whether to lower packed f32tof16 to a custom function
      *  in order to get more correct round-to-zero behaviour. */
     bool lowerF32toF16 = true;
@@ -91,6 +95,11 @@ private:
     SsaDef function = { };
   };
 
+  struct UdivFunc {
+    ScalarType type = { };
+    SsaDef function = { };
+  };
+
   Builder& m_builder;
 
   Options m_options;
@@ -104,6 +113,7 @@ private:
   util::small_vector<MulLegacyFunc, 8u> m_mulLegacyFunctions;
   util::small_vector<PowLegacyFunc, 4u> m_powLegacyFunctions;
   util::small_vector<PowLegacyFunc, 4u> m_logLegacyFunctions;
+  util::small_vector<UdivFunc, 4u> m_udivFunctions;
 
   SsaDef m_f32tof16Function = { };
   SsaDef m_msadFunction = { };
@@ -128,6 +138,8 @@ private:
   Builder::iterator lowerLegacyOp(Builder::iterator op);
 
   Builder::iterator lowerDot(Builder::iterator op);
+
+  Builder::iterator lowerUDiv(Builder::iterator op);
 
   Builder::iterator lowerClamp(Builder::iterator op);
 
@@ -156,6 +168,8 @@ private:
   SsaDef buildLog2LegacyFunc(BasicType type);
 
   SsaDef buildF32toF16Func();
+
+  SsaDef buildUdivFunc(ScalarType type);
 
   Builder::iterator tryFuseClamp(Builder::iterator op);
 
