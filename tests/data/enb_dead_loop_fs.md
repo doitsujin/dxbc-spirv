@@ -1,7 +1,5 @@
 # `enb_dead_loop_fs.dxbc`
 
--- binary not included, see below --
-
 The pixel shader that makes `CleanupControlFlowPass` crash. Captured from a live
 Skyrim SE + ENBSeries using the RudyENB preset, run with `DXVK_SHADER_DUMP_PATH`
 (1 out of 11,750 dumped shaders is the only one that fails).
@@ -128,3 +126,5 @@ I can mail it to you for testing if you want.
 
 The artificial test in `tests/ir/test_ir_cfg_cleanup.cpp` reproduces the same CFG
 structure.
+
+Update 26-09-03: Added the file
