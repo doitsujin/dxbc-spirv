@@ -550,6 +550,8 @@ bool CleanupControlFlowPass::removeUnusedBlocks() {
 SsaDef CleanupControlFlowPass::removeBlock(SsaDef block) {
   dxbc_spv_assert(m_builder.getOp(block).getOpCode() == OpCode::eLabel);
 
+  breakLoopBackEdge(block);
+
   removeBlockFromUnusedList(block);
 
   auto iter = m_builder.iter(block);
@@ -577,6 +579,48 @@ void CleanupControlFlowPass::removeBlockFromUnusedList(SsaDef block) {
     } else {
       i++;
     }
+  }
+}
+
+
+void CleanupControlFlowPass::breakLoopBackEdge(SsaDef block) {
+  const auto& labelOp = m_builder.getOp(block);
+
+  if (Construct(labelOp.getOperand(labelOp.getFirstLiteralOperandIndex())) != Construct::eStructuredLoop)
+    return;
+
+  /* A dead region containing a loop is cyclic, so there is no topological order
+   * in which its blocks can be removed without some branch transiently naming a
+   * block that is already gone. Replace the terminator of the continue block
+   * of the loop with eUnreachable. */
+
+  auto continueBlock = SsaDef(labelOp.getOperand(1u));
+
+  if (!continueBlock)
+    return;
+
+  auto terminator = findBlockTerminator(m_builder, continueBlock);
+
+  if (!terminator || m_builder.getOp(terminator).getOpCode() == OpCode::eUnreachable)
+    return;
+
+  util::small_vector<SsaDef, 16u> branchTargets;
+
+  forEachBranchTarget(m_builder.getOp(terminator), [&] (SsaDef target) {
+    if (target != block)
+      branchTargets.push_back(target);
+  });
+
+  /* The continue block no longer branches anywhere, so any phi naming it as an
+   * incoming block needs updating. */
+  rewriteBlockInPhiUses(m_builder, continueBlock, SsaDef());
+
+  m_builder.rewriteOp(terminator, Op::Unreachable());
+
+  /* Queue any block that just lost its last predecessor. */
+  for (auto t : branchTargets) {
+    if (m_builder.getOp(t) && !isBlockUsed(t))
+      m_unusedBlocks.push_back(t);
   }
 }
 

@@ -74,6 +74,8 @@ private:
 
   void removeBlockFromUnusedList(SsaDef block);
 
+  void breakLoopBackEdge(SsaDef block);
+
   SsaDef removeBlock(SsaDef block);
 
   SsaDef removeBlockTerminator(SsaDef block);
