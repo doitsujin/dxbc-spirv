@@ -78,6 +78,8 @@ private:
 
   SsaDef removeBlockTerminator(SsaDef block);
 
+  void removeUnreachableBranches(SsaDef block);
+
   bool isMergeBlock(SsaDef block) const;
 
   bool isContinueBlock(SsaDef block) const;
