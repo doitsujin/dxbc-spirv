@@ -5,6 +5,7 @@
 namespace dxbc_spv::tests::ir {
 
 void testIrBuilder();
+void testIrCfgCleanup();
 void testIrInputMap();
 void testIrOp();
 void testIrSerialize();
@@ -18,6 +19,7 @@ void runTests() {
   RUN_TEST(testIrSerialize);
   RUN_TEST(testIrTypePropagation);
   RUN_TEST(testIrInputMap);
+  RUN_TEST(testIrCfgCleanup);
 }
 
 }

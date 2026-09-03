@@ -4,6 +4,7 @@ test_files = [
   'test_main.cpp',
 
   'ir/test_ir_builder.cpp',
+  'ir/test_ir_cfg_cleanup.cpp',
   'ir/test_ir_input_map.cpp',
   'ir/test_ir_op.cpp',
   'ir/test_ir_serialize.cpp',
