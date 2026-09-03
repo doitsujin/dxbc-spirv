@@ -550,10 +550,11 @@ bool CleanupControlFlowPass::removeUnusedBlocks() {
 SsaDef CleanupControlFlowPass::removeBlock(SsaDef block) {
   dxbc_spv_assert(m_builder.getOp(block).getOpCode() == OpCode::eLabel);
 
+  removeUnreachableBranches(block);
   removeBlockFromUnusedList(block);
+  rewriteBlockInPhiUses(m_builder, block, SsaDef());
 
   auto iter = m_builder.iter(block);
-  rewriteBlockInPhiUses(m_builder, block, SsaDef());
 
   while (!isBlockTerminator(iter->getOpCode())) {
     if (iter->getOpCode() == OpCode::eFunctionCall)
@@ -614,6 +615,30 @@ SsaDef CleanupControlFlowPass::removeBlockTerminator(SsaDef block) {
   }
 
   return next;
+}
+
+
+void CleanupControlFlowPass::removeUnreachableBranches(SsaDef block) {
+  const auto& op = m_builder.getOp(block);
+  auto [a, b] = m_builder.getUses(block);
+
+  for (auto use = a; use != b; use++) {
+    if (isBranchInstruction(use->getOpCode())) {
+      /* Branches targeting an unreachable block are unreachable themselves. This
+       * can only happen with back edges of unreachable loops. To avoid dangling
+       * references to the loop header, replace the branch with Unreachable. */
+      dxbc_spv_assert(getConstructForBlock(block) == Construct::eStructuredLoop);
+
+      auto continueBlock = SsaDef(op.getOperand(1u));
+      dxbc_spv_assert(continueBlock == findContainingBlock(m_builder, use->getDef()));
+
+      rewriteBlockInPhiUses(m_builder, continueBlock, SsaDef());
+
+      auto next = removeBlockTerminator(use->getDef());
+      m_builder.addBefore(next, Op::Unreachable());
+      break;
+    }
+  }
 }
 
 
