@@ -277,9 +277,6 @@ void Disassembler::disassembleRegisterAddressing(std::ostream& stream, const Ope
 
     RegisterType type = arg.getRegisterType();
     if (type == RegisterType::eConst
-      || type == RegisterType::eConst2
-      || type == RegisterType::eConst3
-      || type == RegisterType::eConst4
       || type == RegisterType::eConstInt
       || type == RegisterType::eConstBool
       || type == RegisterType::eSampler

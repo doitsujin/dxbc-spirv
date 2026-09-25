@@ -63,9 +63,6 @@ ir::SsaDef ResourceMap::emitConstantLoad(
 
   /* Relative addressing is only supported for float constants */
   dxbc_spv_assert(registerType == RegisterType::eConst
-    || registerType == RegisterType::eConst2
-    || registerType == RegisterType::eConst3
-    || registerType == RegisterType::eConst4
     || !operand.hasRelativeAddressing());
 
   ConstantType constantType = constantTypeFromRegisterType(registerType);
@@ -91,10 +88,7 @@ ir::SsaDef ResourceMap::emitConstantLoad(
     ir::SsaDef constantIndex = builder.makeConstant(registerIndex);
 
     if (operand.hasRelativeAddressing()) {
-      dxbc_spv_assert(registerType == RegisterType::eConst
-        || registerType == RegisterType::eConst2
-        || registerType == RegisterType::eConst3
-        || registerType == RegisterType::eConst4);
+      dxbc_spv_assert(registerType == RegisterType::eConst);
 
       constantIndex = m_converter.calculateAddress(builder,
         operand.getRelativeAddressingRegisterType(),
@@ -143,10 +137,7 @@ void ResourceMap::emitImmediateConstant(
   auto info = m_converter.getShaderInfo();
 
   switch (registerType) {
-    case RegisterType::eConst:
-    case RegisterType::eConst2:
-    case RegisterType::eConst3:
-    case RegisterType::eConst4: {
+    case RegisterType::eConst: {
       std::array<float, 4u> values = {
         imm.getImmediate<float>(0u), imm.getImmediate<float>(1u),
         imm.getImmediate<float>(2u), imm.getImmediate<float>(3u)
@@ -154,7 +145,7 @@ void ResourceMap::emitImmediateConstant(
 
       // PS 1.x clamps float constants
       if (m_converter.getShaderInfo().getType() == ShaderType::ePixel
-        && m_converter.getShaderInfo().getVersion().first == 1u) {
+       && m_converter.getShaderInfo().getVersion().first == 1u) {
         for (float& value : values) {
           value = std::max(std::min(value, 1.0f), -1.0f);
         }

@@ -1333,9 +1333,6 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
   dxbc_spv_assert(!operand.hasRelativeAddressing()
     || operand.getRegisterType() == RegisterType::eInput
     || operand.getRegisterType() == RegisterType::eConst
-    || operand.getRegisterType() == RegisterType::eConst2
-    || operand.getRegisterType() == RegisterType::eConst3
-    || operand.getRegisterType() == RegisterType::eConst4
     || (operand.getRegisterType() == RegisterType::eOutput && getShaderInfo().getType() == ShaderType::eVertex));
 
   switch (operand.getRegisterType()) {
@@ -1375,9 +1372,6 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
       break;
 
     case RegisterType::eConst:
-    case RegisterType::eConst2:
-    case RegisterType::eConst3:
-    case RegisterType::eConst4:
     case RegisterType::eConstInt:
     case RegisterType::eConstBool:
       loadDef = m_resources.emitConstantLoad(builder, operand, mask, type);
@@ -2625,9 +2619,6 @@ std::string Converter::makeRegisterDebugName(RegisterType type, uint32_t index, 
 
   const ConstantInfo* constantInfo = nullptr;
   if (type == RegisterType::eConst
-    || type == RegisterType::eConst2
-    || type == RegisterType::eConst3
-    || type == RegisterType::eConst4
     || type == RegisterType::eConstInt
     || type == RegisterType::eConstBool
     || type == RegisterType::eSampler

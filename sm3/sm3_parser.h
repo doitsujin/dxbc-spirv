@@ -162,9 +162,6 @@ private:
 inline ConstantType constantTypeFromRegisterType(RegisterType registerType) {
   switch (registerType) {
     case RegisterType::eConst:
-    case RegisterType::eConst2:
-    case RegisterType::eConst3:
-    case RegisterType::eConst4:
       return ConstantType::eFloat4;
 
     case RegisterType::eConstInt:
@@ -342,15 +339,38 @@ public:
     return util::bextract(m_token, 21, 1);
   }
 
-  /** Queries register type */
+  /** Queries register type. This will normalize Const2 etc into Const */
   RegisterType getRegisterType() const {
-    return RegisterType((util::bextract(m_token, 11u, 2u) << 3u)
-      | util::bextract(m_token, 28u, 3u));
+    auto type = getRawRegisterType();
+
+    if (type >= RegisterType::eConst2 && type <= RegisterType::eConst4)
+      type = RegisterType::eConst;
+
+    return type;
   }
 
-  /** Queries register index. */
-  uint32_t getIndex() const {
+  /** Queries non-normalized register type */
+  RegisterType getRawRegisterType() const {
+    return RegisterType(
+      (util::bextract(m_token, 11u, 2u) << 3u) |
+      (util::bextract(m_token, 28u, 3u)));
+  }
+
+  /** Queries raw register index */
+  uint32_t getRawIndex() const {
     return util::bextract(m_token, 0u, 11u);
+  }
+
+  /** Queries register index. This will offset constant register
+   *  indices for higher constant banks as necessary. */
+  uint32_t getIndex() const {
+    auto index = getRawIndex();
+    auto type = getRawRegisterType();
+
+    if (type >= RegisterType::eConst2 && type <= RegisterType::eConst4)
+      index += 2048u * (1u + uint32_t(type) - uint32_t(RegisterType::eConst2));
+
+    return index;
   }
 
   /** Queries the relative addressing register. */

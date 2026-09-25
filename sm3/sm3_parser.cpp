@@ -500,11 +500,8 @@ Operand::Operand(util::ByteReader& reader, const OperandInfo& info, Instruction&
   if ((info.kind == OperandKind::eDstReg || info.kind == OperandKind::eSrcReg) && hasRelativeAddressing()) {
     RegisterType registerType = getRegisterType();
     if (registerType != RegisterType::eConst
-      && registerType != RegisterType::eConst2
-      && registerType != RegisterType::eConst3
-      && registerType != RegisterType::eConst4
-      && registerType != RegisterType::eOutput
-      && registerType != RegisterType::eInput) {
+     && registerType != RegisterType::eOutput
+     && registerType != RegisterType::eInput) {
       Logger::err("Invalid register specified for relative indexing.");
       resetOnError();
       return;
