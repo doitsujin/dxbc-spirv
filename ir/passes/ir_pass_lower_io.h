@@ -7,6 +7,7 @@
 #include "../ir_builder.h"
 
 #include "../../util/util_hash.h"
+#include "../../util/util_swizzle.h"
 
 namespace dxbc_spv::ir {
 
@@ -321,6 +322,11 @@ public:
    *  actual output declaration. Should not be called if stages are I/O-compatible. */
   bool resolveMismatchedIo(ShaderStage prevStage, const IoMap& prevStageOut);
 
+  /** Rewrites non-builtin pixel shader outputs to be full-sized vectors, and sets
+   *  all components that are never written to 0. This way we get well-defined
+   *  behaviour if a PS is used with incompatible blendig configs. */
+  void resolveUnwrittenPsOutputs();
+
   /** Rewrites multisampled image bindings as single-sampled, and adjusts load
    *  instructions as well as sample count queries accordingly. */
   bool demoteMultisampledSrv();
@@ -396,6 +402,10 @@ private:
   Builder::iterator removeOutput(Builder::iterator op);
 
   void removeUnusedStreams();
+
+  void resolveUnwrittenPsOutput(SsaDef declaration);
+
+  util::WriteMask determineOutputStoreComponentMask(SsaDef declaration);
 
   bool remapTessIoLocation(Builder::iterator op, uint32_t perPatchMask, uint32_t perVertexMask);
 

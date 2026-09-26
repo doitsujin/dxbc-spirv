@@ -604,6 +604,22 @@ bool LowerIoPass::resolveMismatchedIo(ShaderStage prevStage, const IoMap& prevSt
 }
 
 
+void LowerIoPass::resolveUnwrittenPsOutputs() {
+  dxbc_spv_assert(m_stage == ShaderStage::ePixel);
+
+  small_vector<SsaDef, 8> outputs;
+  auto [a, b] = m_builder.getDeclarations();
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::eDclOutput)
+      outputs.push_back(iter->getDef());
+  }
+
+  for (auto output : outputs)
+    resolveUnwrittenPsOutput(output);
+}
+
+
 bool LowerIoPass::demoteMultisampledSrv() {
   auto [a, b] = m_builder.getDeclarations();
 
@@ -1618,6 +1634,130 @@ void LowerIoPass::removeUnusedStreams() {
       ++iter;
     }
   }
+}
+
+
+void LowerIoPass::resolveUnwrittenPsOutput(SsaDef declaration) {
+  auto mask = determineOutputStoreComponentMask(declaration);
+
+  /* Nothing to do if all four components are written */
+  if (mask == util::ComponentBit::eAll)
+    return;
+
+  /* If the output isn't vec4 yet, rewrite it to use the missing
+   * components, and also scalarize all full loads and stores. */
+  const auto& dclOp = m_builder.getOp(declaration);
+
+  auto oldType = dclOp.getType().getBaseType(0u);
+  auto newType = BasicType(oldType.getBaseType(), 4u);
+
+  if (oldType != newType) {
+    m_builder.rewriteOp(declaration, Op(dclOp).setType(newType));
+
+    small_vector<SsaDef, 64u> uses;
+    m_builder.getUses(declaration, uses);
+
+    for (auto use : uses) {
+      const auto& useOp = m_builder.getOp(use);
+
+      switch (useOp.getOpCode()) {
+        case OpCode::eOutputLoad: {
+          auto loadType = useOp.getType().getBaseType(0u);
+
+          if (loadType.isVector()) {
+            Op composite(OpCode::eCompositeConstruct, loadType);
+
+            for (uint32_t i = 0u; i < loadType.getVectorSize(); i++) {
+              composite.addOperand(m_builder.addBefore(use, Op::OutputLoad(
+                loadType.getBaseType(), declaration, m_builder.makeConstant(i))));
+            }
+
+            m_builder.rewriteOp(use, std::move(composite));
+          } else if (oldType.isScalar()) {
+            m_builder.rewriteOp(use, Op::OutputLoad(loadType,
+              declaration, m_builder.makeConstant(0u)));
+          }
+        } break;
+
+        case OpCode::eOutputStore: {
+          auto value = m_builder.getOpForOperand(useOp, 2u).getDef();
+          auto valueType = m_builder.getOpForOperand(useOp, 2u).getType().getBaseType(0u);
+
+          if (valueType.isVector()) {
+            for (uint32_t i = 0u; i < valueType.getVectorSize(); i++) {
+              auto scalar = m_builder.addBefore(use, Op::CompositeExtract(
+                valueType.getBaseType(), value, m_builder.makeConstant(i)));
+
+              m_builder.addBefore(use, Op::OutputStore(declaration,
+                m_builder.makeConstant(i), scalar));
+            }
+
+            m_builder.remove(use);
+          } else if (oldType.isScalar()) {
+            m_builder.rewriteOp(use, Op::OutputStore(declaration,
+              m_builder.makeConstant(0u), value));
+          }
+        } break;
+
+        default:
+          break;
+      }
+    }
+  }
+
+  /* Initialize unwritten components with zero when we exit the shader */
+  auto ref = m_builder.getOpForOperand(m_entryPoint, 0u).getDef();
+
+  while (ref) {
+    const auto& op = m_builder.getOp(ref);
+
+    if (op.getOpCode() == OpCode::eReturn) {
+      for (uint32_t i = 0u; i < 4u; i++) {
+        if (!(mask & util::componentBit(util::Component(i)))) {
+          m_builder.addBefore(ref, Op::OutputStore(declaration,
+            m_builder.makeConstant(i),
+            m_builder.makeConstantZero(newType.getBaseType())));
+        }
+      }
+    }
+
+    if (op.getOpCode() == OpCode::eFunctionEnd)
+      break;
+
+    ref = m_builder.getNext(ref);
+  }
+}
+
+
+util::WriteMask LowerIoPass::determineOutputStoreComponentMask(SsaDef declaration) {
+  dxbc_spv_assert(m_builder.getOp(declaration).getType().isBasicType());
+
+  util::WriteMask mask = {};
+
+  auto [a, b] = m_builder.getUses(declaration);
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::eOutputStore) {
+      const auto& address = m_builder.getOpForOperand(*iter, 1u);
+      const auto& value = m_builder.getOpForOperand(*iter, 2u);
+
+      dxbc_spv_assert(value.getType().isBasicType());
+
+      util::WriteMask storeMask = util::makeWriteMaskForComponents(
+        value.getType().getBaseType(0u).getVectorSize());
+
+      uint32_t shift = 0u;
+
+      if (address) {
+        dxbc_spv_assert(address.isConstant());
+        shift = uint32_t(address.getOperand(0u));
+      }
+
+      mask |= util::WriteMask(uint8_t(storeMask) << shift);
+    }
+  }
+
+  return mask;
 }
 
 
