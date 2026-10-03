@@ -1,0 +1,41 @@
+name: Test Builds on Linux
+
+on: [push, pull_request]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-24.04
+    container: archlinux/archlinux:base-devel
+
+    steps:
+    - name: Setup container
+      run: pacman -Syu --needed --noconfirm git meson ninja mingw-w64-gcc
+
+    - name: Checkout code
+      uses: actions/checkout@v7
+      with:
+        submodules: recursive
+
+    - name: Create MinGW cross file
+      run: |
+        cat > ci-mingw-cross.txt << EOF
+        [binaries]
+        c = 'x86_64-w64-mingw32-gcc'
+        cpp = 'x86_64-w64-mingw32-g++'
+        ar = 'x86_64-w64-mingw32-ar'
+        [host_machine]
+        system = 'windows'
+        cpu_family = 'x86_64'
+        cpu = 'x86_64'
+        endian = 'little'
+        EOF
+
+    - name: Build MinGW
+      run: |
+        meson setup build-mingw --cross-file ci-mingw-cross.txt
+        meson compile -C build-mingw
+
+    - name: Build native GCC
+      run: |
+        meson setup build-native-gcc
+        CC=gcc CXX=g++ meson compile -C build-native-gcc
