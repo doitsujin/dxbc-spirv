@@ -76,6 +76,9 @@ void Disassembler::disassembleOp(std::ostream& stream, const Op& op) const {
   if (!m_options.showDebugNames && op.getOpCode() == OpCode::eDebugName)
     return;
 
+  if (m_options.resolveDescriptorLoads && op.getOpCode() == OpCode::eDescriptorLoad)
+    return;
+
   if (op.getFlags()) {
     std::stringstream flags;
     flags << " [";
@@ -258,6 +261,24 @@ void Disassembler::disassembleOperandDef(std::ostream& stream, const Op& op, uin
       }
 
       stream << ")]";
+      return;
+    }
+  }
+
+  if (m_options.resolveDescriptorLoads) {
+    const auto& def = m_builder.getOp(operand);
+
+    if (def.getOpCode() == OpCode::eDescriptorLoad) {
+      stream << "%[";
+      disassembleOperandDef(stream, def, 0);
+
+      if (uint32_t(m_builder.getOpForOperand(def, 0).getOperand(3)) != 1u) {
+        stream << "[";
+        disassembleOperandDef(stream, def, 1);
+        stream << "[";
+      }
+
+      stream << "]";
       return;
     }
   }
