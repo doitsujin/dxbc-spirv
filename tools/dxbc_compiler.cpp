@@ -141,6 +141,7 @@ bool printIrAssembly(ir::Builder& builder, const Options& options) {
 
   ir::Disassembler::Options disasmOptions;
   disasmOptions.resolveConstants = true;
+  disasmOptions.resolveDescriptorLoads = true;
   disasmOptions.showConstants = false;
   disasmOptions.coloredOutput = !options.noColors;
   disasmOptions.showDivergence = !options.convertOnly;

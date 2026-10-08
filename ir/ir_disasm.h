@@ -28,6 +28,8 @@ public:
     bool useEnumNames = true;
     /** Whether to resolve constant references. */
     bool resolveConstants = false;
+    /** Whether to resolve descriptor loads */
+    bool resolveDescriptorLoads = false;
     /** Whether to show constant instructions. */
     bool showConstants = true;
     /** Whether to show debug name instructions. */
