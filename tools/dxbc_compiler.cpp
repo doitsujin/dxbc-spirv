@@ -314,6 +314,7 @@ bool compileShader(util::ByteReader reader, const Options& options) {
     compileOptions.syncOptions.insertUavBarriers = options.uavBarriers;
 
     compileOptions.cseOptions.relocateDescriptorLoad = true;
+    compileOptions.cseOptions.resolveOverlappingLoads = true;
 
     compileOptions.descriptorIndexing.optimizeDescriptorIndexing = true;
 
