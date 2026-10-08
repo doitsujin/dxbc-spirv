@@ -18,6 +18,16 @@ CsePass::~CsePass() {
 
 bool CsePass::run() {
   bool progress = false;
+  progress |= resolveDuplicateInstructions();
+  progress |= resolveOverlappingLoads();
+  return progress;
+}
+
+
+bool CsePass::resolveDuplicateInstructions() {
+  std::unordered_multiset<Op, OpHash, OpEq> defs;
+
+  bool progress = false;
   auto iter = m_builder.getCode().first;
 
   std::vector<SsaDef> blockList;
@@ -30,7 +40,7 @@ bool CsePass::run() {
 
     if (opType & CseOpFlag::eCanDeduplicate) {
       bool isTrivial = isTrivialOp(*iter);
-      auto [a, b] = m_defs.equal_range(*iter);
+      auto [a, b] = defs.equal_range(*iter);
 
       SsaDef next = { };
 
@@ -92,7 +102,7 @@ bool CsePass::run() {
         continue;
       }
 
-      m_defs.insert(*iter);
+      defs.insert(*iter);
     } else if (iter->getOpCode() == OpCode::eLabel) {
       /* For phi processing */
       blockList.push_back(iter->getDef());
@@ -146,6 +156,38 @@ bool CsePass::run() {
 }
 
 
+bool CsePass::resolveOverlappingLoads() {
+  if (!m_options.resolveOverlappingLoads)
+    return false;
+
+  bool progress = false;
+
+  small_vector<std::pair<SsaDef, ResourceKind>, 64> descriptors;
+
+  auto [a, b] = m_builder.getDeclarations();
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::eDclSrv) {
+      auto kind = ResourceKind(iter->getOperand(4u));
+
+      if (!resourceIsTyped(kind)) {
+        auto [begin, end] = m_builder.getUses(iter->getDef());
+
+        for (auto j = begin; j != end; j++) {
+          if (j->getOpCode() == OpCode::eDescriptorLoad)
+            descriptors.emplace_back(j->getDef(), kind);
+        }
+      }
+    }
+  }
+
+  for (auto e : descriptors)
+    progress |= resolveOverlappingLoads(e.second, e.first);
+
+  return progress;
+}
+
+
 bool CsePass::runPass(Builder& builder, const Options& options) {
   return CsePass(builder, options).run();
 }
@@ -161,6 +203,246 @@ size_t CsePass::OpHash::operator () (const Op& op) const {
     hash = util::hash_combine(hash, uint64_t(op.getOperand(i)));
 
   return hash;
+}
+
+
+bool CsePass::resolveOverlappingLoads(ResourceKind kind, SsaDef descriptor) {
+  small_vector<SsaDef, 64> uses;
+
+  auto [a, b] = m_builder.getUses(descriptor);
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::eBufferLoad)
+      uses.push_back(iter->getDef());
+  }
+
+  std::sort(uses.begin(), uses.end(), [this] (SsaDef a, SsaDef b) {
+    return m_dom.defDominates(a, b);
+  });
+
+  bool progress = false;
+
+  for (size_t i = 0u; i < uses.size(); i++) {
+    if (!uses.at(i))
+      continue;
+
+    for (size_t j = i + 1u; j < uses.size(); j++) {
+      const auto& a = m_builder.getOp(uses.at(i));
+      const auto& b = m_builder.getOp(uses.at(j));
+
+      if (!a || !b || !loadsOverlap(a, b) || !m_dom.defDominates(a.getDef(), b.getDef()))
+        continue;
+
+      /* Load A dominates and overlaps load B. Replace both loads with the larger
+       * of the two loads and replace all uses with composite ops as necessary. */
+      std::tie(uses.at(i), uses.at(j)) = resolveLoads(kind, a, b);
+      progress = true;
+    }
+  }
+
+  return progress;
+}
+
+
+std::pair<SsaDef, SsaDef> CsePass::resolveLoads(ResourceKind kind, const Op& a, const Op& b) {
+  dxbc_spv_assert(m_dom.defDominates(a.getDef(), b.getDef()));
+
+  /* Classic CSE case, can still happen here */
+  if (a.getType() == b.getType()) {
+    m_builder.rewriteDef(b.getDef(), a.getDef());
+    return std::make_pair(a.getDef(), SsaDef());
+  }
+
+  switch (kind) {
+    case ResourceKind::eBufferRaw:
+      return resolveLoadsRaw(a, b);
+
+    case ResourceKind::eBufferStructured:
+      return resolveLoadsStructured(a, b);
+
+    default:
+      dxbc_spv_unreachable();
+      return std::make_pair(SsaDef(), SsaDef());
+  }
+}
+
+
+std::pair<SsaDef, SsaDef> CsePass::resolveLoadsRaw(const Op& a, const Op& b) {
+  std::array<SsaDef, 2> loads = { a.getDef(), b.getDef() };
+
+  /* Fully scalarize raw loads, duplicates can be eliminated later */
+  for (auto& load : loads) {
+    const auto& loadOp = m_builder.getOp(load);
+    auto loadBlock = m_dom.getBlockForDef(load);
+
+    auto loadType = loadOp.getType().getBaseType(0u);
+    auto baseType = loadType.getBaseType();
+
+    if (loadType.isScalar())
+      continue;
+
+    auto baseAddress = SsaDef(loadOp.getOperand(1u));
+    auto compositeOp = Op(OpCode::eCompositeConstruct, loadType);
+
+    for (uint32_t i = 0u; i < loadType.getVectorSize(); i++) {
+      auto address = baseAddress;
+      auto addressType = m_builder.getOp(baseAddress).getType().getBaseType(0u);
+
+      if (i) {
+        address = m_builder.addBefore(load, Op::IAdd(
+          addressType, baseAddress, makeTypedConstant(m_builder, addressType, i)));
+        m_dom.setBlockForDef(address, loadBlock);
+      }
+
+      auto scalar = m_builder.addBefore(load, Op::BufferLoad(baseType,
+        SsaDef(loadOp.getOperand(0u)), address, byteSize(baseType)).setFlags(loadOp.getFlags()));
+      m_dom.setBlockForDef(scalar, loadBlock);
+      compositeOp.addOperand(scalar);
+    }
+
+    m_builder.rewriteOp(load, std::move(compositeOp));
+    load = SsaDef();
+  }
+
+  return std::make_pair(loads.at(0), loads.at(1));
+}
+
+
+std::pair<SsaDef, SsaDef> CsePass::resolveLoadsStructured(const Op& a, const Op& b) {
+  auto addressA = m_builder.getOpForOperand(a, 1u);
+  auto addressB = m_builder.getOpForOperand(b, 1u);
+
+  auto aCount = addressA.getType().getBaseType(0u).getVectorSize();
+  auto bCount = addressB.getType().getBaseType(0u).getVectorSize();
+
+  auto minCount = std::min(aCount, bCount);
+  auto maxCount = std::max(aCount, bCount);
+
+  /* Replace small load with large load and extract composites as necessary.
+   * Should be safe due to per-element robustness. Note that we can in some
+   * cases load vectors from a scalar array, so we actually need to check
+   * the laod type size here. */
+  auto [smallLoad, largeLoad] = a.getType().byteSize() < b.getType().byteSize()
+    ? std::make_pair(a.getDef(), b.getDef())
+    : std::make_pair(b.getDef(), a.getDef());
+
+  auto smallType = m_builder.getOp(smallLoad).getType();
+  auto largeType = m_builder.getOp(largeLoad).getType();
+
+  auto loadBlock = m_dom.getBlockForDef(smallLoad);
+
+  /* We can duplicate the address op because they can only possibly
+   * differ in constant IDs. There won't be any dominance issues. */
+  auto newAddress = m_builder.getOpForOperand(largeLoad, 1u).getDef();
+
+  if (!m_dom.defDominates(newAddress, smallLoad)) {
+    newAddress = m_builder.addBefore(smallLoad, Op(m_builder.getOp(newAddress)));
+    m_dom.setBlockForDef(newAddress, loadBlock);
+  }
+
+  auto newLoad = m_builder.addBefore(smallLoad, Op(m_builder.getOp(largeLoad)).setOperand(1u, newAddress));
+  m_dom.setBlockForDef(newLoad, loadBlock);
+
+  if (maxCount > minCount) {
+    auto indexType = BasicType(ScalarType::eU32, maxCount - minCount);
+    auto indexOp = Op(OpCode::eConstant, indexType);
+
+    for (uint32_t i = minCount; i < maxCount; i++) {
+      const auto& smallAddress = m_builder.getOpForOperand(smallLoad, 1u);
+
+      if (smallAddress.isConstant()) {
+        indexOp.addOperand(uint32_t(smallAddress.getOperand(i)));
+      } else {
+        dxbc_spv_assert(smallAddress.getOpCode() == OpCode::eCompositeConstruct);
+        indexOp.addOperand(uint32_t(m_builder.getOpForOperand(smallAddress, i).getOperand(0)));
+      }
+    }
+
+    m_builder.rewriteOp(smallLoad, Op::CompositeExtract(
+      smallType, newLoad, m_builder.add(indexOp)));
+  } else {
+    dxbc_spv_assert(smallType.isBasicType() && largeType.isVectorType());
+
+    /* Need to assemble the small vector type from the larger one */
+    if (smallType.isVectorType()) {
+      Op compositeOp(OpCode::eCompositeConstruct, smallType);
+
+      for (uint32_t i = 0u; i < smallType.getBaseType(0u).getVectorSize(); i++) {
+        auto scalar = m_builder.addBefore(smallLoad, Op::CompositeExtract(
+          smallType.getBaseType(0u).getBaseType(), newLoad, m_builder.makeConstant(i)));
+        m_dom.setBlockForDef(scalar, loadBlock);
+
+        compositeOp.addOperand(scalar);
+      }
+
+      m_builder.rewriteOp(smallLoad, std::move(compositeOp));
+    } else {
+      m_builder.rewriteOp(smallLoad, Op::CompositeExtract(
+        smallType.getBaseType(0u).getBaseType(), newLoad, m_builder.makeConstant(0)));
+    }
+  }
+
+  return std::make_pair(
+    a.getDef() != smallLoad ? a.getDef() : SsaDef(),
+    b.getDef() != smallLoad ? b.getDef() : SsaDef());
+}
+
+
+bool CsePass::loadsOverlap(const Op& a, const Op& b) {
+  dxbc_spv_assert(a.getOpCode() == OpCode::eBufferLoad && b.getOpCode() == OpCode::eBufferLoad);
+
+  /* Descriptors must obviously be the same */
+  if (a.getOperand(0u) != b.getOperand(0u))
+    return false;
+
+  /* If the address is identical, the only thing that can differ is the
+   * load type for raw buffer loads, in which case they obviously overlap. */
+  auto addressA = m_builder.getOpForOperand(a, 1u);
+  auto addressB = m_builder.getOpForOperand(b, 1u);
+
+  if (addressA.getDef() == addressB.getDef())
+    return true;
+
+  /* Assume constants are fully folded */
+  if (addressA.isConstant() != addressB.isConstant())
+    return false;
+
+  if (addressA.isUndef() || addressB.isUndef())
+    return false;
+
+  if ((!addressA.isConstant() && addressA.getType().isVectorType() && addressA.getOpCode() != OpCode::eCompositeConstruct)
+   || (!addressB.isConstant() && addressB.getType().isVectorType() && addressB.getOpCode() != OpCode::eCompositeConstruct))
+    return false;
+
+  /* Given that we either have scalars, constants or composites, we can now
+   * simply compare the operands, which are either both IDs or both literals */
+  auto aSize = addressA.getType().getBaseType(0u).getVectorSize();
+  auto bSize = addressB.getType().getBaseType(0u).getVectorSize();
+
+  for (uint32_t i = 0u; i < std::min(aSize, bSize); i++) {
+    auto aScalar = Operand(addressA.getDef());
+    auto bScalar = Operand(addressB.getDef());
+
+    if (addressA.isConstant() || addressA.getType().isVectorType())
+      aScalar = addressA.getOperand(i);
+
+    if (addressB.isConstant() || addressB.getType().isVectorType())
+      bScalar = addressB.getOperand(i);
+
+    if (aScalar != bScalar)
+      return false;
+  }
+
+  /* We can only promote partial loads if the last indices are all constant */
+  if (!addressA.isConstant() && !addressB.isConstant()) {
+    for (uint32_t i = std::min(aSize, bSize); i < std::max(aSize, bSize); i++) {
+      if ((i < aSize && !m_builder.getOpForOperand(addressA, i).isConstant())
+       || (i < bSize && !m_builder.getOpForOperand(addressB, i).isConstant()))
+        return false;
+    }
+  }
+
+  return true;
 }
 
 

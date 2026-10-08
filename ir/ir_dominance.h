@@ -53,6 +53,7 @@ public:
   }
 
   void setBlockForDef(SsaDef def, SsaDef block) {
+    dxbc_spv_assert(!block || m_builder.getOp(block).getOpCode() == OpCode::eLabel);
     m_nodeInfos[def].blockDef = block;
   }
 
