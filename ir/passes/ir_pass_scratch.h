@@ -125,6 +125,8 @@ private:
 
   bool boundCheckScratchArray(SsaDef def);
 
+  bool boundCheckConstantArray(SsaDef def);
+
   Builder::iterator rewriteBoundCheckedConstant(const Op& op);
 
   std::pair<SsaDef, uint64_t> extractBaseAndOffset(const Op& op) const;

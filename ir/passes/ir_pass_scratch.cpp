@@ -96,7 +96,7 @@ bool CleanupScratchPass::enableBoundChecking() {
     if (iter->getOpCode() == OpCode::eDclScratch) {
       feedback |= boundCheckScratchArray(iter->getDef());
     } else if (iter->isConstant() && iter->getType().isArrayType()) {
-      if (boundCheckScratchArray(iter->getDef())) {
+      if (boundCheckConstantArray(iter->getDef())) {
         iter = rewriteBoundCheckedConstant(*iter);
         feedback = true;
         continue;
@@ -668,6 +668,73 @@ bool CleanupScratchPass::boundCheckScratchArray(SsaDef def) {
   }
 
   return hasBoundCheck;
+}
+
+
+bool CleanupScratchPass::boundCheckConstantArray(SsaDef def) {
+  const auto& constantOp = m_builder.getOp(def);
+
+  util::small_vector<SsaDef, 256u> uses;
+  m_builder.getUses(def, uses);
+
+  bool feedback = false;
+
+  for (auto use : uses) {
+    auto useOp = m_builder.getOp(use);
+
+    if (useOp.getOpCode() != OpCode::eConstantLoad
+     || (useOp.getFlags() & OpFlag::eInBounds))
+      continue;
+
+    /* Check relevant index components against the respective array sizes */
+    const auto& indexOp = m_builder.getOpForOperand(useOp, 1u);
+    auto indexType = indexOp.getType().getBaseType(0u);
+
+    uint32_t dims = std::min(constantOp.getType().getArrayDimensions(), indexType.getVectorSize());
+
+    util::small_vector<SsaDef, 4u> indexDefs;
+
+    for (uint32_t i = 0u; i < dims; i++) {
+      auto size = constantOp.getType().getArraySize(constantOp.getType().getArrayDimensions() - i - 1u);
+
+      auto& indexDef = indexDefs.emplace_back();
+      indexDef = indexOp.getDef();
+
+      if (indexType.isVector()) {
+        indexDef = m_builder.addBefore(use, Op::CompositeExtract(
+          indexType.getBaseType(), indexDef, m_builder.makeConstant(i)));
+      }
+
+      indexDef = m_builder.addBefore(use,
+        Op::UMin(indexType.getBaseType(), indexDef, m_builder.makeConstant(size)));
+    }
+
+    for (uint32_t i = dims; i < indexType.getVectorSize(); i++) {
+      indexDefs.push_back(m_builder.addBefore(use,
+        Op::CompositeExtract(indexType.getBaseType(), indexOp.getDef(), m_builder.makeConstant(i))));
+    }
+
+    /* Build new index vector */
+    auto newIndex = indexDefs.front();
+
+    if (indexType.isVector()) {
+      Op newIndexOp(OpCode::eCompositeConstruct, indexType);
+
+      for (auto s : indexDefs)
+        newIndexOp.addOperand(s);
+
+      newIndex = m_builder.addBefore(use, std::move(newIndexOp));
+    }
+
+    useOp.setFlags(useOp.getFlags() | OpFlag::eInBounds);
+    useOp.setOperand(1u, newIndex);
+
+    m_builder.rewriteOp(use, std::move(useOp));
+
+    feedback = true;
+  }
+
+  return feedback;
 }
 
 
