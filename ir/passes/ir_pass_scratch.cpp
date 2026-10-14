@@ -1,5 +1,6 @@
 #include <algorithm>
 
+#include "ir_pass_function.h"
 #include "ir_pass_scratch.h"
 #include "ir_pass_ssa.h"
 
@@ -69,8 +70,10 @@ bool CleanupScratchPass::unpackArrays() {
       feedback |= tryUnpackArray(iter->getDef());
   }
 
-  if (feedback)
+  if (feedback) {
+    ir::FunctionCleanupPass::runResolveSharedTempPass(m_builder);
     ir::SsaConstructionPass::runPass(m_builder);
+  }
 
   return feedback;
 }
