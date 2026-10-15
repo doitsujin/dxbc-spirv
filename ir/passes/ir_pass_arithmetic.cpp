@@ -2583,6 +2583,21 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentityArithmeticOp(B
           }
         }
       }
+
+      /* min(a, min(a, b)) -> min(a, b)
+       * max(a, max(a, b)) -> max(a, b) */
+      if (a.getOpCode() == op->getOpCode() || b.getOpCode() == op->getOpCode()) {
+        const auto& nestedOp = a.getOpCode() == op->getOpCode() ? a : b;
+        const auto& otherOp  = a.getOpCode() == op->getOpCode() ? b : a;
+
+        bool match = otherOp.getDef() == SsaDef(nestedOp.getOperand(0u))
+                  || otherOp.getDef() == SsaDef(nestedOp.getOperand(1u));
+
+        if (match) {
+          auto next = m_builder.rewriteDef(op->getDef(), nestedOp.getDef());
+          return std::make_pair(true, m_builder.iter(next));
+        }
+      }
     } break;
 
     case OpCode::eISub: {
