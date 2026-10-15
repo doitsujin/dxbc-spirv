@@ -586,61 +586,56 @@ SsaDef CleanupScratchPass::emitScratchCbvFunction(SsaDef def, const CbvInfo& bas
 bool CleanupScratchPass::boundCheckScratchArray(SsaDef def) {
   const auto& scratchOp = m_builder.getOp(def);
 
+  if (!scratchOp.getType().isArrayType())
+    return false;
+
   util::small_vector<SsaDef, 256u> uses;
   m_builder.getUses(def, uses);
 
   bool hasLoad = false;
-  bool hasBoundCheck = false;
 
   for (auto use : uses) {
-    auto useOp = m_builder.getOp(use);
+    const auto& useOp = m_builder.getOp(use);
+
+    if (useOp.getOpCode() != OpCode::eScratchLoad &&
+        useOp.getOpCode() != OpCode::eScratchStore)
+      continue;
 
     if (useOp.getFlags() & OpFlag::eInBounds)
       continue;
 
-    if (useOp.getOpCode() != OpCode::eScratchLoad &&
-        useOp.getOpCode() != OpCode::eScratchStore &&
-        useOp.getOpCode() != OpCode::eConstantLoad)
-      continue;
-
-    /* Ignore op if the index is fully constant and in bounds */
     const auto& indexOp = m_builder.getOpForOperand(useOp, 1u);
+
     auto indexType = indexOp.getType().getBaseType(0u);
+    auto arrayDims = std::min(scratchOp.getType().getArrayDimensions(), indexType.getVectorSize());
 
-    uint32_t dims = std::min(scratchOp.getType().getArrayDimensions(), indexType.getVectorSize());
+    /* Check whether the index is in bounds already */
+    bool isInBoundsConstant = indexOp.isConstant();
 
-    bool isInBoundsConstant = true;
-
-    for (uint32_t i = 0u; i < dims; i++) {
+    for (uint32_t i = 0u; i < arrayDims && isInBoundsConstant; i++) {
       auto size = scratchOp.getType().getArraySize(scratchOp.getType().getArrayDimensions() - i - 1u);
-      isInBoundsConstant = isInBoundsConstant && indexOp.isConstant() && uint32_t(indexOp.getOperand(i)) < size;
+      isInBoundsConstant = uint32_t(indexOp.getOperand(i)) < size;
     }
 
     if (isInBoundsConstant)
       continue;
 
-    /* Check all relevant index components against the respective array size */
     if (useOp.getOpCode() == OpCode::eScratchStore) {
-      SsaDef inBoundsCond = { };
+      /* For stores, bound-check index against all array dimensions and insert
+       * control flow so that we strictly avoid any out-of-bounds writes. */
+      auto inBoundsCond = m_builder.makeConstant(true);
 
-      for (uint32_t i = 0u; i < dims; i++) {
+      for (uint32_t i = 0u; i < arrayDims; i++) {
         auto size = scratchOp.getType().getArraySize(scratchOp.getType().getArrayDimensions() - i - 1u);
-        auto indexDef = indexOp.getDef();
+        auto index = indexOp.getDef();
 
         if (indexType.isVector()) {
-          indexDef = m_builder.addBefore(use, Op::CompositeExtract(
-            indexType.getBaseType(), indexDef, m_builder.makeConstant(i)));
+          index = m_builder.addBefore(use, Op::CompositeExtract(
+            indexType.getBaseType(), indexOp.getDef(), m_builder.makeConstant(i)));
         }
 
-        auto check = m_builder.addBefore(use,
-          Op::ULt(ScalarType::eBool, indexDef, m_builder.makeConstant(size)));
-
-        if (inBoundsCond) {
-          inBoundsCond = m_builder.addBefore(use,
-            Op::BAnd(ScalarType::eBool, inBoundsCond, check));
-        } else {
-          inBoundsCond = check;
-        }
+        inBoundsCond = m_builder.addBefore(use, Op::BAnd(ScalarType::eBool, inBoundsCond,
+          m_builder.addBefore(use, Op::ULt(ScalarType::eBool, index, makeTypedConstant(m_builder, indexType.getBaseType(), size)))));
       }
 
       /* Insert control flow to guard the dynamic store. The current
@@ -657,63 +652,48 @@ bool CleanupScratchPass::boundCheckScratchArray(SsaDef def) {
       /* Rewrite phis using the original block to use the new merge block */
       rewriteBlockInPhiUses(m_builder, block, mergeLabel);
     } else {
-      util::small_vector<SsaDef, 4u> indexDefs;
+      /* For loads, avoid control flow, and instead clamp the index
+       * to the array size, which can sometimes be optimized away. */
+      Op clampedIndexOp(OpCode::eCompositeConstruct, indexType);
 
-      for (uint32_t i = 0u; i < dims; i++) {
+      for (uint32_t i = 0u; i < arrayDims; i++) {
         auto size = scratchOp.getType().getArraySize(scratchOp.getType().getArrayDimensions() - i - 1u);
-
-        auto& indexDef = indexDefs.emplace_back();
-        indexDef = indexOp.getDef();
+        auto index = indexOp.getDef();
 
         if (indexType.isVector()) {
-          indexDef = m_builder.addBefore(use, Op::CompositeExtract(
-            indexType.getBaseType(), indexDef, m_builder.makeConstant(i)));
+          index = m_builder.addBefore(use, Op::CompositeExtract(
+            indexType.getBaseType(), indexOp.getDef(), m_builder.makeConstant(i)));
         }
 
-        indexDef = m_builder.addBefore(use,
-          Op::UMin(indexType.getBaseType(), indexDef, m_builder.makeConstant(size)));
+        clampedIndexOp.addOperand(m_builder.addBefore(use, Op::UMin(indexType.getBaseType(),
+          index, makeTypedConstant(m_builder, indexType.getBaseType(), i ? size : size - 1u))));
       }
 
-      for (uint32_t i = dims; i < indexType.getVectorSize(); i++) {
-        indexDefs.push_back(m_builder.addBefore(use,
-          Op::CompositeExtract(indexType.getBaseType(), indexOp.getDef(), m_builder.makeConstant(i))));
+      for (uint32_t i = arrayDims; i < indexType.getVectorSize(); i++) {
+        clampedIndexOp.addOperand(m_builder.addBefore(use, Op::CompositeExtract(
+          indexType.getBaseType(), indexOp.getDef(), m_builder.makeConstant(i))));
       }
 
-      /* Build new index vector */
-      auto newIndex = indexDefs.front();
+      auto clampedIndex = indexType.isVector()
+        ? m_builder.addBefore(use, clampedIndexOp)
+        : SsaDef(clampedIndexOp.getOperand(0u));
 
-      if (indexType.isVector()) {
-        Op newIndexOp(OpCode::eCompositeConstruct, indexType);
-
-        for (auto s : indexDefs)
-          newIndexOp.addOperand(s);
-
-        newIndex = m_builder.addBefore(use, std::move(newIndexOp));
-      }
-
-      useOp.setFlags(useOp.getFlags() | OpFlag::eInBounds);
-      useOp.setOperand(1u, newIndex);
-
-      m_builder.rewriteOp(use, std::move(useOp));
-
+      m_builder.rewriteOp(use, Op(useOp).setOperand(1u, clampedIndex).setFlags(useOp.getFlags() | OpFlag::eInBounds));
       hasLoad = true;
     }
-
-    hasBoundCheck = true;
   }
 
-  if (hasLoad && !scratchOp.isConstant()) {
-    /* If there are loads, pad each array dimension by one
-     * element to have an extra element that reads zero */
+  if (hasLoad) {
+    /* Pad inner arrays by one element so we read zero */
     auto type = scratchOp.getType();
 
-    for (uint32_t i = 0u; i < type.getArrayDimensions(); i++)
-      type.setArraySize(i, 1u + type.getArraySize(i));
+    for (uint32_t i = 0u; i < type.getArrayDimensions() - 1u; i++)
+      type.setArraySize(i, type.getArraySize(i) + 1u);
 
-    m_builder.setOpType(def, type);
+    m_builder.rewriteOp(scratchOp.getDef(), Op(scratchOp).setType(type));
   }
 
-  return hasBoundCheck;
+  return true;
 }
 
 
