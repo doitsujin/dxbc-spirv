@@ -171,12 +171,6 @@ void FunctionCleanupPass::gatherSharedTempUses() {
       case OpCode::eTmpLoad:
       case OpCode::eTmpStore: {
         const auto& temp = m_builder.getOpForOperand(*iter, 0u);
-        auto e = m_sharedTemps.find(temp.getDef());
-
-        if (e == m_sharedTemps.end())
-          m_sharedTemps.insert({ temp.getDef(), function });
-        else if (e->second && e->second != function)
-          e->second = SsaDef();
 
         if (!isEntryPoint)
           insertUnique(m_functionTemps, function, temp.getDef());
@@ -195,8 +189,6 @@ void FunctionCleanupPass::gatherSharedTempUses() {
 
 
 void FunctionCleanupPass::propagateSharedTempUses() {
-  removeLocalTempsFromLookupTables();
-
   while (propagateSharedTempUsesRound())
     continue;
 }
@@ -214,25 +206,6 @@ bool FunctionCleanupPass::propagateSharedTempUsesRound() {
   }
 
   return progress;
-}
-
-
-void FunctionCleanupPass::removeLocalTempsFromLookupTables() {
-  /* Remove temporaries that are only used in one function */
-  for (auto iter = m_sharedTemps.begin(); iter != m_sharedTemps.end(); ) {
-    if (iter->second)
-      iter = m_sharedTemps.erase(iter);
-    else
-      ++iter;
-  }
-
-  /* Remove function to shared temp entries for non-shared temporaries */
-  for (auto iter = m_functionTemps.begin(); iter != m_functionTemps.end(); ) {
-    if (m_sharedTemps.find(iter->second) == m_sharedTemps.end())
-      iter = m_functionTemps.erase(iter);
-    else
-      ++iter;
-  }
 }
 
 

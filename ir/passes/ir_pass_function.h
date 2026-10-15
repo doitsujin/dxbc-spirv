@@ -65,7 +65,6 @@ private:
 
   Builder& m_builder;
 
-  std::map<SsaDef, SsaDef> m_sharedTemps;
   std::map<SsaDef, uint32_t> m_callDepth;
 
   std::multimap<SsaDef, SsaDef> m_functionTemps;
@@ -76,8 +75,6 @@ private:
   void propagateSharedTempUses();
 
   bool propagateSharedTempUsesRound();
-
-  void removeLocalTempsFromLookupTables();
 
   void resolveSharedTempsForFunction(SsaDef fn);
 
