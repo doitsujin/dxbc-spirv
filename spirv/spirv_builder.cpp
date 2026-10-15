@@ -838,8 +838,12 @@ void SpirvBuilder::emitDclScratch(const ir::Op& op) {
   auto typeId = getIdForType(op.getType());
   auto ptrTypeId = getIdForPtrType(typeId, spv::StorageClassPrivate);
 
-  pushOp(m_declarations, spv::OpVariable, ptrTypeId, varId,
-    spv::StorageClassPrivate, getIdForConstantNull(op.getType()));
+  if (m_options.zeroInitializeScratch) {
+    pushOp(m_declarations, spv::OpVariable, ptrTypeId, varId,
+      spv::StorageClassPrivate, getIdForConstantNull(op.getType()));
+  } else {
+    pushOp(m_declarations, spv::OpVariable, ptrTypeId, varId, spv::StorageClassPrivate);
+  }
 
   addEntryPointId(varId);
 }

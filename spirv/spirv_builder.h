@@ -55,6 +55,9 @@ public:
     int32_t maxCbvCount = -1;
     /** Maximum tessellation factor supported by the device. */
     float maxTessFactor = 64.0f;
+    /** Zero-initialize scratch variables. Useful in case games rely on
+     *  undefined behaviour, but may cause perf issues in some cases. */
+    bool zeroInitializeScratch = false;
   };
 
   explicit SpirvBuilder(const ir::Builder& builder, ResourceMapping& mapping, const Options& options);
