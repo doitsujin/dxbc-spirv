@@ -74,6 +74,7 @@ void legalizeIr(ir::Builder& builder, const CompileOptions& options) {
       ir::SsaConstructionPass::runInsertExitPhiPass(builder);
 
       progress |= ir::DescriptorIndexingPass::runPass(builder, options.descriptorIndexing);
+      progress |= ir::CleanupScratchPass::runScratchClearInsertion(builder, options.scratchOptions);
 
       /* In some rare cases there may be feedback loops between derivative
        * hoisting and CSE. Resolve these right away to avoid having to run
@@ -95,6 +96,7 @@ void legalizeIr(ir::Builder& builder, const CompileOptions& options) {
   }
 
   ir::ArithmeticPass::runLateLoweringPasses(builder, options.arithmeticOptions);
+  ir::CleanupScratchPass::runScratchClearLowering(builder, options.scratchOptions);
 
   /* Remove unused function parameters and function returns. */
   while (ir::FunctionCleanupPass::runRemoveParameterPass(builder))
