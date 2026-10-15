@@ -71,6 +71,20 @@ public:
   /* Runs all passes in a sensible order */
   static bool runPass(Builder& builder, const Options& options);
 
+  /* Runs pass to insert scratch clear instructions around scratch stores,
+   * and replace unwritten scratch variables with zero. Should only be run
+   * once, and only when control flow is finalized to avoid pessimizing
+   * branching due to the pass introducing additional phis. */
+  bool insertScratchClear();
+
+  static bool runScratchClearInsertion(Builder& builder, const Options& options);
+
+  /* Runs pass to lower scratch clear to helper function. This should
+   * be run late in order to eliminate some calls with constant folding. */
+  bool lowerScratchClear();
+
+  static bool runScratchClearLowering(Builder& builder, const Options& options);
+
 private:
 
   Builder&  m_builder;
@@ -132,6 +146,12 @@ private:
   std::pair<SsaDef, uint64_t> extractBaseAndOffset(const Op& op) const;
 
   std::string getScratchCbvFunctionName(SsaDef def) const;
+
+  SsaDef emitScratchClearFunction(SsaDef def) const;
+
+  bool insertScratchClearForDef(SsaDef def) const;
+
+  bool lowerScratchClearForDef(SsaDef def) const;
 
   bool allStoreIndicesConstant(SsaDef def) const;
 

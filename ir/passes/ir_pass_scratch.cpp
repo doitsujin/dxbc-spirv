@@ -1,6 +1,7 @@
 #include <algorithm>
 
 #include "ir_pass_function.h"
+#include "ir_pass_scalarize.h"
 #include "ir_pass_scratch.h"
 #include "ir_pass_ssa.h"
 
@@ -125,6 +126,51 @@ bool CleanupScratchPass::runPass(Builder& builder, const Options& options) {
   feedback |= instance.enableBoundChecking();
 
   return feedback;
+}
+
+
+bool CleanupScratchPass::insertScratchClear() {
+  bool feedback = false;
+
+  if (!m_options.enableBoundChecking)
+    return feedback;
+
+  for (auto iter = m_builder.begin(); iter != m_builder.getDeclarations().second; iter++) {
+    if (iter->getOpCode() == OpCode::eDclScratch)
+      feedback |= insertScratchClearForDef(iter->getDef());
+  }
+
+  if (feedback) {
+    ir::FunctionCleanupPass::runResolveSharedTempPass(m_builder);
+    ir::SsaConstructionPass::runPass(m_builder);
+    ir::ScalarizePass::runResolveRedundantCompositesPass(m_builder);
+  }
+
+  return feedback;
+}
+
+
+bool CleanupScratchPass::lowerScratchClear() {
+  bool feedback = false;
+
+  for (auto iter = m_builder.begin(); iter != m_builder.getDeclarations().second; iter++) {
+    if (iter->getOpCode() == OpCode::eDclScratch)
+      feedback |= lowerScratchClearForDef(iter->getDef());
+  }
+
+  return feedback;
+}
+
+
+bool CleanupScratchPass::runScratchClearInsertion(Builder& builder, const Options& options) {
+  CleanupScratchPass instance(builder, options);
+  return instance.insertScratchClear();
+}
+
+
+bool CleanupScratchPass::runScratchClearLowering(Builder& builder, const Options& options) {
+  CleanupScratchPass instance(builder, options);
+  return instance.lowerScratchClear();
 }
 
 
@@ -1242,6 +1288,219 @@ std::string CleanupScratchPass::getScratchCbvFunctionName(SsaDef def) const {
 
   str << "_cbv";
   return str.str();
+}
+
+
+SsaDef CleanupScratchPass::emitScratchClearFunction(SsaDef def) const {
+  auto scratchType = m_builder.getOp(def).getType();
+  auto entryPoint = SsaDef(m_builder.getOpForOperand(def, 0u).getOperand(0u));
+
+  auto loParam = m_builder.add(Op::DclParam(ScalarType::eU32));
+  auto hiParam = m_builder.add(Op::DclParam(ScalarType::eU32));
+
+  m_builder.add(Op::DebugName(loParam, "lo"));
+  m_builder.add(Op::DebugName(hiParam, "hi"));
+
+  auto function = m_builder.addBefore(entryPoint, Op::Function(ScalarType::eVoid)
+    .addParam(loParam).addParam(hiParam));
+  auto cursor = m_builder.setCursor(function);
+
+  /* Load parameters */
+  auto entryBlock = m_builder.add(Op::Label());
+
+  auto lo = m_builder.add(Op::ParamLoad(ScalarType::eU32, function, loParam));
+  auto hi = m_builder.add(Op::ParamLoad(ScalarType::eU32, function, hiParam));
+
+  /* Emit loop header with phi for loop counter */
+  auto loopHeader = m_builder.add(Op::Label());
+  auto loopCounter = m_builder.add(Op::Phi(ScalarType::eU32));
+
+  auto loopCheck = m_builder.add(Op::Label());
+  auto loopExit = m_builder.add(Op::Label());
+  auto loopBody = m_builder.add(Op::Label());
+  auto loopContinue = m_builder.add(Op::Label());
+
+  auto loopMerge = m_builder.add(Op::Label());
+  m_builder.add(Op::Return());
+  m_builder.add(Op::FunctionEnd());
+
+  /* Build body block, which checks the loop counter against
+   * the upper bound and exits the loop as necessary */
+  m_builder.addBefore(loopHeader, Op::Branch(loopHeader));
+  m_builder.addBefore(loopCheck, Op::Branch(loopCheck));
+  m_builder.setCursor(loopCheck);
+
+  auto exitCond = m_builder.add(Op::UGe(ScalarType::eBool, loopCounter, hi));
+  m_builder.add(Op::BranchConditional(exitCond, loopExit, loopBody));
+
+  /* Build exit block */
+  m_builder.setCursor(loopExit);
+  m_builder.add(Op::Branch(loopMerge));
+
+  /* Build loop body */
+  m_builder.setCursor(loopBody);
+  m_builder.add(Op::ScratchStore(def, loopCounter,
+    m_builder.makeConstantZero(scratchType.getSubType(0u))));
+
+  auto nextCounter = m_builder.add(Op::IAdd(ScalarType::eU32,
+    loopCounter, m_builder.makeConstant(1u)));
+
+  m_builder.rewriteOp(loopCounter, Op::Phi(ScalarType::eU32)
+    .addPhi(entryBlock, lo)
+    .addPhi(loopContinue, nextCounter));
+
+  m_builder.add(Op::Branch(loopContinue));
+
+  /* Build continue block */
+  m_builder.setCursor(loopContinue);
+  m_builder.add(Op::Branch(loopHeader));
+
+  /* Adjust labels for structured control flow */
+  m_builder.rewriteOp(loopCheck, Op::LabelSelection(loopBody));
+  m_builder.rewriteOp(loopHeader, Op::LabelLoop(loopMerge, loopContinue));
+
+  m_builder.setCursor(cursor);
+  return function;
+}
+
+
+bool CleanupScratchPass::insertScratchClearForDef(SsaDef def) const {
+  const auto& scratchOp = m_builder.getOp(def);
+  const auto& entryPointOp = m_builder.getOpForOperand(scratchOp, 0u);
+
+  if (!scratchOp.getType().isArrayType())
+    return false;
+
+  /* Temporary variable that stores the first unwritten index */
+  auto firstUnwrittenTemp = m_builder.add(Op::DclTmp(ScalarType::eU32, SsaDef(scratchOp.getOperand(0u))));
+
+  for (uint32_t i = 0u; i < entryPointOp.getFirstLiteralOperandIndex(); i++) {
+    auto ref = m_builder.getNext(SsaDef(entryPointOp.getOperand(i)));
+    dxbc_spv_assert(m_builder.getOp(ref).getOpCode() == OpCode::eLabel);
+
+    m_builder.addAfter(ref, Op::TmpStore(firstUnwrittenTemp, m_builder.makeConstant(0u)));
+  }
+
+  util::small_vector<SsaDef, 256u> uses;
+  m_builder.getUses(def, uses);
+
+  for (auto use : uses) {
+    const auto& useOp = m_builder.getOp(use);
+
+    if (useOp.getOpCode() != OpCode::eScratchLoad
+     && useOp.getOpCode() != OpCode::eScratchStore)
+      continue;
+
+    /* Extract outer array index */
+    const auto& indexOp = m_builder.getOpForOperand(useOp, 1u);
+
+    auto indexType = indexOp.getType().getBaseType(0u);
+    auto indexDef = indexOp.getDef();
+
+    if (indexType.isVector()) {
+      indexDef = m_builder.addBefore(use, Op::CompositeExtract(
+        indexType.getBaseType(), indexDef, m_builder.makeConstant(0u)));
+    }
+
+    if (indexType.getBaseType() != ScalarType::eU32)
+      indexDef = m_builder.addBefore(use, Op::ConvertItoI(ScalarType::eU32, indexDef));
+
+    /* Load current value of first unwritten index */
+    auto firstUnwrittenDef = m_builder.addBefore(use, Op::TmpLoad(ScalarType::eU32, firstUnwrittenTemp));
+
+    if (useOp.getOpCode() == OpCode::eScratchStore) {
+      auto nextUnwrittenDef = m_builder.addBefore(use, Op::IAdd(ScalarType::eU32, indexDef, m_builder.makeConstant(1u)));
+      nextUnwrittenDef = m_builder.addBefore(use, Op::UMax(ScalarType::eU32, firstUnwrittenDef, nextUnwrittenDef));
+
+      /* Also need to clear the current element if this is a partial store */
+      m_builder.addBefore(use, Op::ScratchClear(scratchOp.getDef(), firstUnwrittenDef,
+        indexType.isScalar() ? indexDef : nextUnwrittenDef));
+      m_builder.addBefore(use, Op::TmpStore(firstUnwrittenTemp, nextUnwrittenDef));
+    } else {
+      auto writtenCond = m_builder.addBefore(use, Op::ULt(ScalarType::eBool, indexDef, firstUnwrittenDef));
+      auto scratchLoad = m_builder.addBefore(use, Op(useOp));
+
+      m_builder.rewriteOp(use, Op::Select(useOp.getType(), writtenCond,
+        scratchLoad, m_builder.makeConstantZero(useOp.getType())));
+    }
+  }
+
+  return true;
+}
+
+
+bool CleanupScratchPass::lowerScratchClearForDef(SsaDef def) const {
+  const auto& scratchOp = m_builder.getOp(def);
+
+  if (!scratchOp.getType().isArrayType())
+    return false;
+
+  util::small_vector<SsaDef, 256u> uses;
+  m_builder.getUses(def, uses);
+
+  bool feedback = false;
+  SsaDef helper = {};
+
+  std::string debugName;
+
+  for (auto use : uses) {
+    const auto& useOp = m_builder.getOp(use);
+
+    if (useOp.getOpCode() == OpCode::eScratchClear) {
+      /* If both indices are constant and the first is not loess than
+       * the second, this is a no-op and we can skip the instruction.
+       * The same is true if both operands are identical. */
+      const auto& lo = m_builder.getOpForOperand(useOp, 1u);
+      const auto& hi = m_builder.getOpForOperand(useOp, 2u);
+
+      bool canSkip = lo.getDef() == hi.getDef();
+
+      if (!canSkip && lo.isConstant() && hi.isConstant())
+        canSkip = uint32_t(lo.getOperand(0u)) >= uint32_t(hi.getOperand(0u));
+
+      /* Another pattern that we generate ourselves when writing consecutive
+       * members of the same element is ScratchClear(max(x, a+1), a). Since
+       * we can reasonably ignore integer overflows on array insices, this
+       * kind of clear op is always a no-op. */
+      if (!canSkip && lo.getOpCode() == OpCode::eUMax) {
+        for (uint32_t i = 0u; i < lo.getOperandCount() && !canSkip; i++) {
+          const auto& maxOperand = m_builder.getOpForOperand(lo, i);
+
+          if (maxOperand.getDef() == hi.getDef()) {
+            canSkip = true;
+          } else if (maxOperand.getOpCode() == OpCode::eIAdd) {
+            const auto& a = m_builder.getOpForOperand(maxOperand, 0u);
+            const auto& b = m_builder.getOpForOperand(maxOperand, 1u);
+
+            canSkip = a.getDef() == hi.getDef() && b.isConstant();
+          }
+        }
+      }
+
+      if (canSkip) {
+        m_builder.remove(use);
+      } else {
+        if (!helper)
+          helper = emitScratchClearFunction(def);
+
+        m_builder.rewriteOp(use, Op::FunctionCall(ScalarType::eVoid,
+          helper).addParam(lo.getDef()).addParam(hi.getDef()));
+      }
+
+      feedback = true;
+    } else if (useOp.getOpCode() == OpCode::eDebugName) {
+      std::stringstream debugNameBuilder;
+      debugNameBuilder << useOp.getLiteralString(useOp.getFirstLiteralOperandIndex());
+      debugNameBuilder << "_clear";
+
+      debugName = debugNameBuilder.str();
+    }
+  }
+
+  if (helper && !debugName.empty())
+    m_builder.add(Op::DebugName(helper, debugName.c_str()));
+
+  return feedback;
 }
 
 
