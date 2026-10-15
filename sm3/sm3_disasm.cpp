@@ -334,27 +334,24 @@ void Disassembler::disassembleDeclaration(std::ostream& stream, const Instructio
     uint32_t index = operand.getSemanticIndex();
     if (usage != SemanticUsage::eColor) {
       stream << usage;
+
+      // Only print an index for registers that can exist more than once
+      if (usage != SemanticUsage::eBlendWeight
+          && usage != SemanticUsage::eBlendIndices
+          && usage != SemanticUsage::ePointSize
+          && usage != SemanticUsage::eTangent
+          && usage != SemanticUsage::eBinormal
+          && usage != SemanticUsage::ePositionT
+          && usage != SemanticUsage::eFog
+          && usage != SemanticUsage::eDepth) {
+        stream << std::to_string(index);
+      }
     } else {
       if (index == 0) {
         stream << "color";
       } else {
         stream << "specular" << (index - 1u);
       }
-    }
-
-    if (usage == SemanticUsage::ePosition
-      || usage == SemanticUsage::eNormal
-      || usage == SemanticUsage::eTexCoord
-      || usage == SemanticUsage::eSample
-      || (usage != SemanticUsage::eBlendWeight
-        && usage != SemanticUsage::eBlendIndices
-        && usage != SemanticUsage::ePointSize
-        && usage != SemanticUsage::eTangent
-        && usage != SemanticUsage::eBinormal
-        && usage != SemanticUsage::ePositionT
-        && usage != SemanticUsage::eFog
-        && usage != SemanticUsage::eDepth)) {
-      stream << std::to_string(index);
     }
   }
 }
