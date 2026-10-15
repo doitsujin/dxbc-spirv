@@ -282,26 +282,27 @@ value around and feed it back into a shader later, or potentially use it in exte
 | `CheckSparseAccess`  | `bool`      | `%feedback`  |
 
 ### Load/Store instructions
-| `ir::OpCode`         | Return type  | Arguments...       |                                |          |         |
-|----------------------|--------------|--------------------|--------------------------------|----------|---------|
-| `ParamLoad`          | any          | `%Function`        | `%DclParam` ...                |          |         |
-| `TmpLoad`            | any          | `%DclTmp` variable |                                |          |         |
-| `TmpStore`           | `void`       | `%DclTmp` variable | `%value`                       |          |         |
-| `ScratchLoad`        | any          | `%DclScratch` var. | `%address` into scratch array  |          |         |
-| `ScratchStore`       | `void`       | `%DclScratch` var. | `%address` into scratch array  | `%value` |         |
-| `LdsLoad`            | any          | `%DclLds` variable | `%address` into LDS            |          |         |
-| `LdsStore`           | `void`       | `%DclLds` variable | `%address` into LDS            | `%value` |         |
-| `PushDataLoad`       | any          | `%DclPushData`     | `%address` into push data      |          |         |
-| `InputLoad`          | any          | `%DclInput*`       | `%address` into input type     |          |         |
-| `OutputLoad`         | any          | `%DclOutput*`      | `%address` into output type    |          |         |
-| `OutputStore`        | any          | `%DclOutput*`      | `%address` into output type    | `%value` |         |
-| `DescriptorLoad`     | descriptor   | `%Dcl*` variable   | `%index` into descriptor array |          |         |
-| `BufferLoad`         | any          | `%descriptor`      | `%address` into CBV / SRV / UAV| `align`  |         |
-| `BufferStore`        | any          | `%descriptor` (UAV)| `%address` into UAV            | `%value` | `align` |
-| `BufferQuerySize`    | `u32`        | `%descriptor`      |                                |          |         |
-| `MemoryLoad`         | any          | `%Pointer`         | `%address` into pointee type   | `align`  |         |
-| `MemoryStore`        | any          | `%Pointer`         | `%address` into pointee type   | `%value` | `align` |
-| `ConstantLoad`       | any          | `%Constant`        | `%address` into pointee type   |                    |
+| `ir::OpCode`         | Return type  | Arguments...       |                                |          |          |
+|----------------------|--------------|--------------------|--------------------------------|----------|----------|
+| `ParamLoad`          | any          | `%Function`        | `%DclParam` ...                |          |          |
+| `TmpLoad`            | any          | `%DclTmp` variable |                                |          |          |
+| `TmpStore`           | `void`       | `%DclTmp` variable | `%value`                       |          |          |
+| `ScratchLoad`        | any          | `%DclScratch` var. | `%address` into scratch array  |          |          |
+| `ScratchStore`       | `void`       | `%DclScratch` var. | `%address` into scratch array  | `%value` |          |
+| `ScratchClear`       | `void`       | `%DclScratch` var. | `%lo` Lower bound              | `%hi` Upper bound | |
+| `LdsLoad`            | any          | `%DclLds` variable | `%address` into LDS            |          |          |
+| `LdsStore`           | `void`       | `%DclLds` variable | `%address` into LDS            | `%value` |          |
+| `PushDataLoad`       | any          | `%DclPushData`     | `%address` into push data      |          |          |
+| `InputLoad`          | any          | `%DclInput*`       | `%address` into input type     |          |          |
+| `OutputLoad`         | any          | `%DclOutput*`      | `%address` into output type    |          |          |
+| `OutputStore`        | any          | `%DclOutput*`      | `%address` into output type    | `%value` |          |
+| `DescriptorLoad`     | descriptor   | `%Dcl*` variable   | `%index` into descriptor array |          |          |
+| `BufferLoad`         | any          | `%descriptor`      | `%address` into CBV / SRV / UAV| `align`  |          |
+| `BufferStore`        | any          | `%descriptor` (UAV)| `%address` into UAV            | `%value` | `align`  |
+| `BufferQuerySize`    | `u32`        | `%descriptor`      |                                |          |          |
+| `MemoryLoad`         | any          | `%Pointer`         | `%address` into pointee type   | `align`  |          |
+| `MemoryStore`        | any          | `%Pointer`         | `%address` into pointee type   | `%value` | `align`  |
+| `ConstantLoad`       | any          | `%Constant`        | `%address` into pointee type   |                     |
 
 Note that `SrvLoad`, `UavLoad` and `UavStore` instructions can only be used on raw, structured or typed buffer instructions. Image
 resources can only be accessed via image instructions.
@@ -333,6 +334,9 @@ the operation, and will be at least equal to the size of the scalar type being a
 
 The `ConstantLoad` instruction can be used to dynamically index into a constant array. If the array is a vector array, the vector
 component index must be constant.
+
+The `ScratchClear` instruction zero-initializes all elements in the range `[%lo,%hi)` in the given scratch array. This instruction
+will always get lowered and must not appear in the final code.
 
 ### Atomic instructions
 | `ir::OpCode`         | Return type      | Arguments...      |                              |                |                |                |

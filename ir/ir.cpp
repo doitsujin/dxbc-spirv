@@ -835,6 +835,7 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eTmpStore: return os << "TmpStore";
     case OpCode::eScratchLoad: return os << "ScratchLoad";
     case OpCode::eScratchStore: return os << "ScratchStore";
+    case OpCode::eScratchClear: return os << "ScratchClear";
     case OpCode::eLdsLoad: return os << "LdsLoad";
     case OpCode::eLdsStore: return os << "LdsStore";
     case OpCode::ePushDataLoad: return os << "PushDataLoad";

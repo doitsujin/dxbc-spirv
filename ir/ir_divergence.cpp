@@ -335,7 +335,8 @@ Scope DivergenceAnalysis::determineScope(const Op& op) {
     }
 
     case OpCode::eOutputStore:
-    case OpCode::eScratchStore: {
+    case OpCode::eScratchStore:
+    case OpCode::eScratchClear: {
       taintFunction(m_currentFunction);
 
       auto scope = determineScopeForArgsAndBlock(op);

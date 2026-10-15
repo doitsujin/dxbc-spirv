@@ -575,6 +575,7 @@ bool DerivativePass::canHoistDerivativeOp(const Op& derivOp, SsaDef dstBlock) co
       case OpCode::eOutputStore:
       case OpCode::eLdsStore:
       case OpCode::eScratchStore:
+      case OpCode::eScratchClear:
       case OpCode::eBufferStore:
       case OpCode::eImageStore:
       case OpCode::eMemoryStore:

@@ -573,6 +573,7 @@ void SpirvBuilder::emitInstruction(const ir::Op& op) {
     case ir::OpCode::eDclTmp:
     case ir::OpCode::eTmpLoad:
     case ir::OpCode::eTmpStore:
+    case ir::OpCode::eScratchClear:
     case ir::OpCode::eScopedIf:
     case ir::OpCode::eScopedElse:
     case ir::OpCode::eScopedEndIf:

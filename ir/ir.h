@@ -1103,6 +1103,7 @@ enum class OpCode : uint16_t {
   eMemoryLoad                   = 304u,
   eMemoryStore                  = 305u,
   eConstantLoad                 = 306u,
+  eScratchClear                 = 307u,
 
   eLdsAtomic                    = 320u,
   eBufferAtomic                 = 321u,
@@ -2093,6 +2094,13 @@ public:
       .addOperand(decl)
       .addOperand(address)
       .addOperand(value);
+  }
+
+  static Op ScratchClear(SsaDef decl, SsaDef lo, SsaDef hi) {
+    return Op(OpCode::eScratchClear, Type())
+      .addOperand(decl)
+      .addOperand(lo)
+      .addOperand(hi);
   }
 
   static Op LdsLoad(Type type, SsaDef decl, SsaDef address) {

@@ -601,6 +601,7 @@ CseOpFlags CsePass::classifyOp(const Op& op) const {
     case OpCode::eBarrier:
     case OpCode::eScratchLoad:
     case OpCode::eScratchStore:
+    case OpCode::eScratchClear:
     case OpCode::eLdsLoad:
     case OpCode::eLdsStore:
     case OpCode::eOutputLoad:

@@ -258,6 +258,7 @@ bool RemoveUnusedPass::hasSideEffect(const Op& op) const {
     /* Store ops */
     case OpCode::eTmpStore:
     case OpCode::eScratchStore:
+    case OpCode::eScratchClear:
     case OpCode::eLdsStore:
     case OpCode::eOutputStore:
     case OpCode::eBufferStore:
