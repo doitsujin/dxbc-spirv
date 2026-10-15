@@ -130,7 +130,7 @@ bool CleanupScratchPass::runPass(Builder& builder, const Options& options) {
 
 
 bool CleanupScratchPass::insertScratchClear() {
-  bool feedback = false;
+  bool feedback = vectorizeScratchStores();
 
   if (!m_options.enableBoundChecking)
     return feedback;
@@ -1361,6 +1361,169 @@ SsaDef CleanupScratchPass::emitScratchClearFunction(SsaDef def) const {
 
   m_builder.setCursor(cursor);
   return function;
+}
+
+
+bool CleanupScratchPass::vectorizeScratchStores() const {
+  /* If there are consecutive component-wise stores to a scratch variable
+   * within a block that all use the same base index, and if there are no
+   * loads in between, we can batch those stores. This will allow us to
+   * get rid of redundant scratch clear ops in some cases. */
+  bool feedback = false;
+
+  struct Entry {
+    SsaDef scratch = {};
+    SsaDef store = {};
+    SsaDef index = {};
+    SsaDef value = {};
+    uint32_t component = 0u;
+  };
+
+  small_vector<Entry, 16u> entries;
+
+  auto next = m_builder.getCode().first->getDef();
+
+  while (next) {
+    const auto& op = m_builder.getOp(next);
+
+    SsaDef removeScratchVar = {};
+
+    switch (op.getOpCode()) {
+      case OpCode::eScratchStore: {
+        const auto& scratchOp = m_builder.getOpForOperand(op, 0u);
+        const auto& indexOp = m_builder.getOpForOperand(op, 1u);
+        const auto& valueOp = m_builder.getOpForOperand(op, 2u);
+
+        /* Only handle simple scratch arrays of a vector type here,
+         * multi-dimensional arrays get too annoying to handle. */
+        auto scratchType = scratchOp.getType();
+
+        if (!scratchType.isArrayType())
+          break;
+
+        scratchType = scratchType.getSubType(0u);
+
+        if (!scratchType.isVectorType() && !scratchType.isStructType())
+          break;
+
+        uint32_t memberCount = scratchType.isVectorType()
+          ? scratchType.getBaseType(0u).getVectorSize()
+          : scratchType.getStructMemberCount();
+
+        if (memberCount > 64u)
+          break;
+
+        if (indexOp.getType().getBaseType(0u).getVectorSize() != 2u) {
+          removeScratchVar = scratchOp.getDef();
+          break;
+        }
+
+        SsaDef element = {};
+        uint32_t component = 0u;
+
+        if (indexOp.isConstant()) {
+          element = m_builder.makeConstant(uint32_t(indexOp.getOperand(0u)));
+          component = uint32_t(indexOp.getOperand(1u));
+        } else {
+          dxbc_spv_assert(indexOp.getOpCode() == OpCode::eCompositeConstruct);
+
+          const auto& componentOp = m_builder.getOpForOperand(indexOp, 1u);
+          dxbc_spv_assert(componentOp.isConstant());
+
+          element = m_builder.getOpForOperand(indexOp, 0u).getDef();
+          component = uint32_t(componentOp.getOperand(0u));
+        }
+
+        uint64_t writtenMask = 0u;
+
+        for (auto& e : entries) {
+          if (e.scratch == scratchOp.getDef()) {
+            /* If a store uses a different index, we also can't batch */
+            if (e.index != element) {
+              removeScratchVar = scratchOp.getDef();
+              break;
+            }
+
+            if (e.component == component) {
+              m_builder.remove(e.store);
+
+              e.value = valueOp.getDef();
+              e.store = op.getDef();
+            }
+
+            writtenMask |= uint64_t(1u) << e.component;
+          }
+        }
+
+        if (removeScratchVar)
+          break;
+
+        if (!(writtenMask & (uint64_t(1u) << component))) {
+          auto& e = entries.emplace_back();
+          e.scratch = scratchOp.getDef();
+          e.store = op.getDef();
+          e.index = element;
+          e.value = valueOp.getDef();
+          e.component = component;
+
+          writtenMask |= uint64_t(1u) << component;
+        }
+
+        /* If all components were written, emit vectorized store */
+        if (writtenMask == (uint64_t(2u) << (memberCount - 1u)) - 1u) {
+          Op compositeOp(OpCode::eCompositeConstruct, scratchType);
+
+          for (uint32_t i = 0u; i < memberCount; i++)
+            compositeOp.addOperand(SsaDef());
+
+          for (auto& e : entries) {
+            if (e.scratch == scratchOp.getDef())
+              compositeOp.setOperand(e.component, e.value);
+          }
+
+          auto composite = m_builder.addBefore(op.getDef(), std::move(compositeOp));
+
+          m_builder.rewriteOp(op.getDef(), Op::ScratchStore(
+            scratchOp.getDef(), element, composite));
+
+          removeScratchVar = scratchOp.getDef();
+
+          /* Remove all involved scalar stores */
+          for (auto& e : entries) {
+            if (e.scratch == scratchOp.getDef() && e.store != op.getDef())
+              m_builder.remove(e.store);
+          }
+        }
+      } break;
+
+      case OpCode::eScratchLoad: {
+        /* Remove all entries accessing the same scratch variable since
+         * we don't really know whether different indices overlap */
+        removeScratchVar = m_builder.getOpForOperand(op, 0u).getDef();
+      } break;
+
+      case OpCode::eLabel: {
+        /* Can't optimize across blocks */
+        entries.clear();
+      } break;
+
+      default:
+        break;
+    }
+
+    if (removeScratchVar) {
+      for (auto i = entries.begin(); i != entries.end(); ) {
+        if (i->scratch == removeScratchVar)
+          i = entries.erase(i);
+        else
+          i++;
+      }
+    }
+
+    next = m_builder.getNext(next);
+  }
+
+  return feedback;
 }
 
 

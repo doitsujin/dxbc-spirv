@@ -149,6 +149,8 @@ private:
 
   SsaDef emitScratchClearFunction(SsaDef def) const;
 
+  bool vectorizeScratchStores() const;
+
   bool insertScratchClearForDef(SsaDef def) const;
 
   bool lowerScratchClearForDef(SsaDef def) const;
