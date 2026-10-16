@@ -23,6 +23,7 @@ void RemoveUnusedPass::run() {
   for (const auto& op : m_builder) {
     switch (op.getOpCode()) {
       case OpCode::eFunction: {
+        currFnHasSideEffects = false;
         currFn = op.getDef();
       } break;
 
@@ -30,7 +31,6 @@ void RemoveUnusedPass::run() {
         m_functionsWithSideEffects.emplace_back(currFn, currFnHasSideEffects);
 
         currFn = ir::SsaDef();
-        currFnHasSideEffects = false;
       } break;
 
       /* Skip control flow since we cannot optimize it away, but it
@@ -285,7 +285,6 @@ bool RemoveUnusedPass::hasSideEffect(const Op& op) const {
     /* Debug drain */
     case OpCode::eDrain:
       return true;
-
 
     /* Declarations that can be removed if unused */
     case OpCode::eUndef:
