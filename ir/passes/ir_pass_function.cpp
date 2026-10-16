@@ -20,6 +20,7 @@ void FunctionCleanupPass::resolveSharedTemps() {
   gatherSharedTempUses();
   propagateSharedTempUses();
   determineFunctionCallDepth();
+  orderFunctionsByCallDepth();
 
   /* Order functions by call depth in decending order. This is necessary
    * since processing function calls will insert new temp load/store ops,
@@ -164,6 +165,8 @@ void FunctionCleanupPass::gatherSharedTempUses() {
       } break;
 
       case OpCode::eFunctionEnd: {
+        m_functionEnds.insert({ function, iter->getDef() });
+
         function = SsaDef();
         isEntryPoint = false;
       } break;
@@ -453,6 +456,29 @@ void FunctionCleanupPass::determineFunctionCallDepth() {
       }
     }
   } while (progress);
+
+  for (const auto& e : m_callDepth)
+    m_functionsByDepth.push_back(e);
+
+  std::sort(m_functionsByDepth.begin(), m_functionsByDepth.end(),
+    [] (const std::pair<SsaDef, uint32_t>& a, const std::pair<SsaDef, uint32_t>& b) {
+      return a.second < b.second || (a.second == b.second && a.first > b.first);
+    });
+}
+
+
+void FunctionCleanupPass::orderFunctionsByCallDepth() {
+  for (const auto& e : m_functionsByDepth) {
+    auto code = m_builder.getCode().first->getDef();
+
+    auto a = e.first;
+    auto b = m_functionEnds.at(a);
+
+    if (code == a)
+      continue;
+
+    m_builder.reorderBefore(code, a, b);
+  }
 }
 
 

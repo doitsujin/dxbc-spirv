@@ -70,6 +70,10 @@ private:
   std::multimap<SsaDef, SsaDef> m_functionTemps;
   std::multimap<SsaDef, SsaDef> m_functionCalls;
 
+  std::unordered_map<SsaDef, SsaDef> m_functionEnds;
+
+  small_vector<std::pair<SsaDef, uint32_t>, 64u> m_functionsByDepth;
+
   void gatherSharedTempUses();
 
   void propagateSharedTempUses();
@@ -89,6 +93,8 @@ private:
   void adjustFunctionForSharedTemps(SsaDef function, TmpParamInfo* a, TmpParamInfo* b);
 
   void determineFunctionCallDepth();
+
+  void orderFunctionsByCallDepth();
 
   void removeReturnValue(SsaDef function);
 
