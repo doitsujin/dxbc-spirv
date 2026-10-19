@@ -421,7 +421,7 @@ static const std::array<InstructionLayout, 100> g_instructionLayouts = {{
   }} },
   /* BreakP */
   { {{
-    { OperandKind::eDstReg, ir::ScalarType::eBool },
+    { OperandKind::eSrcReg, ir::ScalarType::eBool },
   }} },
   /* Phase */
   { },

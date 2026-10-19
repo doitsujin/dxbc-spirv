@@ -1368,7 +1368,8 @@ ir::SsaDef Converter::loadSrc(ir::Builder& builder, const Instruction& op, const
       break;
 
     case RegisterType::ePredicate:
-      logOpError(op, "Predicate cannot be loaded as a regular source register.");
+      dxbc_spv_assert(type == ir::ScalarType::eBool);
+      loadDef = m_regFile.emitPredicateLoad(builder, swizzle, mask);
       break;
 
     case RegisterType::eConst:
@@ -1782,11 +1783,6 @@ bool Converter::handleIf(ir::Builder& builder, const Instruction& op) {
 
   if (op.getOpCode() == OpCode::eIf) {
     cond = loadSrc(builder, op, op.getSrc(0u), ComponentBit::eX, op.getSrc(0u).getSwizzle(getShaderInfo()), ir::ScalarType::eBool);
-    if (op.getSrc(0u).getModifier() == OperandModifier::eNot) {
-      cond = builder.add(ir::Op::BNot(ir::ScalarType::eBool, cond));
-    } else if (op.getSrc(0u).getModifier() != OperandModifier::eNone) {
-      return logOpError(op, "Unknown if condition modifier: ", uint32_t(op.getSrc(0u).getModifier()));
-    }
   } else if (op.getOpCode() == OpCode::eIfC) {
     ir::SsaDef src0 = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX, ir::ScalarType::eF32);
     ir::SsaDef src1 = loadSrcModified(builder, op, op.getSrc(1u), ComponentBit::eX, ir::ScalarType::eF32);
@@ -1838,30 +1834,36 @@ bool Converter::handleBreak(ir::Builder& builder, const Instruction& op) {
     /* Break unconditionally */
     builder.add(ir::Op::ScopedLoopBreak(construct->def));
     return true;
-  } else if (op.getOpCode() == OpCode::eBreakP) {
+  }
+
+  ir::SsaDef cond;
+  if (op.getOpCode() == OpCode::eBreakP) {
     /* Break if the predicate is true */
+    dxbc_spv_assert(op.getSrcCount() == 1u);
+    dxbc_spv_assert(!op.hasDst());
+    dxbc_spv_assert(op.getSrc(0u).getRegisterType() == RegisterType::ePredicate);
+    /* It's a separate instruction, not predicated break. */
+    dxbc_spv_assert(!op.isPredicated());
+    dxbc_spv_assert(!op.getSrc(0u).isPredicated());
+
     /* It **must** have a replicate swizzle, so just load X. */
-    auto cond = m_regFile.emitPredicateLoad(builder, op.getDst().getPredicateSwizzle(), ComponentBit::eX);
-    auto breakIf = builder.add(ir::Op::ScopedIf(ir::SsaDef(), cond));
-    builder.add(ir::Op::ScopedLoopBreak(construct->def));
-    auto breakEndIf = builder.add(ir::Op::ScopedEndIf(breakIf));
-    builder.rewriteOp(breakIf, ir::Op(builder.getOp(breakIf)).setOperand(0u, breakEndIf));
-    return true;
+    cond = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX, ir::ScalarType::eBool);
   } else if (op.getOpCode() == OpCode::eBreakC) {
     /* Break based on the comparison */
     auto src0 = loadSrcModified(builder, op, op.getSrc(0u), ComponentBit::eX, ir::ScalarType::eF32);
     auto src1 = loadSrcModified(builder, op, op.getSrc(1u), ComponentBit::eX, ir::ScalarType::eF32);
-    auto cond = emitComparison(builder, src0, src1, op.getComparisonMode());
-    auto breakIf = builder.add(ir::Op::ScopedIf(ir::SsaDef(), cond));
-    builder.add(ir::Op::ScopedLoopBreak(construct->def));
-    auto breakEndIf = builder.add(ir::Op::ScopedEndIf(breakIf));
-    builder.rewriteOp(breakIf, ir::Op(builder.getOp(breakIf)).setOperand(0u, breakEndIf));
-    return true;
+    cond = emitComparison(builder, src0, src1, op.getComparisonMode());
   } else {
     dxbc_spv_unreachable();
     Logger::err("handleBreak can't handle opcode '", op.getOpCode(), "'");
     return false;
   }
+
+  auto breakIf = builder.add(ir::Op::ScopedIf(ir::SsaDef(), cond));
+  builder.add(ir::Op::ScopedLoopBreak(construct->def));
+  auto breakEndIf = builder.add(ir::Op::ScopedEndIf(breakIf));
+  builder.rewriteOp(breakIf, ir::Op(builder.getOp(breakIf)).setOperand(0u, breakEndIf));
+  return true;
 }
 
 
@@ -2047,12 +2049,12 @@ ir::SsaDef Converter::applySrcModifiers(ir::Builder& builder, ir::SsaDef def, co
   bool isUnknown = type.isUnknownType();
   bool partialPrecision = instruction.hasDst() && instruction.getDst().isPartialPrecision();
 
-  if (!type.isFloatType()) {
+  auto mod = operand.getModifier();
+
+  if (!type.isFloatType() && mod != OperandModifier::eNot) {
     type = ir::BasicType(partialPrecision ? ir::ScalarType::eMinF16 : ir::ScalarType::eF32, type.getVectorSize());
     modifiedDef = builder.add(ir::Op::ConsumeAs(type, modifiedDef));
   }
-
-  auto mod = operand.getModifier();
 
   switch (mod) {
     case OperandModifier::eAbs: /* abs(r) */
@@ -2127,6 +2129,11 @@ ir::SsaDef Converter::applySrcModifiers(ir::Builder& builder, ir::SsaDef def, co
     case OperandModifier::eNeg: /* -r */
       modifiedDef = builder.add(ir::Op::FNeg(type, modifiedDef));
     break;
+
+    case OperandModifier::eNot:
+      dxbc_spv_assert(type.isBoolType());
+      modifiedDef = builder.add(ir::Op::BNot(type, modifiedDef));
+      break;
 
     case OperandModifier::eNone:
       break;
