@@ -28,15 +28,19 @@ public:
 
   /** Constructs shader info. Note that the dword count must include
    *  the two dwords consumed by the info structure itself. */
-  ShaderInfo(ShaderType type, uint32_t major, uint32_t minor)
-  : m_token(((~0u & uint32_t(type)) << 16) | ((major & 0xff) << 8u) | (minor & 0xff)) { }
+  ShaderInfo(ShaderType type, uint32_t major, uint32_t minor) {
+    m_token = ~0u;
+    m_token = util::binsert(0u, major, 8u, 8u);
+    m_token = util::binsert(m_token, minor, 0u, 8u);
+    m_token = util::binsert(m_token, uint32_t(type), 16u, 1u);
+  }
 
   /** Parses shader info */
   explicit ShaderInfo(util::ByteReader& reader);
 
   /** Extracts shader type from version token */
   ShaderType getType() const {
-    return ShaderType(util::bextract(m_token, 16u, 1));
+    return ShaderType(util::bextract(m_token, 16u, 1u));
   }
 
   /** Extracts shader model version from version token */
