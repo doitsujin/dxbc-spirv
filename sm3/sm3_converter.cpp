@@ -1743,7 +1743,9 @@ bool Converter::handleCrs(ir::Builder& builder, const Instruction& op) {
     auto b = builder.add(emitFMul(scalarType, src0y, src1x));
     components.push_back(builder.add(ir::Op::FSub(scalarType, a, b)));
   }
-  auto res = composite(builder, makeVectorType(scalarType, writeMask), components.data(), Swizzle::identity(), writeMask);
+
+  auto res = composite(builder, makeVectorType(scalarType, writeMask), components.data(),
+    Swizzle::identity(), util::makeWriteMaskForComponents(components.size()));
   return storeDstModifiedPredicated(builder, op, dst, res);
 }
 
@@ -1769,7 +1771,8 @@ bool Converter::handleSetP(ir::Builder& builder, const Instruction& op) {
     components.push_back(comparison);
   }
 
-  auto result = composite(builder, makeVectorType(ir::ScalarType::eBool, writeMask), components.data(), Swizzle::identity(), writeMask);
+  auto result = composite(builder, makeVectorType(ir::ScalarType::eBool, writeMask), components.data(),
+    Swizzle::identity(), util::makeWriteMaskForComponents(components.size()));
   return storeDstModifiedPredicated(builder, op, dst, result);
 }
 
