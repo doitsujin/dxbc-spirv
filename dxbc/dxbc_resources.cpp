@@ -424,7 +424,7 @@ std::pair<ir::SsaDef, ir::SsaDef> ResourceMap::emitRawStructuredLoad(
       : m_converter.computeRawAddress(builder, elementIndex, block);
 
     /* Load buffer data and convert to desired result type */
-    ir::SsaDef sparseFeedback = { };
+    sparseFeedback = { };
     ir::SsaDef result = builder.add(ir::Op::BufferLoad(resultType, descriptor, address, blockAlignment).setFlags(loadFlags));
 
     if (isSparse) {
