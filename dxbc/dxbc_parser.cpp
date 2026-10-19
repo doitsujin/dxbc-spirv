@@ -1832,6 +1832,12 @@ bool Instruction::write(util::ByteWriter& writer, const ShaderInfo& info) const 
   if (!token.write(writer))
     return false;
 
+  if (token.isCustomData()) {
+    auto [data, size] = getCustomData();
+    writer.write(size * 4u, reinterpret_cast<const uint8_t*>(data));
+    return true;
+  }
+
   /* Emit operands */
   auto layout = getLayout(info);
 
