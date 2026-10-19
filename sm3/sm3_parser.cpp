@@ -591,7 +591,8 @@ bool Operand::write(util::ByteWriter& writer, const ShaderInfo& info) const {
     for (uint32_t i = 0u; i < uint32_t(componentCount); i++) {
       bool lastWrite;
       if (m_info.type == ir::ScalarType::eBool)
-        lastWrite = writer.write(getImmediate<bool>(i));
+        // Write as an uint32_t because we need to write 4 bytes for an immediate
+        lastWrite = writer.write(getImmediate<uint32_t>(i));
       else if (m_info.type == ir::ScalarType::eF32)
         lastWrite = writer.write(getImmediate<float>(i));
       else
