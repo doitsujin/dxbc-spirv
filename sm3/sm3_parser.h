@@ -257,8 +257,10 @@ public:
   /** Creates operand and sets up the operand type.
    * Other properties need to be set manually. */
   Operand(OperandInfo info, RegisterType type)
-    : m_token(((uint32_t(type) & 0b11000) << 11u) | (uint32_t(type) & 0b111) << 28u),
-      m_info(info) { }
+    : m_info(info) {
+    m_token = util::binsert(0u, uint32_t(type) >> 3u, 11u, 2u);
+    m_token = util::binsert(m_token, uint32_t(type), 28u, 3u);
+  }
 
   /** Recursively parses operand in byte stream, index operands. */
   Operand(util::ByteReader& reader, const OperandInfo& info, Instruction& op, const ShaderInfo& shaderInfo);
