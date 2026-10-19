@@ -1013,8 +1013,8 @@ ir::SsaDef IoMap::emitDynamicLoadFunction(ir::Builder& builder) const {
 
       for (uint32_t j = 0u; j < 4u; j++) {
         if ((baseType.isScalar() && j == 0) || j < baseType.getVectorSize()) {
-          auto value = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eF32, input, builder.makeConstant(i)));
-          components[j] = emitTexCoordPointSpriteAdjustment(builder, *ioVar, value, i);
+          auto value = builder.add(ir::Op::CompositeExtract(ir::ScalarType::eF32, input, builder.makeConstant(j)));
+          components[j] = emitTexCoordPointSpriteAdjustment(builder, *ioVar, value, j);
         } else {
           components[j] = builder.makeConstant(0.0f);
         }
