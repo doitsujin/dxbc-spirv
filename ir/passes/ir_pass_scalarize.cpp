@@ -118,10 +118,6 @@ void ScalarizePass::scalarizeVectorOps() {
       case OpCode::eFPow:
       case OpCode::eFPowLegacy:
       case OpCode::eUMSad:
-      case OpCode::eIAddCarry:
-      case OpCode::eISubBorrow:
-      case OpCode::eSMulExtended:
-      case OpCode::eUMulExtended:
       case OpCode::eUDiv:
       case OpCode::eUMod:
         iter = handleGenericOp(iter, false);
@@ -282,6 +278,10 @@ void ScalarizePass::scalarizeVectorOps() {
       case OpCode::eFDotAdd:
       case OpCode::eFDotAddLegacy:
       case OpCode::eDrain:
+      case OpCode::eIAddCarry:
+      case OpCode::eISubBorrow:
+      case OpCode::eSMulExtended:
+      case OpCode::eUMulExtended:
         break;
 
       /* Invalid opcodes */
