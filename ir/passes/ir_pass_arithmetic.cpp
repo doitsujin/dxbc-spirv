@@ -3,6 +3,7 @@
 #include <sstream>
 
 #include "ir_pass_arithmetic.h"
+#include "ir_pass_conditions.h"
 #include "ir_pass_lower_consume.h"
 #include "ir_pass_remove_unused.h"
 #include "ir_pass_scalarize.h"
@@ -1882,7 +1883,7 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectFAdd(Builder::iterator 
     const auto& bt = m_builder.getOpForOperand(b, 1u);
     const auto& bf = m_builder.getOpForOperand(b, 2u);
 
-    if (evalBAnd(ac, bc) == std::make_optional(false)) {
+    if (!ConditionPass::evaluateBooleanAnd(m_builder, ac, bc)) {
       if (isConstantValue(bf, 0.0) || isConstantValue(bf, -0.0)) {
         m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(), bc.getDef(), bt.getDef(), a.getDef()).setFlags(op->getFlags()));
         return std::make_pair(true, op);
@@ -5005,22 +5006,6 @@ bool ArithmeticPass::isConstantValue(const Op& op, T value) const {
   }
 
   return true;
-}
-
-
-std::optional<bool> ArithmeticPass::evalBAnd(const Op& a, const Op& b) const {
-  if ((a.isConstant() && !bool(a.getOperand(0u))) ||
-      (b.isConstant() && !bool(b.getOperand(0u))))
-    return std::make_optional(false);
-
-  /* av == c0 && av == c1 where c0 != c1 */
-  if (a.getOpCode() == OpCode::eIEq && b.getOpCode() == OpCode::eIEq &&
-      m_builder.getOpForOperand(a, 0u).getDef() == m_builder.getOpForOperand(b, 0u).getDef() &&
-      m_builder.getOpForOperand(a, 1u).isConstant() && m_builder.getOpForOperand(b, 1u).isConstant() &&
-      m_builder.getOpForOperand(a, 1u).getDef() != m_builder.getOpForOperand(b, 1u).getDef())
-    return std::make_optional(false);
-
-  return std::nullopt;
 }
 
 

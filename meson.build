@@ -46,6 +46,7 @@ dxbc_spv_files = files([
   'ir/passes/ir_pass_buffer_kind.cpp',
   'ir/passes/ir_pass_cfg_cleanup.cpp',
   'ir/passes/ir_pass_cfg_convert.cpp',
+  'ir/passes/ir_pass_conditions.cpp',
   'ir/passes/ir_pass_cse.cpp',
   'ir/passes/ir_pass_derivative.cpp',
   'ir/passes/ir_pass_descriptor_indexing.cpp',
