@@ -260,8 +260,6 @@ private:
   template<typename T>
   bool isConstantValue(const Op& op, T value) const;
 
-  std::optional<bool> evalBAnd(const Op& a, const Op& b) const;
-
   bool shouldFlipOperands(const Op& op) const;
 
   OpFlags getFpFlags(const Op& op) const;

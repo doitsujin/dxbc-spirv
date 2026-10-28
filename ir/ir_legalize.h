@@ -7,6 +7,7 @@
 #include "./passes/ir_pass_buffer_kind.h"
 #include "./passes/ir_pass_cfg_cleanup.h"
 #include "./passes/ir_pass_cfg_convert.h"
+#include "./passes/ir_pass_conditions.h"
 #include "./passes/ir_pass_cse.h"
 #include "./passes/ir_pass_derivative.h"
 #include "./passes/ir_pass_descriptor_indexing.h"
