@@ -1466,10 +1466,9 @@ std::pair<bool, Builder::iterator> ArithmeticPass::selectCompare(Builder::iterat
   auto tDef = SsaDef(a.getOperand(1u));
   auto fDef = SsaDef(a.getOperand(2u));
 
-  /* Be a bit more conservative around floats and only allow checking for constant
-   * operands that we can easily eliminate. Resolves some SM3 comparison patterns. */
-  if (b.getType().getBaseType(0u).isFloatType() && (!b.isConstant() ||
-      !(m_builder.getOp(tDef).isConstant() || m_builder.getOp(fDef).isConstant())))
+  /* Only optimize for constant operands that we can easily eliminate, otherwise we end
+   * up emitting too many extra instructions. Resolves some SM3 comparison patterns. */
+  if ((!b.isConstant() || !(m_builder.getOp(tDef).isConstant() || m_builder.getOp(fDef).isConstant())))
     return std::make_pair(false, ++op);
 
   /* Preserve operand order for inequalities */
