@@ -312,6 +312,8 @@ bool compileShader(util::ByteReader reader, const Options& options) {
 
     compileOptions.bufferOptions.useTypedForSparseFeedback = true;
 
+    compileOptions.bufferIndexing.allowDynamicIndexing = true;
+
     compileOptions.syncOptions.insertLdsBarriers = options.ldsBarriers;
     compileOptions.syncOptions.insertUavBarriers = options.uavBarriers;
 

@@ -4,6 +4,7 @@
 #include "ir_builder.h"
 
 #include "./passes/ir_pass_arithmetic.h"
+#include "./passes/ir_pass_buffer_indexing.h"
 #include "./passes/ir_pass_buffer_kind.h"
 #include "./passes/ir_pass_cfg_cleanup.h"
 #include "./passes/ir_pass_cfg_convert.h"
@@ -53,6 +54,8 @@ struct CompileOptions {
   ir::CsePass::Options cseOptions = { };
   /* Options for the descriptor indexing pass */
   ir::DescriptorIndexingPass::Options descriptorIndexing = { };
+  /* Options for the buffer indexing pass */
+  ir::BufferIndexingPass::Options bufferIndexing = {};
 };
 
 /** Invokes all required lowering passes on the IR on the given builder. */

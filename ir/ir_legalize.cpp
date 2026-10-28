@@ -75,6 +75,7 @@ void legalizeIr(ir::Builder& builder, const CompileOptions& options) {
       ir::SsaConstructionPass::runInsertExitPhiPass(builder);
 
       progress |= ir::DescriptorIndexingPass::runPass(builder, options.descriptorIndexing);
+      progress |= ir::BufferIndexingPass::runPass(builder, options.bufferIndexing);
 
       /* In some rare cases there may be feedback loops between derivative
        * hoisting and CSE. Resolve these right away to avoid having to run
