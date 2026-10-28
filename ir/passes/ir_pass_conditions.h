@@ -36,6 +36,16 @@ private:
     bool    value = false;
   };
 
+  struct CompareRange {
+    SsaDef    def = {};
+    uint64_t  min = -1;
+    uint64_t  max =  0;
+
+    bool isValid() const;
+
+    std::optional<CompareRange> merge(const CompareRange& other) const;
+  };
+
   Builder& m_builder;
 
   std::optional<bool> evaluateBoolExpression(const Op& expr, size_t count, const Condition* conditions, size_t depth);
@@ -53,6 +63,10 @@ private:
   std::pair<bool, Builder::iterator> handleSelect(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> handleBooleanOp(Builder::iterator op);
+
+  std::pair<bool, Builder::iterator> resolveRangeCompare(Builder::iterator op);
+
+  CompareRange makeCompareRange(const Op& op) const;
 
   Condition makeCondition(const Op& cond, bool value) const;
 

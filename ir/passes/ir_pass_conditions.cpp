@@ -303,10 +303,189 @@ std::pair<bool, Builder::iterator> ConditionPass::handleBooleanOp(Builder::itera
     }
   }
 
-  if (progress)
+  if (progress) {
     m_builder.rewriteOp(op->getDef(), std::move(newOp));
+    return std::make_pair(true, ++op);
+  }
 
-  return std::make_pair(progress, ++op);
+  return resolveRangeCompare(op);
+}
+
+
+
+
+std::pair<bool, Builder::iterator> ConditionPass::resolveRangeCompare(Builder::iterator op) {
+  if (op->getOpCode() != OpCode::eBOr)
+    return std::make_pair(false, ++op);
+
+  /* Resolves integer compare chains such as:
+   * - a == 1 || a == 2 || ... || a == n => a >= 1 && a <= n
+   * - a <= 3 || a == 4 => a <= 4
+   * - a >= 6 || a == 5 => a >= 5
+   * - (a >= 1 && a <= 2) || a == 3 => (a >= 1 && a <= 3) */
+  small_vector<CompareRange, 256> compareRanges;
+
+  small_vector<SsaDef, 64> stack;
+  stack.push_back(op->getDef());
+
+  bool hasValidRange = false;
+
+  while (!stack.empty()) {
+    const auto& op = m_builder.getOp(stack.back());
+    stack.pop_back();
+
+    if (op.getOpCode() == OpCode::eBOr) {
+      for (uint32_t i = 0u; i < op.getFirstLiteralOperandIndex(); i++) {
+        const auto& arg = m_builder.getOpForOperand(op, i);
+
+        if (isOnlyUse(m_builder, arg.getDef(), op.getDef())) {
+          stack.push_back(arg.getDef());
+        } else {
+          auto range = makeCompareRange(arg);
+          compareRanges.push_back(range);
+
+          hasValidRange |= range.isValid();
+        }
+      }
+    } else {
+      auto range = makeCompareRange(op);
+      compareRanges.push_back(range);
+
+      hasValidRange |= range.isValid();
+    }
+  }
+
+  if (!hasValidRange || compareRanges.size() <= 1u)
+    return std::make_pair(false, ++op);
+
+  /* Sort ranges in such a way that we can trivially merge them */
+  std::sort(compareRanges.begin(), compareRanges.end(),
+    [] (const CompareRange& a, const CompareRange& b) {
+      if (a.def != b.def)
+        return a.def < b.def;
+
+      return a.min < b.min;
+    });
+
+  /* Check whether we can compare any ranges. If not, we need to
+   * exit immediately to not incorrectly report progress. */
+  bool canMergeRanges = false;
+
+  for (size_t i = 1u; i < compareRanges.size(); i++) {
+    if (compareRanges[i].merge(compareRanges[i - 1])) {
+      canMergeRanges = true;
+      break;
+    }
+  }
+
+  if (!canMergeRanges)
+    return std::make_pair(false, ++op);
+
+  /* Compact adjacent ranges and emit range checks. */
+  SsaDef def = {};
+
+  while (!compareRanges.empty()) {
+    auto curr = compareRanges.back();
+    compareRanges.pop_back();
+
+    auto cond = curr.def;
+
+    if (curr.isValid()) {
+      while (!compareRanges.empty()) {
+        auto next = compareRanges.back();
+        auto merged = curr.merge(next);
+
+        if (!merged.has_value())
+          break;
+
+        curr = merged.value();
+        compareRanges.pop_back();
+      }
+
+      const auto& type = m_builder.getOp(curr.def).getType().getBaseType(0u);
+
+      if (curr.min == curr.max) {
+        cond = m_builder.addBefore(op->getDef(), Op::IEq(ScalarType::eBool,
+          curr.def, makeTypedConstant(m_builder, type, curr.min)));
+      } else {
+        uint64_t maxVal = (uint64_t(2u) << (bitWidth(type.getBaseType()) - 1u)) - 1u;
+
+        auto ge = (curr.min > 0)
+          ? m_builder.addBefore(op->getDef(), Op::UGe(ScalarType::eBool, curr.def, makeTypedConstant(m_builder, type, curr.min)))
+          : m_builder.makeConstant(true);
+
+        auto le = (curr.max < maxVal)
+          ? m_builder.addBefore(op->getDef(), Op::ULt(ScalarType::eBool, curr.def, makeTypedConstant(m_builder, type, curr.max + 1u)))
+          : m_builder.makeConstant(true);
+
+        cond = m_builder.addBefore(op->getDef(), Op::BAnd(ScalarType::eBool, ge, le));
+      }
+    }
+
+    def = (!def) ? cond : m_builder.addBefore(op->getDef(),
+      Op::BOr(ScalarType::eBool, def, cond));
+  }
+
+  auto next = m_builder.rewriteDef(op->getDef(), def);
+  return std::make_pair(true, m_builder.iter(next));
+}
+
+
+ConditionPass::CompareRange ConditionPass::makeCompareRange(const Op& op) const {
+  CompareRange result = {};
+  result.def = op.getDef();
+
+  switch (op.getOpCode()) {
+    case OpCode::eIEq:
+    case OpCode::eULt:
+    case OpCode::eULe:
+    case OpCode::eUGt:
+    case OpCode::eUGe: {
+      const auto& a = m_builder.getOpForOperand(op, 0u);
+      const auto& b = m_builder.getOpForOperand(op, 1u);
+
+      if (!b.isConstant() || !b.getType().getBaseType(0u).isUnsignedIntType())
+        return result;
+
+      auto value = uint64_t(b.getOperand(0u));
+      result.def = a.getDef();
+
+      if (op.getOpCode() == OpCode::eIEq) {
+        result.min = value;
+        result.max = value;
+      } else if (op.getOpCode() == OpCode::eULt || op.getOpCode() == OpCode::eULe) {
+        result.min = 0;
+        result.max = value - (op.getOpCode() == OpCode::eULt ? 1u : 0u);
+      } else if (op.getOpCode() == OpCode::eUGt || op.getOpCode() == OpCode::eUGe) {
+        result.min = value + (op.getOpCode() == OpCode::eUGt ? 1u : 0u);
+        result.max = -1;
+      }
+
+      return result;
+    }
+
+    case OpCode::eBAnd: {
+      auto a = makeCompareRange(m_builder.getOpForOperand(op, 0u));
+      auto b = makeCompareRange(m_builder.getOpForOperand(op, 1u));
+
+      if (a.def != b.def)
+        return result;
+
+      auto min = std::max(a.min, b.min);
+      auto max = std::min(a.max, b.max);
+
+      if (min > max)
+        return result;
+
+      result.def = a.def;
+      result.min = min;
+      result.max = max;
+      return result;
+    }
+
+    default:
+      return result;
+  }
 }
 
 
@@ -320,6 +499,27 @@ ConditionPass::Condition ConditionPass::makeCondition(const Op& cond, bool value
 
 bool ConditionPass::contradicts(const Op& a, const Op& b) const {
   return !evaluateBooleanAnd(m_builder, a, b);
+}
+
+
+bool ConditionPass::CompareRange::isValid() const {
+  return min <= max;
+}
+
+
+std::optional<ConditionPass::CompareRange> ConditionPass::CompareRange::merge(const CompareRange& other) const {
+  /* Need to be careful to avoid overflows here */
+  if ((def == other.def)
+   && ((other.min > max && other.min == max + 1u)
+    || (min > other.max && min == other.max + 1u))) {
+    CompareRange result = {};
+    result.def = def;
+    result.min = std::min(min, other.min);
+    result.max = std::max(max, other.max);
+    return std::make_optional(result);
+  } else {
+    return std::nullopt;
+  }
 }
 
 }
