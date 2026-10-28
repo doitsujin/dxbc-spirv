@@ -310,6 +310,8 @@ bool compileShader(util::ByteReader reader, const Options& options) {
   if (!(options.convertOnly || options.irInput)) {
     ir::CompileOptions compileOptions = { };
 
+    compileOptions.bufferOptions.useTypedForSparseFeedback = true;
+
     compileOptions.syncOptions.insertLdsBarriers = options.ldsBarriers;
     compileOptions.syncOptions.insertUavBarriers = options.uavBarriers;
 
