@@ -33,6 +33,7 @@ private:
 
   struct IndexedLoad {
     SsaDef    selectOp      = {};
+    uint32_t  selectArg     = 0u;
     SsaDef    compareVar    = {};
     uint32_t  compareValue  = 0u;
     SsaDef    loadOp        = {};
