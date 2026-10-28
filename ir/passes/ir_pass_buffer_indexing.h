@@ -34,10 +34,11 @@ private:
   struct IndexedLoad {
     SsaDef    selectOp      = {};
     SsaDef    compareVar    = {};
-    uint32_t  compareValue  = {};
+    uint32_t  compareValue  = 0u;
     SsaDef    loadOp        = {};
+    SsaDef    loadExtract   = {};
     SsaDef    indexBase     = {};
-    uint32_t  indexOffset   = {};
+    uint32_t  indexOffset   = 0u;
 
     bool isNextOf(const IndexedLoad& other) const;
 

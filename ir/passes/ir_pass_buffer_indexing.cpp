@@ -112,6 +112,11 @@ bool BufferIndexingPass::rewriteLoadAsIndexed(const IndexedLoad& load, uint32_t 
   auto newLoad = m_builder.addBefore(load.selectOp,
     Op(m_builder.getOp(load.loadOp)).setOperand(1u, newIndex));
 
+  if (load.loadExtract) {
+    newLoad = m_builder.addBefore(load.selectOp, Op::CompositeExtract(
+      m_builder.getOp(load.selectOp).getType(), newLoad, load.loadExtract));
+  }
+
   /* Rewrite select op in place to swap out the load */
   m_builder.rewriteOp(load.selectOp, Op(m_builder.getOp(load.selectOp)).setOperand(1u, newLoad));
   return true;
@@ -168,26 +173,52 @@ small_vector<BufferIndexingPass::IndexedLoad, 256> BufferIndexingPass::getIndexe
 
     if (load->getOpCode() == OpCode::eBufferLoad) {
       const auto& indexOp = m_builder.getOpForOperand(*load, 1u);
+
+      /* Gather actual uses into (use, load) pairs */
+      small_vector<std::pair<SsaDef, SsaDef>, 1024> uses;
       auto [useA, useB] = m_builder.getUses(load->getDef());
 
       for (auto use = useA; use != useB; use++) {
+        if (use->getOpCode() == OpCode::eSelect)
+          uses.emplace_back(use->getDef(), load->getDef());
+
+        if (use->getOpCode() == OpCode::eCompositeExtract) {
+          auto [extrA, extrB] = m_builder.getUses(use->getDef());
+
+          for (auto extr = extrA; extr != extrB; extr++) {
+            if (extr->getOpCode() == OpCode::eSelect)
+              uses.emplace_back(extr->getDef(), use->getDef());
+          }
+        }
+      }
+
+      for (auto use : uses) {
+        const auto& useOp = m_builder.getOp(use.first);
+        dxbc_spv_assert(useOp.getOpCode() == OpCode::eSelect);
+
         bool isIndexedSelect = false;
 
-        if (use->getOpCode() == OpCode::eSelect && SsaDef(use->getOperand(1u)) == load->getDef()) {
-            const auto& cond = m_builder.getOpForOperand(*use, 0u);
+        if (useOp.getOpCode() == OpCode::eSelect) {
+            const auto& cond = m_builder.getOpForOperand(useOp, 0u);
 
           if (cond.getOpCode() == OpCode::eIEq) {
             const auto& condA = m_builder.getOpForOperand(cond, 0u);
             const auto& condB = m_builder.getOpForOperand(cond, 1u);
 
+            if (SsaDef(useOp.getOperand(1u)) != use.second)
+              continue;
+
             if (condB.isConstant() && condB.getType().getBaseType(0u).isUnsignedIntType()) {
               isIndexedSelect = true;
 
               auto& loadInfo = result.emplace_back();
-              loadInfo.selectOp = use->getDef();
+              loadInfo.selectOp = useOp.getDef();
               loadInfo.compareVar = condA.getDef();
               loadInfo.compareValue = uint32_t(condB.getOperand(0u));
               loadInfo.loadOp = load->getDef();
+
+              if (use.second != loadInfo.loadOp)
+                loadInfo.loadExtract = m_builder.getOpForOperand(use.second, 1u).getDef();
 
               if (indexOp.isConstant()) {
                 loadInfo.indexOffset = uint32_t(indexOp.getOperand(0u));
@@ -229,6 +260,7 @@ small_vector<BufferIndexingPass::IndexedLoad, 256> BufferIndexingPass::getIndexe
 
 bool BufferIndexingPass::IndexedLoad::isNextOf(const IndexedLoad& other) const {
   return compareVar   == other.compareVar
+      && loadExtract  == other.loadExtract
       && indexBase    == other.indexBase
       && compareValue == other.compareValue + 1u
       && indexOffset  >  other.indexOffset;
@@ -239,6 +271,9 @@ bool BufferIndexingPass::IndexedLoad::compare(const IndexedLoad& a, const Indexe
   /* Ensure that batchable loads are grouped together */
   if (a.compareVar != b.compareVar)
     return a.compareVar < b.compareVar;
+
+  if (a.loadExtract != b.loadExtract)
+    return a.loadExtract < b.loadExtract;
 
   if (a.indexBase != b.indexBase)
     return a.indexBase < b.indexBase;
