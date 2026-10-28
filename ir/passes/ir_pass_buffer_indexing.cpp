@@ -118,7 +118,7 @@ bool BufferIndexingPass::rewriteLoadAsIndexed(const IndexedLoad& load, uint32_t 
   }
 
   /* Rewrite select op in place to swap out the load */
-  m_builder.rewriteOp(load.selectOp, Op(m_builder.getOp(load.selectOp)).setOperand(1u, newLoad));
+  m_builder.rewriteOp(load.selectOp, Op(m_builder.getOp(load.selectOp)).setOperand(load.selectArg, newLoad));
   return true;
 }
 
@@ -201,11 +201,13 @@ small_vector<BufferIndexingPass::IndexedLoad, 256> BufferIndexingPass::getIndexe
         if (useOp.getOpCode() == OpCode::eSelect) {
             const auto& cond = m_builder.getOpForOperand(useOp, 0u);
 
-          if (cond.getOpCode() == OpCode::eIEq) {
+          if (cond.getOpCode() == OpCode::eIEq || cond.getOpCode() == OpCode::eINe) {
             const auto& condA = m_builder.getOpForOperand(cond, 0u);
             const auto& condB = m_builder.getOpForOperand(cond, 1u);
 
-            if (SsaDef(useOp.getOperand(1u)) != use.second)
+            uint32_t selectArg = cond.getOpCode() == OpCode::eIEq ? 1u : 2u;
+
+            if (SsaDef(useOp.getOperand(selectArg)) != use.second)
               continue;
 
             if (condB.isConstant() && condB.getType().getBaseType(0u).isUnsignedIntType()) {
@@ -213,6 +215,7 @@ small_vector<BufferIndexingPass::IndexedLoad, 256> BufferIndexingPass::getIndexe
 
               auto& loadInfo = result.emplace_back();
               loadInfo.selectOp = useOp.getDef();
+              loadInfo.selectArg = selectArg;
               loadInfo.compareVar = condA.getDef();
               loadInfo.compareValue = uint32_t(condB.getOperand(0u));
               loadInfo.loadOp = load->getDef();
