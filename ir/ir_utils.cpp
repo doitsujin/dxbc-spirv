@@ -30,8 +30,10 @@ void rewriteBlockInPhiUse(Builder& builder, SsaDef phi, SsaDef oldBlock, SsaDef 
   /* Resolve trivial phi right away */
   if (newPhi.getOperandCount() > 2u)
     builder.rewriteOp(phi, std::move(newPhi));
-  else
+  else if (phi != SsaDef(newPhi.getOperand(1u)))
     builder.rewriteDef(phi, SsaDef(newPhi.getOperand(1u)));
+  else
+    builder.rewriteDef(phi, builder.makeUndef(oldPhi.getType()));
 }
 
 
