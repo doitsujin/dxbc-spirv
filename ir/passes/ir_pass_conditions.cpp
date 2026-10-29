@@ -342,6 +342,7 @@ std::pair<bool, Builder::iterator> ConditionPass::resolveRangeCompare(Builder::i
           stack.push_back(arg.getDef());
         } else {
           auto range = makeCompareRange(arg);
+          range.isOnlyUse = false;
           compareRanges.push_back(range);
 
           hasValidRange |= range.isValid();
@@ -349,6 +350,7 @@ std::pair<bool, Builder::iterator> ConditionPass::resolveRangeCompare(Builder::i
       }
     } else {
       auto range = makeCompareRange(op);
+      range.isOnlyUse = m_builder.getUseCount(op.getDef()) == 1;
       compareRanges.push_back(range);
 
       hasValidRange |= range.isValid();
@@ -372,9 +374,15 @@ std::pair<bool, Builder::iterator> ConditionPass::resolveRangeCompare(Builder::i
   bool canMergeRanges = false;
 
   for (size_t i = 1u; i < compareRanges.size(); i++) {
-    if (compareRanges[i].merge(compareRanges[i - 1])) {
-      canMergeRanges = true;
-      break;
+    auto range = compareRanges[i].merge(compareRanges[i - 1]);
+
+    if (range && range->isValid()) {
+      /* Only merge if we can actually save some instructions. Boolean
+       * or is most likely cheap anyway, so reuse that if possible. */
+      if (range->max - range->min >= uint64_t(3u) || range->isOnlyUse) {
+        canMergeRanges = true;
+        break;
+      }
     }
   }
 
@@ -516,6 +524,7 @@ std::optional<ConditionPass::CompareRange> ConditionPass::CompareRange::merge(co
     result.def = def;
     result.min = std::min(min, other.min);
     result.max = std::max(max, other.max);
+    result.isOnlyUse = isOnlyUse || other.isOnlyUse;
     return std::make_optional(result);
   } else {
     return std::nullopt;

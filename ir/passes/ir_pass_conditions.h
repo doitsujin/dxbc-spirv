@@ -38,6 +38,7 @@ private:
 
   struct CompareRange {
     SsaDef    def = {};
+    bool      isOnlyUse = false;
     uint64_t  min = -1;
     uint64_t  max =  0;
 
