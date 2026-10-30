@@ -282,6 +282,7 @@ void ScalarizePass::scalarizeVectorOps() {
       case OpCode::eISubBorrow:
       case OpCode::eSMulExtended:
       case OpCode::eUMulExtended:
+      case OpCode::eEvalIsSame:
         break;
 
       /* Invalid opcodes */

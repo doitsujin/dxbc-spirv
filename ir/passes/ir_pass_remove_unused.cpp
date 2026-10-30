@@ -441,6 +441,8 @@ bool RemoveUnusedPass::hasSideEffect(const Op& op) const {
     case OpCode::eUMax:
     case OpCode::eUClamp:
     case OpCode::eUMSad:
+
+    case OpCode::eEvalIsSame:
       return false;
   }
 
