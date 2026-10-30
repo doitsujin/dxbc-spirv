@@ -22,14 +22,23 @@ CleanupScratchPass::~CleanupScratchPass() {
 bool CleanupScratchPass::propagateCbvScratchCopies() {
   bool feedback = false;
 
-  if (!m_options.resolveCbvCopy)
+  if (!m_options.resolveCbvCopy && !m_options.resolveLdsCopy)
     return feedback;
 
   auto [a, b] = m_builder.getDeclarations();
 
   for (auto iter = a; iter != b; iter++) {
-    if (iter->getOpCode() == OpCode::eDclScratch)
-      feedback |= promoteScratchCbvCopy(iter->getDef());
+    if (iter->getOpCode() == OpCode::eDclScratch) {
+      if (m_options.resolveCbvCopy)
+        feedback |= promoteScratchCbvCopy(iter->getDef());
+      if (m_options.resolveLdsCopy)
+        feedback |= promoteScratchLdsCopy(iter->getDef());
+    }
+  }
+
+  if (feedback) {
+    FunctionCleanupPass::runResolveSharedTempPass(m_builder);
+    SsaConstructionPass::runPass(m_builder);
   }
 
   return feedback;
@@ -387,6 +396,279 @@ bool CleanupScratchPass::promoteScratchCbvCopy(SsaDef def) {
   /* Remove all stores */
   for (auto store : stores)
     m_builder.remove(store);
+
+  return true;
+}
+
+
+bool CleanupScratchPass::promoteScratchLdsCopy(SsaDef def) {
+  /* If the scratch array is a perfect copy of an LDS variable, i.e. if all
+   * store indices match exactly and if all elements are written, and if
+   * no stores to the LDS variable happen at the same time as scratch loads,
+   * we can optimize the scratch array away and use LDS loads directly. */
+  const auto& scratch = m_builder.getOp(def);
+
+  if (!scratch.getType().isArrayType()
+   || !scratch.getType().getSubType(0u).isBasicType())
+    return false;
+
+  SsaDef ldsDef = {};
+
+  small_vector<std::pair<SsaDef, uint32_t>, 256> ldsLoads;
+  ldsLoads.resize(scratch.getType().computeFlattenedScalarCount());
+
+  util::small_vector<SsaDef, 256u> loads;
+  util::small_vector<SsaDef, 256u> stores;
+
+  auto [a, b] = m_builder.getUses(def);
+
+  for (auto iter = a; iter != b; iter++) {
+    if (iter->getOpCode() == OpCode::eScratchLoad) {
+      loads.push_back(iter->getDef());
+    } else if (iter->getOpCode() == OpCode::eScratchStore) {
+      stores.push_back(iter->getDef());
+
+      /* Stores must use a constant index */
+      const auto& index = m_builder.getOpForOperand(*iter, 1u);
+      const auto& value = m_builder.getOpForOperand(*iter, 2u);
+
+      if (!index.isConstant() || value.getOpCode() != OpCode::eLdsLoad)
+        return false;
+
+      /* LDS loads must use a constant index */
+      const auto& ldsVar = m_builder.getOpForOperand(value, 0u);
+      const auto& ldsIndex = m_builder.getOpForOperand(value, 1u);
+
+      if ((ldsDef && ldsDef != ldsVar.getDef()) || !ldsIndex.isConstant())
+        return false;
+
+      /* Array index must be identical. We'll check that the
+       * individual scalar indices match up properly later. */
+      if (ldsIndex.getOperand(0u) != index.getOperand(0u))
+        return false;
+
+      if (!ldsDef) {
+        ldsDef = ldsVar.getDef();
+
+        /* LDS type must be a scalar or vector array as well,
+         * but allow multi-dimensional arrays here. */
+        if (!ldsVar.getType().isArrayType() || ldsVar.getType().getStructMemberCount() > 1u)
+          return false;
+      }
+
+      /* Write back LDS load for each scalar store */
+      auto type = scratch.getType();
+
+      uint32_t scalarIndex = 0u;
+      uint32_t scalarCount = value.getType().computeFlattenedScalarCount();
+
+      for (uint32_t i = 0u; i < index.getOperandCount(); i++) {
+        auto member = uint32_t(index.getOperand(i));
+        scalarIndex += type.computeScalarIndex(member);
+        type = type.getSubType(member);
+      }
+
+      for (uint32_t i = 0; i < scalarCount; i++) {
+        ldsLoads.at(scalarIndex + i) = std::make_pair(
+          value.getDef(), scalarCount > 1 ? i : ~0u);
+      }
+    }
+  }
+
+  if (loads.empty() || stores.empty())
+    return false;
+
+  /* Verify that scalar components from LDS loads aren't swizzled weirdly */
+  uint32_t scalarCount = scratch.getType().getSubType(0u).computeFlattenedScalarCount();
+  uint32_t arraySize = scratch.getType().getArraySize(0);
+
+  for (uint32_t c = 0u; c < scalarCount; c++) {
+    const auto& load0 = ldsLoads.at(c);
+
+    for (uint32_t e = 1u; e < arraySize; e++) {
+      const auto& load1 = ldsLoads.at(e * scalarCount + c);
+
+      /* Loads for this scalar must either be both null or both non-null */
+      if ((!load0.first) != (!load1.first) || (load0.second != load1.second))
+        return false;
+
+      if (!load0.first)
+        continue;
+
+      /* If loads are non-null, indexing except for the array index must match */
+      const auto& idx0 = m_builder.getOpForOperand(load0.first, 1u);
+      const auto& idx1 = m_builder.getOpForOperand(load1.first, 1u);
+
+      dxbc_spv_assert(idx0.isConstant() && idx1.isConstant());
+
+      if (idx0.getOperandCount() != idx1.getOperandCount())
+        return false;
+
+      for (uint32_t i = 1u; i < idx0.getOperandCount(); i++) {
+        if (idx0.getOperand(i) != idx1.getOperand(i))
+          return false;
+      }
+    }
+  }
+
+  /* Ensure that stores dominate all loads */
+  if (!storesDominateLoads(stores.begin(), stores.end(), loads.begin(), loads.end()))
+    return false;
+
+  /* We can only move LDS loads if there is no risk of LDS stores happening
+   * between the original load and the scratch load. This is very difficult
+   * to prove by just looking at control flow, so just use the SSA algorithm
+   * and a temporary counter variable.
+   *
+   * Crucially, we also need to version workgroup memory barriers since we
+   * must not move loads past a barrier if that may cause later stores to
+   * interfere. */
+  const auto& entryPoint = m_builder.getOpForOperand(scratch, 0u);
+
+  auto tmpVar = m_builder.add(Op::DclTmp(ScalarType::eU64, entryPoint.getDef()));
+
+  for (uint32_t i = 0u; i < entryPoint.getFirstLiteralOperandIndex(); i++) {
+    auto iter = ++m_builder.iter(m_builder.getOpForOperand(entryPoint, i).getDef());
+    dxbc_spv_assert(iter->getOpCode() == OpCode::eLabel);
+
+    m_builder.addAfter(iter->getDef(), Op::TmpStore(tmpVar, m_builder.makeConstant(uint64_t(0u))));
+  }
+
+  small_vector<SsaDef, 256> versionBumps;
+
+  for (auto iter = m_builder.getCode().first; iter != m_builder.getCode().second; iter++) {
+    switch (iter->getOpCode()) {
+      case OpCode::eLdsStore:
+      case OpCode::eLdsAtomic: {
+        if (m_builder.getOpForOperand(*iter, 0u).getDef() == ldsDef)
+          versionBumps.push_back(iter->getDef());
+      } break;
+
+      case OpCode::eBarrier: {
+        auto memFlags = MemoryTypeFlags(iter->getOperand(2u));
+
+        if (memFlags & MemoryType::eLds)
+          versionBumps.push_back(iter->getDef());
+      } break;
+
+      default:
+        break;
+    }
+  }
+
+  for (auto bump : versionBumps) {
+    m_builder.addBefore(bump, Op::TmpStore(tmpVar,
+      m_builder.addBefore(bump, Op::IAdd(ScalarType::eU64,
+        m_builder.addBefore(bump, Op::TmpLoad(ScalarType::eU64, tmpVar)),
+        m_builder.makeConstant(uint64_t(1u))))));
+  }
+
+  /* Determine version number for each LDS load involved in the array */
+  Op isSameOp = Op::EvalIsSame(ScalarType::eBool);
+
+  for (const auto& ldsLoad : ldsLoads) {
+    if (ldsLoad.first) {
+      isSameOp.addOperand(m_builder.addBefore(ldsLoad.first,
+        Op::TmpLoad(ScalarType::eU64, tmpVar)));
+    }
+  }
+
+  /* Rewrite scratch loads to LDS loads */
+  for (auto load : loads) {
+    const auto& loadOp = m_builder.getOp(load);
+    dxbc_spv_assert(loadOp.getType().isBasicType());
+
+    /* Insert compile-time check that LDS hasn't been modified */
+    auto ldsVersionCond = m_builder.addBefore(load, Op(isSameOp).addOperand(
+      m_builder.addBefore(load, Op::TmpLoad(ScalarType::eU64, tmpVar))));
+
+    /* Need to fully scalarize here since the load types may not match */
+    const auto& indexOp = m_builder.getOpForOperand(loadOp, 1u);
+
+    uint32_t componentIndex = 0u;
+    uint32_t componentCount = loadOp.getType().getBaseType(0u).getVectorSize();
+
+    SsaDef baseAddress = indexOp.getDef();
+
+    if (indexOp.isConstant()) {
+      if (indexOp.getOperandCount() > 1u)
+        componentIndex = uint32_t(indexOp.getOperand(1u));
+
+      baseAddress = m_builder.makeConstant(uint32_t(indexOp.getOperand(0u)));
+    } else if (indexOp.getType().isVectorType()) {
+      dxbc_spv_assert(indexOp.getOpCode() == OpCode::eCompositeConstruct);
+      baseAddress = m_builder.getOpForOperand(indexOp, 0u).getDef();
+
+      const auto& componentOp = m_builder.getOpForOperand(indexOp, 1u);
+      dxbc_spv_assert(componentOp.isConstant());
+
+      componentIndex = uint32_t(componentOp.getOperand(0u));
+    }
+
+    /* Scratch returns 0 for out-of-bounds loads, so just to be safe,
+     * bound-check the array index and replace with 0 as necessary. */
+    auto inBoundsCond = m_builder.addBefore(load, Op::ULt(ScalarType::eBool,
+      baseAddress, m_builder.makeConstant(scratch.getType().getArraySize(0))));
+
+    /* Iterate over components and emit LDS loads */
+    Op newLoadOp(OpCode::eCompositeConstruct, loadOp.getType());
+    auto loadType = loadOp.getType().getBaseType(0u).getBaseType();
+
+    for (uint32_t i = 0u; i < componentCount; i++) {
+      Op newAddressOp = Op::CompositeConstruct(Type(), baseAddress);
+
+      const auto& ldsLoadInfo = ldsLoads.at(componentIndex + i);
+
+      if (!ldsLoadInfo.first) {
+        newLoadOp.addOperand(m_builder.makeUndef(loadType));
+        continue;
+      }
+
+      const auto& ldsLoadOp = m_builder.getOp(ldsLoadInfo.first);
+      const auto& ldsIndex = m_builder.getOpForOperand(ldsLoadOp, 1u);
+      dxbc_spv_assert(ldsIndex.isConstant());
+
+      for (uint32_t i = 1u; i < ldsIndex.getOperandCount(); i++)
+        newAddressOp.addOperand(m_builder.makeConstant(uint32_t(ldsIndex.getOperand(i))));
+
+      if (ldsLoadInfo.second != ~0u)
+        newAddressOp.addOperand(m_builder.makeConstant(ldsLoadInfo.second));
+
+      newAddressOp.setType(BasicType(ScalarType::eU32, newAddressOp.getOperandCount()));
+
+      SsaDef newAddress = baseAddress;
+
+      if (newAddressOp.getType().isVectorType())
+        newAddress = m_builder.addBefore(load, std::move(newAddressOp));
+
+      /* Emit LDS load */
+      auto newLdsLoad = m_builder.addBefore(load, Op::LdsLoad(loadType, ldsDef, newAddress));
+      newLdsLoad = m_builder.addBefore(load, Op::Select(
+        loadType, inBoundsCond, newLdsLoad, m_builder.makeConstantZero(loadType)));
+
+      /* Emit fallback scratch load */
+      auto newScratchAddress = baseAddress;
+
+      if (scratch.getType().isVectorType()) {
+        newScratchAddress = m_builder.addBefore(load, Op::CompositeConstruct(
+          BasicType(ScalarType::eU32, 2u), baseAddress, m_builder.makeConstant(componentIndex + i)));
+      }
+
+      auto newScratchLoad = m_builder.addBefore(load, Op::ScratchLoad(loadType, def, newScratchAddress));
+
+      /* Pick either LDS or scratch load */
+      newLoadOp.addOperand(m_builder.addBefore(load, Op::Select(
+        loadType, ldsVersionCond, newLdsLoad, newScratchLoad)));
+    }
+
+    /* Assemble composite as necessary */
+    SsaDef newLoad = SsaDef(newLoadOp.getOperand(0u));
+
+    if (componentCount > 1u)
+      newLoad = m_builder.addBefore(load, std::move(newLoadOp));
+
+    m_builder.rewriteDef(load, newLoad);
+  }
 
   return true;
 }
