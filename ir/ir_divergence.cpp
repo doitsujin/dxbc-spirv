@@ -398,6 +398,10 @@ Scope DivergenceAnalysis::determineScope(const Op& op) {
         return Scope::eThread;
     } return Scope::eGlobal;
 
+    /* Compile-time evaluations */
+    case OpCode::eEvalIsSame:
+      return Scope::eGlobal;
+
     /* Invalid opcodes */
     case OpCode::eUnknown:
     case OpCode::eLastDeclarative:

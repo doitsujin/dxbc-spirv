@@ -491,7 +491,8 @@ bool DerivativePass::canHoistDerivativeOp(const Op& derivOp, SsaDef dstBlock) co
       case OpCode::eUMin:
       case OpCode::eUMax:
       case OpCode::eUClamp:
-      case OpCode::eUMSad: {
+      case OpCode::eUMSad:
+      case OpCode::eEvalIsSame: {
         if (!allowComplexInput)
           return false;
       } [[fallthrough]];

@@ -959,6 +959,7 @@ std::ostream& operator << (std::ostream& os, const OpCode& opCode) {
     case OpCode::eSMulExtended: return os << "SMulExtended";
     case OpCode::eUMulExtended: return os << "UMulExtended";
     case OpCode::eDrain: return os << "Drain";
+    case OpCode::eEvalIsSame: return os << "EvalIsSame";
   }
 
   return os << "OpCode(" << std::dec << uint32_t(opCode) << ")";
