@@ -64,6 +64,7 @@ void legalizeIr(ir::Builder& builder, const CompileOptions& options) {
   while (true) {
     bool progress = false;
 
+    progress |= ir::EvalCompileTimePass::runPass(builder, true);
     progress |= ir::ArithmeticPass::runPass(builder, options.arithmeticOptions);
     progress |= ir::ConditionPass::runPass(builder);
     progress |= ir::CsePass::runPass(builder, options.cseOptions);
@@ -74,6 +75,7 @@ void legalizeIr(ir::Builder& builder, const CompileOptions& options) {
     if (!progress && !std::exchange(derivativePassRun, true)) {
       ir::SsaConstructionPass::runInsertExitPhiPass(builder);
 
+      progress |= ir::EvalCompileTimePass::runPass(builder, false);
       progress |= ir::DescriptorIndexingPass::runPass(builder, options.descriptorIndexing);
       progress |= ir::BufferIndexingPass::runPass(builder, options.bufferIndexing);
 

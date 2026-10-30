@@ -12,6 +12,7 @@
 #include "./passes/ir_pass_cse.h"
 #include "./passes/ir_pass_derivative.h"
 #include "./passes/ir_pass_descriptor_indexing.h"
+#include "./passes/ir_pass_eval.h"
 #include "./passes/ir_pass_function.h"
 #include "./passes/ir_pass_lower_consume.h"
 #include "./passes/ir_pass_lower_min16.h"
