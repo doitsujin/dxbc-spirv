@@ -1469,6 +1469,12 @@ public:
     return m_resultType;
   }
 
+  /** Changes opcode. Should be an opcode of the same format. */
+  Op& setOpCode(OpCode opCode) {
+    m_opCode = opCode;
+    return *this;
+  }
+
   /** Changes result type */
   Op& setType(Type type) {
     m_resultType = std::move(type);
