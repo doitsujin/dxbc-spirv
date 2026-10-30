@@ -1,7 +1,7 @@
-#include "../ir_utils.h"
-
 #include "ir_pass_conditions.h"
 #include "ir_pass_remove_unused.h"
+
+#include "../ir_utils.h"
 
 namespace dxbc_spv::ir {
 
@@ -58,7 +58,8 @@ bool ConditionPass::evaluateBooleanAnd(const Builder& builder, const Op& a, cons
     return bool(a.getOperand(0)) == bool(b.getOperand(0));
 
   /* av == c0 && av == c1 where c0 != c1 */
-  if (a.getOpCode() == OpCode::eIEq && b.getOpCode() == OpCode::eIEq) {
+  if ((a.getOpCode() == OpCode::eIEq && b.getOpCode() == OpCode::eIEq)
+   || (a.getOpCode() == OpCode::eFEq && b.getOpCode() == OpCode::eFEq)) {
     const auto& v0 = builder.getOpForOperand(a, 0);
     const auto& v1 = builder.getOpForOperand(b, 0);
 
@@ -90,7 +91,7 @@ bool ConditionPass::evaluateBooleanAnd(const Builder& builder, const Op& a, cons
 
 
 std::optional<bool> ConditionPass::evaluateBoolExpression(const Op& expr, size_t count, const Condition* conditions, size_t depth) {
-  if (depth > MaxRecursionDepth)
+  if (expr.getType() != ScalarType::eBool)
     return std::nullopt;
 
   /* Check negation first because that will generally not occur in
@@ -115,6 +116,10 @@ std::optional<bool> ConditionPass::evaluateBoolExpression(const Op& expr, size_t
       return std::make_optional(false);
   }
 
+  /* All checks below will recurse */
+  if (depth >= MaxRecursionDepth)
+    return std::nullopt;
+
   /* Recursively evaluate boolean and / or */
   if (expr.getOpCode() == OpCode::eBAnd || expr.getOpCode() == OpCode::eBOr) {
     auto check = expr.getOpCode() == OpCode::eBOr;
@@ -135,6 +140,84 @@ std::optional<bool> ConditionPass::evaluateBoolExpression(const Op& expr, size_t
 
     if (a.has_value() && b.has_value())
       return std::make_optional((a == b) == check);
+  }
+
+  /* For comparisons, check whether we can evaluate the inverse.
+   * Relevant to handle trivial a == 1 && a != 0 patterns. */
+  static const std::array<std::pair<OpCode, OpCode>, 6> s_compareInverse = {{
+    { OpCode::eIEq, OpCode::eINe },
+    { OpCode::eULt, OpCode::eUGe },
+    { OpCode::eULe, OpCode::eUGt },
+    { OpCode::eSLt, OpCode::eSGe },
+    { OpCode::eSLe, OpCode::eSGt },
+    { OpCode::eFEq, OpCode::eFNe },
+  }};
+
+  for (const auto& e : s_compareInverse) {
+    OpCode flippedOpCode = OpCode::eUnknown;
+
+    if (expr.getOpCode() == e.first)
+      flippedOpCode = e.second;
+    else if (expr.getOpCode() == e.second)
+      flippedOpCode = e.first;
+
+    if (flippedOpCode != OpCode::eUnknown) {
+      /* We know this is an end point of sorts, so
+       * avoid recursing any further */
+      auto flippedOp = Op(expr).setOpCode(flippedOpCode);
+      auto flippedValue = evaluateBoolExpression(flippedOp,
+        count, conditions, MaxRecursionDepth);
+
+      if (flippedValue.has_value())
+        return std::make_optional(!flippedValue.value());
+    }
+  }
+
+  if (depth + 1u >= MaxRecursionDepth)
+    return std::nullopt;
+
+  /* Handle more complex compare patterns. If we know that the left-hand
+   * expression is true, the right must also be true. If the right-hand
+   * expression is false, the left-hand must therefore also be false. */
+  static const std::array<std::pair<OpCode, OpCode>, 18> s_compareConclusions = {{
+    { OpCode::eIEq, OpCode::eUGe },
+    { OpCode::eIEq, OpCode::eULe },
+    { OpCode::eULt, OpCode::eULe },
+    { OpCode::eULt, OpCode::eINe },
+    { OpCode::eUGt, OpCode::eUGe },
+    { OpCode::eUGt, OpCode::eINe },
+
+    { OpCode::eIEq, OpCode::eSGe },
+    { OpCode::eIEq, OpCode::eSLe },
+    { OpCode::eSLt, OpCode::eSLe },
+    { OpCode::eSLt, OpCode::eINe },
+    { OpCode::eSGt, OpCode::eSGe },
+    { OpCode::eSGt, OpCode::eINe },
+
+    { OpCode::eFEq, OpCode::eFGe },
+    { OpCode::eFEq, OpCode::eFLe },
+    { OpCode::eFLt, OpCode::eFLe },
+    { OpCode::eFLt, OpCode::eFNe },
+    { OpCode::eFGt, OpCode::eFGe },
+    { OpCode::eFGt, OpCode::eFNe },
+  }};
+
+  for (const auto& e : s_compareConclusions) {
+    std::pair<OpCode, bool> check(OpCode::eUnknown, false);
+
+    if (expr.getOpCode() == e.first)
+      check = std::make_pair(e.second, false);
+    else if (expr.getOpCode() == e.second)
+      check = std::make_pair(e.first, true);
+
+    if (check.first != OpCode::eUnknown) {
+      auto checkOp = Op(expr).setOpCode(check.first);
+      auto checkValue = evaluateBoolExpression(checkOp,
+        count, conditions, MaxRecursionDepth - 1u);
+
+      if (checkValue == std::make_optional(check.second))
+        return checkValue;
+    }
   }
 
   return std::nullopt;
