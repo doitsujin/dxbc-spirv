@@ -314,13 +314,13 @@ Scope DivergenceAnalysis::determineScope(const Op& op) {
     case OpCode::eDrain:
       return determineScopeForArgs(op);
 
-    /* Loads that observe side effects from other functions still
-     * need to take callers into account */
+    /* Loads that observe side effects from other functions still need to
+     * take callers into account */
     case OpCode::eLdsLoad:
     case OpCode::eScratchLoad:
     case OpCode::eOutputLoad: {
       taintFunction(m_currentFunction);
-      return determineScopeForArgsAndBlock(op);
+      return determineScopeForArgs(op);
     }
 
     /* For stores, we additionally need to take the scope of the current block
