@@ -46,6 +46,8 @@ private:
 
   small_vector<std::pair<ir::SsaDef, bool>, 64u> m_functionsWithSideEffects;
 
+  bool canRemoveVariable(const Op& op) const;
+
   bool canRemoveOp(const Op& op) const;
 
   void removeOp(SsaDef def);

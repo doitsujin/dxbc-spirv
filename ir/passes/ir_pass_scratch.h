@@ -20,6 +20,8 @@ public:
     bool enableBoundChecking = true;
     /* Whether to optimize constant buffer to scratch array copies. */
     bool resolveCbvCopy = true;
+    /* Whether to optimize LDS to scratch array copies. */
+    bool resolveLdsCopy = true;
     /* Whether to unpack arrays that are only accessed via constant
      * indices. These arrays can be trivially converted to SSA form. */
     bool unpackConstantIndexedArrays = true;
@@ -100,6 +102,8 @@ private:
   bool promoteScratchToConstant(SsaDef def);
 
   bool promoteScratchCbvCopy(SsaDef def);
+
+  bool promoteScratchLdsCopy(SsaDef def);
 
   CbvInfo getCbvCopyMapping(const Op& op);
 

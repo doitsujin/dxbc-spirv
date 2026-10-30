@@ -33,6 +33,14 @@ void RemoveUnusedPass::run() {
         currFn = ir::SsaDef();
       } break;
 
+      /* We can safely remove LDS/Scratch variables if they are only
+       * written, because those writes have no observable effect. */
+      case OpCode::eDclLds:
+      case OpCode::eDclScratch: {
+        if (canRemoveVariable(op))
+          m_builder.getUses(op.getDef(), ops);
+      } break;
+
       /* Skip control flow since we cannot optimize it away, but it
        * also does not strictly have side effects for functions. */
       case OpCode::eLabel:
@@ -86,6 +94,18 @@ void RemoveUnusedPass::run() {
         ops.push_back(operand);
     }
   }
+}
+
+
+bool RemoveUnusedPass::canRemoveVariable(const Op& op) const {
+  auto [a, b] = m_builder.getUses(op.getDef());
+
+  for (auto iter = a; iter != b; iter++) {
+    if (!iter->getType().isVoidType())
+      return false;
+  }
+
+  return true;
 }
 
 
@@ -441,6 +461,8 @@ bool RemoveUnusedPass::hasSideEffect(const Op& op) const {
     case OpCode::eUMax:
     case OpCode::eUClamp:
     case OpCode::eUMSad:
+
+    case OpCode::eEvalIsSame:
       return false;
   }
 

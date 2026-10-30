@@ -1229,6 +1229,8 @@ enum class OpCode : uint16_t {
 
   eDrain                        = 992u,
 
+  eEvalIsSame                   = 993u,
+
   Count
 };
 
@@ -2871,6 +2873,11 @@ public:
       .addOperands(arg, args...);
   }
 
+  template<typename... Tx>
+  static Op EvalIsSame(Type type, Tx... args) {
+    return Op(OpCode::eEvalIsSame, type)
+      .addOperands(args...);
+  }
 
 private:
 
