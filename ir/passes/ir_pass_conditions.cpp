@@ -353,8 +353,17 @@ std::pair<bool, Builder::iterator> ConditionPass::handleBooleanOp(Builder::itera
   Op newOp = *op;
 
   for (uint32_t i = 0u; i < 2u; i++) {
-    const auto& a = m_builder.getOpForOperand(*op, i);
-    const auto& b = m_builder.getOpForOperand(*op, i ^ 1);
+    /* Gather conditions from the other operand as already rewritten in
+     * newOp, not from the original instruction. Otherwise both operands
+     * get simplified based on each other's original value, and duplicate
+     * conditions such as:
+     *  a = (x != 0)
+     *  b = (x != 0)
+     *  result = a && b
+     * would be optimized to `result = true`.
+     */
+    const auto& a = m_builder.getOpForOperand(newOp, i);
+    const auto& b = m_builder.getOpForOperand(newOp, i ^ 1);
 
     small_vector<Condition, 256> conditions;
 
