@@ -48,13 +48,19 @@ private:
     SsaDef    indexBase     = {};
     uint32_t  indexOffset   = 0u;
 
-    bool isNextOf(const IndexedLoad& other) const;
+    bool canMergeWithStride(const IndexedLoad& other, uint32_t stride) const;
+
+    bool isMergeCandidate(const IndexedLoad& other) const;
+
+    uint32_t computeStride(const IndexedLoad& other) const;
 
     static bool compare(const IndexedLoad& a, const IndexedLoad& b);
   };
 
   Builder&  m_builder;
   Options   m_options;
+
+  uint32_t getOptimalStride(size_t count, const IndexedLoad* loads);
 
   bool optimizeBuffer(SsaDef descriptor);
 
