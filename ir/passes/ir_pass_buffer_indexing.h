@@ -31,6 +31,13 @@ public:
 
 private:
 
+  struct LoadInfo {
+    SsaDef    selectOp      = {};
+    SsaDef    selectArg     = {};
+    SsaDef    castOp        = {};
+    SsaDef    extractOp     = {};
+  };
+
   struct IndexedLoad {
     SsaDef    selectOp      = {};
     uint32_t  selectArg     = 0u;
@@ -54,6 +61,8 @@ private:
   bool rewriteLoadAsIndexed(const IndexedLoad& load, uint32_t stride);
 
   small_vector<SsaDef, 256> getBuffers();
+
+  void getLoadSelectInfos(SsaDef def, LoadInfo base, small_vector<LoadInfo, 1024>& loads) const;
 
   small_vector<IndexedLoad, 256> getIndexedLoads(SsaDef descriptor);
 
