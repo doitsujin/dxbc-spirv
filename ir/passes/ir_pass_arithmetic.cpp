@@ -3546,6 +3546,28 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentitySelect(Builder
     }
   }
 
+  /* select(a != b, x, y) -> select(a == b, y, x), provided that all uses
+   * of the comparison are selects or negations that can be optimized out
+   * anyway. Allows conditions to be optimized more easily. */
+  if (cond.getOpCode() == OpCode::eINe || cond.getOpCode() == OpCode::eFNe) {
+    bool invertCond = true;
+    auto [useA, useB] = m_builder.getUses(cond.getDef());
+
+    for (auto use = useA; use != useB && invertCond; use++) {
+      invertCond = use->getOpCode() == OpCode::eSelect
+                || use->getOpCode() == OpCode::eBNot;
+    }
+
+    if (invertCond) {
+      auto inverseOpCode = cond.getOpCode() == OpCode::eINe ? OpCode::eIEq : OpCode::eFEq;
+      auto inverse = m_builder.addAfter(cond.getDef(), Op(cond).setOpCode(inverseOpCode));
+
+      m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(),
+        inverse, b.getDef(), a.getDef()).setFlags(op->getFlags()));
+      return std::make_pair(true, op);
+    }
+  }
+
   /* select(x != 0, ufindmsb(x), -1) -> ufindmsb(x) */
   if (isConstantValue(b, -1)) {
     SsaDef msbOperand = { };
