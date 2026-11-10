@@ -3533,12 +3533,15 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentitySelect(Builder
 
   /* select(a == b, a, b) -> b
    * select(a != b, a, b) -> a */
-  if (cond.getOpCode() == OpCode::eIEq || cond.getOpCode() == OpCode::eINe) {
+  if (cond.getOpCode() == OpCode::eIEq || cond.getOpCode() == OpCode::eINe
+   || cond.getOpCode() == OpCode::eFEq || cond.getOpCode() == OpCode::eFNe) {
     auto c0 = m_builder.getOpForOperand(cond, 0u).getDef();
     auto c1 = m_builder.getOpForOperand(cond, 1u).getDef();
 
     if ((c0 == a.getDef() && c1 == b.getDef()) || (c0 == b.getDef() && c1 == a.getDef())) {
-      auto next = m_builder.rewriteDef(op->getDef(), cond.getOpCode() == OpCode::eIEq ? b.getDef() : a.getDef());
+      bool isEq = cond.getOpCode() == OpCode::eIEq || cond.getOpCode() == OpCode::eFEq;
+
+      auto next = m_builder.rewriteDef(op->getDef(), isEq ? b.getDef() : a.getDef());
       return std::make_pair(true, m_builder.iter(next));
     }
   }
