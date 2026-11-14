@@ -405,8 +405,8 @@ using UavFlags = util::Flags<UavFlag>;
 enum class SyncFlag : uint32_t {
   eWorkgroupThreads       = (1u << 0),
   eWorkgroupMemory        = (1u << 1),
-  eUavMemoryGlobal        = (1u << 2),
-  eUavMemoryLocal         = (1u << 3),
+  eUavMemoryLocal         = (1u << 2),
+  eUavMemoryGlobal        = (1u << 3),
 
   eFlagEnum = 0u
 };
