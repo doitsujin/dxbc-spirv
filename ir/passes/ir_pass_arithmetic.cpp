@@ -78,6 +78,9 @@ bool ArithmeticPass::runPass() {
     }
   }
 
+  if (progress)
+    RemoveUnusedPass::runPass(m_builder);
+
   return progress;
 }
 
