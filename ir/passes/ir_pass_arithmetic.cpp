@@ -3544,6 +3544,31 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentitySelect(Builder
     }
   }
 
+  /* select(x != 0, ufindmsb(x), -1) -> ufindmsb(x)
+   * select(x == 0, -1, ufindmsb(x)) -> ufindmsb(x) */
+  if (isConstantValue(a, -1) || isConstantValue(b, -1)) {
+    const auto& msbOp = isConstantValue(a, -1) ? b : a;
+    auto compareOp = isConstantValue(a, -1) ? OpCode::eIEq : OpCode::eINe;
+
+    SsaDef msbOperand = { };
+
+    if (msbOp.getOpCode() == OpCode::eUFindMsb) {
+      msbOperand = m_builder.getOpForOperand(msbOp, 0u).getDef();
+    } else if (msbOp.getOpCode() == OpCode::eCast) {
+      const auto& castOperand = m_builder.getOpForOperand(msbOp, 0u);
+
+      if (castOperand.getOpCode() == OpCode::eUFindMsb)
+        msbOperand = m_builder.getOpForOperand(castOperand, 0u).getDef();
+    }
+
+    if (msbOperand && cond.getOpCode() == compareOp &&
+        m_builder.getOpForOperand(cond, 0u).getDef() == msbOperand &&
+        isConstantValue(m_builder.getOpForOperand(cond, 1u), 0)) {
+      auto next = m_builder.rewriteDef(op->getDef(), msbOp.getDef());
+      return std::make_pair(true, m_builder.iter(next));
+    }
+  }
+
   /* select(a != b, x, y) -> select(a == b, y, x), provided that all uses
    * of the comparison are selects or negations that can be optimized out
    * anyway. Allows conditions to be optimized more easily. */
@@ -3563,27 +3588,6 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentitySelect(Builder
       m_builder.rewriteOp(op->getDef(), Op::Select(op->getType(),
         inverse, b.getDef(), a.getDef()).setFlags(op->getFlags()));
       return std::make_pair(true, op);
-    }
-  }
-
-  /* select(x != 0, ufindmsb(x), -1) -> ufindmsb(x) */
-  if (isConstantValue(b, -1)) {
-    SsaDef msbOperand = { };
-
-    if (a.getOpCode() == OpCode::eUFindMsb) {
-      msbOperand = m_builder.getOpForOperand(a, 0u).getDef();
-    } else if (a.getOpCode() == OpCode::eCast) {
-      const auto& castOperand = m_builder.getOpForOperand(a, 0u);
-
-      if (castOperand.getOpCode() == OpCode::eUFindMsb)
-        msbOperand = m_builder.getOpForOperand(castOperand, 0u).getDef();
-    }
-
-    if (msbOperand && cond.getOpCode() == OpCode::eINe &&
-        m_builder.getOpForOperand(cond, 0u).getDef() == msbOperand &&
-        isConstantValue(m_builder.getOpForOperand(cond, 1u), 0)) {
-      auto next = m_builder.rewriteDef(op->getDef(), a.getDef());
-      return std::make_pair(true, m_builder.iter(next));
     }
   }
 
