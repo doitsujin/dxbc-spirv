@@ -275,7 +275,7 @@ void Disassembler::disassembleOperandDef(std::ostream& stream, const Op& op, uin
       if (uint32_t(m_builder.getOpForOperand(def, 0).getOperand(3)) != 1u) {
         stream << "[";
         disassembleOperandDef(stream, def, 1);
-        stream << "[";
+        stream << "]";
       }
 
       stream << "]";
