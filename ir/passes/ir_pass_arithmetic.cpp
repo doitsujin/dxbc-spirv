@@ -3454,6 +3454,36 @@ std::pair<bool, Builder::iterator> ArithmeticPass::resolveIdentitySelect(Builder
     return std::make_pair(true, op);
   }
 
+  /* select(cond, x || y, y) -> select(cond, x, false) || y
+   * select(cond, y, x || y) -> select(cond, false, x) || y
+   * select(cond, x && y, y) -> select(cond, x, true) && y
+   * select(cond, y, x && y) -> select(cond, true, x) && y */
+  if (op->getType().getBaseType(0u).isBoolType()) {
+    for (uint32_t i = 0u; i < 2u; i++) {
+      const auto& x = m_builder.getOpForOperand(*op, 1u + (i ^ 0u));
+      const auto& y = m_builder.getOpForOperand(*op, 1u + (i ^ 1u));
+
+      if (x.getOpCode() == OpCode::eBOr || x.getOpCode() == OpCode::eBAnd) {
+        const auto& x0 = m_builder.getOpForOperand(x, 0u);
+        const auto& x1 = m_builder.getOpForOperand(x, 1u);
+
+        if (x0.getDef() != y.getDef() && x1.getDef() != y.getDef())
+          continue;
+
+        const auto& xUnique = x0.getDef() == y.getDef() ? x1 : x0;
+
+        auto newSelect = m_builder.addBefore(op->getDef(), Op(*op)
+          .setOperand(1u + (i ^ 0u), xUnique.getDef())
+          .setOperand(1u + (i ^ 1u), m_builder.makeConstant(x.getOpCode() == OpCode::eBAnd)));
+
+        m_builder.rewriteOp(op->getDef(), Op(x.getOpCode(), ScalarType::eBool)
+          .addOperand(newSelect)
+          .addOperand(y.getDef()));
+        return std::make_pair(true, m_builder.iter(newSelect));
+      }
+    }
+  }
+
   /* boolean select(cond, a, b) -> (cond && a) || (!cond && b) */
   if (op->getType().getBaseType(0u).isBoolType()) {
     auto tDef = m_builder.addBefore(op->getDef(), Op::BAnd(op->getType(), cond.getDef(), a.getDef()));
