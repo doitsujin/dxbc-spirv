@@ -5092,6 +5092,7 @@ Operand ArithmeticPass::makeScalarOperand(const Type& type, T value) {
   dxbc_spv_assert(type.isBasicType());
 
   switch (type.getBaseType(0u).getBaseType()) {
+    case ScalarType::eBool: return Operand(bool(value));
     case ScalarType::eI8:   return Operand(int8_t(value));
     case ScalarType::eU8:   return Operand(uint8_t(value));
     case ScalarType::eI16:  return Operand(int16_t(value));
