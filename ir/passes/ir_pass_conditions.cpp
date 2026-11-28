@@ -94,26 +94,39 @@ std::optional<bool> ConditionPass::evaluateBoolExpression(const Op& expr, size_t
   if (expr.getType() != ScalarType::eBool)
     return std::nullopt;
 
+  if (expr.isConstant())
+    return std::make_optional(bool(expr.getOperand(0)));
+
+  /* Look up cached op if we have one, this helps avoid redundantly
+   * evaluating expressions which we can't determine the result of,
+   * or when a subexpression is used in both sides of a boolean op. */
+  if (expr.getDef()) {
+    auto entry = m_boolOps.find(expr.getDef());
+
+    if (entry != m_boolOps.end())
+      return entry->second;
+  }
+
   /* Check negation first because that will generally not occur in
    * the list on its own */
   if (expr.getOpCode() == OpCode::eBNot) {
     auto value = evaluateBoolExpression(m_builder.getOpForOperand(expr, 0), count, conditions, depth + 1u);
 
     if (value.has_value())
-      return std::make_optional(!value.value());
+      return cacheBoolExpression(expr.getDef(), std::make_optional(!value.value()));
   }
 
   /* Check whether we know anything about the condition itself */
   for (size_t i = 0u; i < count; i++) {
     if (conditions[i].def == expr.getDef())
-      return std::make_optional(conditions[i].value);
+      return cacheBoolExpression(expr.getDef(), std::make_optional(conditions[i].value));
   }
 
   /* Check whether we can infer that the condition cannot be true
    * at the same time as another */
   for (size_t i = 0u; i < count; i++) {
     if (conditions[i].value && contradicts(expr, m_builder.getOp(conditions[i].def)))
-      return std::make_optional(false);
+      return cacheBoolExpression(expr.getDef(), std::make_optional(false));
   }
 
   /* All checks below will recurse */
@@ -128,7 +141,7 @@ std::optional<bool> ConditionPass::evaluateBoolExpression(const Op& expr, size_t
     auto b = evaluateBoolExpression(m_builder.getOpForOperand(expr, 1), count, conditions, depth + 1);
 
     if (a == std::make_optional(check) || b == std::make_optional(check))
-      return std::make_optional(check);
+      return cacheBoolExpression(expr.getDef(), std::make_optional(check));
   }
 
   /* Recursively evaluate boolean eq / ne */
@@ -139,7 +152,7 @@ std::optional<bool> ConditionPass::evaluateBoolExpression(const Op& expr, size_t
     auto b = evaluateBoolExpression(m_builder.getOpForOperand(expr, 1), count, conditions, depth + 1);
 
     if (a.has_value() && b.has_value())
-      return std::make_optional((a == b) == check);
+      return cacheBoolExpression(expr.getDef(), std::make_optional((a == b) == check));
   }
 
   /* For comparisons, check whether we can evaluate the inverse.
@@ -164,12 +177,12 @@ std::optional<bool> ConditionPass::evaluateBoolExpression(const Op& expr, size_t
     if (flippedOpCode != OpCode::eUnknown) {
       /* We know this is an end point of sorts, so
        * avoid recursing any further */
-      auto flippedOp = Op(expr).setOpCode(flippedOpCode);
+      auto flippedOp = Op(expr).setOpCode(flippedOpCode).setSsaDef(SsaDef());
       auto flippedValue = evaluateBoolExpression(flippedOp,
         count, conditions, MaxRecursionDepth);
 
       if (flippedValue.has_value())
-        return std::make_optional(!flippedValue.value());
+        return cacheBoolExpression(expr.getDef(), std::make_optional(!flippedValue.value()));
     }
   }
 
@@ -211,16 +224,16 @@ std::optional<bool> ConditionPass::evaluateBoolExpression(const Op& expr, size_t
       check = std::make_pair(e.first, true);
 
     if (check.first != OpCode::eUnknown) {
-      auto checkOp = Op(expr).setOpCode(check.first);
+      auto checkOp = Op(expr).setOpCode(check.first).setSsaDef(SsaDef());
       auto checkValue = evaluateBoolExpression(checkOp,
         count, conditions, MaxRecursionDepth - 1u);
 
       if (checkValue == std::make_optional(check.second))
-        return checkValue;
+        return cacheBoolExpression(expr.getDef(), checkValue);
     }
   }
 
-  return std::nullopt;
+  return cacheBoolExpression(expr.getDef(), std::nullopt);
 }
 
 
@@ -526,7 +539,7 @@ std::pair<bool, Builder::iterator> ConditionPass::resolveRangeCompare(Builder::i
       Op::BOr(ScalarType::eBool, def, cond));
   }
 
-  auto next = m_builder.rewriteDef(op->getDef(), def);
+  auto next = rewriteDef(op->getDef(), def);
   return std::make_pair(true, m_builder.iter(next));
 }
 
@@ -586,6 +599,22 @@ ConditionPass::CompareRange ConditionPass::makeCompareRange(const Op& op) const 
     default:
       return result;
   }
+}
+
+
+std::optional<bool> ConditionPass::cacheBoolExpression(SsaDef def, std::optional<bool> result) {
+  if (!def)
+    return result;
+
+  auto feedback = m_boolOps.emplace(def, result);
+  dxbc_spv_assert(feedback.second);
+  return feedback.first->second;
+}
+
+
+SsaDef ConditionPass::rewriteDef(SsaDef oldDef, SsaDef newDef) {
+  m_boolOps.erase(oldDef);
+  return m_builder.rewriteDef(oldDef, newDef);
 }
 
 

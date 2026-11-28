@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <unordered_map>
 
 #include "../ir.h"
 #include "../ir_builder.h"
@@ -49,6 +50,8 @@ private:
 
   Builder& m_builder;
 
+  std::unordered_map<SsaDef, std::optional<bool>> m_boolOps;
+
   std::optional<bool> evaluateBoolExpression(const Op& expr, size_t count, const Condition* conditions, size_t depth);
 
   SsaDef evaluateBool(const Op& expr, size_t count, const Condition* conditions);
@@ -66,6 +69,10 @@ private:
   std::pair<bool, Builder::iterator> handleBooleanOp(Builder::iterator op);
 
   std::pair<bool, Builder::iterator> resolveRangeCompare(Builder::iterator op);
+
+  std::optional<bool> cacheBoolExpression(SsaDef def, std::optional<bool> result);
+
+  SsaDef rewriteDef(SsaDef oldDef, SsaDef newDef);
 
   CompareRange makeCompareRange(const Op& op) const;
 
