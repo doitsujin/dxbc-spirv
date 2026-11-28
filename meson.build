@@ -3,6 +3,12 @@ project('dxbc-spirv', ['cpp'],
   meson_version   : '>= 1.0',
   default_options : [ 'cpp_std=c++17', 'warning_level=2', 'cpp_eh=none' ])
 
+fs = import('fs')
+
+cpp = meson.get_compiler('cpp')
+
+dxbc_spv_inc = include_directories('.')
+
 sm3_files = files([
   'sm3/sm3_types.cpp',
   'sm3/sm3_parser.cpp',
@@ -83,6 +89,11 @@ if get_option('enable_sm5')
 endif
 
 if get_option('enable_spirv')
+  if fs.is_dir('./submodules/spirv_headers/include')
+    dxbc_spv_inc += ['./submodules/spirv_headers/include']
+  elif not cpp.check_header('spirv/unified1/spirv.hpp')
+    error('Missing SPIRV-Headers')
+  endif
   dxbc_spv_files += spv_files
   dxbc_spv_args += '-DDXBC_SPV_ENABLE_SPIRV'
 endif
@@ -99,7 +110,6 @@ if get_option('enable_tools')
   subdir('tools')
 endif
 
-dxbc_spv_inc = include_directories('.')
 dxbc_spv_dep = declare_dependency(
   include_directories : dxbc_spv_inc,
   link_with           : lib_dxbc_spv)
